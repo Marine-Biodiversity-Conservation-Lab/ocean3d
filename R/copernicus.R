@@ -932,3 +932,759 @@ copernicus_load <- function(source = c("marine", "cds", "ads"),
 
   normalizePath(path, winslash = "/", mustWork = TRUE)
 }
+
+
+# Internal: validate netCDF files supplied to copernicus_summarise().
+.copernicus_summary_files <- function(file_paths) {
+  if (!is.character(file_paths) || !length(file_paths) || anyNA(file_paths) ||
+      any(!nzchar(file_paths))) {
+    stop("`file_paths` must be a non-empty character vector.", call. = FALSE)
+  }
+
+  missing <- !file.exists(file_paths)
+  if (any(missing)) {
+    stop(
+      "Copernicus netCDF file(s) not found:\n  ",
+      paste(file_paths[missing], collapse = "\n  "),
+      call. = FALSE
+    )
+  }
+
+  ext <- tolower(tools::file_ext(file_paths))
+  if (any(!ext %in% c("nc", "nc4"))) {
+    stop("`copernicus_summarise()` currently supports netCDF (.nc/.nc4) files only.",
+         call. = FALSE)
+  }
+
+  normalizePath(file_paths, winslash = "/", mustWork = TRUE)
+}
+
+# Internal: identify the temporal dimension in a netCDF file.
+.copernicus_nc_time_dim <- function(nc) {
+  dims <- names(nc$dim)
+  lower <- tolower(dims)
+
+  exact <- which(lower %in% c("time", "valid_time"))
+  if (length(exact) == 1) return(dims[exact])
+
+  by_units <- which(vapply(nc$dim, function(x) {
+    units <- if (is.null(x$units)) "" else tolower(x$units)
+    grepl("^(seconds|minutes|hours|days|months|years) since ", units)
+  }, logical(1)))
+
+  candidates <- unique(c(exact, by_units))
+  if (length(candidates) == 1) return(dims[candidates])
+
+  if (!length(candidates)) {
+    stop("Could not identify a time dimension in the netCDF file.", call. = FALSE)
+  }
+
+  stop(
+    "Multiple possible time dimensions were found: ",
+    paste(dims[candidates], collapse = ", "),
+    ".",
+    call. = FALSE
+  )
+}
+
+# Internal: convert a netCDF time dimension to UTC POSIXct values.
+.copernicus_nc_time_values <- function(nc, time_dim) {
+  d <- nc$dim[[time_dim]]
+  vals <- as.numeric(d$vals)
+  units <- if (is.null(d$units)) "" else as.character(d$units)
+
+  m <- regexec(
+    "^(seconds?|minutes?|hours?|days?) since (.+)$",
+    units,
+    ignore.case = TRUE
+  )
+  parts <- regmatches(units, m)[[1]]
+
+  if (length(parts) != 3) {
+    stop(
+      "Unsupported or missing time units for dimension '", time_dim, "': ",
+      units, ". Expected units such as 'hours since YYYY-MM-DD HH:MM:SS'.",
+      call. = FALSE
+    )
+  }
+
+  origin_txt <- sub("Z$", "", parts[3])
+  origin <- tryCatch(
+    as.POSIXct(
+      origin_txt,
+      tz = "UTC",
+      tryFormats = c(
+        "%Y-%m-%d %H:%M:%OS",
+        "%Y-%m-%dT%H:%M:%OS",
+        "%Y-%m-%d"
+      )
+    ),
+    error = function(e) as.POSIXct(NA, tz = "UTC")
+  )
+
+  if (is.na(origin)) {
+    stop("Could not parse netCDF time origin: ", parts[3], call. = FALSE)
+  }
+
+  mult <- switch(
+    tolower(parts[2]),
+    second = 1, seconds = 1,
+    minute = 60, minutes = 60,
+    hour = 3600, hours = 3600,
+    day = 86400, days = 86400
+  )
+
+  origin + vals * mult
+}
+
+# Internal: index temporal slices across one or more netCDF files.
+.copernicus_summary_time_index <- function(file_paths, start_datetime, end_datetime) {
+  rows <- vector("list", length(file_paths))
+
+  for (i in seq_along(file_paths)) {
+    nc <- ncdf4::nc_open(file_paths[i])
+    rows[[i]] <- tryCatch(
+      {
+        time_dim <- .copernicus_nc_time_dim(nc)
+        time <- .copernicus_nc_time_values(nc, time_dim)
+
+        data.frame(
+          file = file_paths[i],
+          file_index = i,
+          time_index = seq_along(time),
+          datetime = as.POSIXct(time, origin = "1970-01-01", tz = "UTC"),
+          stringsAsFactors = FALSE
+        )
+      },
+      finally = ncdf4::nc_close(nc)
+    )
+  }
+
+  idx <- do.call(rbind, rows)
+  idx <- idx[order(idx$datetime, idx$file_index, idx$time_index), , drop = FALSE]
+  rownames(idx) <- NULL
+
+  start <- if (is.null(start_datetime)) NULL else
+    as.POSIXct(.copernicus_datetime(start_datetime, "start_datetime"),
+               format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+  end <- if (is.null(end_datetime)) NULL else
+    as.POSIXct(.copernicus_datetime(end_datetime, "end_datetime"),
+               format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+
+  if (!is.null(start) && is.null(end)) end <- start
+  if (is.null(start) && !is.null(end)) {
+    stop("`start_datetime` is required when `end_datetime` is supplied.",
+         call. = FALSE)
+  }
+  if (!is.null(start) && end < start) {
+    stop("`end_datetime` must be equal to or later than `start_datetime`.",
+         call. = FALSE)
+  }
+
+  selected <- rep(TRUE, nrow(idx))
+  if (!is.null(start)) selected <- selected & idx$datetime >= start
+  if (!is.null(end)) selected <- selected & idx$datetime <= end
+
+  idx$selected <- selected
+  idx
+}
+
+# Internal: print available and selected time information.
+.copernicus_summary_time_message <- function(index) {
+  selected <- index[index$selected, , drop = FALSE]
+
+  message(
+    "Available time steps: ", nrow(index),
+    " (", format(min(index$datetime), "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    " to ", format(max(index$datetime), "%Y-%m-%d %H:%M:%S", tz = "UTC"), ")"
+  )
+
+  if (!nrow(selected)) {
+    message("Selected time steps: 0")
+    return(invisible(NULL))
+  }
+
+  message(
+    "Selected time steps: ", nrow(selected),
+    " (", format(min(selected$datetime), "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    " to ", format(max(selected$datetime), "%Y-%m-%d %H:%M:%S", tz = "UTC"), ")"
+  )
+  message("Dates/times to summarise:")
+  for (x in format(selected$datetime, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")) {
+    message("  - ", x)
+  }
+
+  invisible(NULL)
+}
+
+# Internal: return the names of variables that should be summarised over time.
+.copernicus_nc_summary_vars <- function(nc, time_dim) {
+  vars <- names(nc$var)
+
+  has_time <- vapply(vars, function(v) {
+    time_dim %in% vapply(nc$var[[v]]$dim, `[[`, character(1), "name")
+  }, logical(1))
+
+  vars <- vars[has_time]
+  vars <- vars[!grepl("(^|_)(time_?bounds?|bounds?|bnds?)$", vars, ignore.case = TRUE)]
+
+  vars <- vars[vapply(vars, function(v) {
+    dims <- vapply(nc$var[[v]]$dim, `[[`, character(1), "name")
+    length(setdiff(dims, time_dim)) > 0
+  }, logical(1))]
+
+  if (!length(vars)) {
+    stop("No data variables with a time dimension were found.", call. = FALSE)
+  }
+
+  vars
+}
+
+# Internal: create output paths for requested summaries.
+.copernicus_summary_paths <- function(file_paths, fun, output_dir, filename) {
+  if (is.null(output_dir)) output_dir <- dirname(file_paths[1])
+  .copernicus_validate_string(output_dir, "output_dir")
+  dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+
+  if (is.null(filename)) {
+    stem <- tools::file_path_sans_ext(basename(file_paths[1]))
+    out <- file.path(output_dir, paste0(stem, "_", fun, ".nc"))
+  } else {
+    .copernicus_validate_string(filename, "filename")
+    ext <- tools::file_ext(filename)
+    if (!tolower(ext) %in% c("nc", "nc4")) {
+      stop("`filename` must end in .nc or .nc4.", call. = FALSE)
+    }
+
+    stem <- tools::file_path_sans_ext(filename)
+    suffix <- paste0(".", ext)
+
+    if (length(fun) == 1) {
+      out <- file.path(output_dir, filename)
+    } else {
+      out <- file.path(output_dir, paste0(stem, "_", fun, suffix))
+    }
+  }
+
+  stats::setNames(out, fun)
+}
+
+# Internal: copy netCDF attributes, excluding attributes handled separately.
+.copernicus_nc_copy_atts <- function(nc_in, nc_out, var_in = 0, var_out = 0,
+                                     exclude = character()) {
+  atts <- tryCatch(ncdf4::ncatt_get(nc_in, var_in), error = function(e) list())
+  if (!length(atts)) return(invisible(TRUE))
+
+  keep <- setdiff(names(atts), exclude)
+  for (nm in keep) {
+    value <- atts[[nm]]
+    if (is.null(value) || !length(value)) next
+    try(ncdf4::ncatt_put(nc_out, var_out, nm, value), silent = TRUE)
+  }
+
+  invisible(TRUE)
+}
+
+# Internal: build dimension definitions for a summarised netCDF.
+.copernicus_nc_dim_defs <- function(nc, dim_names) {
+  defs <- lapply(dim_names, function(nm) {
+    d <- nc$dim[[nm]]
+    calendar <- if (is.null(d$calendar) || !length(d$calendar)) NA else d$calendar
+    longname <- if (is.null(d$longname) || !length(d$longname)) nm else d$longname
+
+    ncdf4::ncdim_def(
+      name = nm,
+      units = if (is.null(d$units)) "" else d$units,
+      vals = d$vals,
+      unlim = FALSE,
+      create_dimvar = TRUE,
+      calendar = calendar,
+      longname = longname
+    )
+  })
+
+  stats::setNames(defs, dim_names)
+}
+
+# Internal: initialize streaming accumulators for one variable.
+.copernicus_summary_accumulator <- function(dim_lengths, fun) {
+  n <- prod(dim_lengths)
+  need_mean <- any(fun %in% c("mean", "sd"))
+
+  list(
+    dim = dim_lengths,
+    count = array(0, dim = dim_lengths),
+    mean = if (need_mean) array(0, dim = dim_lengths) else NULL,
+    m2 = if ("sd" %in% fun) array(0, dim = dim_lengths) else NULL,
+    min = if ("min" %in% fun) array(Inf, dim = dim_lengths) else NULL,
+    max = if ("max" %in% fun) array(-Inf, dim = dim_lengths) else NULL,
+    any_na = array(FALSE, dim = dim_lengths)
+  )
+}
+
+# Internal: update one variable accumulator from one time slice.
+.copernicus_summary_update <- function(acc, x, fun, na.rm) {
+  x <- array(as.numeric(x), dim = acc$dim)
+  valid <- !is.na(x)
+
+  if (!na.rm) acc$any_na <- acc$any_na | !valid
+
+  if (any(valid)) {
+    old_count <- acc$count[valid]
+    new_count <- old_count + 1
+
+    if (any(fun %in% c("mean", "sd"))) {
+      delta <- x[valid] - acc$mean[valid]
+      acc$mean[valid] <- acc$mean[valid] + delta / new_count
+
+      if ("sd" %in% fun) {
+        delta2 <- x[valid] - acc$mean[valid]
+        acc$m2[valid] <- acc$m2[valid] + delta * delta2
+      }
+    }
+
+    if ("min" %in% fun) acc$min[valid] <- pmin(acc$min[valid], x[valid])
+    if ("max" %in% fun) acc$max[valid] <- pmax(acc$max[valid], x[valid])
+    acc$count[valid] <- new_count
+  }
+
+  acc
+}
+
+# Internal: finalize one summary statistic from an accumulator.
+.copernicus_summary_finalize <- function(acc, fun, na.rm) {
+  out <- switch(
+    fun,
+    mean = acc$mean,
+    min = acc$min,
+    max = acc$max,
+    sd = {
+      z <- array(NA_real_, dim = acc$dim)
+      ok <- acc$count > 1
+      z[ok] <- sqrt(acc$m2[ok] / (acc$count[ok] - 1))
+      z
+    }
+  )
+
+  if (fun %in% c("mean", "min", "max")) out[acc$count == 0] <- NA_real_
+  if (!na.rm) out[acc$any_na] <- NA_real_
+  out
+}
+
+#' Summarise Copernicus netCDF data across time
+#'
+#' Summarise one or more Copernicus netCDF files across their temporal
+#' dimension while preserving all non-temporal dimensions (for example
+#' longitude, latitude, depth, or projected x/y dimensions). Processing is
+#' performed directly on the native netCDF data using `ncdf4`; conversion to a
+#' `SpatRaster` is not required.
+#'
+#' All variables containing the detected time dimension are summarised. Variables
+#' without a time dimension are copied unchanged from the first input file so
+#' that auxiliary coordinates, grid mappings, and other static metadata remain
+#' available in the output.
+#'
+#' The calculation is performed one time step at a time. This avoids loading the
+#' complete multidimensional time series into memory and is suitable for large
+#' Copernicus files. When multiple input files are supplied they must have
+#' compatible non-temporal dimensions and variables.
+#'
+#' One netCDF file is written per requested summary statistic. The time dimension
+#' is removed from the summarised variables; spatial and depth dimensions are
+#' retained.
+#'
+#' @param file_paths Character vector. Paths to one or more Copernicus netCDF
+#'   (`.nc` or `.nc4`) files.
+#' @param fun Character vector of temporal summary statistics. Supported values
+#'   are `"mean"`, `"min"`, `"max"`, and `"sd"`.
+#' @param start_datetime Optional start datetime used to filter the available
+#'   netCDF time steps before summarising. A `Date`, `POSIXt`, or character
+#'   value interpreted in UTC.
+#' @param end_datetime Optional end datetime. Defaults to `start_datetime` when
+#'   only a start is supplied. If both are `NULL`, all available time steps are
+#'   summarised.
+#' @param output_dir Optional character. Directory in which summarised netCDF
+#'   files are written. Defaults to the directory containing the first input
+#'   file.
+#' @param filename Optional character. Output filename. When multiple statistics
+#'   are requested, the statistic is appended before the extension
+#'   (for example `summary_mean.nc`, `summary_max.nc`).
+#' @param na.rm Logical. If `TRUE` (default), missing values are ignored within
+#'   each grid cell/depth combination. If `FALSE`, any missing temporal value
+#'   produces a missing summary value at that location.
+#' @param force Logical. Overwrite existing summary files. Default `FALSE`.
+#' @param quiet Logical. Suppress progress messages. Default `FALSE`.
+#'
+#' @returns Named character vector containing paths to the summarised netCDF
+#'   files, with names corresponding to `fun`.
+#'
+#' @examples
+#' \dontrun{
+#' summaries <- copernicus_summarise(
+#'   file_paths = c("thetao_2020_01.nc", "thetao_2020_02.nc"),
+#'   fun = c("mean", "min", "max", "sd"),
+#'   output_dir = "summary"
+#' )
+#' }
+#'
+#' @export
+copernicus_summarise <- function(file_paths,
+                                 fun = c("mean", "min", "max", "sd"),
+                                 start_datetime = NULL,
+                                 end_datetime = NULL,
+                                 output_dir = NULL,
+                                 filename = NULL,
+                                 na.rm = TRUE,
+                                 force = FALSE,
+                                 quiet = FALSE) {
+
+  if (!requireNamespace("ncdf4", quietly = TRUE)) {
+    stop(
+      "Package 'ncdf4' is required for `copernicus_summarise()`. ",
+      "Install it with install.packages('ncdf4').",
+      call. = FALSE
+    )
+  }
+
+  file_paths <- .copernicus_summary_files(file_paths)
+
+  if (!is.character(fun) || !length(fun) || anyNA(fun)) {
+    stop("`fun` must be a non-empty character vector.", call. = FALSE)
+  }
+
+  allowed <- c("mean", "min", "max", "sd")
+  unknown <- setdiff(fun, allowed)
+  if (length(unknown)) {
+    stop(
+      "Unsupported summary function(s): ", paste(unknown, collapse = ", "),
+      ". Supported values are: ", paste(allowed, collapse = ", "),
+      ".",
+      call. = FALSE
+    )
+  }
+  fun <- unique(fun)
+
+  if (!is.logical(na.rm) || length(na.rm) != 1 || is.na(na.rm)) {
+    stop("`na.rm` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(force) || length(force) != 1 || is.na(force)) {
+    stop("`force` must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (!is.logical(quiet) || length(quiet) != 1 || is.na(quiet)) {
+    stop("`quiet` must be TRUE or FALSE.", call. = FALSE)
+  }
+
+  paths <- .copernicus_summary_paths(file_paths, fun, output_dir, filename)
+
+  time_index <- .copernicus_summary_time_index(
+    file_paths = file_paths,
+    start_datetime = start_datetime,
+    end_datetime = end_datetime
+  )
+
+  if (!quiet) .copernicus_summary_time_message(time_index)
+
+  selected_index <- time_index[time_index$selected, , drop = FALSE]
+  if (!nrow(selected_index)) {
+    stop("No netCDF time steps fall within the requested datetime range.",
+         call. = FALSE)
+  }
+
+  if (all(file.exists(paths)) && !force) {
+    if (!quiet) message("Cached summaries: ", paste(basename(paths), collapse = ", "))
+
+    out <- normalizePath(paths, winslash = "/", mustWork = TRUE)
+    names(out) <- names(paths)
+    return(out)
+  }
+
+  nc0 <- ncdf4::nc_open(file_paths[1])
+  on.exit(ncdf4::nc_close(nc0), add = TRUE)
+
+  time_dim <- .copernicus_nc_time_dim(nc0)
+  summary_vars <- .copernicus_nc_summary_vars(nc0, time_dim)
+
+  specs <- lapply(summary_vars, function(v) {
+    var <- nc0$var[[v]]
+    dim_names <- vapply(var$dim, `[[`, character(1), "name")
+    time_idx <- match(time_dim, dim_names)
+    out_dims <- dim_names[-time_idx]
+    out_lengths <- vapply(var$dim[-time_idx], `[[`, numeric(1), "len")
+
+    list(
+      name = v,
+      dim_names = dim_names,
+      time_idx = time_idx,
+      out_dims = out_dims,
+      out_lengths = out_lengths,
+      units = if (is.null(var$units)) "" else var$units,
+      longname = if (is.null(var$longname)) v else var$longname,
+      prec = if (identical(var$prec, "double")) "double" else "float",
+      missval = if (is.null(var$missval) || !is.finite(var$missval)) 1e20 else var$missval
+    )
+  })
+  names(specs) <- summary_vars
+
+  accumulators <- lapply(specs, function(s) {
+    .copernicus_summary_accumulator(s$out_lengths, fun)
+  })
+
+  # Static variables are copied unchanged from the first file. Dimension
+  # coordinate variables are created automatically by ncdim_def().
+  first_dim_names <- names(nc0$dim)
+  static_vars <- names(nc0$var)[vapply(nc0$var, function(v) {
+    dims <- vapply(v$dim, `[[`, character(1), "name")
+    !time_dim %in% dims
+  }, logical(1))]
+  static_vars <- setdiff(static_vars, first_dim_names)
+
+  if (!quiet) {
+    message(
+      "Summarising ", length(summary_vars), " variable(s) across ",
+      length(file_paths), " netCDF file(s): ",
+      paste(summary_vars, collapse = ", ")
+    )
+  }
+
+  # Stream through only the selected files/time steps, updating accumulators.
+  selected_files <- unique(selected_index$file_index)
+
+  for (f in selected_files) {
+    nc <- if (f == 1) nc0 else ncdf4::nc_open(file_paths[f])
+    close_after <- f > 1
+
+    tryCatch(
+      {
+        this_time <- .copernicus_nc_time_dim(nc)
+        if (!identical(this_time, time_dim)) {
+          stop(
+            "Input files use different time dimensions ('", time_dim, "' vs '",
+            this_time, "').",
+            call. = FALSE
+          )
+        }
+
+        file_times <- selected_index$time_index[selected_index$file_index == f]
+
+        for (v in summary_vars) {
+          if (!v %in% names(nc$var)) {
+            stop("Variable '", v, "' is missing from file: ", file_paths[f],
+                 call. = FALSE)
+          }
+
+          var <- nc$var[[v]]
+          dims <- vapply(var$dim, `[[`, character(1), "name")
+          time_idx <- match(time_dim, dims)
+
+          if (is.na(time_idx)) {
+            stop("Variable '", v, "' has no time dimension in file: ",
+                 file_paths[f], call. = FALSE)
+          }
+
+          out_dims <- dims[-time_idx]
+          out_lengths <- vapply(var$dim[-time_idx], `[[`, numeric(1), "len")
+
+          if (!identical(out_dims, specs[[v]]$out_dims) ||
+              !identical(as.numeric(out_lengths),
+                         as.numeric(specs[[v]]$out_lengths))) {
+            stop(
+              "Non-temporal dimensions for variable '", v,
+              "' are not compatible across input files.",
+              call. = FALSE
+            )
+          }
+
+          if (f > 1) {
+            for (dn in out_dims) {
+              ref <- nc0$dim[[dn]]$vals
+              cur <- nc$dim[[dn]]$vals
+              if (length(ref) != length(cur) ||
+                  !isTRUE(all.equal(ref, cur, tolerance = 1e-10,
+                                   check.attributes = FALSE))) {
+                stop(
+                  "Coordinate values for dimension '", dn,
+                  "' differ across input files.",
+                  call. = FALSE
+                )
+              }
+            }
+          }
+
+          start <- rep(1, length(dims))
+          count <- vapply(var$dim, `[[`, numeric(1), "len")
+          count[time_idx] <- 1
+
+          for (tt in file_times) {
+            start[time_idx] <- tt
+
+            x <- ncdf4::ncvar_get(
+              nc,
+              v,
+              start = start,
+              count = count,
+              collapse_degen = FALSE
+            )
+
+            slice <- array(as.numeric(x), dim = specs[[v]]$out_lengths)
+            accumulators[[v]] <- .copernicus_summary_update(
+              accumulators[[v]], slice, fun, na.rm
+            )
+          }
+        }
+      },
+      finally = {
+        if (close_after) ncdf4::nc_close(nc)
+      }
+    )
+
+    if (!quiet) {
+      message(
+        "Processed ", sum(selected_index$file_index == f),
+        " selected time step(s) from: ", basename(file_paths[f])
+      )
+    }
+  }
+
+  # Determine all non-time dimensions needed by summary and static variables.
+  used_dims <- unique(unlist(lapply(specs, `[[`, "out_dims"), use.names = FALSE))
+  if (length(static_vars)) {
+    static_dims <- unlist(lapply(static_vars, function(v) {
+      vapply(nc0$var[[v]]$dim, `[[`, character(1), "name")
+    }), use.names = FALSE)
+    used_dims <- unique(c(used_dims, static_dims))
+  }
+  used_dims <- setdiff(used_dims, time_dim)
+
+  dim_defs <- .copernicus_nc_dim_defs(nc0, used_dims)
+
+  # Build definitions for summarised variables.
+  summary_defs <- lapply(specs, function(s) {
+    ncdf4::ncvar_def(
+      name = s$name,
+      units = s$units,
+      dim = unname(dim_defs[s$out_dims]),
+      missval = s$missval,
+      longname = s$longname,
+      prec = s$prec
+    )
+  })
+  names(summary_defs) <- summary_vars
+
+  # Build definitions for static auxiliary variables.
+  static_defs <- lapply(static_vars, function(v) {
+    var <- nc0$var[[v]]
+    dims <- vapply(var$dim, `[[`, character(1), "name")
+    missval <- if (is.null(var$missval) || !is.finite(var$missval)) 1e20 else var$missval
+
+    ncdf4::ncvar_def(
+      name = v,
+      units = if (is.null(var$units)) "" else var$units,
+      dim = unname(dim_defs[dims]),
+      missval = missval,
+      longname = if (is.null(var$longname)) v else var$longname,
+      prec = var$prec
+    )
+  })
+  names(static_defs) <- static_vars
+
+  # Write one native netCDF per requested summary statistic.
+  for (stat in fun) {
+    dest <- paths[[stat]]
+
+    if (file.exists(dest) && !force) {
+      if (!quiet) message("Cached: ", basename(dest))
+      next
+    }
+    if (file.exists(dest) && force) unlink(dest, force = TRUE)
+
+    nc_out <- ncdf4::nc_create(
+      dest,
+      vars = c(unname(summary_defs), unname(static_defs)),
+      force_v4 = TRUE
+    )
+    output_open <- TRUE
+
+    # Copy global metadata before adding sharkabc3d-specific provenance.
+    .copernicus_nc_copy_atts(
+      nc0, nc_out, 0, 0,
+      exclude = c("history")
+    )
+
+    history_in <- tryCatch(ncdf4::ncatt_get(nc0, 0, "history")$value,
+                           error = function(e) NULL)
+    history_new <- paste0(
+      format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+      " sharkabc3d::copernicus_summarise(): temporal ", stat,
+      " across ", nrow(selected_index), " selected time step(s) from ",
+      length(unique(selected_index$file_index)), " file(s)."
+    )
+    history <- if (is.null(history_in) || !length(history_in) || is.na(history_in)) {
+      history_new
+    } else {
+      paste(history_in, history_new, sep = "\n")
+    }
+
+    ncdf4::ncatt_put(nc_out, 0, "history", history)
+    ncdf4::ncatt_put(nc_out, 0, "temporal_summary", stat)
+    ncdf4::ncatt_put(
+      nc_out, 0, "source_files",
+      paste(basename(file_paths), collapse = ", ")
+    )
+    ncdf4::ncatt_put(
+      nc_out, 0, "summary_start_datetime",
+      format(min(selected_index$datetime), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+    )
+    ncdf4::ncatt_put(
+      nc_out, 0, "summary_end_datetime",
+      format(max(selected_index$datetime), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+    )
+    ncdf4::ncatt_put(nc_out, 0, "summary_time_steps", nrow(selected_index))
+
+    for (v in summary_vars) {
+      values <- .copernicus_summary_finalize(accumulators[[v]], stat, na.rm)
+      ncdf4::ncvar_put(nc_out, v, values)
+
+      .copernicus_nc_copy_atts(
+        nc0, nc_out, v, v,
+        exclude = c(
+          "_FillValue", "missing_value", "scale_factor", "add_offset",
+          "cell_methods"
+        )
+      )
+
+      original_cell_methods <- tryCatch(
+        ncdf4::ncatt_get(nc0, v, "cell_methods")$value,
+        error = function(e) NULL
+      )
+      summary_method <- paste0("time: ", stat)
+      if (!is.null(original_cell_methods) && length(original_cell_methods) &&
+          !is.na(original_cell_methods) && nzchar(original_cell_methods)) {
+        summary_method <- paste(original_cell_methods, summary_method)
+      }
+
+      ncdf4::ncatt_put(nc_out, v, "cell_methods", summary_method)
+      ncdf4::ncatt_put(nc_out, v, "temporal_summary", stat)
+    }
+
+    for (v in static_vars) {
+      ncdf4::ncvar_put(nc_out, v, ncdf4::ncvar_get(nc0, v, collapse_degen = FALSE))
+      .copernicus_nc_copy_atts(
+        nc0, nc_out, v, v,
+        exclude = c("_FillValue", "missing_value", "scale_factor", "add_offset")
+      )
+    }
+
+    ncdf4::nc_close(nc_out)
+    output_open <- FALSE
+
+    if (!file.exists(dest) || file.info(dest)$size == 0) {
+      stop("Failed to create summarised netCDF file: ", dest, call. = FALSE)
+    }
+
+    if (!quiet) message("Written: ", basename(dest))
+  }
+
+  out <- normalizePath(paths, winslash = "/", mustWork = TRUE)
+  names(out) <- names(paths)
+  out
+}

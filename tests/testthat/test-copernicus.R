@@ -240,3 +240,132 @@ test_that("copernicus_load validates force and quiet", {
     "quiet"
   )
 })
+
+test_that("copernicus_summarise validates inputs", {
+  skip_if_not_installed("ncdf4")
+  
+  expect_error(
+    copernicus_summarise(character()),
+    "non-empty character vector"
+  )
+  
+  expect_error(
+    copernicus_summarise("does_not_exist.nc"),
+    "not found"
+  )
+  
+  tmp <- tempfile(fileext = ".txt")
+  writeLines("x", tmp)
+  on.exit(unlink(tmp), add = TRUE)
+  
+  expect_error(
+    copernicus_summarise(tmp),
+    "netCDF"
+  )
+})
+
+test_that("copernicus_summarise rejects unsupported functions", {
+  skip_if_not_installed("ncdf4")
+  
+  expect_error(
+    copernicus_summarise(
+      "does_not_matter.nc",
+      fun = "median"
+    )
+  )
+})
+
+test_that("copernicus_summarise preserves lon lat depth and summarises time", {
+  skip_if_not_installed("ncdf4")
+  
+  tmp <- tempfile("copernicus_summary_")
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+  
+  input <- file.path(tmp, "synthetic.nc")
+  
+  lon <- ncdf4::ncdim_def("longitude", "degrees_east", c(0, 1))
+  lat <- ncdf4::ncdim_def("latitude", "degrees_north", c(40, 41))
+  depth <- ncdf4::ncdim_def("depth", "m", c(0, 100))
+  time <- ncdf4::ncdim_def(
+    "time",
+    "days since 2000-01-01 00:00:00",
+    0:2,
+    unlim = TRUE
+  )
+  
+  thetao <- ncdf4::ncvar_def(
+    "thetao",
+    "degrees_C",
+    list(lon, lat, depth, time),
+    missval = -9999,
+    prec = "double"
+  )
+  
+  nc <- ncdf4::nc_create(input, thetao)
+  
+  values <- array(
+    c(
+      # time 1
+      1, 2, 3, 4, 5, 6, 7, 8,
+      # time 2
+      2, 3, 4, 5, 6, 7, 8, 9,
+      # time 3
+      3, 4, 5, 6, 7, 8, 9, 10
+    ),
+    dim = c(2, 2, 2, 3)
+  )
+  
+  ncdf4::ncvar_put(nc, "thetao", values)
+  ncdf4::nc_close(nc)
+  
+  out <- copernicus_summarise(
+    input,
+    fun = c("mean", "min", "max", "sd"),
+    output_dir = tmp,
+    filename = "summary.nc",
+    force = TRUE,
+    quiet = TRUE
+  )
+  
+  expect_named(out, c("mean", "min", "max", "sd"))
+  expect_true(all(file.exists(out)))
+  
+  # Mean
+  nc_mean <- ncdf4::nc_open(out["mean"])
+  on.exit(ncdf4::nc_close(nc_mean), add = TRUE)
+  
+  expect_true(all(c("longitude", "latitude", "depth") %in% names(nc_mean$dim)))
+  expect_false("time" %in% names(nc_mean$dim))
+  
+  mean_values <- ncdf4::ncvar_get(nc_mean, "thetao")
+  
+  expected_mean <- apply(values, c(1, 2, 3), mean)
+  
+  expect_equal(mean_values, expected_mean)
+  
+  # Min
+  nc_min <- ncdf4::nc_open(out["min"])
+  min_values <- ncdf4::ncvar_get(nc_min, "thetao")
+  ncdf4::nc_close(nc_min)
+  
+  expect_equal(min_values, apply(values, c(1, 2, 3), min))
+  
+  # Max
+  nc_max <- ncdf4::nc_open(out["max"])
+  max_values <- ncdf4::ncvar_get(nc_max, "thetao")
+  ncdf4::nc_close(nc_max)
+  
+  expect_equal(max_values, apply(values, c(1, 2, 3), max))
+  
+  # SD
+  nc_sd <- ncdf4::nc_open(out["sd"])
+  sd_values <- ncdf4::ncvar_get(nc_sd, "thetao")
+  ncdf4::nc_close(nc_sd)
+  
+  expect_equal(
+    sd_values,
+    apply(values, c(1, 2, 3), sd),
+    tolerance = 1e-10
+  )
+}) 
