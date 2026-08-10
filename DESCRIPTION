@@ -20,7 +20,12 @@ Imports:
     stringr,
     terra,
     rredlist,
-    ncdf4
+    ncdf4,
+    dplyr,
+    gfwr (>= 3.0),
+    reticulate,
+    ecmwfr,
+    here
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Suggests:
