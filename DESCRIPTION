@@ -23,7 +23,7 @@ Imports:
     ncdf4,
     dplyr,
     gfwr (>= 3.0),
-    reticulate,
+    jsonlite,
     ecmwfr,
     here
 Encoding: UTF-8
@@ -37,6 +37,7 @@ Suggests:
     rmarkdown,
     testthat (>= 3.0.0),
     tibble,
+    reticulate,
     tidyterra,
     vcr
 Config/testthat/edition: 3
