@@ -768,7 +768,7 @@ copernicus_login <- function(path = NULL) {
     }
     
   } else if (identical(os, "Linux")) {
-    asset <- "copernicusmarine_linux"
+    asset <- "copernicusmarine_linux-glibc-2.39.cli"
     
   } else {
     stop(
