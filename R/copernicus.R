@@ -6663,6 +6663,62 @@ copernicus_load <- function(
   normalizePath(output_file, winslash = "/", mustWork = TRUE)
 }
 
+# Internal: validate/configure ECMWF Data Store authentication.
+.copernicus_ecmwf_auth <- function() {
+  key <- tryCatch(ecmwfr::wf_get_key(), error = function(e) NULL)
+  
+  if (is.character(key) && length(key) == 1 && !is.na(key) && nzchar(key)) {
+    return(invisible(TRUE))
+  }
+  
+  if (!interactive()) {
+    stop(
+      "ECMWF Data Store authentication is required. `ecmwfr >= 2.0.0` uses ",
+      "a Personal Access Token (PAT), not the legacy username/password scheme. ",
+      "Run `ecmwfr::wf_set_key()` once before using CDS or ADS ",
+      "non-interactively.",
+      call. = FALSE
+    )
+  }
+  
+  message(
+    "ECMWF Data Store authentication is required.\n",
+    "CDS and ADS use the same Personal Access Token (PAT).\n",
+    "Opening the official CDS API setup page. Log in, copy your PAT, then paste ",
+    "it into the authentication dialog.\n",
+    "Legacy ERA5/CERRA username/password files are not used."
+  )
+  
+  try(
+    utils::browseURL("https://cds.climate.copernicus.eu/how-to-api"),
+    silent = TRUE
+  )
+  
+  tryCatch(
+    ecmwfr::wf_set_key(),
+    error = function(e) {
+      stop(
+        "Could not configure the ECMWF Data Store token: ",
+        conditionMessage(e),
+        call. = FALSE
+      )
+    }
+  )
+  
+  key <- tryCatch(ecmwfr::wf_get_key(), error = function(e) NULL)
+  
+  if (!is.character(key) || length(key) != 1 || is.na(key) || !nzchar(key)) {
+    stop(
+      "ECMWF Data Store authentication was not configured successfully. ",
+      "Obtain a Personal Access Token from the official CDS API setup page ",
+      "and run `ecmwfr::wf_set_key()`.",
+      call. = FALSE
+    )
+  }
+  
+  invisible(TRUE)
+}
+
 # Internal: CDS/ADS backend using ecmwfr.
 .copernicus_load_ecmwf <- function(source, dataset_id, variables,
                                    start_datetime, end_datetime,
