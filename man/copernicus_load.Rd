@@ -6,6 +6,7 @@
 \usage{
 copernicus_load(
   source = c("marine", "cds", "ads"),
+  backend = c("auto", "standalone", "python"),
   dataset_id,
   variables = NULL,
   start_datetime = NULL,
@@ -20,6 +21,8 @@ copernicus_load(
   output_dir = NULL,
   filename = NULL,
   split_by = NULL,
+  organize_by = NULL,
+  hemisphere = c("north", "south"),
   concurrent_processes = NULL,
   compression = NULL,
   dataset_version = NULL,
@@ -29,53 +32,58 @@ copernicus_load(
 )
 }
 \arguments{
-\item{source}{Character. Copernicus service: \code{"marine"}, \code{"cds"}, or \code{"ads"}.}
+\item{source}{Character. Copernicus service: \code{"marine"}, \code{"cds"}, or
+\code{"ads"}.}
+
+\item{backend}{Character. Backend used for Copernicus Marine requests:
+\code{"auto"}, \code{"standalone"}, or \code{"python"}.}
 
 \item{dataset_id}{Character. Provider dataset identifier.}
 
-\item{variables}{Optional character vector of variables to download.}
+\item{variables}{Character vector containing one or more environmental
+variables to download. For Copernicus Marine this must be supplied
+explicitly. Each requested variable is stored in separate NetCDF files.}
 
-\item{start_datetime}{Optional start datetime. A \code{Date}, \code{POSIXt}, or
-character value. Times are interpreted in UTC.}
+\item{start_datetime}{Optional start datetime.}
 
-\item{end_datetime}{Optional end datetime. Defaults to \code{start_datetime}.}
+\item{end_datetime}{Optional end datetime.}
 
-\item{xmin, xmax, ymin, ymax}{Optional geographic bounding box in decimal
-degrees. The ordering used internally for ECMWF \code{area} is north, west,
-south, east.}
+\item{xmin, xmax, ymin, ymax}{Optional geographic bounding box.}
 
-\item{depth_min, depth_max}{Optional depth range in metres, positive downward.
-Supported directly for Copernicus Marine. For CDS/ADS, vertical
-dimensions such as pressure or model levels should be supplied through
-\code{request}.}
+\item{depth_min, depth_max}{Optional depth range in metres, positive
+downward.}
 
-\item{request}{Named list of provider- or dataset-specific request arguments.
-Examples include \code{product_type}, \code{pressure_level}, \code{data_format},
-\code{download_format}, \code{service}, or \code{coordinates_selection_method}.}
+\item{request}{Named list of provider- or dataset-specific request
+arguments.}
 
-\item{output_dir}{Character. Destination directory. Defaults to a
-source-specific subdirectory of \code{\link[=copernicus_cache_dir]{copernicus_cache_dir()}}.}
+\item{output_dir}{Character. Root destination directory.}
 
-\item{filename}{Optional output filename. For ECMWF services this is passed as
-the request \code{target}.}
+\item{filename}{Optional base output filename.}
 
-\item{split_by}{Optional character. For Copernicus Marine, split downloaded
-subsets by \code{"variable"}, \code{"hour"}, \code{"day"}, \code{"month"}, or \code{"year"}.}
+\item{split_by}{Optional character defining temporal file subdivision for
+Copernicus Marine. Supported values are \code{"year"}, \code{"season"}, \code{"month"},
+\code{"week"}, \code{"day"}, and \code{"hour"}. Variables are always split
+automatically.}
 
-\item{concurrent_processes}{Optional integer. Number of concurrent processes
-used by Copernicus Marine when \code{split_by} is supplied.}
+\item{organize_by}{Optional character vector defining the directory
+hierarchy. Supported components are \code{"service"}, \code{"dataset"},
+\code{"variable"}, \code{"year"}, \code{"season"}, \code{"month"}, \code{"week"}, \code{"day"},
+and \code{"hour"}.}
 
-\item{compression}{Optional integer from 0 to 9 giving the Copernicus Marine
-NetCDF compression level.}
+\item{hemisphere}{Character. \code{"north"} or \code{"south"}. Used only to assign
+human-readable names to meteorological seasons.}
+
+\item{concurrent_processes}{Optional integer >= 1.}
+
+\item{compression}{Optional integer from 0 to 9.}
 
 \item{dataset_version}{Optional Copernicus Marine dataset version.}
 
 \item{dataset_part}{Optional Copernicus Marine dataset part.}
 
-\item{force}{Logical. Overwrite an identifiable existing output file.
-Default \code{FALSE}.}
+\item{force}{Logical. Replace existing output files.}
 
-\item{quiet}{Logical. Suppress progress messages where supported.}
+\item{quiet}{Logical. Suppress progress messages where possible.}
 }
 \value{
 Character vector containing paths to downloaded files.
@@ -87,52 +95,97 @@ sources are Copernicus Marine (\code{"marine"}), Climate Data Store (\code{"cds"
 and Atmosphere Data Store (\code{"ads"}).
 }
 \details{
-Copernicus Marine requests use the Python \code{copernicusmarine} package through
-\code{reticulate}. CDS and ADS requests use \code{ecmwfr}.
+Copernicus Marine requests can use either the official standalone
+Copernicus Marine Toolbox or the Python \code{copernicusmarine} package through
+\code{reticulate}. The standalone Toolbox is the recommended backend because it
+does not require users to install or configure Python.
 
-The common arguments provide a consistent interface for dataset, variable,
-spatial, temporal, and depth selection. Dataset-specific request parameters
-can be supplied through \code{request}. Explicit arguments to \code{copernicus_load()}
-take precedence over duplicate entries in \code{request}.
+With \code{backend = "auto"}, the standalone Toolbox is used when available.
+The Python backend is used only when the standalone executable is not
+available. Backend selection occurs before the request starts; a failed
+request is never automatically retried using another backend.
 
-Authentication is managed through the official provider clients. Copernicus
-Marine credentials are checked automatically and interactive login is offered
-when needed. CDS and ADS use an ECMWF Personal Access Token (PAT),
-configured with \code{\link[ecmwfr:wf_set_key]{ecmwfr::wf_set_key()}}. If no PAT is found in an interactive
-session, the official CDS API setup page is opened and token setup is started.
+For Copernicus Marine, each output NetCDF file contains exactly one
+requested environmental variable. When several variables are supplied,
+they are automatically separated into different files. \code{split_by} therefore
+controls temporal subdivision only.
 
-For CERRA requests, geographic subsetting is performed locally when a bounding
-box is supplied. The provider response is downloaded to a temporary directory,
-the raster is cropped with \code{terra}, only the cropped result is retained, and
-temporary full-domain files are removed automatically.
+Downloaded Copernicus Marine files can optionally be arranged into a
+directory hierarchy with \code{organize_by}. For example,
+
+\code{c("service", "dataset", "variable", "year", "month", "day")}
+
+stores each variable independently below the service and dataset, followed
+by calendar year, month, and day.
+
+Temporal organization cannot be finer than \code{split_by}. For example,
+\code{split_by = "month"} cannot be combined with
+\code{organize_by = c("year", "month", "day")}, because one monthly output file
+can contain multiple days. Such incompatible combinations are detected
+before a download starts.
+
+Week splitting and organization use ISO weeks. ISO weeks start on Monday
+and week 1 is the week containing 4 January. The associated year is the ISO
+week-year rather than necessarily the ordinary calendar year.
+
+Season splitting uses meteorological rather than astronomical seasons.
+Meteorological seasons are fixed three-month periods beginning on the first
+day of a month:
+\itemize{
+\item DJF: December-February
+\item MAM: March-May
+\item JJA: June-August
+\item SON: September-November
+}
+
+These temporal boundaries are identical in both hemispheres.
+\code{hemisphere} determines only the human-readable season name. Thus DJF is
+\code{"winter_DJF"} in the Northern Hemisphere and \code{"summer_DJF"} in the
+Southern Hemisphere. DJF is assigned to the year containing January and
+February; for example, December 2025 belongs to DJF 2026.
+
+The official Copernicus Marine Toolbox natively supports splitting by year,
+month, day, and hour. Week and meteorological-season splitting are managed
+by this package by issuing one appropriately bounded Toolbox request per
+temporal period.
+
+CDS and ADS requests use \code{ecmwfr}. File organization through \code{organize_by}
+is currently implemented for Copernicus Marine only.
+
+Authentication is managed through the official provider clients. For
+Copernicus Marine, run \code{\link[=copernicus_login]{copernicus_login()}} once before the first request.
+The credentials created by the official Copernicus Marine Toolbox are
+shared by both the standalone and Python backends, so the same login can be
+used with \code{backend = "standalone"} or \code{backend = "python"}.
+
+If the Python backend does not find valid credentials, it asks the user to
+configure authentication with \code{\link[=copernicus_login]{copernicus_login()}} rather than attempting
+an interactive password prompt through \code{reticulate}, because such prompts
+are not reliably supported in R sessions.
 }
 \examples{
 \dontrun{
-# Copernicus Marine
 files <- copernicus_load(
   source = "marine",
-  dataset_id = "cmems_mod_glo_phy_my_0.083deg_P1D-m",
-  variables = c("thetao", "so"),
-  start_datetime = "2020-01-01",
-  end_datetime = "2020-01-31",
-  xmin = -6, xmax = 10, ymin = 35, ymax = 45,
-  depth_min = 0, depth_max = 500
-)
-
-# ERA5 through the Climate Data Store
-files <- copernicus_load(
-  source = "cds",
-  dataset_id = "reanalysis-era5-single-levels",
-  variables = "2m_temperature",
-  start_datetime = "2021-01-01T12:00:00",
-  end_datetime = "2021-01-31T12:00:00",
-  xmin = -2, xmax = 4, ymin = 36, ymax = 43,
-  request = list(
-    product_type = "reanalysis",
-    data_format = "netcdf",
-    download_format = "unarchived"
-  ),
-  filename = "era5_temperature.nc"
+  dataset_id = "cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m",
+  variables = "thetao",
+  start_datetime = "2026-07-01",
+  end_datetime = "2026-07-31",
+  xmin = -6,
+  xmax = 10,
+  ymin = 35,
+  ymax = 45,
+  depth_min = 0,
+  depth_max = 500,
+  split_by = "day",
+  organize_by = c(
+    "service",
+    "dataset",
+    "variable",
+    "year",
+    "month",
+    "day"
+  )
 )
 }
 

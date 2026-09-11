@@ -14,3 +14,7 @@ Returns the path to the package's persistent cache directory for downloaded
 Copernicus environmental data. Uses \code{\link[tools:R_user_dir]{tools::R_user_dir()}} so the location
 survives across sessions and follows platform conventions.
 }
+\examples{
+copernicus_cache_dir()
+
+}

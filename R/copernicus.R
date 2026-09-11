@@ -5,6 +5,11 @@
 #' survives across sessions and follows platform conventions.
 #'
 #' @returns Character. Path to cache directory (created if missing).
+#' 
+#' 
+#' @examples
+#' copernicus_cache_dir()
+#'
 #' @export
 copernicus_cache_dir <- function() {
   
@@ -34,6 +39,12 @@ copernicus_cache_dir <- function() {
 #' @param confirm Logical. Require interactive confirmation. Default `TRUE`.
 #'
 #' @returns Invisibly, `TRUE` on success.
+#' 
+#' @examples
+#' \dontrun{
+#' copernicus_cache_clear()
+#' }
+#' 
 #' @export
 copernicus_cache_clear <- function(confirm = TRUE) {
   path <- copernicus_cache_dir()
@@ -350,6 +361,11 @@ copernicus_status <- function(path = NULL) {
 #' automatically. If authentication still needs to be configured, an
 #' interactive Toolbox login is started.
 #'
+#' Authentication only needs to be configured once. The credentials created
+#' by the official Copernicus Marine Toolbox are shared by both the standalone
+#' and Python backends, so no separate Python login is required before using
+#' `backend = "python"`.
+#' 
 #' When running inside RStudio, a first-time login is opened in the RStudio
 #' Terminal because username and password prompts from external programs may
 #' not receive interactive input correctly from the RStudio Console.
@@ -1192,9 +1208,15 @@ copernicus_setup <- function(
 #' is currently implemented for Copernicus Marine only.
 #'
 #' Authentication is managed through the official provider clients. For
-#' Copernicus Marine, authentication can be configured with
-#' [copernicus_login()]. Credentials are discovered, validated, and stored by
-#' the official Copernicus Marine Toolbox rather than by this package.
+#' Copernicus Marine, run [copernicus_login()] once before the first request.
+#' The credentials created by the official Copernicus Marine Toolbox are
+#' shared by both the standalone and Python backends, so the same login can be
+#' used with `backend = "standalone"` or `backend = "python"`.
+#'
+#' If the Python backend does not find valid credentials, it asks the user to
+#' configure authentication with [copernicus_login()] rather than attempting
+#' an interactive password prompt through `reticulate`, because such prompts
+#' are not reliably supported in R sessions.
 #'
 #' @param source Character. Copernicus service: `"marine"`, `"cds"`, or
 #'   `"ads"`.
@@ -1346,6 +1368,18 @@ copernicus_load <- function(
     )
   }
   
+  if (!is.null(compression) &&
+      (!is.numeric(compression) ||
+       length(compression) != 1L ||
+       !is.finite(compression) ||
+       compression < 0 ||
+       compression > 9 ||
+       compression != as.integer(compression))) {
+    stop(
+      "`compression` must be a single integer from 0 to 9.",
+      call. = FALSE
+    )
+  }
   .copernicus_validate_bbox(
     xmin = xmin,
     xmax = xmax,
@@ -1755,42 +1789,26 @@ copernicus_load <- function(
   )
 }
 
-# Internal: validate or interactively configure Copernicus Marine credentials.
+# Internal: validate Copernicus Marine credentials for the Python backend.
 .copernicus_marine_auth <- function(cm) {
   valid <- tryCatch(
     isTRUE(cm$login(check_credentials_valid = TRUE)),
     error = function(e) FALSE
   )
-
-  if (valid) return(invisible(TRUE))
-
-  if (!interactive()) {
-    stop(
-      "Valid Copernicus Marine credentials were not found. ",
-      "Run the Copernicus Marine Toolbox login once before using ",
-      "`copernicus_load()` non-interactively.",
-      call. = FALSE
-    )
+  
+  if (valid) {
+    return(invisible(TRUE))
   }
-
-  message(
-    "Copernicus Marine authentication is required.\n",
-    "The official Copernicus Marine Toolbox will request your credentials and ",
-    "store them in its standard user configuration."
+  
+  stop(
+    "Valid Copernicus Marine credentials were not found.\n\n",
+    "Configure authentication first with `copernicus_login()`, or run ",
+    "`copernicusmarine.login()` directly in a Python terminal, then retry ",
+    "`copernicus_load()`.\n\n",
+    "Interactive Python login is not attempted through `reticulate` because ",
+    "password prompts are not reliably supported in R sessions.",
+    call. = FALSE
   )
-
-  ok <- tryCatch(
-    isTRUE(cm$login()),
-    error = function(e) {
-      stop(
-        "Copernicus Marine authentication failed: ", conditionMessage(e),
-        call. = FALSE
-      )
-    }
-  )
-
-  if (!ok) stop("Copernicus Marine authentication failed.", call. = FALSE)
-  invisible(TRUE)
 }
 
 # Internal: Copernicus Marine Python backend.
@@ -3280,6 +3298,14 @@ copernicus_load <- function(
   
   x <- as.character(x)
   
+  if (length(x) != 1L ||
+      is.na(x) ||
+      !nzchar(trimws(x))) {
+    stop(
+      "Could not create a valid file or directory name.",
+      call. = FALSE
+    )
+  }
   x <- gsub(
     '[<>:"/\\\\|?*]',
     "_",
@@ -3510,114 +3536,7 @@ copernicus_load <- function(
   plan
 }
 
-# Internal: parse the file information returned by a completed standalone
-# Copernicus Marine download.
-#
-# Unlike a dry-run, a completed download does not report variable names or
-# coordinate extents in the JSON payload. Those properties are read directly
-# from the downloaded NetCDF files when needed.
-.copernicus_parse_download_files <- function(output) {
-  
-  if (!length(output)) {
-    stop(
-      "The Copernicus Marine download returned no output.",
-      call. = FALSE
-    )
-  }
-  
-  json_start <- grep(
-    "^\\s*\\[\\s*$",
-    output
-  )
-  
-  if (!length(json_start)) {
-    stop(
-      "Could not find the JSON file information in the completed ",
-      "Copernicus Marine download output.",
-      call. = FALSE
-    )
-  }
-  
-  json_text <- paste(
-    output[json_start[[1]]:length(output)],
-    collapse = "\n"
-  )
-  
-  files <- tryCatch(
-    jsonlite::fromJSON(
-      json_text,
-      simplifyVector = FALSE
-    ),
-    error = function(e) {
-      stop(
-        "Could not parse the completed Copernicus Marine download result.\n\n",
-        "Original error:\n  ",
-        conditionMessage(e),
-        call. = FALSE
-      )
-    }
-  )
-  
-  if (!is.list(files) || !length(files)) {
-    stop(
-      "The completed Copernicus Marine request returned no output files.",
-      call. = FALSE
-    )
-  }
-  
-  required_fields <- c(
-    "filename",
-    "status"
-  )
-  
-  for (i in seq_along(files)) {
-    
-    missing_fields <- setdiff(
-      required_fields,
-      names(files[[i]])
-    )
-    
-    if (length(missing_fields)) {
-      stop(
-        "Completed Copernicus Marine download item ",
-        i,
-        " is missing required field",
-        if (length(missing_fields) > 1L) "s" else "",
-        ":\n  ",
-        paste(
-          missing_fields,
-          collapse = ", "
-        ),
-        call. = FALSE
-      )
-    }
-    
-    if (!identical(
-      as.character(files[[i]]$status),
-      "000"
-    )) {
-      stop(
-        "Copernicus Marine reported an unsuccessful downloaded file.\n\n",
-        "File:\n  ",
-        files[[i]]$filename,
-        "\n\n",
-        "Status:\n  ",
-        files[[i]]$status,
-        if (!is.null(files[[i]]$message)) {
-          paste0(
-            "\n\nMessage:\n  ",
-            files[[i]]$message
-          )
-        } else {
-          ""
-        },
-        call. = FALSE
-      )
-    }
-  }
-  
-  files
-}
+
 # Internal: extract one coordinate extent from a Copernicus Marine dry-run
 # item.
 .copernicus_plan_extent <- function(
@@ -4753,7 +4672,6 @@ copernicus_load <- function(
         "--dry-run"
       )
     }
-    
     if (isTRUE(quiet)) {
       args <- c(
         args,
@@ -4761,7 +4679,6 @@ copernicus_load <- function(
         "ERROR"
       )
     }
-    
     args
   }
   
@@ -4848,7 +4765,7 @@ copernicus_load <- function(
       download_result <- .copernicus_run_standalone(
         executable = executable,
         args = download_args,
-        dataset_id = dataset_id,
+        dataset_id = dataset_id
       )
       
       if (!identical(download_result$status, 0L)) {
@@ -4907,8 +4824,31 @@ copernicus_load <- function(
         }
       }
       
-      download_items <- .copernicus_parse_download_files(
-        output = download_result$output
+      # The completed Toolbox request does not report output filenames.
+      # Once the process has completed successfully, use the NetCDF files
+      # actually written to the staging directory as the authoritative result.
+      staging_candidates <- list.files(
+        staging_dir,
+        pattern = "\\.(nc|nc4)$",
+        full.names = TRUE,
+        recursive = TRUE,
+        ignore.case = TRUE
+      )
+      if (!length(staging_candidates)) {
+        stop(
+          "The Copernicus Marine Toolbox completed the custom temporal split ",
+          "request successfully, but no NetCDF files were found in the ",
+          "temporary staging directory.",
+          call. = FALSE
+        )
+      }
+      download_items <- lapply(
+        staging_candidates,
+        function(path) {
+          list(
+            filename = basename(path)
+          )
+        }
       )
       
     } else {
@@ -4982,7 +4922,7 @@ copernicus_load <- function(
         period_result <- .copernicus_run_standalone(
           executable = executable,
           args = period_args,
-          dataset_id = dataset_id,
+          dataset_id = dataset_id
         )
         
         if (!identical(period_result$status, 0L)) {
@@ -5044,27 +4984,40 @@ copernicus_load <- function(
           }
         }
         
-        this_download <- .copernicus_parse_download_files(
-          output = period_result$output
+      }
+    }
+    
+    # Completed Toolbox requests do not reliably report output filenames.
+    # If no download items are available yet, use the NetCDF files
+    # actually written to the staging directory as the authoritative result.
+    if (!length(download_items)) {
+      staging_candidates <- list.files(
+        staging_dir,
+        pattern = "\\.(nc|nc4)$",
+        full.names = TRUE,
+        recursive = TRUE,
+        ignore.case = TRUE
+      )
+      if (length(staging_candidates)) {
+        download_items <- lapply(
+          staging_candidates,
+          function(path) {
+            list(
+              filename = basename(path)
+            )
+          }
         )
-        
-        download_items <- c(
-          download_items,
-          this_download
+      } else {
+        stop(
+          "The Copernicus Marine Toolbox completed the request successfully, ",
+          "but no NetCDF files were found in the temporary staging directory.",
+          call. = FALSE
         )
       }
     }
     
-    if (!length(download_items)) {
-      stop(
-        "The Copernicus Marine Toolbox completed the request but returned ",
-        "no downloadable files.",
-        call. = FALSE
-      )
-    }
-    
     # ---------------------------------------------------------------------
-    # Match the files reported by the Toolbox to the NetCDF files actually
+    # Match the expected download items to the NetCDF files actually
     # written to the staging directory.
     # ---------------------------------------------------------------------
     
@@ -5080,7 +5033,7 @@ copernicus_load <- function(
       stop(
         "The Copernicus Marine Toolbox completed the download, but the ",
         "number of NetCDF files found does not match the reported result.\n\n",
-        "Files reported by the Toolbox:\n  ",
+        "Expected download items:\n  ",
         length(download_items),
         "\n\n",
         "NetCDF files found:\n  ",
@@ -5151,7 +5104,7 @@ copernicus_load <- function(
       
       if (!file.exists(path)) {
         stop(
-          "A Copernicus Marine output file reported by the Toolbox does not ",
+          "A Copernicus Marine output file expected from the download does not ",
           "exist:\n  ",
           path,
           call. = FALSE
@@ -5456,7 +5409,7 @@ copernicus_load <- function(
     plan_result <- .copernicus_run_standalone(
       executable = executable,
       args = plan_args,
-      dataset_id = dataset_id,
+      dataset_id = dataset_id
     )
     
     if (!identical(plan_result$status, 0L)) {
@@ -5543,7 +5496,7 @@ copernicus_load <- function(
       period_plan_result <- .copernicus_run_standalone(
         executable = executable,
         args = period_plan_args,
-        dataset_id = dataset_id,
+        dataset_id = dataset_id
       )
       
       if (!identical(period_plan_result$status, 0L)) {
@@ -6004,7 +5957,7 @@ copernicus_load <- function(
     bulk_result <- .copernicus_run_standalone(
       executable = executable,
       args = bulk_args,
-      dataset_id = dataset_id,
+      dataset_id = dataset_id
     )
     
     if (!identical(bulk_result$status, 0L)) {
@@ -6289,7 +6242,7 @@ copernicus_load <- function(
     item_result <- .copernicus_run_standalone(
       executable = executable,
       args = item_args,
-      dataset_id = dataset_id,
+      dataset_id = dataset_id
     )
     
     if (!identical(item_result$status, 0L)) {

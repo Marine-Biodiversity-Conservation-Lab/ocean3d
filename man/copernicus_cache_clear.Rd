@@ -15,3 +15,9 @@ Invisibly, \code{TRUE} on success.
 \description{
 Remove all files downloaded to the default Copernicus cache.
 }
+\examples{
+\dontrun{
+copernicus_cache_clear()
+}
+
+}
