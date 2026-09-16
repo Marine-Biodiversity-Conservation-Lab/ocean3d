@@ -1,0 +1,58 @@
+## Codecov configuration for ocean3d
+##
+## Lives in .github/ so it is covered by the existing ^\.github$ entry in
+## .Rbuildignore and stays out of the built package.
+##
+## Validate changes with:
+##   curl -X POST --data-binary @.github/codecov.yml https://codecov.io/validate
+
+codecov:
+  require_ci_to_pass: true
+  notify:
+    # Don't post a report until test-coverage.yaml has finished, so the
+    # comment always reflects a completed run.
+    wait_for_ci: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "50...90"
+
+  status:
+    # Project status guards total coverage against regressions. This is the
+    # check that matters: a PR that adds a large, lightly tested file will
+    # fail here even if its patch status passes.
+    project:
+      default:
+        target: auto        # compare against the PR base
+        threshold: 1%       # tolerate small, incidental drops
+        if_ci_failed: error
+        if_not_found: failure
+
+    # Patch status covers only lines changed by the PR.
+    patch:
+      default:
+        target: 80%
+        threshold: 0%
+        if_ci_failed: error
+        if_not_found: failure
+
+comment:
+  # Always render the full table. 
+  layout: "header, diff, files, footer"
+  # `behavior: default` edits the existing comment in place. Switch to `new`
+  # if you want a fresh comment per upload rather than risking a stale one.
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+## Files that are not R source and carry no coverage data.
+ignore:
+  - "man/**"
+  - "vignettes/**"
+  - "inst/**"
+  - "tests/**"
+  - "docs/**"
+  - "renv/**"
+  - "example_data/**"
