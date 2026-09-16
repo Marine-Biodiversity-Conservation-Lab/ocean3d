@@ -5,14 +5,14 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Shark and Ray Abiotic Covariates in 3 Dimensions • sharkabc3d</title>
+<title>Three-Dimensional Marine Spatial Analysis • ocean3d</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Shark and Ray Abiotic Covariates in 3 Dimensions">
-<meta name="description" content="Facilitates the analysis of shark and ray habitat in 3D, enabling descriptions of habitat by depth and area. Provides tools for volume calculation, environmental extraction, and spatial overlap analysis between species ranges, fisheries, and depth-stratified environmental data.">
-<meta property="og:description" content="Facilitates the analysis of shark and ray habitat in 3D, enabling descriptions of habitat by depth and area. Provides tools for volume calculation, environmental extraction, and spatial overlap analysis between species ranges, fisheries, and depth-stratified environmental data.">
+<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Three-Dimensional Marine Spatial Analysis">
+<meta name="description" content="Facilitates the analysis of marine habitat in 3D, enabling descriptions of habitat by depth and area. Provides tools for volume calculation, environmental extraction, and spatial overlap analysis between species ranges, fisheries, and depth-stratified environmental data.">
+<meta property="og:description" content="Facilitates the analysis of marine habitat in 3D, enabling descriptions of habitat by depth and area. Provides tools for volume calculation, environmental extraction, and spatial overlap analysis between species ranges, fisheries, and depth-stratified environmental data.">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -20,9 +20,9 @@
 
     <nav class="navbar navbar-expand-lg fixed-top bg-light" data-bs-theme="light" aria-label="Site navigation"><div class="container">
 
-    <a class="navbar-brand me-2" href="index.html">sharkabc3d</a>
+    <a class="navbar-brand me-2" href="index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9006</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9007</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -48,7 +48,7 @@
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="search.json">
 </form></li>
-<li class="nav-item"><a class="external-link nav-link" href="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul>
 </div>
 
@@ -57,12 +57,12 @@
 </nav><div class="container template-home">
 <div class="row">
   <main id="main" class="col-md-9"><div class="section level1">
-<div class="page-header"><h1 id="sharkabc3d">sharkabc3d<a class="anchor" aria-label="anchor" href="#sharkabc3d"></a>
+<div class="page-header"><h1 id="ocean3d">ocean3d<a class="anchor" aria-label="anchor" href="#ocean3d"></a>
 </h1></div>
 <!-- badges: start -->
 
-<p><strong>sharkabc3d</strong> (Shark and Ray Abiotic Covariates in 3 Dimensions) is an R package for three-dimensional marine spatial analysis of sharks, rays, and chimaeras.</p>
-<p>The three-dimensional marine environment poses a unique challenge for spatial analyses. Most conventional GIS workflows represent space as a two-dimensional plane, an abstraction that fails to capture the range of depths and vertical overlap of marine habitat. Fisheries also operate at different depths depending on gear type and target species, creating depth-specific patterns of threat exposure that require analysis in 3D volume rather than 2D planes to quantify. <code>sharkabc3d</code> provides documented workflows and reusable functions for:</p>
+<p><strong>ocean3d</strong> is an R package for three-dimensional marine spatial analysis of species ranges, fisheries, and depth-stratified oceanographic data. It grew out of work on sharks, rays, and chimaeras, with the functions generalising to any marine taxon or spatial layer.</p>
+<p>The three-dimensional marine environment poses a unique challenge for spatial analyses. Most conventional GIS workflows represent space as a two-dimensional plane. This abstraction fails to capture the range of depths and vertical overlap of marine habitat. Fisheries also operate at different depths depending on gear type and target species, creating depth-specific patterns of threat exposure that require analysis in 3D volume rather than 2D planes to quantify. <code>ocean3d</code> provides documented workflows and reusable functions for:</p>
 <ul>
 <li>extracting values from depth-stratified oceanographic rasters within user-defined geographic areas and depth windows;</li>
 <li>characterising the abiotic habitat (e.g., temperature, dissolved oxygen) of marine species using IUCN Red List ranges and World Ocean Atlas 2023 climatologies;</li>
@@ -77,10 +77,10 @@
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
-<p>You can install the development version of sharkabc3d from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
+<p>You can install the development version of ocean3d from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("devtools")</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"Marine-Biodiversity-Conservation-Lab/sharkabc3d"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"Marine-Biodiversity-Conservation-Lab/ocean3d"</span><span class="op">)</span></span></code></pre></div>
 <p>Add an IUCN Red List API key to access species-assessment functions. Sign up and acquire your API key at <a href="https://api.iucnredlist.org/" class="external-link uri">https://api.iucnredlist.org/</a>:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">usethis</span><span class="fu">::</span><span class="fu">edit_r_environ</span><span class="op">(</span><span class="op">)</span></span>
@@ -101,6 +101,44 @@
 <li>
 <code><a href="reference/fill_missing_depths.html">fill_missing_depths()</a></code> — fix swapped upper/lower depth values and fill missing values from genus-level means.</li>
 </ul>
+<div class="section level4">
+<h4 id="world-ocean-atlas-2023-utilities">World Ocean Atlas 2023 utilities<a class="anchor" aria-label="anchor" href="#world-ocean-atlas-2023-utilities"></a>
+</h4>
+<ul>
+<li>
+<code><a href="reference/woa_download.html">woa_download()</a></code> — download WOA 2023 NetCDF files (temperature, salinity, dissolved oxygen, oxygen saturation, AOU, nitrate, phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with caching.</li>
+<li>
+<code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> — load a WOA NetCDF and select a statistical field (e.g., objectively analyzed climatology), returning a <code>SpatRaster</code> with the package’s standard <code>{variable}_depth={value}</code> layer names.</li>
+<li>
+<code><a href="reference/woa_cache_dir.html">woa_cache_dir()</a></code> / <code><a href="reference/woa_cache_clear.html">woa_cache_clear()</a></code> — manage the persistent WOA download cache.</li>
+</ul>
+</div>
+<div class="section level4">
+<h4 id="copernicus-marine-cds-ads">Copernicus (Marine, CDS, ADS)<a class="anchor" aria-label="anchor" href="#copernicus-marine-cds-ads"></a>
+</h4>
+<ul>
+<li>
+<code><a href="reference/copernicus_setup.html">copernicus_setup()</a></code> — download and configure the standalone Toolbox executable (no separate Python installation needed).</li>
+<li>
+<code><a href="reference/copernicus_login.html">copernicus_login()</a></code> — configure or verify authentication, once.</li>
+<li>
+<code><a href="reference/copernicus_status.html">copernicus_status()</a></code> — report whether the Toolbox is available, and from which path and version.</li>
+<li>
+<code><a href="reference/copernicus_load.html">copernicus_load()</a></code> — download a dataset from Copernicus Marine, the Climate Data Store, or the Atmosphere Data Store, subset by variable, time window, bounding box and depth range.</li>
+<li>
+<code><a href="reference/copernicus_summarise.html">copernicus_summarise()</a></code> — reduce downloaded NetCDFs across time (mean, min, max, sd), preserving depth and the other non-temporal dimensions, working on the NetCDF directly via <code>ncdf4</code>.</li>
+<li>
+<code><a href="reference/copernicus_cache_dir.html">copernicus_cache_dir()</a></code> / <code><a href="reference/copernicus_cache_clear.html">copernicus_cache_clear()</a></code> — manage the persistent Copernicus download cache.</li>
+</ul>
+</div>
+<div class="section level4">
+<h4 id="global-fishing-watch-fisheries-effort">Global Fishing Watch (fisheries effort)<a class="anchor" aria-label="anchor" href="#global-fishing-watch-fisheries-effort"></a>
+</h4>
+<ul>
+<li>
+<code><a href="reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code> — turn the long-format apparent-fishing-hours tibble from <code><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html" class="external-link">gfwr::gfw_ais_fishing_hours()</a></code> into a multi-layer <code>SpatRaster</code>, one layer per gear (or other grouping). Extending that into 3D uses the general converters — <code><a href="reference/as_envelope.html">as_envelope()</a></code> and <code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> — driven by a gear-to-depth-band lookup. Those operating-depth priors are analysis assumptions rather than package data, so they live in the <code>gfw-fishing-effort-3d</code> article.</li>
+</ul>
+</div>
 </div>
 <div class="section level3">
 <h3 id="building-the-3d-study-grid-and-rasterized-ranges">Building the 3D study grid and rasterized ranges<a class="anchor" aria-label="anchor" href="#building-the-3d-study-grid-and-rasterized-ranges"></a>
@@ -108,8 +146,23 @@
 <ul>
 <li>
 <code><a href="reference/create_study_raster.html">create_study_raster()</a></code> — build an empty study-area <code>SpatRaster</code> covering the combined extent of one or more spatial inputs.</li>
+</ul>
+</div>
+<div class="section level3">
+<h3 id="two-3d-representations-and-moving-between-them">Two 3D representations, and moving between them<a class="anchor" aria-label="anchor" href="#two-3d-representations-and-moving-between-them"></a>
+</h3>
+<p>A <code>SpatEnvelope</code> stores one continuous <code>[depth_min, depth_max]</code> interval per cell; a <code>SpatVoxel</code> stores a value at each of a set of depth levels, so it can hold a variable and interior gaps.</p>
+<ul>
 <li>
-<code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> — rasterize a single species range or fishery footprint onto the study grid and attach per-cell <code>depth_min</code> / <code>depth_max</code>, returning a <code>SpatEnvelope</code>. Depth limits are lists mixing numerics and rasters, so bathymetry is just one more constraint: per cell the deepest <code>depth_min</code> and the shallowest <code>depth_max</code> win.</li>
+<code><a href="reference/as_voxel.html">as_voxel()</a></code> — wrap a multi-depth <code>SpatRaster</code> (or a list of single-depth ones) as a validated <code>SpatVoxel</code>, ordered shallow to deep with <code>{variable}_depth={value}</code> layer names.</li>
+<li>
+<code><a href="reference/as_envelope.html">as_envelope()</a></code> — define a 3D envelope with two rasters, with <code>depth_min</code> and <code>depth_max</code> corresponding to the minimum and maximum depths present in given cell.</li>
+<li>
+<code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> — rasterize a single species range or fishery footprint onto the study grid and attach per-cell <code>depth_min</code> / <code>depth_max</code>, returning a <code>SpatEnvelope</code>.</li>
+<li>
+<code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> — expand an envelope onto a set of depth levels.</li>
+<li>
+<code><a href="reference/voxel_to_envelope.html">voxel_to_envelope()</a></code> — collapse a voxel to the envelope bounding it, using a predicate on the cell values. Lossy: interior gaps are filled.</li>
 </ul>
 </div>
 <div class="section level3">
@@ -138,7 +191,7 @@
 </ul>
 </div>
 <div class="section level3">
-<h3 id="environmental-extraction-3d">Environmental extraction (3D)<a class="anchor" aria-label="anchor" href="#environmental-extraction-3d"></a>
+<h3 id="environmental-extraction-to-areas">Environmental extraction to areas<a class="anchor" aria-label="anchor" href="#environmental-extraction-to-areas"></a>
 </h3>
 <ul>
 <li>
@@ -152,34 +205,26 @@
 <p>See <code>vignette("woa-species-range-voxels")</code> for the full workflow, from a range polygon through to summary statistics.</p>
 </div>
 <div class="section level3">
-<h3 id="world-ocean-atlas-2023-utilities">World Ocean Atlas 2023 utilities<a class="anchor" aria-label="anchor" href="#world-ocean-atlas-2023-utilities"></a>
+<h3 id="environmental-extraction-to-point-observations">Environmental extraction to point observations<a class="anchor" aria-label="anchor" href="#environmental-extraction-to-point-observations"></a>
 </h3>
 <ul>
 <li>
-<code><a href="reference/woa_download.html">woa_download()</a></code> — download WOA 2023 NetCDF files (temperature, salinity, dissolved oxygen, oxygen saturation, AOU, nitrate, phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with caching.</li>
+<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> — the general engine: match observation points (data frame, tibble, <code>sf</code> POINT, matrix, or named list) against one or more NetCDF files, snapping to the nearest longitude, latitude, time and depth cell. Returns the input with the extracted values appended, structure preserved.</li>
 <li>
-<code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> — load a WOA NetCDF and select a statistical field (e.g., objectively analyzed climatology), returning a <code>SpatRaster</code> with the package’s standard <code>{variable}_depth={value}</code> layer names.</li>
+<code><a href="reference/extract2d.html">extract2d()</a></code> — for variables with no depth dimension.</li>
 <li>
-<code>woa_nc_extract()</code> — extract layers for a chosen statistical field from an already-loaded WOA <code>SpatRaster</code>.</li>
+<code><a href="reference/extract3d_nearest.html">extract3d_nearest()</a></code> — the valid, non-missing depth layer closest to each observation’s depth, so a cell below the seabed does not silently return <code>NA</code>.</li>
 <li>
-<code>woa_summarise_monthly()</code> — compute min, max, and max-minus-min across monthly WOA files at each depth layer.</li>
+<code><a href="reference/extract3d_surface.html">extract3d_surface()</a></code> / <code><a href="reference/extract3d_bottom.html">extract3d_bottom()</a></code> — the first available depth layer, or the deepest non-missing one at that cell.</li>
 <li>
-<code><a href="reference/woa_cache_dir.html">woa_cache_dir()</a></code> / <code><a href="reference/woa_cache_clear.html">woa_cache_clear()</a></code> — manage the persistent WOA download cache.</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="global-fishing-watch-fisheries-effort">Global Fishing Watch (fisheries effort)<a class="anchor" aria-label="anchor" href="#global-fishing-watch-fisheries-effort"></a>
-</h3>
-<ul>
-<li>
-<code><a href="reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code> — turn the long-format apparent-fishing-hours tibble from <code><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html" class="external-link">gfwr::gfw_ais_fishing_hours()</a></code> into a multi-layer <code>SpatRaster</code>, one layer per gear (or other grouping). Extending that into 3D uses the general converters — <code><a href="reference/as_envelope.html">as_envelope()</a></code> and <code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> — driven by a gear-to-depth-band lookup. Those operating-depth priors are analysis assumptions rather than package data, so they live in the <code>gfw-fishing-effort-3d</code> article.</li>
+<code><a href="reference/extract3d_all.html">extract3d_all()</a></code> — nearest, surface and bottom in one pass, as three columns.</li>
 </ul>
 </div>
 </div>
 <div class="section level2">
 <h2 id="contributing">Contributing<a class="anchor" aria-label="anchor" href="#contributing"></a>
 </h2>
-<p>Contributions are welcome. <code>sharkabc3d</code> is being actively built out from a set of lab analyses into a general, tested package, and there is plenty of well-scoped work available. Start with:</p>
+<p>Contributions are welcome. <code>ocean3d</code> is being actively built out from a set of lab analyses into a general, tested package, and there is plenty of well-scoped work available. Start with:</p>
 <ul>
 <li>
 <strong><a href="CONTRIBUTING.html">CONTRIBUTING.md</a></strong> — development setup, data requirements, the branching/coordination workflow, and coding conventions.</li>
@@ -194,19 +239,19 @@
 <h2 id="acknowledgements">Acknowledgements<a class="anchor" aria-label="anchor" href="#acknowledgements"></a>
 </h2>
 <p>Thank you to the people that have inspired and collaborated on this work!</p>
-<p>Rachel Aitchison, Wade VanderWright, Amanda Arnold, Dr. Samm Sherman, Dr. Alifa Haque.</p>
+<p>David Ruiz-García, Rachel Aitchison, Wade VanderWright, Amanda Arnold, Dr. Samm Sherman, Dr. Alifa Haque.</p>
 </div>
 <div class="section level2">
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
-<p>Matsushiba, J. H., &amp; Dulvy, N. K. <em>sharkabc3d: An R Package for Three-Dimensional Marine Spatial Analyses of Abiotic Covariates.</em></p>
+<p>Jay H. Matsushiba, David Ruiz-García, Rachel M. Aitchison, Wade J. VanderWright, C. Samantha Sherman, Alifa Bintha Haque, Nicholas K. Dulvy. <em>ocean3d: An R Package for Three-Dimensional Spatial Analyses of Marine Habitat.</em></p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
 <h2 data-toc-skip>Links</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/" class="external-link">Browse source code</a></li>
-<li><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/issues" class="external-link">Report a bug</a></li>
+<li><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/" class="external-link">Browse source code</a></li>
+<li><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues" class="external-link">Report a bug</a></li>
 </ul>
 </div>
 
@@ -229,7 +274,7 @@
 <div class="citation">
 <h2 data-toc-skip>Citation</h2>
 <ul class="list-unstyled">
-<li><a href="authors.html#citation">Citing sharkabc3d</a></li>
+<li><a href="authors.html#citation">Citing ocean3d</a></li>
 </ul>
 </div>
 
@@ -237,15 +282,16 @@
 <h2 data-toc-skip>Developers</h2>
 <ul class="list-unstyled">
 <li>Jay Matsushiba <br><small class="roles"> Author, maintainer </small> <a href="https://orcid.org/0000-0003-0496-9188" target="orcid.widget" aria-label="ORCID" class="external-link"><span class="fab fa-orcid orcid" aria-hidden="true"></span></a>  </li>
+<li>David Ruiz-García <br><small class="roles"> Author </small>   </li>
 </ul>
 </div>
 
 <div class="dev-status">
 <h2 data-toc-skip>Dev status</h2>
 <ul class="list-unstyled">
-<li><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions?query=workflow%3Apkgcheck" class="external-link"><img src="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/workflows/pkgcheck/badge.svg" alt="pkgcheck"></a></li>
-<li><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
-<li><a href="https://app.codecov.io/gh/Marine-Biodiversity-Conservation-Lab/sharkabc3d" class="external-link"><img src="https://codecov.io/gh/Marine-Biodiversity-Conservation-Lab/sharkabc3d/graph/badge.svg" alt="Codecov test coverage"></a></li>
+<li><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions?query=workflow%3Apkgcheck" class="external-link"><img src="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/workflows/pkgcheck/badge.svg" alt="pkgcheck"></a></li>
+<li><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
+<li><a href="https://app.codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d" class="external-link"><img src="https://codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d/graph/badge.svg" alt="Codecov test coverage"></a></li>
 <li><a href="https://www.repostatus.org/#wip" class="external-link"><img src="https://www.repostatus.org/badges/latest/wip.svg" alt="Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public."></a></li>
 </ul>
 </div>
@@ -255,7 +301,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Jay Matsushiba.</p>
+  <p>Developed by Jay Matsushiba, David Ruiz-García.</p>
 </div>
 
 <div class="pkgdown-footer-right">

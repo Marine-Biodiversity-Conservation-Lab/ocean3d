@@ -16,8 +16,8 @@ distribution. Depths are positive metres increasing downward, and
 
 ## See also
 
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md),
-[SpatVolume](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVolume-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
+[SpatVolume](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVolume-class.md)
 
 ## Examples
 

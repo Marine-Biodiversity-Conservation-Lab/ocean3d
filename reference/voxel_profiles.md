@@ -2,7 +2,7 @@
 
 A vertical profile decides how the value a cell carries is spread down
 the depth levels that cell occupies.
-[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md)
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 takes one through its `profile` argument, as a function — either one of
 these, or one you write.
 
@@ -37,7 +37,7 @@ grid of `ind` with either one layer or one per depth.
 
 - `profile_flat()`: The whole value at every occupied level. This is
   what `profile = NULL` means in
-  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md);
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md);
   it exists as a function so the no-profile case is a profile like any
   other rather than a special case in the caller.
 
@@ -50,7 +50,7 @@ grid of `ind` with either one layer or one per depth.
 ## Writing a profile
 
 A profile is called once per
-[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md)
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 call, with three arguments, positionally:
 
 - `ind`:

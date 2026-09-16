@@ -15,8 +15,8 @@ non-NA at the depths above and below it.
 
 ## See also
 
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md),
-[SpatVolume](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVolume-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
+[SpatVolume](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVolume-class.md)
 
 ## Examples
 

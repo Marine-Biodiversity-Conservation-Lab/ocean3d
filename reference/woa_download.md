@@ -2,7 +2,7 @@
 
 Download World Ocean Atlas 2023 NetCDF files from the NCEI THREDDS
 server. Files are cached in
-[`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_cache_dir.md)
+[`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_dir.md)
 (or a user-supplied `output_dir`) and skipped on subsequent calls unless
 `force = TRUE`.
 
@@ -46,7 +46,7 @@ woa_download(
 - output_dir:
 
   Character. Destination directory. Defaults to
-  [`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_cache_dir.md).
+  [`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_dir.md).
 
 - force:
 

@@ -18,7 +18,7 @@ The example species is the Banded Wobbegong (*Orectolobus halei*).
 
 ``` r
 
-library(sharkabc3d)
+library(ocean3d)
 library(dplyr)
 library(sf)
 library(stringr)
@@ -116,7 +116,7 @@ seafloor <- (terra::project(bathy, study_grid) * -1) |>
 
 ### Step 4: Build the species’ depth envelope
 
-[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md)
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
 builds the per-cell depth window. The seafloor goes in as one more
 `depth_max` constraint, so the species’ nominal lower limit is clamped
 to the bed wherever the bed is shallower; per cell the shallowest

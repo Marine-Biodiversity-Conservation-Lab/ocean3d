@@ -2,7 +2,7 @@
 
 `intersects_3d()` tests, cell by cell, whether `x` and `y` overlap in
 3D. It is the yes/no form of
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 and takes the same inputs. It computes only the presence pattern, with
 no cell areas and no volumes, so it is the cheap choice for richness and
 tally maps.
@@ -45,9 +45,9 @@ intersects_3d(x, y, ...)
 - x, y:
 
   The two objects. At least one must be a
-  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   or a
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
   The other can be either of those, a single-layer `SpatRaster`
   footprint, or polygons (`SpatVector`, `sf`, `sfc`). Rasters must share
   one grid (CRS, extent, resolution).
@@ -62,7 +62,7 @@ intersects_3d(x, y, ...)
   Only when one input is an envelope and the other a voxel. How the
   envelope is placed on the voxel's depth levels: `"top"` (default) or
   `"midpoint"`. See
-  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md).
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
 
 ## Value
 
@@ -90,7 +90,7 @@ The order of `x` and `y` does not matter.
 
 ## See also
 
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 for the shared space itself;
 [`mask()`](https://rspatial.github.io/terra/reference/mask.html) to keep
 a voxel's values inside a domain.

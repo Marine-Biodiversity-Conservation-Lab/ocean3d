@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>3D Volume Overlap Between Species and Fisheries • sharkabc3d</title>
+<title>3D Volume Overlap Between Species and Fisheries • ocean3d</title>
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
 <script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
@@ -18,9 +18,9 @@
 
     <nav class="navbar navbar-expand-lg fixed-top bg-light" data-bs-theme="light" aria-label="Site navigation"><div class="container">
 
-    <a class="navbar-brand me-2" href="../index.html">sharkabc3d</a>
+    <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9006</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9007</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -46,7 +46,7 @@
 <li class="nav-item"><form class="form-inline" role="search">
  <input class="form-control" type="search" name="search-input" id="search-input" autocomplete="off" aria-label="Search site" placeholder="Search for" data-search-index="../search.json">
 </form></li>
-<li class="nav-item"><a class="external-link nav-link" href="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
+<li class="nav-item"><a class="external-link nav-link" href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/" aria-label="GitHub"><span class="fa fab fa-github fa-lg"></span></a></li>
       </ul>
 </div>
 
@@ -63,7 +63,7 @@
       <h1>3D Volume Overlap Between Species and Fisheries</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/blob/main/vignettes/articles/bangladesh-fisheries-3d-overlap.Rmd" class="external-link"><code>vignettes/articles/bangladesh-fisheries-3d-overlap.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/vignettes/articles/bangladesh-fisheries-3d-overlap.Rmd" class="external-link"><code>vignettes/articles/bangladesh-fisheries-3d-overlap.Rmd</code></a></small>
       <div class="d-none name"><code>bangladesh-fisheries-3d-overlap.Rmd</code></div>
     </div>
 
@@ -81,7 +81,7 @@ actual 3D volume overlap is often much smaller because species occupy
 depth ranges that provide refuge from fishing gear.</p>
 <p>The original analysis used a hexagonal grid, custom depth-overlap
 calculations, and participatory mapping data. Here we reproduce the same
-methodology using the <code>sharkabc3d</code> raster-based volume
+methodology using the <code>ocean3d</code> raster-based volume
 functions.</p>
 <div class="section level3">
 <h3 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
@@ -107,7 +107,7 @@ depth</li>
 </h3>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># devtools::load_all()</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d" class="external-link">sharkabc3d</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d" class="external-link">ocean3d</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://stringr.tidyverse.org" class="external-link">stringr</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://readxl.tidyverse.org" class="external-link">readxl</a></span><span class="op">)</span></span>
@@ -513,13 +513,13 @@ it).</p>
 <p>Having computed the 3D overlaps, we now compare our raster-based
 results against the reference outputs from the original analysis (Haque
 et al.), which used a hexagonal grid approach. We expect
-<code>sharkabc3d</code> volumes to be systematically lower for two
+<code>ocean3d</code> volumes to be systematically lower for two
 reasons:</p>
 <ol style="list-style-type: decimal">
 <li>
 <strong>Per-cell bathymetry clamping</strong>: The original analysis
 applied a single uniform depth range across the entire intersection
-(volume = area × depth_range). <code>sharkabc3d</code> clamps
+(volume = area × depth_range). <code>ocean3d</code> clamps
 <code>depth_max</code> to the actual seafloor in each cell, so cells
 shallower than the nominal depth range contribute less volume. On the
 shallow Bangladesh continental shelf, this significantly reduces
@@ -611,21 +611,21 @@ it.</p>
 <span></span>
 <span><span class="co"># Area comparison</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">comparison</span><span class="op">$</span><span class="va">intersect_area_m2</span> <span class="op">/</span> <span class="fl">1e6</span>, <span class="va">comparison</span><span class="op">$</span><span class="va">our_intersect_area_m2</span> <span class="op">/</span> <span class="fl">1e6</span>,</span>
-<span>     xlab <span class="op">=</span> <span class="st">"Original area (km²)"</span>, ylab <span class="op">=</span> <span class="st">"sharkabc3d area (km²)"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Original area (km²)"</span>, ylab <span class="op">=</span> <span class="st">"ocean3d area (km²)"</span>,</span>
 <span>     main <span class="op">=</span> <span class="st">"Intersection Area"</span>,</span>
 <span>     pch <span class="op">=</span> <span class="fl">19</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/adjustcolor.html" class="external-link">adjustcolor</a></span><span class="op">(</span><span class="st">"steelblue"</span>, <span class="fl">0.6</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lty <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"red"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Mean depth comparison</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">comparison</span><span class="op">$</span><span class="va">ref_mean_depth_m</span>, <span class="va">comparison</span><span class="op">$</span><span class="va">our_mean_depth_m</span>,</span>
-<span>     xlab <span class="op">=</span> <span class="st">"Original mean depth (m)"</span>, ylab <span class="op">=</span> <span class="st">"sharkabc3d mean depth (m)"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Original mean depth (m)"</span>, ylab <span class="op">=</span> <span class="st">"ocean3d mean depth (m)"</span>,</span>
 <span>     main <span class="op">=</span> <span class="st">"Mean Overlap Depth"</span>,</span>
 <span>     pch <span class="op">=</span> <span class="fl">19</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/adjustcolor.html" class="external-link">adjustcolor</a></span><span class="op">(</span><span class="st">"steelblue"</span>, <span class="fl">0.6</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lty <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"red"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Volume comparison</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">comparison</span><span class="op">$</span><span class="va">intersect_volume_m3</span> <span class="op">/</span> <span class="fl">1e9</span>, <span class="va">comparison</span><span class="op">$</span><span class="va">our_intersect_volume_m3</span> <span class="op">/</span> <span class="fl">1e9</span>,</span>
-<span>     xlab <span class="op">=</span> <span class="st">"Original volume (km³)"</span>, ylab <span class="op">=</span> <span class="st">"sharkabc3d volume (km³)"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">"Original volume (km³)"</span>, ylab <span class="op">=</span> <span class="st">"ocean3d volume (km³)"</span>,</span>
 <span>     main <span class="op">=</span> <span class="st">"Overlap Volume"</span>,</span>
 <span>     pch <span class="op">=</span> <span class="fl">19</span>, col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/adjustcolor.html" class="external-link">adjustcolor</a></span><span class="op">(</span><span class="st">"steelblue"</span>, <span class="fl">0.6</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/graphics/abline.html" class="external-link">abline</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, lty <span class="op">=</span> <span class="fl">2</span>, col <span class="op">=</span> <span class="st">"red"</span><span class="op">)</span></span>
@@ -640,7 +640,7 @@ it.</p>
 <thead><tr class="header">
 <th>Aspect</th>
 <th>Original (Haque et al.)</th>
-<th><code>sharkabc3d</code></th>
+<th><code>ocean3d</code></th>
 </tr></thead>
 <tbody>
 <tr class="odd">
@@ -681,7 +681,7 @@ it.</p>
 </tr>
 </tbody>
 </table>
-<p><code>sharkabc3d</code> produces lower volume estimates than the
+<p><code>ocean3d</code> produces lower volume estimates than the
 original analysis (median volume ratio ~0.33). The difference is driven
 primarily by per-cell bathymetry clamping (~56% of the reduction) and
 secondarily by raster vs hexagonal grid edge effects (~25%). The
@@ -1063,7 +1063,7 @@ fishery only, or both. Recreates the
 <div class="section level3">
 <h3 id="conclusion">Conclusion<a class="anchor" aria-label="anchor" href="#conclusion"></a>
 </h3>
-<p>The raster-based approach in <code>sharkabc3d</code> generalises the
+<p>The raster-based approach in <code>ocean3d</code> generalises the
 hexagonal grid method and leverages <code>terra</code>’s optimised
 raster algebra, making the analysis faster and applicable to any region,
 species set, or fishery configuration.</p>
@@ -1076,7 +1076,7 @@ species set, or fishery configuration.</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Jay Matsushiba.</p>
+  <p>Developed by Jay Matsushiba, David Ruiz-García.</p>
 </div>
 
 <div class="pkgdown-footer-right">

@@ -57,7 +57,7 @@ shown is an illustration rather than a live result.
 
 ``` r
 
-# library(sharkabc3d)
+# library(ocean3d)
 library(terra)
 library(here)
 library(gfwr)

@@ -4,12 +4,12 @@ This is the general point-extraction interface. It can extract
 environmental values for one or multiple observations. The user chooses
 the type of extraction with the `method` argument. The more specific
 functions
-[`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract2d.md),
-[`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract3d_surface.md),
-[`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract3d_bottom.md),
-[`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract3d_nearest.md)
+[`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md),
+[`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_surface.md),
+[`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_bottom.md),
+[`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_nearest.md)
 and
-[`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract3d_all.md)
+[`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_all.md)
 are wrappers around this function.
 
 ## Usage
@@ -186,7 +186,7 @@ outputs.
 ``` r
 nc_file <- system.file(
   "extdata", "example_3d.nc",
-  package = "sharkabc3d"
+  package = "ocean3d"
 )
 
 # Extract the value closest to a single observation

@@ -32,7 +32,7 @@ extract2d(data, nc, var = NULL, ...)
 - ...:
 
   Additional arguments passed to
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract_to_point.md).
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
 
 ## Value
 
@@ -45,7 +45,7 @@ lists are returned as data frames.
 ``` r
 nc_file <- system.file(
   "extdata", "example_2d.nc",
-  package = "sharkabc3d"
+  package = "ocean3d"
 )
 
 observations <- data.frame(

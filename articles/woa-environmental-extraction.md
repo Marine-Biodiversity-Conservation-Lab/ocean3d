@@ -5,7 +5,7 @@
 This vignette demonstrates the World Ocean Atlas (WOA) environmental
 extraction analysis, which summarises temperature and dissolved oxygen
 conditions across the 3D habitat of every shark and ray species. Here we
-implement this workflow using `sharkabc3d` package functions.
+implement this workflow using `ocean3d` package functions.
 
 ### Overview
 
@@ -25,7 +25,7 @@ The workflow has five steps:
 
 ``` r
 
-library(sharkabc3d)
+library(ocean3d)
 library(dplyr)
 library(sf)
 library(stringr)
@@ -62,9 +62,9 @@ saveRDS(depth_table, "tmp/depth_table.RDS")
 ### Step 2: Fill Missing Depth Values
 
 Some species lack depth data on the IUCN Red List. This is handled by
-[`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/fill_missing_depths.md).
+[`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fill_missing_depths.md).
 
-[`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/fill_missing_depths.md)
+[`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fill_missing_depths.md)
 is designed for use inside
 [`dplyr::mutate()`](https://dplyr.tidyverse.org/reference/mutate.html) —
 it takes upper/lower/genus vectors and returns a two-column tibble of
@@ -110,18 +110,18 @@ species_ranges <- sf::st_read(
 
 ### Step 4: Prepare WOA Rasters
 
-[`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_download.md)
+[`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md)
 fetches (and caches) WOA files and
-[`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_load_nc.md)
+[`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
 loads individual files. The monthly summaries are produced by a
 `woa_summarise_monthly()` helper defined in this article (Step 5b)
 rather than by the package.
 
 #### 4a: Download WOA NetCDFs
 
-[`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_download.md)
+[`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md)
 caches files in
-\[[`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_cache_dir.md)\]
+\[[`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_dir.md)\]
 (defaults to the standard R user cache directory), so subsequent runs
 skip the download. Pass `output_dir` if you prefer to keep files in the
 project.
@@ -146,7 +146,7 @@ do_annual <- woa_load_nc(do_annual_path, field = "an")
 #### 4c: Prepare the study grid and bathymetry
 
 Per-cell depth windows are computed by
-[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md),
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md),
 which takes the seafloor as one more `depth_max` constraint and so
 clamps the species’ nominal lower limit to the bed wherever the bed is
 shallower. We pick one environmental raster as the canonical study grid;
@@ -206,7 +206,7 @@ do_annual <- align_to_grid(do_annual, study_grid)
 Before the full pipeline, here is the simplest possible extraction: the
 sea surface temperature (depth = 0) values where a species’ range
 overlaps the WOA temperature raster.
-[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md)
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 puts the range envelope on `t_annual`’s depth levels so
 [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html)
 can restrict it to the cells and depths the species occupies; selecting
@@ -252,10 +252,10 @@ The helper below reduces the twelve monthly files to min/max/diff
 rasters per depth layer, replacing the entire `data-raw/WOA.R` script
 (~170 lines) with two function calls.
 
-It lives in this article rather than in `sharkabc3d` because the package
-is moving to a single generic `temporal_summarise()` that will cover
-both WOA and Copernicus Marine data. Define it in your session before
-running the next chunk.
+It lives in this article rather than in `ocean3d` because the package is
+moving to a single generic `temporal_summarise()` that will cover both
+WOA and Copernicus Marine data. Define it in your session before running
+the next chunk.
 
 ``` r
 
@@ -613,12 +613,12 @@ anim
 
 ### Comparison with Original Analysis
 
-| Aspect | Original (`explore_woa_take_2.qmd`) | `sharkabc3d` |
+| Aspect | Original (`explore_woa_take_2.qmd`) | `ocean3d` |
 |----|----|----|
-| Fetch depths from IUCN API | ~50 lines of custom API parsing | [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/fetch_species_assessments.md) |
-| Fill missing depths | ~30 lines of dplyr manipulation | [`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/fill_missing_depths.md) |
+| Fetch depths from IUCN API | ~50 lines of custom API parsing | [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fetch_species_assessments.md) |
+| Fill missing depths | ~30 lines of dplyr manipulation | [`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fill_missing_depths.md) |
 | Load species ranges | ~10 lines with manual filtering | inline [`sf::st_read()`](https://r-spatial.github.io/sf/reference/st_read.html) with SQL filter |
-| Download WOA files | manual URL lookup per variable | [`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_download.md) (cached) |
+| Download WOA files | manual URL lookup per variable | [`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md) (cached) |
 | Create monthly summaries | `data-raw/WOA.R` (~170 lines) | `woa_summarise_monthly()` helper (this article) |
-| Per-species extraction loop | ~90 lines foreach loop | [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md) + [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html), wrapped in a `summarise_range()` helper (this article) |
+| Per-species extraction loop | ~90 lines foreach loop | [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md) + [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html), wrapped in a `summarise_range()` helper (this article) |
 | **Total** | **~350+ lines across multiple files** | **~30 lines of package calls** |

@@ -1,10 +1,10 @@
-# Contributing to sharkabc3d
+# Contributing to ocean3d
 
-Thanks for your interest in contributing! **sharkabc3d** is an R package
-for three-dimensional marine spatial analysis of sharks, rays, and
-chimaeras. It grew out of several lab analyses (Bangladesh fisheries
-overlap, WOA environmental extraction, deep-sea depth refuge) and is
-being generalised into reusable, tested functions.
+Thanks for your interest in contributing! **ocean3d** is an R package
+for three-dimensional marine spatial analysis. It grew out of several
+lab analyses (Bangladesh fisheries overlap, WOA environmental
+extraction, deep-sea depth refuge) and is being generalised into
+reusable, tested functions.
 
 This document covers how to get set up, how we branch and coordinate,
 and what a contribution needs to look like to be merged.
@@ -23,15 +23,15 @@ and what a contribution needs to look like to be merged.
 
 ------------------------------------------------------------------------
 
-## Why contribute to **sharkabc3d**?
+## Why contribute to **ocean3d**?
 
-**sharkabc3d** is an open-source package, built on collaboration across
-researchers and projects. Currently, **sharkabc3d** is a very new
-project undergoing active development, which means that you can shape
-and directly contribute to the work done. Functionality that you wished
+**ocean3d** is an open-source package, built on collaboration across
+researchers and projects. Currently, **ocean3d** is a very new project
+undergoing active development, which means that you can shape and
+directly contribute to the work done. Functionality that you wished
 existed? You can write an issue with what you would like, reaching
 contributors with your direct feedback. Even better, you can develop
-that functionality and add it to **sharkabc3d** yourself, broadening the
+that functionality and add it to **ocean3d** yourself, broadening the
 impact of your work. Other people can then come along and use your code
 to use in their projects, making science overall more efficient and
 impactful.
@@ -55,7 +55,7 @@ GitHub Flow
 
 ------------------------------------------------------------------------
 
-## How contributing works for **sharkabc3d**
+## How contributing works for **ocean3d**
 
 ### The loop
 
@@ -67,7 +67,7 @@ We use issues as the unit of work and the record of its current state.
     - Issues describe anything that needs to be developed, fixed,
       refined within this codebase. The easiest way to open issues is
       via this package’s [GitHub
-      repository](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/issues).
+      repository](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues).
       When creating the issue, choose any template that fits (or write
       your own from scratch). You can write issues without implementing
       it; it’s totally acceptable and encouraged to write issues about
@@ -196,9 +196,9 @@ exists, a note on the prior analysis it should be generalised from (that
 source material is not in this repo — ask the maintainer).
 
 To see what needs working on, see the [open
-issues](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/issues)
+issues](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues)
 and the package reference (`man/`,
-[`?sharkabc3d`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/sharkabc3d-package.md)).
+[`?ocean3d`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/ocean3d-package.md)).
 
 ------------------------------------------------------------------------
 
@@ -215,8 +215,8 @@ and the package reference (`man/`,
 ### 2. Clone and restore the environment
 
 ``` bash
-git clone https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d.git
-cd sharkabc3d
+git clone https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d.git
+cd ocean3d
 ```
 
 ``` r
@@ -267,7 +267,7 @@ pkgcheck::pkgcheck()          # pkgcheck for rOpenSci submission
 | GEBCO 2025 sub-ice topo (`.nc`) | The common bathymetry grid for everything | <https://www.gebco.net/data_and_products/gridded_bathymetry_data/> |
 | IUCN Red List `SHARKS_RAYS_CHIMAERAS` range shapefile | Species ranges | <https://www.iucnredlist.org/resources/spatial-data-download> (requires a data request) |
 | Marine Regions World EEZ v12 | Study-area clipping | <https://www.marineregions.org/downloads.php> |
-| World Ocean Atlas 2023 | Environmental covariates | Downloaded automatically by [`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_download.md) into a cache dir; see [`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_cache_dir.md) |
+| World Ocean Atlas 2023 | Environmental covariates | Downloaded automatically by [`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md) into a cache dir; see [`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_dir.md) |
 | Global Fishing Watch effort | Fisheries effort | Fetched via `gfwr` with `GFW_TOKEN` |
 | Bangladesh participatory-mapping fishery footprints | `bangladesh-fisheries-3d-overlap` vignette | Not public — contact the maintainer |
 
@@ -283,7 +283,7 @@ pkgcheck::pkgcheck()          # pkgcheck for rOpenSci submission
 - **Optional dependencies:** guard with
   [`requireNamespace("pkg", quietly = TRUE)`](https://rdrr.io/r/base/ns-load.html)
   and give a clear error telling the user what to install (see
-  [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/fetch_species_assessments.md)
+  [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fetch_species_assessments.md)
   and `rredlist`).
 - **Errors:** validate inputs early and fail with an actionable message
   naming the offending argument.
@@ -297,7 +297,7 @@ pkgcheck::pkgcheck()          # pkgcheck for rOpenSci submission
   [`library()`](https://rdrr.io/r/base/library.html) calls inside `R/`,
   no writing to the user’s filesystem outside
   [`tools::R_user_dir()`](https://rdrr.io/r/tools/userdir.html) (see
-  [`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/woa_cache_dir.md)
+  [`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_dir.md)
   for the pattern).
 
 ------------------------------------------------------------------------
@@ -338,9 +338,9 @@ pkgcheck::pkgcheck()          # pkgcheck for rOpenSci submission
 ## Questions, and how to get help
 
 - For usage, methods, or interpretation questions, open a [GitHub
-  Discussion](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/discussions).
+  Discussion](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/discussions).
 - For bugs or feature/function work, open a [GitHub
-  issue](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/issues).
+  issue](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues).
 - For access to non-public data (the Bangladesh fishery footprints),
   contact the maintainer directly: Jay Matsushiba
   <hello@jmatsushiba.com>.
@@ -355,4 +355,4 @@ issue. Please add your ORCID when you’re added.
 
 By contributing you agree that your contributions are licensed under the
 project’s [GNU General Public License
-v3.0](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/LICENSE.md).
+v3.0](https://marine-biodiversity-conservation-lab.github.io/ocean3d/LICENSE.md).

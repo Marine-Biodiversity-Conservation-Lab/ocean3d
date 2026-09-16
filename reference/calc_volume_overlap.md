@@ -2,16 +2,16 @@
 
 Computes the depth interval and volume of each domain and of their
 intersection, cell by cell. The intersection is
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md);
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md);
 this function measures it. Accepts any combination of
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 and
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md);
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md);
 when the two differ, the envelope is discretized onto the voxel's depth
 levels with
-[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md)
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 rather than the voxel being collapsed, because
-[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_to_envelope.md)
+[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
 fills interior gaps and would overstate the overlap.
 
 ## Usage
@@ -40,9 +40,9 @@ calc_volume_overlap(x, y, ...)
 - x, y:
 
   The two domains, each a
-  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   or
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
 
 - ...:
 
@@ -52,7 +52,7 @@ calc_volume_overlap(x, y, ...)
 - bounds:
 
   Voxel methods only. See
-  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/volume.md).
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md).
   Also governs how an envelope is discretized when the two inputs
   differ.
 
@@ -92,16 +92,16 @@ envelope nor a voxel.
 
 Two voxels must be sampled at the same depth levels, and all inputs must
 be on the same grid. To ask only whether two domains overlap, use
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md);
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md);
 it computes no volumes.
 
 ## See also
 
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 for the shared domain itself, and
-[`volume()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/volume.md)
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
 for its total volume;
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md)
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
 when only the presence of overlap is needed.
 
 ## Examples

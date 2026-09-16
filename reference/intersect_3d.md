@@ -3,7 +3,7 @@
 `intersect_3d()` returns the part of space that is inside both `x` and
 `y`. It answers the question "what do these two share?". To ask only "do
 they share anything?", use
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md).
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md).
 To keep one object's values where the other is present, use
 [`mask()`](https://rspatial.github.io/terra/reference/mask.html).
 
@@ -45,9 +45,9 @@ intersect_3d(x, y, ...)
 - x, y:
 
   The two objects. At least one must be a
-  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   or a
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
   The other can be either of those, a single-layer `SpatRaster`
   footprint, or polygons (`SpatVector`, `sf`, `sfc`). Rasters must share
   one grid (CRS, extent, resolution).
@@ -62,23 +62,23 @@ intersect_3d(x, y, ...)
   Only when one input is an envelope and the other a voxel. How the
   envelope is placed on the voxel's depth levels: `"top"` (default) or
   `"midpoint"`. See
-  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md).
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
 
 ## Value
 
 A
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 when both inputs are envelopes, or when one is an envelope and the other
 is 2D. Otherwise a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 of presence. Either is on the grid of the 3D input.
 
 ## Details
 
 At least one of `x` and `y` must be a 3D object: a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 or a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
 The other can be a 3D object too, or a 2D object. A 2D object restricts
 the result horizontally and leaves its depths alone.
 
@@ -96,7 +96,7 @@ the result horizontally and leaves its depths alone.
 - An envelope and a voxel:
 
   The envelope is first placed on the voxel's depth levels with
-  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md).
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
   The result is a voxel.
 
 - A 3D object and a `SpatRaster`:
@@ -123,23 +123,23 @@ carried over. To keep them, use
 
 [`terra::intersect()`](https://rspatial.github.io/terra/reference/intersect.html)
 on two rasters is a 2D test that ignores depth. On a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 or a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md),
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
 in either position, it is an error that points to
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md)
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
 and `intersect_3d()`. Plain rasters, vectors and extents keep terra's
 behaviour.
 
 ## See also
 
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md)
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
 for the yes/no form;
 [`mask()`](https://rspatial.github.io/terra/reference/mask.html) to keep
 a voxel's values inside a domain;
-[`volume()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/volume.md)
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
 for the volume of the result;
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/calc_volume_overlap.md),
+[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md),
 which is built on this function.
 
 ## Examples

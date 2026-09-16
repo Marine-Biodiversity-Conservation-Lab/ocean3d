@@ -1,7 +1,7 @@
 # Extract a 3D raster to an area and a depth band
 
 Crop a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 to an area polygon and select the depth layers within a given depth
 range. The nearest available depth layers to `min_depth` and `max_depth`
 are used as the inclusive bounds, so the result always has at least one
@@ -22,11 +22,11 @@ extract_to_area(area, rast_3d, min_depth = NULL, max_depth = NULL)
 
 - rast_3d:
 
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
   Multi-depth raster, e.g. from
-  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/as_voxel.md)
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   or
-  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md).
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
 
 - min_depth:
 
@@ -41,27 +41,27 @@ extract_to_area(area, rast_3d, min_depth = NULL, max_depth = NULL)
 ## Value
 
 A
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 cropped to `area` and filtered to the depth range.
 
 ## Details
 
 This is the area counterpart of
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract_to_point.md):
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md):
 the same "restrict a 3D source to a target geometry" operation, with a
 polygon as the target rather than observation points.
 
 To restrict a voxel to a species' *per-cell* depth window rather than
 one depth band across the whole area, build a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 and mask with it instead: `mask(rast_3d, range_rast)`. See
-[mask-3d](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/mask-3d.md).
+[mask-3d](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md).
 
 ## See also
 
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract_to_point.md)
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
 for the point counterpart;
-[`depths()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/depths.md)
+[`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
 for the layer depths the bounds snap to.
 
 ## Examples

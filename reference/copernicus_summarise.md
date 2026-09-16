@@ -28,7 +28,7 @@ copernicus_summarise(
 
   Character vector. Paths to one or more Copernicus netCDF (`.nc` or
   `.nc4`) files. This can be the output from
-  [`copernicus_load()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_load.md).
+  [`copernicus_load()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_load.md).
 
 - fun:
 
@@ -96,7 +96,7 @@ dimensions are retained.
 
 ## See also
 
-[`copernicus_load()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_load.md)
+[`copernicus_load()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_load.md)
 
 ## Examples
 

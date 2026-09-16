@@ -39,7 +39,7 @@ dir.exists(cache)
 
 # The cache is recreated empty by the next call that needs it
 woa_cache_dir()
-#> [1] "/tmp/RtmpIdHNsb/R/sharkabc3d/woa"
+#> [1] "/tmp/RtmpE8WIej/R/ocean3d/woa"
 
 if (is.na(old)) Sys.unsetenv("R_USER_CACHE_DIR") else
   Sys.setenv(R_USER_CACHE_DIR = old)

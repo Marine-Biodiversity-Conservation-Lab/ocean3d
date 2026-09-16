@@ -20,7 +20,7 @@ you can check every step against the numbers.
 
 ``` r
 
-library(sharkabc3d)
+library(ocean3d)
 ```
 
 ### Step 1: A study grid and a seafloor
@@ -59,7 +59,7 @@ seafloor
 World Ocean Atlas products arrive as one layer per standard depth. Here
 that shape is built by hand: temperature falling with depth, on a
 latitudinal gradient.
-[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/as_voxel.md)
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
 attaches the layer names and validates the depth axis.
 
 ``` r
@@ -80,7 +80,7 @@ names(t_annual)
 #> [5] "t_an_depth=500"
 ```
 
-[`depths()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/depths.md)
+[`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
 reads that axis back out. It is the accessor to reach for whenever you
 need the numeric depths rather than the layer names:
 
@@ -92,7 +92,7 @@ depths(t_annual)
 
 ### Step 3: The species range polygon, as a `SpatEnvelope`
 
-[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md)
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
 rasterises the polygon onto the study grid and attaches the depth
 limits, giving the species’ 3D domain.
 
@@ -142,7 +142,7 @@ range(terra::values(range_env[["depth_max"]]), na.rm = TRUE)
 
 The envelope and the voxel store depth in different roles, so they
 cannot be combined directly.
-[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md)
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 re-expresses the envelope on the voxel’s depth levels, giving a `1`/`NA`
 occupancy voxel with one layer per depth:
 
@@ -183,7 +183,7 @@ Touching is not overlapping. An envelope of `[0, 100]` ends exactly
 where the 100 m slab begins, so it occupies the 0 m level alone, and two
 envelopes that meet at 100 m land on disjoint levels and do not
 intersect as voxels, the same answer
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 gives for the envelopes themselves:
 
 ``` r
@@ -248,7 +248,7 @@ summary(terra::values(sst, na.rm = TRUE)[, 1])
 
 #### Vertical profile
 
-[`depths()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/depths.md)
+[`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
 also accepts a character vector, which is what makes a per-layer
 [`terra::global()`](https://rspatial.github.io/terra/reference/global.html)
 result easy to turn into a profile — the layer names are on the rows,
@@ -339,7 +339,7 @@ raster being masked, never assumed shared.
 
 ### Step 6: Collapsing back to an envelope
 
-[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_to_envelope.md)
+[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
 is the return trip: it reduces a voxel to the envelope bounding it. A
 predicate decides what counts as present, so it can bound a subset of
 the values rather than just the data extent — here, the depths over
@@ -377,7 +377,7 @@ to a species’ per-cell depth window.
 [`mask()`](https://rspatial.github.io/terra/reference/mask.html) is
 depth-aware for the package’s 3D classes: it places the envelope on the
 voxel’s own depth levels, as
-[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md)
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 did by hand above, and masks layer by layer.
 
 ``` r
@@ -387,4 +387,4 @@ mask(rast_3d, range_env)
 
 To restrict a voxel to a polygon and a single depth band across the
 whole area instead — no per-cell window — use
-[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract_to_area.md).
+[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md).

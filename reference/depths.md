@@ -1,7 +1,7 @@
 # Depths of a voxel's layers
 
 Read the depth axis of a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
 Depth is the layer index in a voxel, and the depth itself is carried in
 the layer name following the `{variable}_depth={value}` convention used
 throughout the package; this parses it back out.
@@ -17,7 +17,7 @@ depths(x)
 - x:
 
   A
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md),
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
   a
   [terra::SpatRaster](https://rspatial.github.io/terra/reference/SpatRaster-class.html),
   or a character vector of layer names.
@@ -41,7 +41,7 @@ Depths are positive metres increasing downward.
 
 ## See also
 
-[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/as_voxel.md),
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
 which builds those layer names.
 
 ## Examples

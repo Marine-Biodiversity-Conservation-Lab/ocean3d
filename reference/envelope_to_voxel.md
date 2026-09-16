@@ -1,9 +1,9 @@
 # Convert Envelope 2.5D -\> Voxel 3D
 
 Expand a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 to the
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md),
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
 with an input of depth levels. A depth level belongs to a cell when the
 slab of water it stands for shares some thickness with that cell's
 `[depth_min, depth_max]` interval; depths outside the interval, and
@@ -27,9 +27,9 @@ envelope_to_voxel(
 - x:
 
   SpatEnvelope, e.g. from
-  [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/as_envelope.md)
+  [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)
   or
-  [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_to_envelope.md).
+  [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md).
 
 - depths:
 
@@ -49,12 +49,12 @@ envelope_to_voxel(
   Optional function distributing `values` across the depth dimension,
   taking `(ind, depths, n_depths)` and returning the weight to apply.
   `NULL` (the default) writes the same value at every depth, as
-  [`profile_flat()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_profiles.md)
+  [`profile_flat()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_profiles.md)
   does;
-  [`profile_equal()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_profiles.md)
+  [`profile_equal()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_profiles.md)
   divides the value equally across the depths a cell occupies. Any
   function meeting the contract in
-  [voxel_profiles](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_profiles.md)
+  [voxel_profiles](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_profiles.md)
   works, including your own.
 
 - bounds:
@@ -73,7 +73,7 @@ envelope_to_voxel(
 ## Value
 
 A
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 with one layer per depth in `depths`, on the grid of `x`, layers ordered
 shallow to deep.
 
@@ -88,7 +88,7 @@ shallow to deep.
   Default `NULL` means the full value is written at every occupied
   level. Providing a `profile_*` function determines how `values` is
   transformed for each depth level. Ex.
-  [`profile_equal()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_profiles.md)
+  [`profile_equal()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_profiles.md)
   divides it evenly over the levels the cell occupies, so sum of all
   depth levels in the voxel equals `values`.
 
@@ -100,7 +100,7 @@ and coming back empty. Touching is not overlapping: an interval that
 ends exactly where a slab begins, `[0, 100]` against the slab `100-200`,
 does not occupy that level, so adjacent depth ranges are placed on
 disjoint levels and do not intersect as voxels. This is the same rule
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 applies between two envelopes.
 
 Where a slab's edges fall is a property of the dataset the levels came
@@ -125,13 +125,13 @@ the deepest level has no next level to run to, so it stands for a
 zero-thickness slab: an envelope is recorded there only when it reaches
 below `max(depths)`, and one that ends exactly at `max(depths)` stops at
 the level above. For the same reason a
-[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_to_envelope.md)
+[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
 round trip drops each cell's deepest occupied level: the envelope's
 `depth_max` names that level, which is the top of its slab.
 
 ## See also
 
-[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_to_envelope.md),
+[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md),
 the reverse (and lossy) collapse.
 
 ## Examples

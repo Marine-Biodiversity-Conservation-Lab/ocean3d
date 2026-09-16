@@ -2,7 +2,7 @@
 
 Fix swapped upper/lower depth values and fill NAs using genus-level
 means. IUCN Red List assessments (see
-[`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/fetch_species_assessments.md))
+[`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fetch_species_assessments.md))
 sometimes record depth limits the wrong way around or omit them
 entirely. Designed for use inside
 [`dplyr::mutate()`](https://dplyr.tidyverse.org/reference/mutate.html) —

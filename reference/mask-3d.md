@@ -4,9 +4,9 @@ These methods make
 [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html)
 depth-aware. `mask(x, mask)` keeps the values of `x` where `mask` is
 present and sets the rest to `NA`. When `mask` is a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 or a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md),
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
 "present" is decided cell by cell **and** depth by depth. A value of `x`
 stays only where the mask domain reaches that cell at that depth.
 
@@ -37,17 +37,17 @@ mask(x, mask, ...)
 - x:
 
   The raster whose values are kept: a
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md),
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
   a
-  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md),
+  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
   or a plain `SpatRaster`.
 
 - mask:
 
   The 3D domain to keep `x` inside: a
-  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   or a
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
   on the same grid as `x`.
 
 - bounds:
@@ -55,7 +55,7 @@ mask(x, mask, ...)
   Only when one side is an envelope and the other a voxel. How the
   envelope is placed on the voxel's depth levels: `"top"` (default) or
   `"midpoint"`. See
-  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md).
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
 
 - ...:
 
@@ -76,7 +76,7 @@ What each pairing does:
 - voxel masked by an envelope:
 
   The envelope is first placed on the voxel's own depth levels with
-  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md).
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
   Each depth layer of the voxel is then masked by the matching level.
   This replaces the hand-written
   `terra::mask(v, envelope_to_voxel(e, depths(v)))` and cannot be
@@ -91,10 +91,10 @@ What each pairing does:
 - envelope masked by an envelope or a voxel:
 
   A cell of `x` is kept where
-  [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md)
+  [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
   finds the two domains overlap. Its depth interval is kept whole. To
   narrow the interval instead, use
-  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md).
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md).
 
 - plain `SpatRaster` masked by an envelope or a voxel:
 
@@ -107,11 +107,11 @@ the class is kept. No method is added for those cases.
 
 ## See also
 
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 for the shared domain itself;
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md)
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
 for the yes/no test;
-[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/extract_to_area.md)
+[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
 to restrict a voxel to a polygon and one depth band instead of a
 per-cell depth window.
 

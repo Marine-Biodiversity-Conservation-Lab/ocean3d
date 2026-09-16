@@ -1,9 +1,9 @@
 # Collapse Voxel 3D -\> Envelope 2.5D
 
 Reduce a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 to the
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 that bounds it. A predicate `fun` is applied to the cell values at each
 depth; for every cell, the shallowest depth at which the predicate is
 `TRUE` becomes `depth_min` and the deepest becomes `depth_max`. Cells
@@ -31,7 +31,7 @@ voxel_to_envelope(v, fun = function(x) !is.na(x))
 ## Value
 
 A
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 with layers `depth_min` and `depth_max`, on the same grid as `v`.
 
 ## Details
@@ -46,12 +46,12 @@ degrees.
 interval per cell, so any interior gap in the voxel is filled in: a cell
 that satisfies `fun` at 0 m and 200 m but not at 100 m still yields the
 envelope `[0, 200]`. Use
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 directly where interior gaps matter.
 
 ## See also
 
-[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md),
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
 the reverse expansion.
 
 ## Examples

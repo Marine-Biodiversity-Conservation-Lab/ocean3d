@@ -1,9 +1,9 @@
 # Total 3D volume of a rasterized domain
 
 Sums the occupied volume of a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 or a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 over the whole grid. Both representations describe a 3D domain over a 2D
 grid, but they store depth in dual roles, so each computes the vertical
 extent differently:
@@ -28,20 +28,20 @@ volume(x, ...)
 - x:
 
   A
-  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   or
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
   A bare SpatRaster is rejected; build one with
-  [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/as_envelope.md),
-  [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md)
+  [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md),
+  [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
   or
-  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/as_voxel.md)
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   first.
 
 - ...:
 
   Arguments for the
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
   method, which are an error for an envelope.
 
 - bounds:
@@ -53,7 +53,7 @@ volume(x, ...)
   convention). Under `"top"` the deepest level has no next level and
   contributes no volume. Outer edges are clamped to `range(depths)`
   under both. Same argument, same meaning, as in
-  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md).
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
 
 ## Value
 
@@ -61,13 +61,13 @@ Numeric of length 1. Total volume in km³.
 
 ## Details
 
-- [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md):
+- [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md):
 
   Depth is the cell value, and the interval is solid by construction.
   Volume is `sum(cell_area * (depth_max - depth_min))` over present
   cells.
 
-- [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md):
+- [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md):
 
   Depth is the layer index. Each occupied voxel contributes its cell
   area times the thickness of the slab its depth level stands for, so
@@ -75,7 +75,7 @@ Numeric of length 1. Total volume in km³.
 
 A voxel volume is quantized to the levels the voxel was sampled at, and
 a voxel built by
-[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/envelope_to_voxel.md)
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 counts a level as occupied on *any* overlap with the envelope. So a
 range of 0-100 m discretized onto 0, 50, 100, 150, 200 m occupies three
 levels spanning 0-150 m and reports more water than the envelope it came
@@ -85,11 +85,11 @@ under `bounds = "top"`, the two agree.
 
 ## See also
 
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/calc_volume_overlap.md)
+[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
 for the volume two domains share, and
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 for the shared domain itself;
-[SpatVolume](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVolume-class.md)
+[SpatVolume](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVolume-class.md)
 for why the two representations dispatch separately.
 
 ## Examples

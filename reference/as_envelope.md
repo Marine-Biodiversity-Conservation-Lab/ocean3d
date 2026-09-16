@@ -1,11 +1,11 @@
 # Coerce a 2D footprint to a 2.5D min-max envelope
 
 Build a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 — one continuous `[depth_min, depth_max]` interval per grid cell — from
 a 2D horizontal footprint and the depth limits that apply to it. This is
 the general form of the conversion
-[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md)
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
 performs for polygons: any 2D raster whose non-`NA` cells mark presence
 becomes a 3D domain once depth limits are attached to it.
 
@@ -32,7 +32,7 @@ as_envelope(x, depth_min, depth_max)
 ## Value
 
 A
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 with layers `depth_min` and `depth_max`, on the grid of `x`.
 
 ## Details
@@ -41,9 +41,9 @@ with layers `depth_min` and `depth_max`, on the grid of `x`.
 pattern: a rasterized species range, a Global Fishing Watch effort
 layer, or a plain presence mask all work. A SpatRaster that *already*
 has exactly the two layers `depth_min` and `depth_max` (the output of
-[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md),
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md),
 or a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 itself) is promoted directly instead, in which case `depth_min` and
 `depth_max` must be omitted.
 

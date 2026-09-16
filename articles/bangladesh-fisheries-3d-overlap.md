@@ -12,7 +12,7 @@ depth ranges that provide refuge from fishing gear.
 
 The original analysis used a hexagonal grid, custom depth-overlap
 calculations, and participatory mapping data. Here we reproduce the same
-methodology using the `sharkabc3d` raster-based volume functions.
+methodology using the `ocean3d` raster-based volume functions.
 
 ### Overview
 
@@ -28,7 +28,7 @@ The workflow has four steps:
 ``` r
 
 # devtools::load_all()
-library(sharkabc3d)
+library(ocean3d)
 library(dplyr)
 library(stringr)
 library(readxl)
@@ -43,7 +43,7 @@ sf::sf_use_s2(FALSE)
 
 The original analysis used GEBCO bathymetry for the Bangladesh EEZ at 1
 km resolution.
-[`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/load_gebco_bathymetry.md)
+[`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md)
 loads and standardises the raster (positive depth values, in metres).
 
 ``` r
@@ -209,7 +209,7 @@ fisheries <- lapply(names(fishery_footprints), function(ft) {
 
 #### 2a: Create study area raster
 
-[`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/create_study_raster.md)
+[`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md)
 computes a combined extent from a list of spatial objects and returns an
 empty raster grid at the desired resolution and CRS.
 
@@ -234,7 +234,7 @@ seafloor <- terra::clamp(-seafloor, lower = 0)
 
 #### 2b: Rasterize species
 
-[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md)
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
 converts one polygon + its depth limits into a `SpatEnvelope`: a
 two-layer raster (`depth_min`, `depth_max`) on the study grid. Depth
 limits are lists, and every entry narrows the envelope — per cell the
@@ -243,7 +243,7 @@ deepest `depth_min` and the shallowest `depth_max` win. Passing
 from extending below the actual bathymetry, and drops cells where the
 bed sits above the shallowest depth the animal occupies.
 
-[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md)
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
 works one polygon at a time and does not reproject, so we transform the
 ranges onto the grid’s CRS once and loop with
 [`lapply()`](https://rdrr.io/r/base/lapply.html).
@@ -283,7 +283,7 @@ names(fishery_rasters) <- fisheries_proj$fishery_type
 ### Step 3: Calculate 3D Volume Overlap
 
 For each species-fishery pair,
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/calc_volume_overlap.md)
+[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
 computes the per-cell depth overlap and returns both the overlap raster
 and a summary with the overlap volume and proportion of each range’s
 total volume.
@@ -446,12 +446,12 @@ depth_refuge %>%
 
 Having computed the 3D overlaps, we now compare our raster-based results
 against the reference outputs from the original analysis (Haque et al.),
-which used a hexagonal grid approach. We expect `sharkabc3d` volumes to
-be systematically lower for two reasons:
+which used a hexagonal grid approach. We expect `ocean3d` volumes to be
+systematically lower for two reasons:
 
 1.  **Per-cell bathymetry clamping**: The original analysis applied a
     single uniform depth range across the entire intersection (volume =
-    area × depth_range). `sharkabc3d` clamps `depth_max` to the actual
+    area × depth_range). `ocean3d` clamps `depth_max` to the actual
     seafloor in each cell, so cells shallower than the nominal depth
     range contribute less volume. On the shallow Bangladesh continental
     shelf, this significantly reduces effective depth.
@@ -543,21 +543,21 @@ par(mfrow = c(1, 3))
 
 # Area comparison
 plot(comparison$intersect_area_m2 / 1e6, comparison$our_intersect_area_m2 / 1e6,
-     xlab = "Original area (km²)", ylab = "sharkabc3d area (km²)",
+     xlab = "Original area (km²)", ylab = "ocean3d area (km²)",
      main = "Intersection Area",
      pch = 19, col = adjustcolor("steelblue", 0.6))
 abline(0, 1, lty = 2, col = "red")
 
 # Mean depth comparison
 plot(comparison$ref_mean_depth_m, comparison$our_mean_depth_m,
-     xlab = "Original mean depth (m)", ylab = "sharkabc3d mean depth (m)",
+     xlab = "Original mean depth (m)", ylab = "ocean3d mean depth (m)",
      main = "Mean Overlap Depth",
      pch = 19, col = adjustcolor("steelblue", 0.6))
 abline(0, 1, lty = 2, col = "red")
 
 # Volume comparison
 plot(comparison$intersect_volume_m3 / 1e9, comparison$our_intersect_volume_m3 / 1e9,
-     xlab = "Original volume (km³)", ylab = "sharkabc3d volume (km³)",
+     xlab = "Original volume (km³)", ylab = "ocean3d volume (km³)",
      main = "Overlap Volume",
      pch = 19, col = adjustcolor("steelblue", 0.6))
 abline(0, 1, lty = 2, col = "red")
@@ -565,16 +565,16 @@ abline(0, 1, lty = 2, col = "red")
 par(mfrow = c(1, 1))
 ```
 
-| Aspect | Original (Haque et al.) | `sharkabc3d` |
+| Aspect | Original (Haque et al.) | `ocean3d` |
 |----|----|----|
 | Grid type | Hexagonal grid (1 km cells) | Raster grid (1 km cells) |
-| Depth handling | Uniform depth range across entire intersection footprint | Per-cell depth clamped to bathymetry via [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md) |
-| Volume formula | area × depth_range (single depth per pair) | Sum of per-cell (cell_area × clamped depth) via [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/calc_volume_overlap.md) |
-| Fishery/species richness maps | Custom ggplot code | [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md) + ggplot2 |
-| Species × fishery overlap maps | Custom ggplot code | [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/calc_volume_overlap.md) + ggplot2/patchwork |
+| Depth handling | Uniform depth range across entire intersection footprint | Per-cell depth clamped to bathymetry via [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md) |
+| Volume formula | area × depth_range (single depth per pair) | Sum of per-cell (cell_area × clamped depth) via [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md) |
+| Fishery/species richness maps | Custom ggplot code | [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md) + ggplot2 |
+| Species × fishery overlap maps | Custom ggplot code | [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md) + ggplot2/patchwork |
 | **Reproducibility** | **Single-use scripts** | **Reusable for any species x fishery** |
 
-`sharkabc3d` produces lower volume estimates than the original analysis
+`ocean3d` produces lower volume estimates than the original analysis
 (median volume ratio ~0.33). The difference is driven primarily by
 per-cell bathymetry clamping (~56% of the reduction) and secondarily by
 raster vs hexagonal grid edge effects (~25%). The per-cell approach is
@@ -654,7 +654,7 @@ overlap at each grid cell. Cells are coloured only where the species is
 present and at least one fishery overlaps in depth. Recreates the
 `all_fishery_by_species/` plots from the original analysis.
 
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md)
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
 answers `TRUE`, `FALSE` or `NA` per cell, so the summed count is a real
 `0` where the species is present but no fishery reaches it, and `NA`
 only where there is nothing to compare. The colour scale starts at 1, so
@@ -964,7 +964,7 @@ for (sp in cr_species_4d) {
 
 ### Conclusion
 
-The raster-based approach in `sharkabc3d` generalises the hexagonal grid
+The raster-based approach in `ocean3d` generalises the hexagonal grid
 method and leverages `terra`’s optimised raster algebra, making the
 analysis faster and applicable to any region, species set, or fishery
 configuration.

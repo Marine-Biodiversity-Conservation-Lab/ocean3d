@@ -46,7 +46,7 @@ SpatEnvelope, with depth_min and depth_max layers.
 
 ## See also
 
-[`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/as_envelope.md),
+[`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md),
 which attaches depth limits to a footprint that is already a raster.
 
 ## Examples

@@ -1,7 +1,7 @@
 # Create a voxel object
 
 Wrap a multi-depth raster as a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md):
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md):
 the validated 3D form used throughout the package, with one layer per
 standard depth and layer names following the `{variable}_depth={value}`
 convention.
@@ -18,7 +18,7 @@ as_voxel(x, depths = NULL, varname = "value")
 
   SpatRaster with `{variable}_depth={value}` layer names, a list of
   single-depth SpatRasters, or an existing
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
 
 - depths:
 
@@ -35,7 +35,7 @@ as_voxel(x, depths = NULL, varname = "value")
 ## Value
 
 A
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 whose layers are ordered shallow to deep.
 
 ## Details

@@ -1,7 +1,7 @@
 # Reduce a variable voxel to a presence voxel
 
 A
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 holds a variable, such as temperature, oxygen or fishing effort. It does
 not say which cells count as occupied. `occupied()` applies a predicate
 and returns presence: 1 where `fun` is `TRUE`, `NA` elsewhere. The grid
@@ -18,7 +18,7 @@ occupied(x, fun = function(v) !is.na(v))
 - x:
 
   A
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md).
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
 
 - fun:
 
@@ -29,7 +29,7 @@ occupied(x, fun = function(v) !is.na(v))
 ## Value
 
 A
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 on the depth levels of `x`. Values are 1 (occupied) or `NA`. Layers are
 named `presence_depth={value}`.
 
@@ -46,19 +46,19 @@ cutoff:
 must return a logical vector of the same length. A predicate that
 summarises the layer, such as `function(v) v > mean(v, na.rm = TRUE)`,
 therefore compares each cell against its own depth.
-[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_to_envelope.md)
+[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
 uses the same contract.
 
 Running `occupied()` on a presence voxel returns it unchanged.
 
 ## See also
 
-[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/voxel_to_envelope.md)
+[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
 collapses the result to a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/SpatEnvelope-class.md).
-[`volume()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/volume.md),
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersect_3d.md),
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/intersects_3d.md)
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md).
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
 and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
 take a presence voxel.
 

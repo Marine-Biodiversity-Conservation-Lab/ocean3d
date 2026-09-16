@@ -194,7 +194,7 @@ CDS and ADS requests use `ecmwfr`. File organization through
 
 Authentication is managed through the official provider clients. For
 Copernicus Marine, run
-[`copernicus_login()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_login.md)
+[`copernicus_login()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_login.md)
 once before the first request. The credentials created by the official
 Copernicus Marine Toolbox are shared by both the standalone and Python
 backends, so the same login can be used with `backend = "standalone"` or
@@ -202,7 +202,7 @@ backends, so the same login can be used with `backend = "standalone"` or
 
 If the Python backend does not find valid credentials, it asks the user
 to configure authentication with
-[`copernicus_login()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_login.md)
+[`copernicus_login()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_login.md)
 rather than attempting an interactive password prompt through
 `reticulate`, because such prompts are not reliably supported in R
 sessions.

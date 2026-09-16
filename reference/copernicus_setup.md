@@ -33,7 +33,7 @@ copernicus_setup(
 ## Value
 
 Invisibly, the result of
-[`copernicus_status()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_status.md)
+[`copernicus_status()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_status.md)
 for the installed executable.
 
 ## Details

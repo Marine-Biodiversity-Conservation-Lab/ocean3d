@@ -5,19 +5,21 @@
 - **Jay Matsushiba**. Author, maintainer.
   [](https://orcid.org/0000-0003-0496-9188)
 
+- **David Ruiz-García**. Author.
+
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/DESCRIPTION)
 
-Matsushiba J (2026). *sharkabc3d: Shark and Ray Abiotic Covariates in 3
-Dimensions*. R package version 0.1.1.9006,
-<https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d>.
+Matsushiba J, Ruiz-García D (2026). *ocean3d: Three-Dimensional Marine
+Spatial Analysis*. R package version 0.1.1.9007,
+<https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d>.
 
     @Manual{,
-      title = {sharkabc3d: Shark and Ray Abiotic Covariates in 3 Dimensions},
-      author = {Jay Matsushiba},
+      title = {ocean3d: Three-Dimensional Marine Spatial Analysis},
+      author = {Jay Matsushiba and David Ruiz-García},
       year = {2026},
-      note = {R package version 0.1.1.9006},
-      url = {https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d},
+      note = {R package version 0.1.1.9007},
+      url = {https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d},
     }
