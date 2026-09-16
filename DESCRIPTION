@@ -1,6 +1,6 @@
 Package: sharkabc3d
 Title: Shark and Ray Abiotic Covariates in 3 Dimensions
-Version: 0.1.1.9005
+Version: 0.1.1.9006
 Authors@R: 
     person("Jay", "Matsushiba", , "hello@jmatsushiba.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-0496-9188"))
@@ -20,7 +20,12 @@ Imports:
     stringr,
     terra,
     rredlist,
-    ncdf4
+    ncdf4,
+    dplyr,
+    gfwr (>= 3.0),
+    jsonlite,
+    ecmwfr,
+    here
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Suggests:
@@ -32,6 +37,8 @@ Suggests:
     rmarkdown,
     testthat (>= 3.0.0),
     tibble,
+    rstudioapi,
+    reticulate,
     tidyterra,
     vcr
 Config/testthat/edition: 3
