@@ -34,7 +34,7 @@ is invalid at that grid cell, for example below the seabed.
 \examples{
 nc_file <- system.file(
   "extdata", "example_3d.nc",
-  package = "sharkabc3d"
+  package = "ocean3d"
 )
 
 observations <- data.frame(

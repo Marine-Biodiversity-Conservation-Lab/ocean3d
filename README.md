@@ -1,18 +1,19 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# sharkabc3d
+# ocean3d
 
 <!-- badges: start -->
-[![pkgcheck](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/workflows/pkgcheck/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions?query=workflow%3Apkgcheck)
-[![R-CMD-check](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions/workflows/R-CMD-check.yaml)
-[![Codecov test coverage](https://codecov.io/gh/Marine-Biodiversity-Conservation-Lab/sharkabc3d/graph/badge.svg)](https://app.codecov.io/gh/Marine-Biodiversity-Conservation-Lab/sharkabc3d)
+[![pkgcheck](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/workflows/pkgcheck/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions?query=workflow%3Apkgcheck)
+[![R-CMD-check](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml)
+[![Codecov test coverage](https://codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d/graph/badge.svg)](https://app.codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d)
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 <!-- badges: end -->
 
-**sharkabc3d** (Shark and Ray Abiotic Covariates in 3 Dimensions) is an
-R package for three-dimensional marine spatial analysis of sharks, rays,
-and chimaeras.
+**ocean3d** is an R package for three-dimensional marine spatial
+analysis — of species ranges, fisheries, and depth-stratified
+oceanographic data. It grew out of work on sharks, rays, and chimaeras,
+and the functions generalise to any marine taxon or spatial layer.
 
 The three-dimensional marine environment poses a unique challenge for
 spatial analyses. Most conventional GIS workflows represent space as a
@@ -20,7 +21,7 @@ two-dimensional plane, an abstraction that fails to capture the range of
 depths and vertical overlap of marine habitat. Fisheries also operate at
 different depths depending on gear type and target species, creating
 depth-specific patterns of threat exposure that require analysis in 3D
-volume rather than 2D planes to quantify. `sharkabc3d` provides
+volume rather than 2D planes to quantify. `ocean3d` provides
 documented workflows and reusable functions for:
 
 - extracting values from depth-stratified oceanographic rasters within
@@ -47,12 +48,12 @@ functions can select the correct layers for a given depth window.
 
 ## Installation
 
-You can install the development version of sharkabc3d from
+You can install the development version of ocean3d from
 [GitHub](https://github.com/) with:
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("Marine-Biodiversity-Conservation-Lab/sharkabc3d")
+devtools::install_github("Marine-Biodiversity-Conservation-Lab/ocean3d")
 ```
 
 Add an IUCN Red List API key to access species-assessment functions.
@@ -163,7 +164,7 @@ range polygon through to summary statistics.
 
 ## Contributing
 
-Contributions are welcome. `sharkabc3d` is being actively built out from a set
+Contributions are welcome. `ocean3d` is being actively built out from a set
 of lab analyses into a general, tested package, and there is plenty of
 well-scoped work available. Start with:
 
@@ -184,5 +185,5 @@ Rachel Aitchison, Wade VanderWright, Amanda Arnold, Dr. Samm Sherman, Dr. Alifa 
 
 ## Citation
 
-Matsushiba, J. H., & Dulvy, N. K. *sharkabc3d: An R Package for
+Matsushiba, J. H., & Dulvy, N. K. *ocean3d: An R Package for
 Three-Dimensional Marine Spatial Analyses of Abiotic Covariates.*

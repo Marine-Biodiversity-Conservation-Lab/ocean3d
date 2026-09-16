@@ -1,7 +1,7 @@
-# Contributing to sharkabc3d
+# Contributing to ocean3d
 
-Thanks for your interest in contributing! **sharkabc3d** is an R package for
-three-dimensional marine spatial analysis of sharks, rays, and chimaeras. It
+Thanks for your interest in contributing! **ocean3d** is an R package for
+three-dimensional marine spatial analysis. It
 grew out of several lab analyses (Bangladesh fisheries overlap, WOA
 environmental extraction, deep-sea depth refuge) and is being generalised into
 reusable, tested functions.
@@ -21,9 +21,9 @@ a contribution needs to look like to be merged.
 
 ---
 
-## Why contribute to **sharkabc3d**? 
+## Why contribute to **ocean3d**? 
 
-**sharkabc3d** is an open-source package, built on collaboration across researchers and projects. Currently, **sharkabc3d** is a very new project undergoing active development, which means that you can shape and directly contribute to the work done. Functionality that you wished existed? You can write an issue with what you would like, reaching contributors with your direct feedback.  Even better, you can develop that functionality and add it to **sharkabc3d** yourself, broadening the impact of your work. Other people can then come along and use your code to use in their projects, making science overall more efficient and impactful. 
+**ocean3d** is an open-source package, built on collaboration across researchers and projects. Currently, **ocean3d** is a very new project undergoing active development, which means that you can shape and directly contribute to the work done. Functionality that you wished existed? You can write an issue with what you would like, reaching contributors with your direct feedback.  Even better, you can develop that functionality and add it to **ocean3d** yourself, broadening the impact of your work. Other people can then come along and use your code to use in their projects, making science overall more efficient and impactful. 
 
 ---
 
@@ -45,7 +45,7 @@ https://docs.github.com/en/get-started/using-github/github-flow
 
 ---
 
-## How contributing works for **sharkabc3d** 
+## How contributing works for **ocean3d** 
 
 ### The loop
 ```
@@ -55,7 +55,7 @@ GitHub issue  →  self-assign  →  branch  →  PR  →  merge
 We use issues as the unit of work and the record of its current state. 
 
 1. **Find or open an issue.** Every piece of work starts as an issue. 
-    - Issues describe anything that needs to be developed, fixed, refined within this codebase. The easiest way to open issues is via this package's [GitHub repository](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/issues). When creating the issue, choose any template that fits (or write your own from scratch). You can write issues without implementing it; it's totally acceptable and encouraged to write issues about what you wish this package did or problems that you have found with it, without intention of coding those actual fixes yourself. 
+    - Issues describe anything that needs to be developed, fixed, refined within this codebase. The easiest way to open issues is via this package's [GitHub repository](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues). When creating the issue, choose any template that fits (or write your own from scratch). You can write issues without implementing it; it's totally acceptable and encouraged to write issues about what you wish this package did or problems that you have found with it, without intention of coding those actual fixes yourself. 
 
 2. **Claim it.** 
     - Assign yourself and comment before you start coding. You can claim your own issues, or claim another issue that someone else has written but it currently unassigned. This is how we avoid two people extracting the same function from the same prior analysis. If an issue has been assigned, but it's been silent for a month, comment and see if the assigned contributor is still working on it. 
@@ -153,8 +153,8 @@ be generalised from (that source material is not in this repo — ask the
 maintainer).
 
 To see what needs working on, see the [open
-issues](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/issues)
-and the package reference (`man/`, `?sharkabc3d`).
+issues](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues)
+and the package reference (`man/`, `?ocean3d`).
 
 ---
 
@@ -170,8 +170,8 @@ and the package reference (`man/`, `?sharkabc3d`).
 ### 2. Clone and restore the environment
 
 ```bash
-git clone https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d.git
-cd sharkabc3d
+git clone https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d.git
+cd ocean3d
 ```
 
 ```r
@@ -283,9 +283,9 @@ pkgcheck::pkgcheck()          # pkgcheck for rOpenSci submission
 ## Questions, and how to get help
 
 - For usage, methods, or interpretation questions, open a
-  [GitHub Discussion](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/discussions).
+  [GitHub Discussion](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/discussions).
 - For bugs or feature/function work, open a
-  [GitHub issue](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/issues).
+  [GitHub issue](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues).
 - For access to non-public data (the Bangladesh fishery footprints), contact
   the maintainer directly: Jay Matsushiba <hello@jmatsushiba.com>.
 

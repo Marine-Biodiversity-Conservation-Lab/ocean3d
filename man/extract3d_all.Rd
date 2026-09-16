@@ -33,7 +33,7 @@ columns: nearest valid depth, surface and bottom.
 \examples{
 nc_file <- system.file(
   "extdata", "example_3d.nc",
-  package = "sharkabc3d"
+  package = "ocean3d"
 )
 
 observations <- data.frame(

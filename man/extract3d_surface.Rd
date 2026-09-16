@@ -32,7 +32,7 @@ netCDF file. This is usually the shallowest layer.
 \examples{
 nc_file <- system.file(
   "extdata", "example_3d.nc",
-  package = "sharkabc3d"
+  package = "ocean3d"
 )
 
 observations <- data.frame(

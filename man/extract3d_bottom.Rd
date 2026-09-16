@@ -34,7 +34,7 @@ means that deeper layers are missing over shallow areas.
 \examples{
 nc_file <- system.file(
   "extdata", "example_3d.nc",
-  package = "sharkabc3d"
+  package = "ocean3d"
 )
 
 observations <- data.frame(

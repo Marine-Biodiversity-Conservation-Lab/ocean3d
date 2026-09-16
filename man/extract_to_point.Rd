@@ -128,7 +128,7 @@ extraction with the \code{method} argument. The more specific functions
 \examples{
 nc_file <- system.file(
   "extdata", "example_3d.nc",
-  package = "sharkabc3d"
+  package = "ocean3d"
 )
 
 # Extract the value closest to a single observation

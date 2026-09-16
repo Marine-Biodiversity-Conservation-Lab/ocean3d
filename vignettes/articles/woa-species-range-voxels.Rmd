@@ -34,7 +34,7 @@ downloads, no local data files. The grids are small enough to print, so you can
 check every step against the numbers.
 
 ```{r setup}
-library(sharkabc3d)
+library(ocean3d)
 ```
 
 ## Step 1: A study grid and a seafloor
