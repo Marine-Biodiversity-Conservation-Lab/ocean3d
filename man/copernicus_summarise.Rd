@@ -18,7 +18,7 @@ copernicus_summarise(
 }
 \arguments{
 \item{file_paths}{Character vector. Paths to one or more Copernicus netCDF
-(\code{.nc} or \code{.nc4}) files.}
+(\code{.nc} or \code{.nc4}) files. This can be the output from \code{copernicus_load()}.}
 
 \item{fun}{Character vector of temporal summary statistics. Supported values
 are \code{"mean"}, \code{"min"}, \code{"max"}, and \code{"sd"}.}
@@ -82,4 +82,7 @@ summaries <- copernicus_summarise(
 )
 }
 
+}
+\seealso{
+\code{\link[=copernicus_load]{copernicus_load()}}
 }

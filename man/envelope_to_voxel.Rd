@@ -68,7 +68,7 @@ occupies that level when its envelope overlaps the slab by more than a
 shared edge. An interval of \verb{[10, 20]} against levels \code{c(0, 100)} therefore
 occupies the 0 m level, rather than falling between the levels and coming
 back empty. Touching is not overlapping: an interval that ends exactly where
-a slab begins, \verb{[0, 100]} against the slab \verb{100-200}, does not occupy that
+a slab begins, \verb{[0, 100]} against the slab \code{100-200}, does not occupy that
 level, so adjacent depth ranges are placed on disjoint levels and do not
 intersect as voxels. This is the same rule \code{\link[=intersect_3d]{intersect_3d()}} applies between
 two envelopes.
