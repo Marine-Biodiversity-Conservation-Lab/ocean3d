@@ -253,10 +253,9 @@ rasters per depth layer, replacing the entire `data-raw/WOA.R` script
 (~170 lines) with two function calls.
 
 It lives in this article rather than in `sharkabc3d` because the package
-is moving to a single generic
-[`temporal_summarise()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/temporal_summarise.md)
-that will cover both WOA and Copernicus Marine data. Define it in your
-session before running the next chunk.
+is moving to a single generic `temporal_summarise()` that will cover
+both WOA and Copernicus Marine data. Define it in your session before
+running the next chunk.
 
 ``` r
 

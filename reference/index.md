@@ -69,8 +69,6 @@
   : Keep a raster's values inside a 3D domain
 - [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/occupied.md)
   : Reduce a variable voxel to a presence voxel
-- [`temporal_summarise()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/temporal_summarise.md)
-  : Summarise across temporal dimension
 - [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/vect_to_envelope.md)
   : Convert SpatVector or sf to SpatEnvelope
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/volume.md)
