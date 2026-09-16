@@ -7281,7 +7281,7 @@ copernicus_load <- function(
 #' retained.
 #'
 #' @param file_paths Character vector. Paths to one or more Copernicus netCDF
-#'   (`.nc` or `.nc4`) files.
+#'   (`.nc` or `.nc4`) files. This can be the output from `copernicus_load()`. 
 #' @param fun Character vector of temporal summary statistics. Supported values
 #'   are `"mean"`, `"min"`, `"max"`, and `"sd"`.
 #' @param start_datetime Optional start datetime used to filter the available
@@ -7313,6 +7313,8 @@ copernicus_load <- function(
 #'   output_dir = "summary"
 #' )
 #' }
+#' 
+#' @seealso [copernicus_load()]
 #'
 #' @export
 copernicus_summarise <- function(file_paths,

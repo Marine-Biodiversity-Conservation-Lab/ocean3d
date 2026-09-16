@@ -1,6 +1,6 @@
 Package: sharkabc3d
 Title: Shark and Ray Abiotic Covariates in 3 Dimensions
-Version: 0.1.1.9005
+Version: 0.1.1.9006
 Authors@R: 
     person("Jay", "Matsushiba", , "hello@jmatsushiba.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-0496-9188"))
