@@ -32,7 +32,7 @@ and optionally a time dimension, but no depth dimension.
 \examples{
 nc_file <- system.file(
   "extdata", "example_2d.nc",
-  package = "sharkabc3d"
+  package = "ocean3d"
 )
 
 observations <- data.frame(

@@ -22,7 +22,7 @@ knitr::opts_chunk$set(
 
 # Visualizing the Voxel Spatial Model
 
-The spatial representation at the core of `sharkabc3d` is the **voxel model**:
+The spatial representation at the core of `ocean3d` is the **voxel model**:
 a cube representation of three-dimensional space, the volumetric analogue of
 the cell (or pixel) in a two-dimensional raster. Each cube is a *voxel*.
 
@@ -56,7 +56,7 @@ tile with the 2D panels using `patchwork`.
 
 ```{r setup}
 # devtools::load_all()
-library(sharkabc3d)
+library(ocean3d)
 library(terra)
 library(ggplot2)
 library(tidyterra)

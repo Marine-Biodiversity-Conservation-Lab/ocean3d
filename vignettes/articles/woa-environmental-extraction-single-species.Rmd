@@ -32,7 +32,7 @@ The example species is the Banded Wobbegong (*Orectolobus halei*).
 ## Setup
 
 ```{r setup}
-library(sharkabc3d)
+library(ocean3d)
 library(dplyr)
 library(sf)
 library(stringr)

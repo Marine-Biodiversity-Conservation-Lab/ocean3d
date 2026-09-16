@@ -24,7 +24,7 @@
 #'
 #' @export
 woa_cache_dir <- function() {
-  path <- file.path(tools::R_user_dir("sharkabc3d", which = "cache"), "woa")
+  path <- file.path(tools::R_user_dir("ocean3d", which = "cache"), "woa")
   if (!dir.exists(path)) {
     dir.create(path, recursive = TRUE, showWarnings = FALSE)
   }
@@ -172,7 +172,7 @@ woa_cache_clear <- function(confirm = TRUE) {
   if (file.exists(sentinel)) return(invisible(TRUE))
 
   msg <- paste0(
-    "sharkabc3d will cache downloaded WOA NetCDF files in:\n  ",
+    "ocean3d will cache downloaded WOA NetCDF files in:\n  ",
     cache_dir, "\n",
     "A full WOA set (temperature + oxygen, annual + monthly, 0.25 deg) ",
     "can exceed 10 GB.\n",

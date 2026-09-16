@@ -822,7 +822,7 @@
 #' @examples
 #' nc_file <- system.file(
 #'   "extdata", "example_3d.nc",
-#'   package = "sharkabc3d"
+#'   package = "ocean3d"
 #' )
 #'
 #' # Extract the value closest to a single observation
@@ -1052,7 +1052,7 @@ extract_to_point <- function(data = NULL,
 #' @examples
 #' nc_file <- system.file(
 #'   "extdata", "example_2d.nc",
-#'   package = "sharkabc3d"
+#'   package = "ocean3d"
 #' )
 #'
 #' observations <- data.frame(
@@ -1094,7 +1094,7 @@ extract2d <- function(data, nc, var = NULL, ...) {
 #' @examples
 #' nc_file <- system.file(
 #'   "extdata", "example_3d.nc",
-#'   package = "sharkabc3d"
+#'   package = "ocean3d"
 #' )
 #'
 #' observations <- data.frame(
@@ -1138,7 +1138,7 @@ extract3d_surface <- function(data, nc, var = NULL, ...) {
 #' @examples
 #' nc_file <- system.file(
 #'   "extdata", "example_3d.nc",
-#'   package = "sharkabc3d"
+#'   package = "ocean3d"
 #' )
 #'
 #' observations <- data.frame(
@@ -1182,7 +1182,7 @@ extract3d_bottom <- function(data, nc, var = NULL, ...) {
 #' @examples
 #' nc_file <- system.file(
 #'   "extdata", "example_3d.nc",
-#'   package = "sharkabc3d"
+#'   package = "ocean3d"
 #' )
 #'
 #' observations <- data.frame(
@@ -1227,7 +1227,7 @@ extract3d_nearest <- function(data, nc, var = NULL, ...) {
 #' @examples
 #' nc_file <- system.file(
 #'   "extdata", "example_3d.nc",
-#'   package = "sharkabc3d"
+#'   package = "ocean3d"
 #' )
 #'
 #' observations <- data.frame(

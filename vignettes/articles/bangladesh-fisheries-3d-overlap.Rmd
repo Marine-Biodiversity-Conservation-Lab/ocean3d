@@ -27,7 +27,7 @@ refuge from fishing gear.
 
 The original analysis used a hexagonal grid, custom depth-overlap
 calculations, and participatory mapping data. Here we reproduce the same
-methodology using the `sharkabc3d` raster-based volume functions.
+methodology using the `ocean3d` raster-based volume functions.
 
 ## Overview
 
@@ -42,7 +42,7 @@ The workflow has four steps:
 
 ```{r setup}
 # devtools::load_all()
-library(sharkabc3d)
+library(ocean3d)
 library(dplyr)
 library(stringr)
 library(readxl)
@@ -442,12 +442,12 @@ depth_refuge %>%
 
 Having computed the 3D overlaps, we now compare our raster-based results
 against the reference outputs from the original analysis (Haque et al.),
-which used a hexagonal grid approach. We expect `sharkabc3d` volumes to be
+which used a hexagonal grid approach. We expect `ocean3d` volumes to be
 systematically lower for two reasons:
 
 1. **Per-cell bathymetry clamping**: The original analysis applied a single
    uniform depth range across the entire intersection (volume = area ×
-   depth_range). `sharkabc3d` clamps `depth_max` to the actual seafloor in
+   depth_range). `ocean3d` clamps `depth_max` to the actual seafloor in
    each cell, so cells shallower than the nominal depth range contribute less
    volume. On the shallow Bangladesh continental shelf, this significantly
    reduces effective depth.
@@ -536,21 +536,21 @@ par(mfrow = c(1, 3))
 
 # Area comparison
 plot(comparison$intersect_area_m2 / 1e6, comparison$our_intersect_area_m2 / 1e6,
-     xlab = "Original area (km²)", ylab = "sharkabc3d area (km²)",
+     xlab = "Original area (km²)", ylab = "ocean3d area (km²)",
      main = "Intersection Area",
      pch = 19, col = adjustcolor("steelblue", 0.6))
 abline(0, 1, lty = 2, col = "red")
 
 # Mean depth comparison
 plot(comparison$ref_mean_depth_m, comparison$our_mean_depth_m,
-     xlab = "Original mean depth (m)", ylab = "sharkabc3d mean depth (m)",
+     xlab = "Original mean depth (m)", ylab = "ocean3d mean depth (m)",
      main = "Mean Overlap Depth",
      pch = 19, col = adjustcolor("steelblue", 0.6))
 abline(0, 1, lty = 2, col = "red")
 
 # Volume comparison
 plot(comparison$intersect_volume_m3 / 1e9, comparison$our_intersect_volume_m3 / 1e9,
-     xlab = "Original volume (km³)", ylab = "sharkabc3d volume (km³)",
+     xlab = "Original volume (km³)", ylab = "ocean3d volume (km³)",
      main = "Overlap Volume",
      pch = 19, col = adjustcolor("steelblue", 0.6))
 abline(0, 1, lty = 2, col = "red")
@@ -558,7 +558,7 @@ abline(0, 1, lty = 2, col = "red")
 par(mfrow = c(1, 1))
 ```
 
-| Aspect | Original (Haque et al.) | `sharkabc3d` |
+| Aspect | Original (Haque et al.) | `ocean3d` |
 |--------|-------------------------|--------------|
 | Grid type | Hexagonal grid (1 km cells) | Raster grid (1 km cells) |
 | Depth handling | Uniform depth range across entire intersection footprint | Per-cell depth clamped to bathymetry via `vect_to_envelope()` |
@@ -567,7 +567,7 @@ par(mfrow = c(1, 1))
 | Species × fishery overlap maps | Custom ggplot code | `calc_volume_overlap()` + ggplot2/patchwork |
 | **Reproducibility** | **Single-use scripts** | **Reusable for any species x fishery** |
 
-`sharkabc3d` produces lower volume estimates than the original analysis
+`ocean3d` produces lower volume estimates than the original analysis
 (median volume ratio ~0.33). The difference is driven primarily by per-cell
 bathymetry clamping (~56% of the reduction) and secondarily by raster vs
 hexagonal grid edge effects (~25%). The per-cell approach is more physically
@@ -947,6 +947,6 @@ for (sp in cr_species_4d) {
 
 ## Conclusion
 
-The raster-based approach in `sharkabc3d` generalises the hexagonal grid
+The raster-based approach in `ocean3d` generalises the hexagonal grid
 method and leverages `terra`'s optimised raster algebra, making the analysis
 faster and applicable to any region, species set, or fishery configuration.

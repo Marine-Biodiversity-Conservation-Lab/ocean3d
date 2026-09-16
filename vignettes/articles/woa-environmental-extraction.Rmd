@@ -20,7 +20,7 @@ knitr::opts_chunk$set(
 This vignette demonstrates the World Ocean Atlas (WOA) environmental extraction
 analysis, which summarises temperature and dissolved oxygen conditions across
 the 3D habitat of every shark and ray species. Here we implement this workflow using
-`sharkabc3d` package functions.
+`ocean3d` package functions.
 
 ## Overview
 
@@ -38,7 +38,7 @@ has five steps:
 ## Setup
 
 ```{r setup}
-library(sharkabc3d)
+library(ocean3d)
 library(dplyr)
 library(sf)
 library(stringr)
@@ -244,7 +244,7 @@ The helper below reduces the twelve monthly files to min/max/diff rasters per
 depth layer, replacing the entire `data-raw/WOA.R` script (~170 lines) with two
 function calls.
 
-It lives in this article rather than in `sharkabc3d` because the package is
+It lives in this article rather than in `ocean3d` because the package is
 moving to a single generic `temporal_summarise()` that will cover both WOA and
 Copernicus Marine data. Define it in your session before running the next
 chunk.
@@ -590,7 +590,7 @@ anim
 
 ## Comparison with Original Analysis
 
-| Aspect | Original (`explore_woa_take_2.qmd`) | `sharkabc3d` |
+| Aspect | Original (`explore_woa_take_2.qmd`) | `ocean3d` |
 |--------|--------------------------------------|--------------|
 | Fetch depths from IUCN API | ~50 lines of custom API parsing | `fetch_species_assessments()` |
 | Fill missing depths | ~30 lines of dplyr manipulation | `fill_missing_depths()` |

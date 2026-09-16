@@ -58,7 +58,7 @@ The three quantities Panel B shows are exactly the ones the analysis computes:
 
 ```{r setup}
 # devtools::load_all()
-library(sharkabc3d)
+library(ocean3d)
 library(terra)
 library(sf)
 library(dplyr)

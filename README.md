@@ -1,26 +1,27 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# sharkabc3d
+# ocean3d
 
 <!-- badges: start -->
-[![pkgcheck](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/workflows/pkgcheck/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions?query=workflow%3Apkgcheck)
-[![R-CMD-check](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d/actions/workflows/R-CMD-check.yaml)
-[![Codecov test coverage](https://codecov.io/gh/Marine-Biodiversity-Conservation-Lab/sharkabc3d/graph/badge.svg)](https://app.codecov.io/gh/Marine-Biodiversity-Conservation-Lab/sharkabc3d)
+[![pkgcheck](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/workflows/pkgcheck/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions?query=workflow%3Apkgcheck)
+[![R-CMD-check](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml)
+[![Codecov test coverage](https://codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d/graph/badge.svg)](https://app.codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d)
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 <!-- badges: end -->
 
-**sharkabc3d** (Shark and Ray Abiotic Covariates in 3 Dimensions) is an
-R package for three-dimensional marine spatial analysis of sharks, rays,
-and chimaeras.
+**ocean3d** is an R package for three-dimensional marine spatial
+analysis of species ranges, fisheries, and depth-stratified
+oceanographic data. It grew out of work on sharks, rays, and chimaeras,
+with the functions generalising to any marine taxon or spatial layer.
 
 The three-dimensional marine environment poses a unique challenge for
 spatial analyses. Most conventional GIS workflows represent space as a
-two-dimensional plane, an abstraction that fails to capture the range of
+two-dimensional plane. This abstraction fails to capture the range of
 depths and vertical overlap of marine habitat. Fisheries also operate at
 different depths depending on gear type and target species, creating
 depth-specific patterns of threat exposure that require analysis in 3D
-volume rather than 2D planes to quantify. `sharkabc3d` provides
+volume rather than 2D planes to quantify. `ocean3d` provides
 documented workflows and reusable functions for:
 
 - extracting values from depth-stratified oceanographic rasters within
@@ -47,12 +48,12 @@ functions can select the correct layers for a given depth window.
 
 ## Installation
 
-You can install the development version of sharkabc3d from
+You can install the development version of ocean3d from
 [GitHub](https://github.com/) with:
 
 ``` r
 # install.packages("devtools")
-devtools::install_github("Marine-Biodiversity-Conservation-Lab/sharkabc3d")
+devtools::install_github("Marine-Biodiversity-Conservation-Lab/ocean3d")
 ```
 
 Add an IUCN Red List API key to access species-assessment functions.
@@ -76,15 +77,67 @@ usethis::edit_r_environ()
 - `fill_missing_depths()` — fix swapped upper/lower depth values and
   fill missing values from genus-level means.
 
+#### World Ocean Atlas 2023 utilities
+
+- `woa_download()` — download WOA 2023 NetCDF files (temperature,
+  salinity, dissolved oxygen, oxygen saturation, AOU, nitrate,
+  phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with
+  caching.
+- `woa_load_nc()` — load a WOA NetCDF and select a statistical field
+  (e.g., objectively analyzed climatology), returning a `SpatRaster`
+  with the package’s standard `{variable}_depth={value}` layer names.
+- `woa_cache_dir()` / `woa_cache_clear()` — manage the persistent WOA
+  download cache.
+
+#### Copernicus (Marine, CDS, ADS)
+
+- `copernicus_setup()` — download and configure the standalone Toolbox
+  executable (no separate Python installation needed).
+- `copernicus_login()` — configure or verify authentication, once.
+- `copernicus_status()` — report whether the Toolbox is available, and
+  from which path and version.
+- `copernicus_load()` — download a dataset from Copernicus Marine, the
+  Climate Data Store, or the Atmosphere Data Store, subset by variable,
+  time window, bounding box and depth range.
+- `copernicus_summarise()` — reduce downloaded NetCDFs across time
+  (mean, min, max, sd), preserving depth and the other non-temporal
+  dimensions, working on the NetCDF directly via `ncdf4`.
+- `copernicus_cache_dir()` / `copernicus_cache_clear()` — manage the
+  persistent Copernicus download cache.
+
+#### Global Fishing Watch (fisheries effort)
+
+- `gfw_effort_to_raster()` — turn the long-format apparent-fishing-hours
+  tibble from `gfwr::gfw_ais_fishing_hours()` into a multi-layer
+  `SpatRaster`, one layer per gear (or other grouping).
+  Extending that into 3D uses the general converters — `as_envelope()` and
+  `envelope_to_voxel()` — driven by a gear-to-depth-band lookup. Those
+  operating-depth priors are analysis assumptions rather than package data,
+  so they live in the `gfw-fishing-effort-3d` article.
+
 ### Building the 3D study grid and rasterized ranges
 
 - `create_study_raster()` — build an empty study-area `SpatRaster`
   covering the combined extent of one or more spatial inputs.
+
+### Two 3D representations, and moving between them
+
+A `SpatEnvelope` stores one continuous `[depth_min, depth_max]` interval
+per cell; a `SpatVoxel` stores a value at each of a set of depth levels,
+so it can hold a variable and interior gaps.
+
+- `as_voxel()` — wrap a multi-depth `SpatRaster` (or a list of
+  single-depth ones) as a validated `SpatVoxel`, ordered shallow to deep
+  with `{variable}_depth={value}` layer names. 
+- `as_envelope()` — define a 3D envelope with two rasters, with `depth_min` 
+  and `depth_max` corresponding to the minimum and maximum depths present in 
+  given cell. 
 - `vect_to_envelope()` — rasterize a single species range or fishery
   footprint onto the study grid and attach per-cell `depth_min` /
-  `depth_max`, returning a `SpatEnvelope`. Depth limits are lists mixing
-  numerics and rasters, so bathymetry is just one more constraint: per
-  cell the deepest `depth_min` and the shallowest `depth_max` win.
+  `depth_max`, returning a `SpatEnvelope`. 
+- `envelope_to_voxel()` — expand an envelope onto a set of depth levels.
+- `voxel_to_envelope()` — collapse a voxel to the envelope bounding it,
+  using a predicate on the cell values. Lossy: interior gaps are filled.
 
 ### 3D spatial query
 
@@ -107,17 +160,17 @@ because terra’s version ignores depth.
 ### 3D volume
 
 Both dispatch on the 3D representation, so they take either a
-`SpatEnvelope` or a `SpatVoxel`. A voxel's volume sums the slab each
+`SpatEnvelope` or a `SpatVoxel`. A voxel’s volume sums the slab each
 occupied depth level stands for, so interior gaps cost volume instead of
 being filled in. Given one of each, the envelope is discretized onto the
-voxel's depth levels.
+voxel’s depth levels.
 
 - `volume()` — total 3D volume (km³) of a rasterized domain.
 - `calc_volume_overlap()` — per-cell depth intervals and volumes for two
   rasterized domains and their intersection (returns a 9-layer stack).
   Built on `intersect_3d()`.
 
-### Environmental extraction (3D)
+### Environmental extraction to areas
 
 - `depths()` — the depths a `SpatVoxel`’s layers stand for, parsed from
   the `{variable}_depth={value}` layer names. Also accepts a bare
@@ -135,35 +188,27 @@ mask(rast_3d, range_env)
 See `vignette("woa-species-range-voxels")` for the full workflow, from a
 range polygon through to summary statistics.
 
-### World Ocean Atlas 2023 utilities
+### Environmental extraction to point observations
 
-- `woa_download()` — download WOA 2023 NetCDF files (temperature,
-  salinity, dissolved oxygen, oxygen saturation, AOU, nitrate,
-  phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with
-  caching.
-- `woa_load_nc()` — load a WOA NetCDF and select a statistical field
-  (e.g., objectively analyzed climatology), returning a `SpatRaster`
-  with the package’s standard `{variable}_depth={value}` layer names.
-- `woa_nc_extract()` — extract layers for a chosen statistical field
-  from an already-loaded WOA `SpatRaster`.
-- `woa_summarise_monthly()` — compute min, max, and max-minus-min across
-  monthly WOA files at each depth layer.
-- `woa_cache_dir()` / `woa_cache_clear()` — manage the persistent WOA
-  download cache.
+- `extract_to_point()` — the general engine: match observation points
+  (data frame, tibble, `sf` POINT, matrix, or named list) against one or
+  more NetCDF files, snapping to the nearest longitude, latitude, time
+  and depth cell. Returns the input with the extracted values appended,
+  structure preserved.
+- `extract2d()` — for variables with no depth dimension.
+- `extract3d_nearest()` — the valid, non-missing depth layer closest to
+  each observation’s depth, so a cell below the seabed does not silently
+  return `NA`.
+- `extract3d_surface()` / `extract3d_bottom()` — the first available
+  depth layer, or the deepest non-missing one at that cell.
+- `extract3d_all()` — nearest, surface and bottom in one pass, as three
+  columns.
 
-### Global Fishing Watch (fisheries effort)
 
-- `gfw_effort_to_raster()` — turn the long-format apparent-fishing-hours
-  tibble from `gfwr::gfw_ais_fishing_hours()` into a multi-layer
-  `SpatRaster`, one layer per gear (or other grouping).
-  Extending that into 3D uses the general converters — `as_envelope()` and
-  `envelope_to_voxel()` — driven by a gear-to-depth-band lookup. Those
-  operating-depth priors are analysis assumptions rather than package data,
-  so they live in the `gfw-fishing-effort-3d` article.
 
 ## Contributing
 
-Contributions are welcome. `sharkabc3d` is being actively built out from a set
+Contributions are welcome. `ocean3d` is being actively built out from a set
 of lab analyses into a general, tested package, and there is plenty of
 well-scoped work available. Start with:
 
@@ -180,9 +225,8 @@ New contributors: the "Known rough edges / good first issues" section of
 
 Thank you to the people that have inspired and collaborated on this work! 
 
-Rachel Aitchison, Wade VanderWright, Amanda Arnold, Dr. Samm Sherman, Dr. Alifa Haque.
+David Ruiz-García, Rachel Aitchison, Wade VanderWright, Amanda Arnold, Dr. Samm Sherman, Dr. Alifa Haque.
 
 ## Citation
 
-Matsushiba, J. H., & Dulvy, N. K. *sharkabc3d: An R Package for
-Three-Dimensional Marine Spatial Analyses of Abiotic Covariates.*
+Jay H. Matsushiba, David Ruiz-García, Rachel M. Aitchison, Wade J. VanderWright, C. Samantha Sherman, Alifa Bintha Haque, Nicholas K. Dulvy. *ocean3d: An R Package for Three-Dimensional Spatial Analyses of Marine Habitat.*

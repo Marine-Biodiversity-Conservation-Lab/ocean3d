@@ -51,7 +51,7 @@ as a solid plate exactly as in Figure 1.
 
 ```{r setup}
 # devtools::load_all()
-library(sharkabc3d)
+library(ocean3d)
 library(terra)
 library(sf)
 library(ggplot2)
