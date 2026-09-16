@@ -23,11 +23,7 @@ calc_volume_overlap(x, y, ...)
 calc_volume_overlap(x, y, ...)
 
 # S4 method for class 'SpatVoxel,SpatVoxel'
-calc_volume_overlap(
-  x,
-  y,
-  bounds = c("top", "midpoint")
-)
+calc_volume_overlap(x, y, bounds = c("top", "midpoint"))
 
 # S4 method for class 'SpatEnvelope,SpatVoxel'
 calc_volume_overlap(x, y, bounds = c("top", "midpoint"), ...)

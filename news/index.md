@@ -1,5 +1,52 @@
 # Changelog
 
+## sharkabc3d 0.1.1.9006
+
+Copernicus environmental data acquisition. A new `copernicus_*` family
+downloads, organises and summarises data from Copernicus Marine and the
+ECMWF-operated Copernicus Data Stores.
+
+### New functions
+
+- [`copernicus_load()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_load.md)
+  acquires data from Copernicus Marine (`source = "marine"`) or the
+  CDS/ADS stores (`"cds"`, `"ads"`), filtered by variable, time range,
+  bounding box and depth range, and returns the paths it wrote. Marine
+  requests go through either the standalone Copernicus Marine Toolbox or
+  the Python `copernicusmarine` package; `backend = "auto"` prefers the
+  standalone executable and falls back to Python. Output is always one
+  variable per file, optionally subdivided with `split_by` (year,
+  season, month, ISO week, day, hour) and filed into a directory
+  hierarchy with `organize_by`. Seasons are meteorological, with
+  `hemisphere` choosing only the human-readable names. CDS and ADS
+  requests are served by `ecmwfr`.
+- [`copernicus_summarise()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_summarise.md)
+  collapses one or more Copernicus netCDF files across time into
+  `"mean"`, `"min"`, `"max"` and `"sd"` files, one per statistic,
+  working a time step at a time so large downloads do not have to fit in
+  memory. Spatial and depth dimensions are kept.
+- [`copernicus_setup()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_setup.md)
+  installs the versioned standalone Toolbox into the user’s application
+  data directory — no Python, conda or `reticulate` needed.
+  [`copernicus_login()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_login.md)
+  configures credentials once (in the RStudio Terminal when run from
+  RStudio, since external password prompts are unreliable in the
+  console), and
+  [`copernicus_status()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_status.md)
+  reports what is installed and whether credentials are valid.
+- [`copernicus_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_cache_dir.md)
+  and
+  [`copernicus_cache_clear()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_cache_clear.md)
+  manage the persistent download cache under
+  [`tools::R_user_dir()`](https://rdrr.io/r/tools/userdir.html).
+
+### Dependencies
+
+- New `Imports`: `ecmwfr` and `jsonlite`, plus `dplyr`, `gfwr (>= 3.0)`
+  and `here`, which were already used by the GFW and IUCN code but
+  undeclared. `reticulate` and `rstudioapi` are in `Suggests`, needed
+  only for the Python backend and the RStudio login path respectively.
+
 ## sharkabc3d 0.1.1.9005
 
 The 3D object model. `SpatVoxel` / `SpatEnvelope` replace the ad-hoc “3D

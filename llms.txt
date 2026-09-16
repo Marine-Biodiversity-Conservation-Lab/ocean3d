@@ -219,6 +219,20 @@ Three-Dimensional Marine Spatial Analyses of Abiotic Covariates.*
   : Create a voxel object
 - [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/calc_volume_overlap.md)
   : Per-cell 3D volume overlap between two rasterized domains
+- [`copernicus_cache_clear()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_cache_clear.md)
+  : Clear the Copernicus cache
+- [`copernicus_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_cache_dir.md)
+  : Copernicus cache directory
+- [`copernicus_load()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_load.md)
+  : Load environmental data from Copernicus services
+- [`copernicus_login()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_login.md)
+  : Log in to Copernicus Marine
+- [`copernicus_setup()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_setup.md)
+  : Set up the Copernicus Marine Toolbox
+- [`copernicus_status()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_status.md)
+  : Check Copernicus Marine Toolbox availability
+- [`copernicus_summarise()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/copernicus_summarise.md)
+  : Summarise Copernicus netCDF data across time
 - [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/create_study_raster.md)
   : Create a study area raster grid
 - [`depths()`](https://marine-biodiversity-conservation-lab.github.io/sharkabc3d/reference/depths.md)
