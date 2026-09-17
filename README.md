@@ -89,22 +89,6 @@ usethis::edit_r_environ()
 - `woa_cache_dir()` / `woa_cache_clear()` — manage the persistent WOA
   download cache.
 
-#### Copernicus (Marine, CDS, ADS)
-
-- `copernicus_setup()` — download and configure the standalone Toolbox
-  executable (no separate Python installation needed).
-- `copernicus_login()` — configure or verify authentication, once.
-- `copernicus_status()` — report whether the Toolbox is available, and
-  from which path and version.
-- `copernicus_load()` — download a dataset from Copernicus Marine, the
-  Climate Data Store, or the Atmosphere Data Store, subset by variable,
-  time window, bounding box and depth range.
-- `copernicus_summarise()` — reduce downloaded NetCDFs across time
-  (mean, min, max, sd), preserving depth and the other non-temporal
-  dimensions, working on the NetCDF directly via `ncdf4`.
-- `copernicus_cache_dir()` / `copernicus_cache_clear()` — manage the
-  persistent Copernicus download cache.
-
 #### Global Fishing Watch (fisheries effort)
 
 - `gfw_effort_to_raster()` — turn the long-format apparent-fishing-hours

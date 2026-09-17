@@ -1,6 +1,6 @@
 Package: ocean3d
 Title: Three-Dimensional Marine Spatial Analysis
-Version: 0.1.1.9007
+Version: 0.1.1.9008
 Authors@R: c(
     person("Jay", "Matsushiba", , "hello@jmatsushiba.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-0496-9188")),
@@ -23,10 +23,7 @@ Imports:
     rredlist,
     ncdf4,
     dplyr,
-    gfwr (>= 3.0),
-    jsonlite,
-    ecmwfr,
-    here
+    gfwr (>= 3.0)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Suggests:
@@ -38,8 +35,6 @@ Suggests:
     rmarkdown,
     testthat (>= 3.0.0),
     tibble,
-    rstudioapi,
-    reticulate,
     tidyterra,
     vcr
 Config/testthat/edition: 3
