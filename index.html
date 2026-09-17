@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9007</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9008</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -111,24 +111,6 @@
 <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> — load a WOA NetCDF and select a statistical field (e.g., objectively analyzed climatology), returning a <code>SpatRaster</code> with the package’s standard <code>{variable}_depth={value}</code> layer names.</li>
 <li>
 <code><a href="reference/woa_cache_dir.html">woa_cache_dir()</a></code> / <code><a href="reference/woa_cache_clear.html">woa_cache_clear()</a></code> — manage the persistent WOA download cache.</li>
-</ul>
-</div>
-<div class="section level4">
-<h4 id="copernicus-marine-cds-ads">Copernicus (Marine, CDS, ADS)<a class="anchor" aria-label="anchor" href="#copernicus-marine-cds-ads"></a>
-</h4>
-<ul>
-<li>
-<code><a href="reference/copernicus_setup.html">copernicus_setup()</a></code> — download and configure the standalone Toolbox executable (no separate Python installation needed).</li>
-<li>
-<code><a href="reference/copernicus_login.html">copernicus_login()</a></code> — configure or verify authentication, once.</li>
-<li>
-<code><a href="reference/copernicus_status.html">copernicus_status()</a></code> — report whether the Toolbox is available, and from which path and version.</li>
-<li>
-<code><a href="reference/copernicus_load.html">copernicus_load()</a></code> — download a dataset from Copernicus Marine, the Climate Data Store, or the Atmosphere Data Store, subset by variable, time window, bounding box and depth range.</li>
-<li>
-<code><a href="reference/copernicus_summarise.html">copernicus_summarise()</a></code> — reduce downloaded NetCDFs across time (mean, min, max, sd), preserving depth and the other non-temporal dimensions, working on the NetCDF directly via <code>ncdf4</code>.</li>
-<li>
-<code><a href="reference/copernicus_cache_dir.html">copernicus_cache_dir()</a></code> / <code><a href="reference/copernicus_cache_clear.html">copernicus_cache_clear()</a></code> — manage the persistent Copernicus download cache.</li>
 </ul>
 </div>
 <div class="section level4">

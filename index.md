@@ -85,29 +85,6 @@ usethis::edit_r_environ()
   [`woa_cache_clear()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_clear.md)
   — manage the persistent WOA download cache.
 
-#### Copernicus (Marine, CDS, ADS)
-
-- [`copernicus_setup()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_setup.md)
-  — download and configure the standalone Toolbox executable (no
-  separate Python installation needed).
-- [`copernicus_login()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_login.md)
-  — configure or verify authentication, once.
-- [`copernicus_status()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_status.md)
-  — report whether the Toolbox is available, and from which path and
-  version.
-- [`copernicus_load()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_load.md)
-  — download a dataset from Copernicus Marine, the Climate Data Store,
-  or the Atmosphere Data Store, subset by variable, time window,
-  bounding box and depth range.
-- [`copernicus_summarise()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_summarise.md)
-  — reduce downloaded NetCDFs across time (mean, min, max, sd),
-  preserving depth and the other non-temporal dimensions, working on the
-  NetCDF directly via `ncdf4`.
-- [`copernicus_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_cache_dir.md)
-  /
-  [`copernicus_cache_clear()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/copernicus_cache_clear.md)
-  — manage the persistent Copernicus download cache.
-
 #### Global Fishing Watch (fisheries effort)
 
 - [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)

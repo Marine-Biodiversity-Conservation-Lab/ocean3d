@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9007</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9008</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,17 @@
       <small>Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.1.1.9008" id="ocean3d-0119008">ocean3d 0.1.1.9008<a class="anchor" aria-label="anchor" href="#ocean3d-0119008"></a></h2>
+<p>The <code>copernicus_*</code> family is withdrawn for now. It is not abandoned: the code is preserved on the <code>feat/7-copernicus</code> branch and in the history of this one, and it will return once it is properly covered by tests (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/50" class="external-link">#50</a>).</p>
+<div class="section level3">
+<h3 id="breaking-changes-0-1-1-9008">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-1-1-9008"></a></h3>
+<ul><li>
+<code>copernicus_setup()</code>, <code>copernicus_login()</code>, <code>copernicus_status()</code>, <code>copernicus_load()</code>, <code>copernicus_summarise()</code>, <code>copernicus_cache_dir()</code> and <code>copernicus_cache_clear()</code> are removed. Code calling them should pin to 0.1.1.9007 or use the <code>feat/7-copernicus</code> branch.</li>
+<li>
+<code>ecmwfr</code> and <code>jsonlite</code> are dropped from <code>Imports</code>, and <code>reticulate</code> and <code>rstudioapi</code> from <code>Suggests</code>; they were only ever used by the Copernicus backends. <code>here</code> moves out of <code>Imports</code> but stays in <code>Suggests</code>, where the vignette articles still use it.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.1.9007" id="ocean3d-0119007">ocean3d 0.1.1.9007<a class="anchor" aria-label="anchor" href="#ocean3d-0119007"></a></h2>
 <p>The package is renamed from <code>sharkabc3d</code> to <code>ocean3d</code>, to reflect that the 3D workflows apply to any marine taxon or spatial layer, not just sharks and rays.</p>
