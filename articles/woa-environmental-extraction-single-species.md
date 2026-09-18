@@ -1,16 +1,28 @@
 # Extracting 3D Environmental Data for a Single Species
 
-## Extracting 3D Environmental Data for a Single Species
+## Extracting 3D Environmental Data for Sharks and Rays Species
+
+This vignette demonstrates the World Ocean Atlas (WOA) environmental
+extraction analysis, which summarises temperature and dissolved oxygen
+conditions across the 3D habitat of shark and ray species. Here we
+implement this workflow using `ocean3d` package functions.
+
+### Overview
+
+The goal is to produce a single summary table with one row per species,
+containing statistics (min, max, mean, range) for temperature and
+dissolved oxygen across each species’ geographic range and depth limits.
+The workflow has five steps:
+
+1.  **Fetch species depth limits** from the IUCN Red List API
+2.  **Load species range polygons**
+3.  **Prepare WOA rasters and the study grid** (download, annual means,
+    align to grid)
+4.  **Extract and summarise** environmental conditions per species
 
 This vignette is a scoped-down version of the full WOA environmental
 extraction workflow that runs for **one example species** instead of
-every shark and ray. It produces two visualisation products:
-
-1.  An **animated GIF** of annual mean temperature through the species’
-    range across every depth layer it occupies.
-2.  A **three-panel static figure** (stacked vertically) showing
-    temperature at the surface, at the standard depth closest to the
-    halfway point, and at the deepest depth the species is found at.
+every shark and ray.
 
 The example species is the Banded Wobbegong (*Orectolobus halei*).
 
@@ -25,9 +37,7 @@ library(stringr)
 library(terra)
 library(here)
 library(ggplot2)
-library(gganimate)
 library(tidyr)
-library(patchwork)
 library(tidyterra)
 
 # The single example species.
@@ -43,16 +53,18 @@ so there is no 30-minute group download.
 
 api_key <- Sys.getenv("IUCN_REDLIST_KEY")
 
+# Use IUCN Red List API to get the species depth ranges
 depth_table <- fetch_species_assessments(
   api_key = api_key,
   species_names = sp_name
 )
 
-# Fill missing depths (a no-op if the species already has both limits).
+# Fill missing depths
 depth_table_complete <- depth_table |>
   mutate(fill_missing_depths(upper_depth_limit, lower_depth_limit, genus_name)) |>
   filter(!is.na(upper_depth), !is.na(lower_depth))
 
+# Get the Orectolobus halei depth range
 sp_depths <- depth_table_complete[
   depth_table_complete$scientific_name == sp_name, ]
 sp_id <- sp_depths$sis_id
@@ -60,14 +72,20 @@ sp_id <- sp_depths$sis_id
 
 ### Step 2: Load the species range polygon
 
+The IUCN Red List shapefiles have to be downloaded yourself, from this
+link: <https://www.iucnredlist.org/resources/spatial-data-download>
+
 Only the one species is read out of the IUCN shapefile via SQL
 filtering.
 
 ``` r
 
-iucn_shp <- here("/home/jay/Programming_Projects/Big_Data/SHARKS_RAYS_CHIMAERAS/SHARKS_RAYS_CHIMAERAS.shp")
+# Download the IUCN Red List shapefiles from https://www.iucnredlist.org/resources/spatial-data-download 
+# Modify the path to your local save location for the shapefile
+iucn_shp <- here("EXAMPLE_DIRECTORY/SHARKS_RAYS_CHIMAERAS/SHARKS_RAYS_CHIMAERAS.shp")
 layer_name <- sf::st_layers(iucn_shp)$name[1]
 
+# Read in just Orectolobus halei
 sp_range <- sf::st_read(
   iucn_shp,
   query = str_glue(
@@ -96,6 +114,7 @@ range_ext <- terra::intersect(
   terra::ext(terra::vect(sp_range)) + 1,
   terra::ext(-180, 180, -90, 90)
 )
+
 # as_voxel() re-wraps after the crop: terra operations propagate the class but
 # do not re-run its validity rules, so wrapping is how the depth axis is
 # re-checked. It is idempotent, so this is cheap.
@@ -104,12 +123,17 @@ t_annual <- as_voxel(terra::crop(t_annual, range_ext))
 # Derive the study grid from the cropped raster so the envelope and the voxel
 # stay on the same grid.
 study_grid <- t_annual[[1]]
+```
+
+``` r
 
 # Bathymetry -> positive depth, aligned to the study grid.
 # Project before negating: negating first forces an eager pass over the full
 # global 15 arc-second grid, which terra otherwise avoids by reading only the
 # window the target grid needs.
-bathy <- load_gebco_bathymetry("/home/jay/Programming_Projects/Big_Data/gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc")
+
+# Download the GEBCO bathymetry data from https://www.gebco.net/data-products/gridded-bathymetry-data
+bathy <- load_gebco_bathymetry("EXAMPLE_DIRECTORY/gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc")
 seafloor <- (terra::project(bathy, study_grid) * -1) |>
   terra::clamp(lower = 0)
 ```

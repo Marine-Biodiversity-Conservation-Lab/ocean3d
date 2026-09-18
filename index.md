@@ -26,15 +26,42 @@ workflows and reusable functions for:
 
 ## How it works
 
-All 3D analyses use a stacked-raster approach built on `terra` and `sf`.
-Polygons (species ranges, fishery footprints) are rasterized onto a
-common bathymetry-aware grid where each cell stores presence plus the
-shallowest and deepest depths the feature occupies (clamped to the
-seafloor). Volume overlap between two rasterized ranges is then computed
-per-cell via raster algebra. Multi-depth environmental rasters (e.g.,
-WOA temperature at 57 standard depths) follow a
-`{variable}_depth={value}` layer-naming convention so that downstream
-functions can select the correct layers for a given depth window.
+In order to represent the 3D space in the ocean, we use a stacked-raster
+approach built on `terra`. We call this the Spatial Voxel Model, with
+the class `SpatVoxel`. Using this `SpatVoxel`, we can represent any
+number of spatial phenomena in the ocean, including species
+distributions, fishing effort, and oceanographic variables.
+
+![Diagram that represents the multi-depth spatial voxel
+model](figures/fig-ocean-voxel-model.png)
+
+Diagram that represents the multi-depth spatial voxel model
+
+This package includes functions for converting common vector
+representations to the `SpatVoxel` class 3D representation. One example
+operation enabled by `ocean3d` is to take an existing vector and
+observed depth range, and have it match with a pre-existing `SpatVoxel`.
+
+![Converting species range vector into
+SpatVoxel](figures/fig-species-voxel.png)
+
+Converting species range vector into SpatVoxel
+
+`ocean3d` uses two representations for 3D geometry: A `SpatEnvelope`
+stores one continuous `[depth_min, depth_max]` interval per cell; a
+`SpatVoxel` (shown above) stores a value at each of a set of depth
+levels, so it can hold a variable and interior gaps. `SpatEnvelope` is
+useful for representing discrete 3D geometry (ex. species ranges with
+defined boundaries for area and depth). In contrast, `SpatVoxel` is
+ideal for representing continuous values (ex. species distribution
+models with probabilities of occurrence, rather than presence and
+absences). `SpatVoxel` can also represent overhangs, holes, etc. in 3D
+space since it contains a value for every depth, rather than a depth
+range.
+
+This package includes utilities for working with commonly used datasets
+in marine habitat spatial analyses, including IUCN Red List, World Ocean
+Atlas, GEBCO, Copernicus Marine, and Global Fishing Watch.
 
 ## Installation
 
@@ -47,6 +74,108 @@ You can install the development version of ocean3d from
 devtools::install_github("Marine-Biodiversity-Conservation-Lab/ocean3d")
 ```
 
+## Function overview
+
+### Create a raster covering extent of multiple spatial inputs
+
+- [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md)
+  — build an empty study-area `SpatRaster` covering the combined extent
+  of one or more spatial inputs.
+
+### 3D representations
+
+- [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  — wrap a multi-depth `SpatRaster` (or a list of single-depth ones) as
+  a validated `SpatVoxel`, ordered shallow to deep with
+  `{variable}_depth={value}` layer names.
+- [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)
+  — define a 3D envelope with two rasters, with `depth_min` and
+  `depth_max` corresponding to the minimum and maximum depths present in
+  given cell.
+
+### Conversion between 3D representations
+
+- [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
+  — rasterize a single species range or fishery footprint onto the study
+  grid and attach per-cell `depth_min` / `depth_max`, returning a
+  `SpatEnvelope`.
+- [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
+  — expand an envelope onto a set of depth levels.
+- [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
+  — collapse a voxel to the envelope bounding it, using a predicate on
+  the cell values. Lossy: interior gaps are filled.
+
+### 3D spatial query
+
+Three functions ask how a `SpatEnvelope` or `SpatVoxel` relates to
+another object in 3D. The other object can be a 3D object or a 2D one: a
+`SpatRaster` footprint or polygons (`SpatVector`, `sf`). A 2D object
+restricts the domain horizontally and without restricting the depths.
+
+- `intersect_3d(x, y)` — the shared 3D space between the two inputs.
+  Returns an envelope with the shared depth interval or a presence
+  voxel, depending on inputs.
+- `intersects_3d(x, y)` — whether inputs share any 3D space, cell by
+  cell: `TRUE`, `FALSE` (both present but disjoint, or only one
+  present), or `NA` (neither present).
+- `mask(x, mask)` —
+  [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html)
+  made depth-aware. Keeps the values of `x` where the mask domain
+  reaches that cell *at that depth*.
+
+[`terra::intersect()`](https://rspatial.github.io/terra/reference/intersect.html)
+on a 3D object is an error that points to these, because terra’s version
+ignores depth.
+
+### 3D volume
+
+Both dispatch on the 3D representation, so they take either a
+`SpatEnvelope` or a `SpatVoxel`. A voxel’s volume sums the slab each
+occupied depth level stands for, so interior gaps cost volume instead of
+being filled in. Given one of each, the envelope is discretized onto the
+voxel’s depth levels.
+
+- [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+  — total 3D volume (km³) of a rasterized domain.
+- [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
+  — per-cell depth intervals and volumes for two rasterized domains and
+  their intersection (returns a 9-layer stack). Built on
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md).
+
+### Environmental extraction to areas
+
+- [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
+  — crop a `SpatVoxel` to an area polygon and select layers within a
+  depth range.
+
+See `vignette("woa-species-range-voxels")` for the full workflow, from a
+range polygon through to summary statistics.
+
+### Environmental extraction to point observations
+
+- [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+  — the general engine: match observation points (data frame, tibble,
+  `sf` POINT, matrix, or named list) against one or more NetCDF files,
+  snapping to the nearest longitude, latitude, time and depth cell.
+  Returns the input with the extracted values appended, structure
+  preserved.
+- [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md)
+  — for variables with no depth dimension.
+- [`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_nearest.md)
+  — the valid, non-missing depth layer closest to each observation’s
+  depth, so a cell below the seabed does not silently return `NA`.
+- [`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_surface.md)
+  /
+  [`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_bottom.md)
+  — the first available depth layer, or the deepest non-missing one at
+  that cell.
+- [`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_all.md)
+  — nearest, surface and bottom in one pass, as three columns.
+
+### Common spatial dataset utilities
+
+#### IUCN Red List API utilities
+
 Add an IUCN Red List API key to access species-assessment functions.
 Sign up and acquire your API key at <https://api.iucnredlist.org/>:
 
@@ -57,18 +186,17 @@ usethis::edit_r_environ()
 # IUCN_REDLIST_KEY="your_iucn_api_key_here"
 ```
 
-## Function overview
-
-### Loading and preparing input data
-
-- [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md)
-  — load a GEBCO bathymetry NetCDF as a `SpatRaster`.
 - [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fetch_species_assessments.md)
   — query the IUCN Red List API for taxonomy, Red List category, and
   depth limits, by SIS ID, scientific name, or comprehensive group code.
 - [`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fill_missing_depths.md)
   — fix swapped upper/lower depth values and fill missing values from
   genus-level means.
+
+#### GEBCO Bathymetry
+
+- [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md)
+  — load a GEBCO bathymetry NetCDF as a `SpatRaster`.
 
 #### World Ocean Atlas 2023 utilities
 
@@ -98,115 +226,6 @@ usethis::edit_r_environ()
   — driven by a gear-to-depth-band lookup. Those operating-depth priors
   are analysis assumptions rather than package data, so they live in the
   `gfw-fishing-effort-3d` article.
-
-### Building the 3D study grid and rasterized ranges
-
-- [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md)
-  — build an empty study-area `SpatRaster` covering the combined extent
-  of one or more spatial inputs.
-
-### Two 3D representations, and moving between them
-
-A `SpatEnvelope` stores one continuous `[depth_min, depth_max]` interval
-per cell; a `SpatVoxel` stores a value at each of a set of depth levels,
-so it can hold a variable and interior gaps.
-
-- [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-  — wrap a multi-depth `SpatRaster` (or a list of single-depth ones) as
-  a validated `SpatVoxel`, ordered shallow to deep with
-  `{variable}_depth={value}` layer names.
-- [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)
-  — define a 3D envelope with two rasters, with `depth_min` and
-  `depth_max` corresponding to the minimum and maximum depths present in
-  given cell.
-- [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
-  — rasterize a single species range or fishery footprint onto the study
-  grid and attach per-cell `depth_min` / `depth_max`, returning a
-  `SpatEnvelope`.
-- [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
-  — expand an envelope onto a set of depth levels.
-- [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
-  — collapse a voxel to the envelope bounding it, using a predicate on
-  the cell values. Lossy: interior gaps are filled.
-
-### 3D spatial query
-
-Three verbs ask how a `SpatEnvelope` or `SpatVoxel` relates to another
-object in 3D. The other object can be a 3D object too, or a 2D one: a
-`SpatRaster` footprint or polygons (`SpatVector`, `sf`). A 2D object
-restricts the domain horizontally and leaves its depths alone.
-
-- `intersect_3d(x, y)` — the 3D space the two share. Returns an envelope
-  with the shared depth interval, or a presence voxel.
-- `intersects_3d(x, y)` — whether they share any 3D space, cell by cell:
-  `TRUE`, `FALSE` (both present but disjoint, or only one present), or
-  `NA` (neither present). Sum a stack of these for a richness map.
-- `mask(x, mask)` —
-  [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html),
-  made depth-aware. Keeps the values of `x` where the mask domain
-  reaches that cell *at that depth*.
-
-[`terra::intersect()`](https://rspatial.github.io/terra/reference/intersect.html)
-on a 3D object is an error that points to these, because terra’s version
-ignores depth.
-
-### 3D volume
-
-Both dispatch on the 3D representation, so they take either a
-`SpatEnvelope` or a `SpatVoxel`. A voxel’s volume sums the slab each
-occupied depth level stands for, so interior gaps cost volume instead of
-being filled in. Given one of each, the envelope is discretized onto the
-voxel’s depth levels.
-
-- [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  — total 3D volume (km³) of a rasterized domain.
-- [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-  — per-cell depth intervals and volumes for two rasterized domains and
-  their intersection (returns a 9-layer stack). Built on
-  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md).
-
-### Environmental extraction to areas
-
-- [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
-  — the depths a `SpatVoxel`’s layers stand for, parsed from the
-  `{variable}_depth={value}` layer names. Also accepts a bare character
-  vector of layer names.
-- [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
-  — crop a `SpatVoxel` to an area polygon and select layers within a
-  depth range.
-
-To restrict a `SpatVoxel` to a species’ *per-cell* depth window —
-preserving each cell’s vertical refuge — mask it with the range
-envelope:
-
-``` r
-
-mask(rast_3d, range_env)
-```
-
-See `vignette("woa-species-range-voxels")` for the full workflow, from a
-range polygon through to summary statistics.
-
-### Environmental extraction to point observations
-
-- [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-  — the general engine: match observation points (data frame, tibble,
-  `sf` POINT, matrix, or named list) against one or more NetCDF files,
-  snapping to the nearest longitude, latitude, time and depth cell.
-  Returns the input with the extracted values appended, structure
-  preserved.
-- [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md)
-  — for variables with no depth dimension.
-- [`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_nearest.md)
-  — the valid, non-missing depth layer closest to each observation’s
-  depth, so a cell below the seabed does not silently return `NA`.
-- [`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_surface.md)
-  /
-  [`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_bottom.md)
-  — the first available depth layer, or the deepest non-missing one at
-  that cell.
-- [`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_all.md)
-  — nearest, surface and bottom in one pass, as three columns.
 
 ## Contributing
 

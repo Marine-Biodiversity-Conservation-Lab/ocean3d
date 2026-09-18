@@ -8,7 +8,5 @@
   Watch](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/gfw-fishing-effort-3d.md):
 - [Extracting 3D Environmental Data for a Single
   Species](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/woa-environmental-extraction-single-species.md):
-- [Extracting 3D Environmental Data for Sharks and
-  Rays](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/woa-environmental-extraction.md):
 - [Extracting Voxel Values Within a Species' 3D
   Range](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/woa-species-range-voxels.md):

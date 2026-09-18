@@ -36,7 +36,6 @@
 <li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
-    <li><a class="dropdown-item" href="../articles/woa-environmental-extraction.html">Extracting 3D Environmental Data for Sharks and Rays</a></li>
     <li><a class="dropdown-item" href="../articles/woa-species-range-voxels.html">Extracting Voxel Values Within a Species' 3D Range</a></li>
   </ul>
 </li>
@@ -70,21 +69,38 @@
     
     
 <div class="section level2">
-<h2 id="extracting-3d-environmental-data-for-a-single-species">Extracting 3D Environmental Data for a Single Species<a class="anchor" aria-label="anchor" href="#extracting-3d-environmental-data-for-a-single-species"></a>
+<h2 id="extracting-3d-environmental-data-for-sharks-and-rays-species">Extracting 3D Environmental Data for Sharks and Rays Species<a class="anchor" aria-label="anchor" href="#extracting-3d-environmental-data-for-sharks-and-rays-species"></a>
 </h2>
+<p>This vignette demonstrates the World Ocean Atlas (WOA) environmental
+extraction analysis, which summarises temperature and dissolved oxygen
+conditions across the 3D habitat of shark and ray species. Here we
+implement this workflow using <code>ocean3d</code> package
+functions.</p>
+<div class="section level3">
+<h3 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
+</h3>
+<p>The goal is to produce a single summary table with one row per
+species, containing statistics (min, max, mean, range) for temperature
+and dissolved oxygen across each species’ geographic range and depth
+limits. The workflow has five steps:</p>
+<ol style="list-style-type: decimal">
+<li>
+<strong>Fetch species depth limits</strong> from the IUCN Red List
+API</li>
+<li><strong>Load species range polygons</strong></li>
+<li>
+<strong>Prepare WOA rasters and the study grid</strong> (download,
+annual means, align to grid)</li>
+<li>
+<strong>Extract and summarise</strong> environmental conditions per
+species</li>
+</ol>
 <p>This vignette is a scoped-down version of the full WOA environmental
 extraction workflow that runs for <strong>one example species</strong>
-instead of every shark and ray. It produces two visualisation
-products:</p>
-<ol style="list-style-type: decimal">
-<li>An <strong>animated GIF</strong> of annual mean temperature through
-the species’ range across every depth layer it occupies.</li>
-<li>A <strong>three-panel static figure</strong> (stacked vertically)
-showing temperature at the surface, at the standard depth closest to the
-halfway point, and at the deepest depth the species is found at.</li>
-</ol>
+instead of every shark and ray.</p>
 <p>The example species is the Banded Wobbegong (<em>Orectolobus
 halei</em>).</p>
+</div>
 <div class="section level3">
 <h3 id="setup">Setup<a class="anchor" aria-label="anchor" href="#setup"></a>
 </h3>
@@ -96,9 +112,7 @@ halei</em>).</p>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://rspatial.org/" class="external-link">terra</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://here.r-lib.org/" class="external-link">here</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://gganimate.com" class="external-link">gganimate</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://tidyr.tidyverse.org" class="external-link">tidyr</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://patchwork.data-imaginist.com" class="external-link">patchwork</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dieghernan.github.io/tidyterra/" class="external-link">tidyterra</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># The single example species.</span></span>
@@ -112,16 +126,18 @@ assessment, so there is no 30-minute group download.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">api_key</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Sys.getenv.html" class="external-link">Sys.getenv</a></span><span class="op">(</span><span class="st">"IUCN_REDLIST_KEY"</span><span class="op">)</span></span>
 <span></span>
+<span><span class="co"># Use IUCN Red List API to get the species depth ranges</span></span>
 <span><span class="va">depth_table</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fetch_species_assessments.html">fetch_species_assessments</a></span><span class="op">(</span></span>
 <span>  api_key <span class="op">=</span> <span class="va">api_key</span>,</span>
 <span>  species_names <span class="op">=</span> <span class="va">sp_name</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Fill missing depths (a no-op if the species already has both limits).</span></span>
+<span><span class="co"># Fill missing depths</span></span>
 <span><span class="va">depth_table_complete</span> <span class="op">&lt;-</span> <span class="va">depth_table</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="../reference/fill_missing_depths.html">fill_missing_depths</a></span><span class="op">(</span><span class="va">upper_depth_limit</span>, <span class="va">lower_depth_limit</span>, <span class="va">genus_name</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">upper_depth</span><span class="op">)</span>, <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">lower_depth</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
+<span><span class="co"># Get the Orectolobus halei depth range</span></span>
 <span><span class="va">sp_depths</span> <span class="op">&lt;-</span> <span class="va">depth_table_complete</span><span class="op">[</span></span>
 <span>  <span class="va">depth_table_complete</span><span class="op">$</span><span class="va">scientific_name</span> <span class="op">==</span> <span class="va">sp_name</span>, <span class="op">]</span></span>
 <span><span class="va">sp_id</span> <span class="op">&lt;-</span> <span class="va">sp_depths</span><span class="op">$</span><span class="va">sis_id</span></span></code></pre></div>
@@ -129,12 +145,17 @@ assessment, so there is no 30-minute group download.</p>
 <div class="section level3">
 <h3 id="step-2-load-the-species-range-polygon">Step 2: Load the species range polygon<a class="anchor" aria-label="anchor" href="#step-2-load-the-species-range-polygon"></a>
 </h3>
+<p>The IUCN Red List shapefiles have to be downloaded yourself, from
+this link: <a href="https://www.iucnredlist.org/resources/spatial-data-download" class="external-link uri">https://www.iucnredlist.org/resources/spatial-data-download</a></p>
 <p>Only the one species is read out of the IUCN shapefile via SQL
 filtering.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">iucn_shp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"/home/jay/Programming_Projects/Big_Data/SHARKS_RAYS_CHIMAERAS/SHARKS_RAYS_CHIMAERAS.shp"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="co"># Download the IUCN Red List shapefiles from https://www.iucnredlist.org/resources/spatial-data-download </span></span>
+<span><span class="co"># Modify the path to your local save location for the shapefile</span></span>
+<span><span class="va">iucn_shp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"EXAMPLE_DIRECTORY/SHARKS_RAYS_CHIMAERAS/SHARKS_RAYS_CHIMAERAS.shp"</span><span class="op">)</span></span>
 <span><span class="va">layer_name</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_layers.html" class="external-link">st_layers</a></span><span class="op">(</span><span class="va">iucn_shp</span><span class="op">)</span><span class="op">$</span><span class="va">name</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span></span>
+<span><span class="co"># Read in just Orectolobus halei</span></span>
 <span><span class="va">sp_range</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_read.html" class="external-link">st_read</a></span><span class="op">(</span></span>
 <span>  <span class="va">iucn_shp</span>,</span>
 <span>  query <span class="op">=</span> <span class="fu"><a href="https://stringr.tidyverse.org/reference/str_glue.html" class="external-link">str_glue</a></span><span class="op">(</span></span>
@@ -162,6 +183,7 @@ filtering.</p>
 <span>  <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/vect.html" class="external-link">vect</a></span><span class="op">(</span><span class="va">sp_range</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span> <span class="fl">1</span>,</span>
 <span>  <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="op">-</span><span class="fl">180</span>, <span class="fl">180</span>, <span class="op">-</span><span class="fl">90</span>, <span class="fl">90</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
+<span></span>
 <span><span class="co"># as_voxel() re-wraps after the crop: terra operations propagate the class but</span></span>
 <span><span class="co"># do not re-run its validity rules, so wrapping is how the depth axis is</span></span>
 <span><span class="co"># re-checked. It is idempotent, so this is cheap.</span></span>
@@ -169,13 +191,15 @@ filtering.</p>
 <span></span>
 <span><span class="co"># Derive the study grid from the cropped raster so the envelope and the voxel</span></span>
 <span><span class="co"># stay on the same grid.</span></span>
-<span><span class="va">study_grid</span> <span class="op">&lt;-</span> <span class="va">t_annual</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
-<span></span>
-<span><span class="co"># Bathymetry -&gt; positive depth, aligned to the study grid.</span></span>
+<span><span class="va">study_grid</span> <span class="op">&lt;-</span> <span class="va">t_annual</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Bathymetry -&gt; positive depth, aligned to the study grid.</span></span>
 <span><span class="co"># Project before negating: negating first forces an eager pass over the full</span></span>
 <span><span class="co"># global 15 arc-second grid, which terra otherwise avoids by reading only the</span></span>
 <span><span class="co"># window the target grid needs.</span></span>
-<span><span class="va">bathy</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry</a></span><span class="op">(</span><span class="st">"/home/jay/Programming_Projects/Big_Data/gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Download the GEBCO bathymetry data from https://www.gebco.net/data-products/gridded-bathymetry-data</span></span>
+<span><span class="va">bathy</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry</a></span><span class="op">(</span><span class="st">"EXAMPLE_DIRECTORY/gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc"</span><span class="op">)</span></span>
 <span><span class="va">seafloor</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/project.html" class="external-link">project</a></span><span class="op">(</span><span class="va">bathy</span>, <span class="va">study_grid</span><span class="op">)</span> <span class="op">*</span> <span class="op">-</span><span class="fl">1</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/clamp.html" class="external-link">clamp</a></span><span class="op">(</span>lower <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -186,7 +210,7 @@ filtering.</p>
 seafloor goes in as one more <code>depth_max</code> constraint, so the
 species’ nominal lower limit is clamped to the bed wherever the bed is
 shallower; per cell the shallowest <code>depth_max</code> wins.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">range_rast</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vect_to_envelope.html">vect_to_envelope</a></span><span class="op">(</span></span>
 <span>  polygon <span class="op">=</span> <span class="va">sp_range</span>,</span>
 <span>  template <span class="op">=</span> <span class="va">study_grid</span>,</span>
@@ -207,7 +231,7 @@ shallower; per cell the shallowest <code>depth_max</code> wins.</p>
 <p>Each frame is one depth layer, from the surface down to the deepest
 layer the species occupies. The colour scale is locked to the global
 temperature range so colours are comparable across frames.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">long_df</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">masked</span>, xy <span class="op">=</span> <span class="cn">TRUE</span>, na.rm <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://tidyr.tidyverse.org/reference/pivot_longer.html" class="external-link">pivot_longer</a></span><span class="op">(</span>cols <span class="op">=</span> <span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span>, names_to <span class="op">=</span> <span class="st">"layer"</span>, values_to <span class="op">=</span> <span class="st">"value"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>depth <span class="op">=</span> <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">layer</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -262,7 +286,7 @@ deepest)<a class="anchor" aria-label="anchor" href="#figure-2-three-panel-static
 <p>We pick three depths from the layers the species actually occupies:
 the surface (0 m), the standard WOA depth closest to the halfway point,
 and the deepest layer with data inside the range.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Depths of each masked layer, and which layers hold any data for this species.</span></span>
 <span><span class="va">layer_depths</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">masked</span><span class="op">)</span></span>
 <span><span class="va">has_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/dimensions.html" class="external-link">nlyr</a></span><span class="op">(</span><span class="va">masked</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
@@ -281,7 +305,7 @@ and the deepest layer with data inside the range.</p>
 this article rather than exported by the package — it is a thin
 <code>ggplot2</code> wrapper that draws one map per depth.
 <code>patchwork</code> stacks them vertically.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Map view of a species range with environmental values at the depth layer</span></span>
 <span><span class="co"># nearest `depth`.</span></span>
 <span><span class="va">plot_range_at_depth</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">species_range</span>, <span class="va">depth</span>, <span class="va">rast_3d</span><span class="op">)</span> <span class="op">{</span></span>
@@ -316,7 +340,7 @@ this article rather than exported by the package — it is a thin
 <span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
 <span>    <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>axis.title <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_blank</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span></span></code></pre></div>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Shared colour limits across the three panels. Without explicit `limits` each</span></span>
 <span><span class="co"># panel rescales to its own range, so the warm surface and the cold deepest</span></span>
 <span><span class="co"># layer would render in the same colours and the panels would not be</span></span>
