@@ -23,3 +23,4 @@
 ^docs$
 ^pkgdown$
 ^vignettes/articles$
+^CITATION\.cff$
