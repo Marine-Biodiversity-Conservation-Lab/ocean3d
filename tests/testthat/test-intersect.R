@@ -324,15 +324,21 @@ test_that("intersects_3d() on mixed input equals promoting the envelope by hand"
 test_that("intersects_3d() is TRUE exactly where intersect_3d() is non-empty", {
   e <- truth_envelopes()
   shared <- intersect_3d(e$a, e$b)
+  # nolint start: scalar_in_linter
+  # use %in% instead of ==, because NA == TRUE returns NA, compared to NA %in% TRUE returns FALSE
   expect_equal(terra::values(intersects_3d(e$a, e$b))[, 1] %in% TRUE,
                !is.na(terra::values(shared)[, "depth_min"]))
+  # nolint end
 
   depths <- c(0, 50, 100, 150, 200, 300, 400)
   va <- envelope_to_voxel(e$a, depths)
   vb <- envelope_to_voxel(e$b, depths)
   shared_v <- intersect_3d(va, vb)
+  # nolint start: scalar_in_linter
+  # use %in% instead of ==, because NA == TRUE returns NA, compared to NA %in% TRUE returns FALSE
   expect_equal(terra::values(intersects_3d(va, vb))[, 1] %in% TRUE,
                rowSums(!is.na(terra::values(shared_v))) > 0)
+  # nolint end
 })
 
 test_that("intersects_3d() is TRUE exactly where calc_volume_overlap() finds overlap", {
@@ -342,7 +348,10 @@ test_that("intersects_3d() is TRUE exactly where calc_volume_overlap() finds ove
                        c(200, 200, 200, 200, 200, 200, 100, 100, 100))
 
   from_volume <- terra::values(calc_volume_overlap(a, b))[, "depth_min_overlap"]
+  # nolint start: scalar_in_linter
+  # use %in% instead of ==, because NA == TRUE returns NA, compared to NA %in% TRUE returns FALSE
   expect_equal(terra::values(intersects_3d(a, b))[, 1] %in% TRUE, !is.na(from_volume))
+  # nolint end
   # ...and FALSE, not NA, where both are present but disjoint.
   expect_equal(terra::values(intersects_3d(a, b))[, 1], c(rep(TRUE, 3), rep(FALSE, 6)))
 })
