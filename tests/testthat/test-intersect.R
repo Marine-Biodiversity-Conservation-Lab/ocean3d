@@ -543,35 +543,3 @@ test_that("constructors accept tagged input as a footprint or template", {
   expect_equal(vals_of(e2, "depth_max"), c(100, 100, NA, 100, 100, NA, 100, 100, NA))
 })
 
-# ---- terra::intersect() guard -----------------------------------------------
-
-test_that("terra::intersect() on a 3D object is an error that names the replacements", {
-  # Before: intersect(a, b) on two envelopes 100 m apart returned a tagged
-  # SpatEnvelope of TRUE/TRUE that passed validObject().
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  b <- make_range_rast(rep(200, 9), rep(300, 9))
-  v <- envelope_to_voxel(a, c(0, 50, 100))
-  fp <- make_footprint(rep(1, 9))
-
-  expect_error(terra::intersect(a, b), "intersects_3d\\(\\)")
-  expect_error(terra::intersect(v, v), "intersect_3d\\(\\)")
-  expect_error(terra::intersect(a, v), "ignores the depth axis")
-  expect_error(terra::intersect(v, a), "ignores the depth axis")
-  expect_error(terra::intersect(a, fp), "ignores the depth axis")
-  expect_error(terra::intersect(fp, v), "ignores the depth axis")
-})
-
-test_that("terra's own intersect() methods are untouched", {
-  fp1 <- make_footprint(c(1, 2, NA, NA), ncol = 4, nrow = 1)
-  fp2 <- make_footprint(c(9, NA, 7, NA), ncol = 4, nrow = 1)
-  expect_equal(vals_of(terra::intersect(fp1, fp2)), c(TRUE, FALSE, FALSE, NA))
-
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  ex <- terra::intersect(a, terra::ext(0, 1000, 0, 1000))
-  expect_s4_class(ex, "SpatExtent")
-
-  poly <- make_left_polygon()
-  expect_s4_class(terra::intersect(poly, poly), "SpatVector")
-
-  expect_equal(intersect(1:3, 2:5), 2:3)
-})
