@@ -46,9 +46,9 @@ test_that("calc_volume_overlap() overlap volume never exceeds volume of either i
   totals <- terra::global(vol_layers, "sum", na.rm = TRUE)$sum
   names(totals) <- c("volume_a", "volume_b", "volume_overlap")
 
-  expect_true(totals[["volume_overlap"]] <= totals[["volume_a"]])
-  expect_true(totals[["volume_overlap"]] <= totals[["volume_b"]])
-  expect_true(totals[["volume_overlap"]] > 0)
+  expect_lte(totals[["volume_overlap"]], totals[["volume_a"]])
+  expect_lte(totals[["volume_overlap"]] <= totals[["volume_b"]])
+  expect_gt(totals[["volume_overlap"]] > 0)
 })
 
 test_that("calc_volume_overlap() overlap is NA where ranges don't spatially overlap", {
@@ -138,7 +138,7 @@ test_that("volume() returns correct value for uniform grid", {
   vol <- volume(r)
 
   # Cell area depends on projection; just check it's positive and reasonable
-  expect_true(vol > 0)
+  expect_gt(vol, 0)
   # With 1km cells: 9 cells * 1 km² * 0.1 km depth = 0.9 km³
   expect_equal(vol, 0.9, tolerance = 0.01)
 })
@@ -265,9 +265,9 @@ test_that("calc_volume_overlap() overlap never exceeds either voxel's volume", {
     result[[c("volume_a", "volume_b", "volume_overlap")]], "sum", na.rm = TRUE
   )$sum
 
-  expect_true(totals[3] <= totals[1])
-  expect_true(totals[3] <= totals[2])
-  expect_true(totals[3] > 0)
+  expect_lte(totals[3], totals[1])
+  expect_lte(totals[3], totals[2])
+  expect_gt(totals[3], 0)
 })
 
 test_that("calc_volume_overlap() promotes an envelope onto the voxel's levels", {
