@@ -40,8 +40,6 @@ make_left_polygon <- function() {
               crs = terra::crs(make_grid()))
 }
 
-vals_of <- function(r, layer = 1) as.vector(terra::values(r)[, layer])
-
 # ---- intersect_3d: envelopes ------------------------------------------------
 
 test_that("intersect_3d() on envelopes is the per-cell interval intersection", {
@@ -53,8 +51,8 @@ test_that("intersect_3d() on envelopes is the per-cell interval intersection", {
   expect_s4_class(out, "SpatEnvelope")
   expect_identical(class(out)[[1]], "SpatEnvelope")
   expect_true(methods::validObject(out))
-  expect_equal(vals_of(out, "depth_min"), rep(50, 9))
-  expect_equal(vals_of(out, "depth_max"), rep(100, 9))
+  expect_equal(terra::values(out)[, "depth_min"], rep(50, 9))
+  expect_equal(terra::values(out)[, "depth_max"], rep(100, 9))
 })
 
 test_that("intersect_3d() on envelopes is empty where the domains do not meet", {
@@ -81,8 +79,8 @@ test_that("intersect_3d() on envelopes keeps only cells present in both", {
                        c(NA, 200, 200, 200, 200, 200, 200, 200, 200))
 
   out <- intersect_3d(a, b)
-  expect_equal(vals_of(out, "depth_min"), c(NA, 50, NA, rep(50, 6)))
-  expect_equal(vals_of(out, "depth_max"), c(NA, 100, NA, rep(100, 6)))
+  expect_equal(terra::values(out)[, "depth_min"], c(NA, 50, NA, rep(50, 6)))
+  expect_equal(terra::values(out)[, "depth_max"], c(NA, 100, NA, rep(100, 6)))
 })
 
 test_that("intersect_3d() is symmetric", {
@@ -154,8 +152,8 @@ test_that("intersect_3d() with a footprint raster restricts an envelope horizont
 
   out <- intersect_3d(a, fp)
   expect_identical(class(out)[[1]], "SpatEnvelope")
-  expect_equal(vals_of(out, "depth_min"), c(0, NA, 0, 0, NA, NA, 0, 0, 0))
-  expect_equal(vals_of(out, "depth_max"), c(100, NA, 100, 100, NA, NA, 100, 100, 100))
+  expect_equal(terra::values(out)[, "depth_min"], c(0, NA, 0, 0, NA, NA, 0, 0, 0))
+  expect_equal(terra::values(out)[, "depth_max"], c(100, NA, 100, 100, NA, NA, 100, 100, 100))
 
   # Mirrored order gives the same object.
   expect_equal(terra::values(intersect_3d(fp, a)), terra::values(out))
@@ -180,12 +178,12 @@ test_that("intersect_3d() accepts polygons as SpatVector, sf and sfc", {
   poly <- make_left_polygon()
   expected_min <- c(0, 0, NA, 0, 0, NA, 0, 0, NA)
 
-  expect_equal(vals_of(intersect_3d(a, poly), "depth_min"), expected_min)
-  expect_equal(vals_of(intersect_3d(poly, a), "depth_min"), expected_min)
+  expect_equal(terra::values(intersect_3d(a, poly))[, "depth_min"], expected_min)
+  expect_equal(terra::values(intersect_3d(poly, a))[, "depth_min"], expected_min)
 
   poly_sf <- sf::st_as_sf(poly)
-  expect_equal(vals_of(intersect_3d(a, poly_sf), "depth_min"), expected_min)
-  expect_equal(vals_of(intersect_3d(a, sf::st_geometry(poly_sf)), "depth_min"),
+  expect_equal(terra::values(intersect_3d(a, poly_sf))[, "depth_min"], expected_min)
+  expect_equal(terra::values(intersect_3d(a, sf::st_geometry(poly_sf)))[, "depth_min"],
                expected_min)
 })
 
@@ -193,8 +191,8 @@ test_that("intersect_3d() projects polygons in another CRS onto the grid", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
   poly_ll <- terra::project(make_left_polygon(), "EPSG:4326")
 
-  expect_equal(vals_of(intersect_3d(a, poly_ll), "depth_min"),
-               vals_of(intersect_3d(a, make_left_polygon()), "depth_min"))
+  expect_equal(terra::values(intersect_3d(a, poly_ll))[, "depth_min"],
+               terra::values(intersect_3d(a, make_left_polygon()))[, "depth_min"])
 })
 
 test_that("intersect_3d() rejects input it cannot read as a footprint", {
@@ -253,14 +251,14 @@ test_that("intersects_3d() on envelopes gives the tri-state truth table", {
   expect_identical(class(out)[[1]], "SpatRaster")
   expect_true(terra::is.bool(out))
   expect_equal(names(out), "intersects")
-  expect_equal(vals_of(out), c(TRUE, FALSE, FALSE, NA))
-  expect_equal(vals_of(intersects_3d(e$b, e$a)), c(TRUE, FALSE, FALSE, NA))
+  expect_equal(terra::values(out)[, 1], c(TRUE, FALSE, FALSE, NA))
+  expect_equal(terra::values(intersects_3d(e$b, e$a))[, 1], c(TRUE, FALSE, FALSE, NA))
 })
 
 test_that("intersects_3d() treats touching intervals as not intersecting", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
   b <- make_range_rast(rep(100, 9), rep(200, 9))
-  expect_equal(vals_of(intersects_3d(a, b)), rep(FALSE, 9))
+  expect_equal(terra::values(intersects_3d(a, b))[, 1], rep(FALSE, 9))
 })
 
 test_that("adjacent depth ranges do not intersect as voxels either", {
@@ -275,13 +273,13 @@ test_that("adjacent depth ranges do not intersect as voxels either", {
   vb <- envelope_to_voxel(b, depths)
 
   # voxel vs voxel
-  expect_equal(vals_of(intersects_3d(va, vb)), rep(FALSE, 9))
-  expect_equal(vals_of(intersects_3d(vb, va)), rep(FALSE, 9))
+  expect_equal(terra::values(intersects_3d(va, vb))[, 1], rep(FALSE, 9))
+  expect_equal(terra::values(intersects_3d(vb, va))[, 1], rep(FALSE, 9))
   expect_true(all(is.na(terra::values(intersect_3d(va, vb)))))
 
   # envelope vs voxel, both orders
-  expect_equal(vals_of(intersects_3d(a, vb)), rep(FALSE, 9))
-  expect_equal(vals_of(intersects_3d(vb, a)), rep(FALSE, 9))
+  expect_equal(terra::values(intersects_3d(a, vb))[, 1], rep(FALSE, 9))
+  expect_equal(terra::values(intersects_3d(vb, a))[, 1], rep(FALSE, 9))
   expect_true(all(is.na(terra::values(intersect_3d(a, vb)))))
   expect_true(all(is.na(terra::values(intersect_3d(va, b)))))
 
@@ -290,13 +288,13 @@ test_that("adjacent depth ranges do not intersect as voxels either", {
   depths_mid <- c(0, 50, 150, 200)
   va_mid <- envelope_to_voxel(a, depths_mid, bounds = "midpoint")
   vb_mid <- envelope_to_voxel(b, depths_mid, bounds = "midpoint")
-  expect_equal(vals_of(intersects_3d(va_mid, vb_mid)), rep(FALSE, 9))
-  expect_equal(vals_of(intersects_3d(a, vb_mid, bounds = "midpoint")), rep(FALSE, 9))
+  expect_equal(terra::values(intersects_3d(va_mid, vb_mid))[, 1], rep(FALSE, 9))
+  expect_equal(terra::values(intersects_3d(a, vb_mid, bounds = "midpoint"))[, 1], rep(FALSE, 9))
 
   # overlapping by any amount is still an intersection, so this is the
   # boundary itself and not a wider gap
   c_ <- make_range_rast(rep(99, 9), rep(200, 9))
-  expect_equal(vals_of(intersects_3d(va, envelope_to_voxel(c_, depths))), rep(TRUE, 9))
+  expect_equal(terra::values(intersects_3d(va, envelope_to_voxel(c_, depths)))[, 1], rep(TRUE, 9))
 })
 
 test_that("intersects_3d() on voxels gives the tri-state truth table", {
@@ -309,7 +307,7 @@ test_that("intersects_3d() on voxels gives the tri-state truth table", {
   out <- intersects_3d(a, b)
   expect_true(terra::is.bool(out))
   expect_identical(class(out)[[1]], "SpatRaster")
-  expect_equal(vals_of(out), c(TRUE, FALSE, FALSE, NA))
+  expect_equal(terra::values(out)[, 1], c(TRUE, FALSE, FALSE, NA))
 })
 
 test_that("intersects_3d() on mixed input equals promoting the envelope by hand", {
@@ -318,22 +316,22 @@ test_that("intersects_3d() on mixed input equals promoting the envelope by hand"
   v <- envelope_to_voxel(truth_envelopes()$b, depths)
 
   by_hand <- intersects_3d(envelope_to_voxel(e, depths), v)
-  expect_equal(vals_of(intersects_3d(e, v)), vals_of(by_hand))
-  expect_equal(vals_of(intersects_3d(v, e)), vals_of(by_hand))
-  expect_equal(vals_of(by_hand), c(TRUE, FALSE, FALSE, NA))
+  expect_equal(terra::values(intersects_3d(e, v))[, 1], terra::values(by_hand)[, 1])
+  expect_equal(terra::values(intersects_3d(v, e))[, 1], terra::values(by_hand)[, 1])
+  expect_equal(terra::values(by_hand)[, 1], c(TRUE, FALSE, FALSE, NA))
 })
 
 test_that("intersects_3d() is TRUE exactly where intersect_3d() is non-empty", {
   e <- truth_envelopes()
   shared <- intersect_3d(e$a, e$b)
-  expect_equal(vals_of(intersects_3d(e$a, e$b)) %in% TRUE,
-               !is.na(vals_of(shared, "depth_min")))
+  expect_equal(terra::values(intersects_3d(e$a, e$b))[, 1] %in% TRUE,
+               !is.na(terra::values(shared)[, "depth_min"]))
 
   depths <- c(0, 50, 100, 150, 200, 300, 400)
   va <- envelope_to_voxel(e$a, depths)
   vb <- envelope_to_voxel(e$b, depths)
   shared_v <- intersect_3d(va, vb)
-  expect_equal(vals_of(intersects_3d(va, vb)) %in% TRUE,
+  expect_equal(terra::values(intersects_3d(va, vb))[, 1] %in% TRUE,
                rowSums(!is.na(terra::values(shared_v))) > 0)
 })
 
@@ -343,34 +341,34 @@ test_that("intersects_3d() is TRUE exactly where calc_volume_overlap() finds ove
   b <- make_range_rast(c(50, 50, 50, 50, 50, 50, 0, 0, 0),
                        c(200, 200, 200, 200, 200, 200, 100, 100, 100))
 
-  from_volume <- vals_of(calc_volume_overlap(a, b), "depth_min_overlap")
-  expect_equal(vals_of(intersects_3d(a, b)) %in% TRUE, !is.na(from_volume))
+  from_volume <- terra::values(calc_volume_overlap(a, b))[, "depth_min_overlap"]
+  expect_equal(terra::values(intersects_3d(a, b))[, 1] %in% TRUE, !is.na(from_volume))
   # ...and FALSE, not NA, where both are present but disjoint.
-  expect_equal(vals_of(intersects_3d(a, b)), c(rep(TRUE, 3), rep(FALSE, 6)))
+  expect_equal(terra::values(intersects_3d(a, b))[, 1], c(rep(TRUE, 3), rep(FALSE, 6)))
 })
 
 test_that("intersects_3d() with 2D input tests presence on both sides", {
   a <- make_range_rast(c(0, 0, NA, NA), c(100, 100, NA, NA), ncol = 4, nrow = 1)
   fp <- make_footprint(c(1, NA, 1, NA), ncol = 4, nrow = 1)
 
-  expect_equal(vals_of(intersects_3d(a, fp)), c(TRUE, FALSE, FALSE, NA))
-  expect_equal(vals_of(intersects_3d(fp, a)), c(TRUE, FALSE, FALSE, NA))
+  expect_equal(terra::values(intersects_3d(a, fp))[, 1], c(TRUE, FALSE, FALSE, NA))
+  expect_equal(terra::values(intersects_3d(fp, a))[, 1], c(TRUE, FALSE, FALSE, NA))
 
   v <- envelope_to_voxel(a, c(0, 100))
-  expect_equal(vals_of(intersects_3d(v, fp)), c(TRUE, FALSE, FALSE, NA))
-  expect_equal(vals_of(intersects_3d(fp, v)), c(TRUE, FALSE, FALSE, NA))
+  expect_equal(terra::values(intersects_3d(v, fp))[, 1], c(TRUE, FALSE, FALSE, NA))
+  expect_equal(terra::values(intersects_3d(fp, v))[, 1], c(TRUE, FALSE, FALSE, NA))
 
   # Polygons: the left two columns of the 3x3 grid.
   a9 <- make_range_rast(c(0, 0, 0, NA, NA, NA, 0, 0, 0),
                         c(100, 100, 100, NA, NA, NA, 100, 100, 100))
-  expect_equal(vals_of(intersects_3d(a9, make_left_polygon())),
+  expect_equal(terra::values(intersects_3d(a9, make_left_polygon()))[, 1],
                c(TRUE, TRUE, FALSE, FALSE, FALSE, NA, TRUE, TRUE, FALSE))
 })
 
 test_that("a stack of intersects_3d() layers sums to a richness map", {
   e <- truth_envelopes()
   stack <- c(intersects_3d(e$a, e$b), intersects_3d(e$a, e$a))
-  expect_equal(vals_of(sum(stack, na.rm = TRUE)), c(2, 1, 1, NA))
+  expect_equal(terra::values(sum(stack, na.rm = TRUE))[, 1], c(2, 1, 1, NA))
 })
 
 test_that("intersects_3d() rejects input without a 3D object or on another grid", {
@@ -451,8 +449,8 @@ test_that("mask(envelope, envelope) keeps whole intervals where the domains meet
 
   out <- mask(a, b)
   expect_identical(class(out)[[1]], "SpatEnvelope")
-  expect_equal(vals_of(out, "depth_min"), c(0, NA, NA, rep(0, 6)))
-  expect_equal(vals_of(out, "depth_max"), c(100, NA, NA, rep(100, 6)))
+  expect_equal(terra::values(out)[, "depth_min"], c(0, NA, NA, rep(0, 6)))
+  expect_equal(terra::values(out)[, "depth_max"], c(100, NA, NA, rep(100, 6)))
 
   # Before: two envelopes 100 m apart came back unchanged.
   deeper <- make_range_rast(rep(300, 9), rep(400, 9))
@@ -466,7 +464,7 @@ test_that("mask(envelope, voxel) keeps cells where the voxel reaches the envelop
                          depths = c(0, 50, 100, 150, 200, 300, 400))
   out <- mask(a, v)
   expect_identical(class(out)[[1]], "SpatEnvelope")
-  expect_equal(vals_of(out, "depth_min"), c(0, NA, NA, rep(0, 6)))
+  expect_equal(terra::values(out)[, "depth_min"], c(0, NA, NA, rep(0, 6)))
 })
 
 test_that("mask(plain raster, voxel) keeps cells occupied at any depth", {
@@ -478,11 +476,11 @@ test_that("mask(plain raster, voxel) keeps cells occupied at any depth", {
 
   out <- mask(fp, v)
   expect_identical(class(out)[[1]], "SpatRaster")
-  expect_equal(vals_of(out), c(7, 8, NA))
-  expect_equal(vals_of(mask(fp, occupied(v, function(x) x > 5))), rep(NA_real_, 3))
+  expect_equal(terra::values(out)[, 1], c(7, 8, NA))
+  expect_equal(terra::values(mask(fp, occupied(v, function(x) x > 5)))[, 1], rep(NA_real_, 3))
 
   e <- make_range_rast(c(0, NA, 0), c(100, NA, 100), ncol = 3, nrow = 1)
-  expect_equal(vals_of(mask(fp, e)), c(7, NA, 9))
+  expect_equal(terra::values(mask(fp, e))[, 1], c(7, NA, 9))
 })
 
 test_that("mask() passes terra's own arguments through", {
@@ -535,11 +533,11 @@ test_that("constructors accept tagged input as a footprint or template", {
   # A voxel layer used as a footprint is still tagged SpatVoxel.
   e <- as_envelope(field[[1]], depth_min = 0, depth_max = 100)
   expect_identical(class(e)[[1]], "SpatEnvelope")
-  expect_equal(vals_of(e, "depth_min"), rep(0, 9))
+  expect_equal(terra::values(e)[, "depth_min"], rep(0, 9))
 
   poly <- sf::st_as_sf(make_left_polygon())
   e2 <- vect_to_envelope(poly, field, depth_min = 0, depth_max = 100)
   expect_identical(class(e2)[[1]], "SpatEnvelope")
-  expect_equal(vals_of(e2, "depth_max"), c(100, 100, NA, 100, 100, NA, 100, 100, NA))
+  expect_equal(terra::values(e2)[, "depth_max"], c(100, 100, NA, 100, 100, NA, 100, 100, NA))
 })
 
