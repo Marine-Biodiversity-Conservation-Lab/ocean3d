@@ -173,7 +173,7 @@ test_that("fetch_species_assessments populates systems_code from assessment", {
     api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
     species_names = "Sphyrna lewini"
   )
-  expect_true(is.character(out$systems_code))
+  expect_type(out$systems_code, "character")
   expect_false(is.na(out$systems_code))
 })
 
@@ -193,7 +193,7 @@ test_that("fetch_species_assessments depth fields are numeric or NA", {
 # fill_missing_depths
 # ---------------------------------------------------------------------------
 
-test_that("fill_missing_depths swaps reversed upper/lower values", {
+test_that("fill_missing_depths swaps reversed upper and lower values", {
   out <- fill_missing_depths(
     upper = c(100, 50),
     lower = c(10, 500),  # first row reversed
