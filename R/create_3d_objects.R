@@ -724,7 +724,7 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 # that every constraint narrows the envelope).
 .combine_depths <- function(x, template, fun) {
   # identify which inputs are SpatRaster, which are not 
-  is_rast <- vapply(x, function(el) inherits(el, "SpatRaster"), logical(1))
+  is_rast <- vapply(x, inherits, logical(1), what = "SpatRaster")
 
   # skips the reordered do.call when there are no rasters in input list x
   # creates raster with single value across
