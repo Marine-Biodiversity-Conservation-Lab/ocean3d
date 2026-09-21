@@ -29,7 +29,7 @@ test_that("as_envelope() builds a SpatEnvelope from a footprint and constant dep
 
   expect_s4_class(e, "SpatEnvelope")
   expect_s4_class(e, "SpatVolume")
-  expect_identical(names(e), c("depth_min", "depth_max"))
+  expect_named(e, c("depth_min", "depth_max"))
 
   vals <- terra::values(e)
   expect_identical(unname(vals[, "depth_min"]), c(0, 0, 0, NA))
@@ -165,14 +165,14 @@ test_that("as_voxel() wraps a conforming multi-depth SpatRaster", {
 
   expect_s4_class(v, "SpatVoxel")
   expect_s4_class(v, "SpatVolume")
-  expect_identical(names(v), paste0("temp_depth=", c(0, 100, 200, 300)))
+  expect_named(v, paste0("temp_depth=", c(0, 100, 200, 300)))
 })
 
 test_that("as_voxel() is idempotent", {
   v <- as_voxel(make_multidepth_rast())
 
   expect_s4_class(as_voxel(v), "SpatVoxel")
-  expect_identical(names(as_voxel(v)), names(v))
+  expect_named(as_voxel(v), names(v))
 })
 
 test_that("as_voxel() sorts layers shallow to deep instead of rejecting them", {
@@ -182,7 +182,7 @@ test_that("as_voxel() sorts layers shallow to deep instead of rejecting them", {
 
   v <- as_voxel(unsorted)
   expect_s4_class(v, "SpatVoxel")
-  expect_identical(names(v), paste0("temp_depth=", c(0, 100, 200, 300)))
+  expect_named(v, paste0("temp_depth=", c(0, 100, 200, 300)))
 })
 
 test_that("as_voxel() sorting carries the values with the layers", {
@@ -192,7 +192,7 @@ test_that("as_voxel() sorting carries the values with the layers", {
   )
   v <- as_voxel(unsorted)
 
-  expect_identical(names(v), paste0("temp_depth=", c(0, 300)))
+  expect_named(v, paste0("temp_depth=", c(0, 300)))
   # the 0 m layer must still hold the values it had before the sort
   expect_identical(unname(terra::values(v[["temp_depth=0"]])[, 1]), c(5, 6, 7, 8))
 })
@@ -202,7 +202,7 @@ test_that("as_voxel() builds layer names from `depths`", {
   names(r) <- c("a", "b", "c", "d")
 
   v <- as_voxel(r, depths = c(0, 100, 200, 300), varname = "temp")
-  expect_identical(names(v), paste0("temp_depth=", c(0, 100, 200, 300)))
+  expect_named(v, paste0("temp_depth=", c(0, 100, 200, 300)))
 })
 
 test_that("as_voxel() accepts a list of single-depth SpatRasters", {
@@ -267,7 +267,7 @@ test_that("as_voxel() catches a SpatVoxel that a terra operation broke", {
   # a lost name is recoverable by supplying `depths`, which rebuilds the names
   rebuilt <- as_voxel(renamed, depths = c(0, 100, 200), varname = "presence")
   expect_true(methods::validObject(rebuilt, test = TRUE))
-  expect_identical(names(rebuilt), names(v))
+  expect_named(rebuilt, names(v))
 })
 
 test_that("as_voxel() repairs a tagged SpatVoxel whose layers are out of order", {
@@ -284,7 +284,7 @@ test_that("as_voxel() repairs a tagged SpatVoxel whose layers are out of order",
 
   fixed <- as_voxel(reversed)
   expect_true(methods::validObject(fixed, test = TRUE))
-  expect_identical(names(fixed), names(v))
+  expect_named(fixed, names(v))
   expect_identical(terra::values(fixed), terra::values(v))
   expect_identical(volume(fixed), volume(v))
 })
@@ -314,7 +314,7 @@ test_that("voxel_to_envelope() defaults to the non-NA vertical extent", {
   e <- voxel_to_envelope(v)
 
   expect_s4_class(e, "SpatEnvelope")
-  expect_identical(names(e), c("depth_min", "depth_max"))
+  expect_named(e, c("depth_min", "depth_max"))
 
   vals <- terra::values(e)
   expect_identical(unname(vals[, "depth_min"]), c(0, 100, 0, NA))
@@ -434,12 +434,12 @@ test_that("envelope_to_voxel() accepts depths that merely coerce to numeric", {
 
   # character and integer depths are coerced rather than rejected as the wrong
   # type, and the coerced values are what the layer names are built from
-  expect_identical(
-    names(envelope_to_voxel(good_envel, depths = c("0", "100"))),
+  expect_named(
+    envelope_to_voxel(good_envel, depths = c("0", "100")),
     paste0("presence_depth=", c(0, 100))
   )
-  expect_identical(
-    names(envelope_to_voxel(good_envel, depths = 0:3)),
+  expect_named(
+    envelope_to_voxel(good_envel, depths = 0:3),
     paste0("presence_depth=", 0:3)
   )
 })
@@ -470,7 +470,7 @@ test_that("envelope_to_voxel() generates voxel from envelope", {
   got <- envelope_to_voxel(x = envel, depths = a_depths, varname = "test")
 
   expect_s4_class(got, "SpatVoxel")
-  expect_identical(names(got), names(expected_vox))
+  expect_named(got, names(expected_vox))
   expect_identical(terra::values(got), terra::values(expected_vox))
 })
 
@@ -746,7 +746,7 @@ test_that("envelope_to_voxel() profile_equal divides across the occupied depths"
                          profile = profile_equal, varname = "time")
   vals <- terra::values(v)
 
-  expect_identical(names(v), paste0("time_depth=", c(0, 100, 200, 300)))
+  expect_named(v, paste0("time_depth=", c(0, 100, 200, 300)))
   expect_identical(unname(vals[1, ]), c(0.5, 0.5, NA, NA))
   expect_identical(unname(vals[2, ]), rep(0.25, 4))
 })
@@ -818,7 +818,7 @@ test_that("envelope_to_voxel() sorts and deduplicates the requested depths", {
 
   v <- envelope_to_voxel(envel, depths = c(200, 0, 100, 200))
 
-  expect_identical(names(v), paste0("presence_depth=", c(0, 100, 200)))
+  expect_named(v, paste0("presence_depth=", c(0, 100, 200)))
 })
 
 test_that("envelope_to_voxel() rejects negative depths (positive-down convention)", {
@@ -865,7 +865,7 @@ test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
   # the round trip recovers every occupied level except the deepest one per
   # cell. The values themselves are not recovered either, since an envelope
   # carries only the depth limits.
-  expect_identical(names(back), names(v))
+  expect_named(back, names(v))
   present <- !is.na(terra::values(back))
   expect_identical(unname(present[1, ]), c(TRUE, TRUE, FALSE, FALSE))   # 0-200 -> 0, 100
   expect_identical(unname(present[2, ]), c(FALSE, TRUE, TRUE, FALSE))   # 100-300 -> 100, 200
@@ -926,7 +926,7 @@ test_that("vect_to_envelope() takes single numeric value for depth_min and depth
 
   result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 10, depth_max = 20) 
 
-  expect_identical(result, expected_result)
+  expect_true(terra::identical(result, expected_result)) # nolint: expect_identical_linter. terra objects are pointers, not identical according to expect_identical()
 })
 
 test_that("vect_to_envelope() correctly takes deeper minimum depth in the depth_min list params", {
@@ -942,7 +942,7 @@ test_that("vect_to_envelope() correctly takes deeper minimum depth in the depth_
 
   result <- vect_to_envelope(make_polygon(), make_template(), depth_min = c(10, r), depth_max = 25) 
 
-  expect_identical(result["depth_min"], expected_result["depth_min"])
+  expect_true(terra::identical(result["depth_min"], expected_result["depth_min"])) # nolint: expect_identical_linter. terra objects are pointers, not identical according to expect_identical()
 })
 
 test_that("vect_to_envelope() correctly takes shallower maximum depth in the depth_max list params", {
@@ -958,7 +958,7 @@ test_that("vect_to_envelope() correctly takes shallower maximum depth in the dep
 
   result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 0, depth_max = c(10, r)) 
 
-  expect_identical(result["depth_max"], expected_result["depth_max"])
+  expect_true(terra::identical(result["depth_max"], expected_result["depth_max"])) # nolint: expect_identical_linter. terra objects are pointers, not identical according to expect_identical()
 })
 
 # TODO: deal with case where depth_max is shallower than depth_min
@@ -987,7 +987,7 @@ test_that("vect_to_envelope() fills NA where depth_max is shallower than depth_m
 
   result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 10, depth_max = c(16, r)) 
 
-  expect_identical(result, expected_result)
+  expect_true(terra::identical(result, expected_result)) # nolint: expect_identical_linter. terra objects are pointers, not identical according to expect_identical()
 })
 
 test_that("vect_to_envelope() catches case where all cells depth_min are deeper than depth_max", {
@@ -1137,7 +1137,7 @@ test_that("masking a voxel by an envelope respects the per-cell depth window", {
   out <- terra::mask(v, envelope_to_voxel(e, depths(v)))
 
   # Layer names survive the mask, so callers can still index by depth.
-  expect_identical(names(out), names(v))
+  expect_named(out, names(v))
   # Every cell holds the 0 m slab. Only the last two run into the 100-500
   # slab; the first two end where it begins and touching is not overlapping.
   # The 500 m level heads a zero-thickness slab that no cell reaches below.
@@ -1199,7 +1199,7 @@ test_that("occupied() turns a variable voxel into a 1-or-NA presence voxel", {
   out <- occupied(v)
 
   expect_s4_class(out, "SpatVoxel")
-  expect_identical(names(out), paste0("presence_depth=", c(0, 100, 200, 300)))
+  expect_named(out, paste0("presence_depth=", c(0, 100, 200, 300)))
   expect_identical(depths(out), depths(v))
   # Presence is 1 where the variable was recorded, NA where it was not.
   expect_identical(unname(terra::values(out)),
@@ -1221,7 +1221,7 @@ test_that("occupied() is idempotent on a presence voxel", {
   once <- occupied(v)
 
   expect_identical(terra::values(occupied(once)), terra::values(once))
-  expect_identical(names(occupied(once)), names(once))
+  expect_named(occupied(once), names(once))
 })
 
 test_that("occupied() rejects input that is not a voxel", {

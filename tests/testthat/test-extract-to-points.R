@@ -515,7 +515,7 @@ test_that("extract_to_point preserves data frame input behaviour", {
   )
 
   expect_s3_class(out, "data.frame")
-  expect_identical(nrow(out), 2)
+  expect_identical(nrow(out), 2L)
   expect_identical(as.numeric(out$temp), c(5, 12))
 })
 

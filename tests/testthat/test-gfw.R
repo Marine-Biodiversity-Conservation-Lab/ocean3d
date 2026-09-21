@@ -101,7 +101,7 @@ test_that("layer_by = NULL produces a single total-effort raster named 'effort'"
   out <- gfw_effort_to_raster(effort, grid, layer_by = NULL)
 
   expect_identical(terra::nlyr(out), 1)
-  expect_identical(names(out), "effort")
+  expect_named(out, "effort")
   expect_identical(terra::global(out, "sum", na.rm = TRUE)$sum, 10)
 })
 
