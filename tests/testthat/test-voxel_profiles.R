@@ -111,7 +111,7 @@ test_that("a custom profile sees the depths it is being asked about", {
 
   envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
                     profile = function(ind, depths, n_depths) {
-                      seen <<- depths
+                      seen <<- depths # nolint: undesirable_operator_linter. test spy
                       1
                     })
 
