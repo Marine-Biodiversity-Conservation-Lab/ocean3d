@@ -1,3 +1,28 @@
+# ocean3d 0.1.1.9009
+
+Housekeeping release addressing `goodpractice` checks (#58). Apart from the
+changes below, behaviour is unchanged.
+
+## Breaking changes
+
+* `terra::intersect()` is no longer intercepted for `SpatEnvelope` and
+  `SpatVoxel`. It previously raised an error pointing to `intersects_3d()` and
+  `intersect_3d()`; it now falls through to terra's 2D method, which ignores
+  depth. Use `intersects_3d()` / `intersect_3d()` for 3D questions.
+
+## Bug fixes
+
+* Point extraction functions (`extract_to_point()`, `extract2d()`,
+  `extract3d_*()`) no longer drop netCDF sources when `nc` is a list that
+  contains a data frame of file paths; previously the data frame replaced
+  every source listed before it. A vector of paths inside a list is now
+  accepted too.
+
+## Minor improvements
+
+* `dplyr` and `gfwr` move from `Imports` to `Suggests`; no package code uses
+  them, so installing ocean3d no longer pulls them in.
+
 # ocean3d 0.1.1.9008
 
 The `copernicus_*` family is withdrawn for now. It is not abandoned: the code
