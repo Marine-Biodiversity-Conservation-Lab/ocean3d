@@ -33,10 +33,10 @@ return a plain \code{SpatRaster} instead. Re-wrapping is cheap either way, since
 returns it untouched.
 
 Propagating the class does not re-run the validity rules, so an operation
-that changes the raster layer set can leave an object still labelled \code{SpatVoxel}
-even if invalid. Passing an invalid \code{SpatVoxel} to \code{as_voxel()} rebuilds
-from layer names, passing through the function as if a plain multi-layer raster.
-Pass \code{depths} to rebuild the layer names.
+that changes the raster layer set can leave an object still labelled
+\code{SpatVoxel} even if invalid. Passing an invalid \code{SpatVoxel} to \code{as_voxel()}
+rebuilds from layer names, passing through the function as if a plain
+multi-layer raster. Pass \code{depths} to rebuild the layer names.
 
 Depths are positive metres increasing downward, matching the World Ocean
 Atlas convention. Negative depths are an error rather than being silently
