@@ -21,7 +21,8 @@ distribution. Depths are positive metres increasing downward, and
 # A two-cell footprint, one cell present and one absent. Build an envelope
 # with as_envelope() (from a raster footprint) or vect_to_envelope() (from
 # polygons).
-fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1)
+fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
+                  ymax = 1)
 terra::values(fp) <- c(1, NA)
 e <- as_envelope(fp, depth_min = 50, depth_max = 200)
 

@@ -23,6 +23,7 @@ Useful links:
 Authors:
 \itemize{
   \item Jay Matsushiba \email{hello@jmatsushiba.com} (\href{https://orcid.org/0000-0003-0496-9188}{ORCID})
+  \item David Ruiz-García \email{david.ruiz-garcia@uv.es} (\href{https://orcid.org/0000-0002-0072-1233}{ORCID})
 }
 
 }

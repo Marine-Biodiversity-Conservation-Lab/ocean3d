@@ -7,12 +7,13 @@
 extract3d_surface(data, nc, var = NULL, ...)
 }
 \arguments{
-\item{data}{Object containing observation points. Can be a data frame, tibble,
-\code{sf} object with POINT geometries, matrix with column names, or named list.}
+\item{data}{Object containing observation points. Can be a data frame,
+tibble, \code{sf} object with POINT geometries, matrix with column names, or
+named list.}
 
-\item{nc}{netCDF source. Can be a file path, vector of file paths, list of file
-paths, opened \code{ncdf4} object, list of opened objects, or a data frame with a
-file column.}
+\item{nc}{netCDF source. Can be a file path, vector of file paths, list of
+file paths, opened \code{ncdf4} object, list of opened objects, or a data frame
+with a file column.}
 
 \item{var}{Name of the variable to extract from the netCDF file. If \code{NULL},
 the function tries to detect the variable automatically from each file.
