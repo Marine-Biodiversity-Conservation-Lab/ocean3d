@@ -474,7 +474,7 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
       list(lower = c(depths[1], mids), upper = c(mids, depths[n]))
     },
     stop("Unhandled `bounds`: \"", bounds, "\".", call. = FALSE)
-  )
+  ) # nolint: unreachable_code_linter. switch() default, not dead code.
 }
 
 # Internal: resolve `values` into the magnitude each cell carries — a single
