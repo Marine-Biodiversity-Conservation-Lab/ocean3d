@@ -218,6 +218,15 @@ test_that("netCDF input can be a list, opened connection, or data frame", {
   expect_identical(from_list$temp, from_df$temp)
 })
 
+test_that("nested netCDF lists keep every source, in order", {
+  # a data frame inside a list used to replace the sources collected before it
+  files_df <- data.frame(file = c("b.nc", "c.nc"))
+  sources <- .as_netcdf_sources(list("a.nc", list(files_df, list("d.nc"))))
+
+  expect_identical(vapply(sources, `[[`, character(1), "source"),
+                   c("a.nc", "b.nc", "c.nc", "d.nc"))
+})
+
 test_that("extract_to_point reports missing required observation columns", {
   skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
