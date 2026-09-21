@@ -888,7 +888,7 @@ overlap_depth_plots <- lapply(seq_len(nrow(cr_pairs)), function(i) {
   df <- as.data.frame(terra::values(stack)) %>%
     setNames(c("sp_depth_min", "sp_depth_max", "fi_depth_min", "fi_depth_max",
                "intersect_min", "intersect_max", "seafloor_depth")) %>%
-    filter(!is.na(sp_depth_min) & !is.na(fi_depth_min)) %>%
+    filter(sp_depth_min, fi_depth_min) %>%
     arrange(seafloor_depth) %>%
     mutate(cell_index = row_number())
 
