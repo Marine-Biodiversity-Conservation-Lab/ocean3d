@@ -43,9 +43,9 @@ test_that("per-gear totals round-trip from effort table to raster", {
   totals <- terra::global(out, "sum", na.rm = TRUE)$sum
   names(totals) <- names(out)
 
-  expect_equal(totals[["effort_trawlers"]], 15)
-  expect_equal(totals[["effort_drifting_longlines"]], 10)
-  expect_equal(totals[["effort_set_gillnets"]], 2)
+  expect_identical(totals[["effort_trawlers"]], 15)
+  expect_identical(totals[["effort_drifting_longlines"]], 10)
+  expect_identical(totals[["effort_set_gillnets"]], 2)
 })
 
 test_that("output has one layer per gear class, named effort_<level>", {
@@ -60,7 +60,7 @@ test_that("output has one layer per gear class, named effort_<level>", {
 
   out <- gfw_effort_to_raster(effort, grid)
 
-  expect_equal(terra::nlyr(out), 3)
+  expect_identical(terra::nlyr(out), 3)
   expect_setequal(
     names(out),
     c("effort_trawlers", "effort_drifting_longlines", "effort_set_gillnets")
@@ -81,8 +81,8 @@ test_that("multiple records in the same cell are aggregated by `fun`", {
   summed <- gfw_effort_to_raster(effort, grid, fun = "sum")
   meaned <- gfw_effort_to_raster(effort, grid, fun = "mean")
 
-  expect_equal(terra::global(summed, "sum", na.rm = TRUE)$sum, 10)
-  expect_equal(
+  expect_identical(terra::global(summed, "sum", na.rm = TRUE)$sum, 10)
+  expect_identical(
     terra::global(meaned, "max", na.rm = TRUE)$max,
     mean(c(2, 3, 5))
   )
@@ -100,9 +100,9 @@ test_that("layer_by = NULL produces a single total-effort raster named 'effort'"
 
   out <- gfw_effort_to_raster(effort, grid, layer_by = NULL)
 
-  expect_equal(terra::nlyr(out), 1)
-  expect_equal(names(out), "effort")
-  expect_equal(terra::global(out, "sum", na.rm = TRUE)$sum, 10)
+  expect_identical(terra::nlyr(out), 1)
+  expect_identical(names(out), "effort")
+  expect_identical(terra::global(out, "sum", na.rm = TRUE)$sum, 10)
 })
 
 test_that("missing required columns produce an informative error", {
@@ -139,8 +139,8 @@ test_that("custom `value` and `layer_by` columns are honoured", {
   expect_setequal(names(out), c("effort_BGD", "effort_IND"))
   totals <- terra::global(out, "sum", na.rm = TRUE)$sum
   names(totals) <- names(out)
-  expect_equal(totals[["effort_BGD"]], 4)
-  expect_equal(totals[["effort_IND"]], 6)
+  expect_identical(totals[["effort_BGD"]], 4)
+  expect_identical(totals[["effort_IND"]], 6)
 })
 
 test_that("points in EPSG:4326 are reprojected onto a non-4326 grid", {
@@ -158,8 +158,8 @@ test_that("points in EPSG:4326 are reprojected onto a non-4326 grid", {
 
   out <- gfw_effort_to_raster(effort, moll_grid)
 
-  expect_equal(terra::crs(out), terra::crs(moll_grid))
-  expect_equal(
+  expect_identical(terra::crs(out), terra::crs(moll_grid))
+  expect_identical(
     terra::global(out, "sum", na.rm = TRUE)$sum,
     15
   )
@@ -178,9 +178,9 @@ test_that("gfw_effort_to_raster assumes extent and resolution from input gfwr ef
   # Check SpatRaster
   expect_s4_class(out, "SpatRaster")
   # Check correct resolution
-  expect_equal(res(out), c(1,1))
+  expect_identical(res(out), c(1,1))
   # Check correct extent
-  expect_true(terra::identical(ext(out), ext(10, 13, 0, 3)))
+  expect_true(terra::identical(ext(out), ext(10, 13, 0, 3))) # nolint: expect_identical_linter. expect_identical() doesn't work for terra objects, since they are pointers in memory
 })
 
 test_that("gfw_effort_to_raster cannot assume extent and resolution from irregular interval between effort values", {

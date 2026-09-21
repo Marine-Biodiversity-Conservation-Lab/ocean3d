@@ -5,7 +5,7 @@ test_that("SpatVoxel and SpatEnvelope are SpatRasters and SpatVolumes", {
   expect_s4_class(v, "SpatRaster")
   expect_s4_class(v, "SpatVolume")
   # terra operations still work on the subclass
-  expect_equal(terra::nlyr(v), 4)
+  expect_identical(terra::nlyr(v), 4)
 })
 
 test_that("SpatVoxel validity rejects non-conforming layer names and order", {
@@ -32,8 +32,8 @@ test_that("as_envelope() builds a SpatEnvelope from a footprint and constant dep
   expect_identical(names(e), c("depth_min", "depth_max"))
 
   vals <- terra::values(e)
-  expect_equal(unname(vals[, "depth_min"]), c(0, 0, 0, NA))
-  expect_equal(unname(vals[, "depth_max"]), c(200, 200, 200, NA))
+  expect_identical(unname(vals[, "depth_min"]), c(0, 0, 0, NA))
+  expect_identical(unname(vals[, "depth_max"]), c(200, 200, 200, NA))
 })
 
 test_that("as_envelope() reads only the non-NA pattern of the footprint", {
@@ -41,7 +41,7 @@ test_that("as_envelope() reads only the non-NA pattern of the footprint", {
   a <- as_envelope(make_footprint(c(1, 5, 0, NA)), 10, 20)
   b <- as_envelope(make_footprint(c(-7, 0.5, 999, NA)), 10, 20)
 
-  expect_equal(terra::values(a), terra::values(b))
+  expect_identical(terra::values(a), terra::values(b))
 })
 
 test_that("as_envelope() keeps the grid of the footprint", {
@@ -58,8 +58,8 @@ test_that("as_envelope() accepts per-cell depth limits as single-layer rasters",
 
   vals <- terra::values(as_envelope(fp, depth_min = dmin, depth_max = dmax))
 
-  expect_equal(unname(vals[, "depth_min"]), c(0, 50, 100, NA))
-  expect_equal(unname(vals[, "depth_max"]), c(100, 200, 300, NA))
+  expect_identical(unname(vals[, "depth_min"]), c(0, 50, 100, NA))
+  expect_identical(unname(vals[, "depth_max"]), c(100, 200, 300, NA))
 })
 
 test_that("as_envelope() mixes a constant limit with a per-cell limit", {
@@ -68,8 +68,8 @@ test_that("as_envelope() mixes a constant limit with a per-cell limit", {
 
   vals <- terra::values(as_envelope(fp, depth_min = 10, depth_max = dmax))
 
-  expect_equal(unname(vals[, "depth_min"]), c(10, 10, 10, NA))
-  expect_equal(unname(vals[, "depth_max"]), c(100, 200, 300, NA))
+  expect_identical(unname(vals[, "depth_min"]), c(10, 10, 10, NA))
+  expect_identical(unname(vals[, "depth_max"]), c(100, 200, 300, NA))
 })
 
 test_that("as_envelope() promotes a raster that already has the depth layers", {
@@ -83,20 +83,20 @@ test_that("as_envelope() promotes a raster that already has the depth layers", {
   e <- as_envelope(plain)
 
   expect_s4_class(e, "SpatEnvelope")
-  expect_equal(terra::values(e), terra::values(plain))
+  expect_identical(terra::values(e), terra::values(plain))
 })
 
 test_that("as_envelope() is idempotent on its own output", {
   e <- as_envelope(make_footprint(), 0, 200)
 
-  expect_equal(terra::values(as_envelope(e)), terra::values(e))
+  expect_identical(terra::values(as_envelope(e)), terra::values(e))
 })
 
 test_that("as_envelope() promotes voxel_to_envelope() output unchanged", {
   v <- methods::new("SpatVoxel", make_multidepth_rast())
   e <- voxel_to_envelope(v)
 
-  expect_equal(terra::values(as_envelope(e)), terra::values(e))
+  expect_identical(terra::values(as_envelope(e)), terra::values(e))
 })
 
 test_that("as_envelope() rejects depth arguments alongside existing depth layers", {
@@ -194,7 +194,7 @@ test_that("as_voxel() sorting carries the values with the layers", {
 
   expect_identical(names(v), paste0("temp_depth=", c(0, 300)))
   # the 0 m layer must still hold the values it had before the sort
-  expect_equal(unname(terra::values(v[["temp_depth=0"]])[, 1]), c(5, 6, 7, 8))
+  expect_identical(unname(terra::values(v[["temp_depth=0"]])[, 1]), c(5, 6, 7, 8))
 })
 
 test_that("as_voxel() builds layer names from `depths`", {
@@ -285,8 +285,8 @@ test_that("as_voxel() repairs a tagged SpatVoxel whose layers are out of order",
   fixed <- as_voxel(reversed)
   expect_true(methods::validObject(fixed, test = TRUE))
   expect_identical(names(fixed), names(v))
-  expect_equal(terra::values(fixed), terra::values(v))
-  expect_equal(volume(fixed), volume(v))
+  expect_identical(terra::values(fixed), terra::values(v))
+  expect_identical(volume(fixed), volume(v))
 })
 
 test_that("as_voxel() output is accepted by voxel_to_envelope()", {
@@ -317,8 +317,8 @@ test_that("voxel_to_envelope() defaults to the non-NA vertical extent", {
   expect_identical(names(e), c("depth_min", "depth_max"))
 
   vals <- terra::values(e)
-  expect_equal(unname(vals[, "depth_min"]), c(0, 100, 0, NA))
-  expect_equal(unname(vals[, "depth_max"]), c(200, 200, 300, NA))
+  expect_identical(unname(vals[, "depth_min"]), c(0, 100, 0, NA))
+  expect_identical(unname(vals[, "depth_max"]), c(200, 200, 300, NA))
 })
 
 test_that("voxel_to_envelope() fills interior gaps (lossy collapse)", {
@@ -326,8 +326,8 @@ test_that("voxel_to_envelope() fills interior gaps (lossy collapse)", {
   v <- methods::new("SpatVoxel", make_multidepth_rast())
   vals <- terra::values(voxel_to_envelope(v))
 
-  expect_equal(unname(vals[1, "depth_min"]), 0)
-  expect_equal(unname(vals[1, "depth_max"]), 200)
+  expect_identical(unname(vals[1, "depth_min"]), 0)
+  expect_identical(unname(vals[1, "depth_max"]), 200)
 })
 
 test_that("voxel_to_envelope() bounds the depths where the predicate holds", {
@@ -335,8 +335,8 @@ test_that("voxel_to_envelope() bounds the depths where the predicate holds", {
   vals <- terra::values(voxel_to_envelope(v, function(x) x > 15))
 
   # only cell 2 exceeds 15, at 100 m and 200 m
-  expect_equal(unname(vals[, "depth_min"]), c(NA, 100, NA, NA))
-  expect_equal(unname(vals[, "depth_max"]), c(NA, 200, NA, NA))
+  expect_identical(unname(vals[, "depth_min"]), c(NA, 100, NA, NA))
+  expect_identical(unname(vals[, "depth_max"]), c(NA, 200, NA, NA))
 })
 
 test_that("voxel_to_envelope() returns NA where the predicate never holds", {
@@ -353,8 +353,8 @@ test_that("voxel_to_envelope() handles a single-depth voxel", {
                                          vals = list(c(10, NA, 5, NA))))
   vals <- terra::values(voxel_to_envelope(v))
 
-  expect_equal(unname(vals[, "depth_min"]), c(50, NA, 50, NA))
-  expect_equal(unname(vals[, "depth_max"]), c(50, NA, 50, NA))
+  expect_identical(unname(vals[, "depth_min"]), c(50, NA, 50, NA))
+  expect_identical(unname(vals[, "depth_max"]), c(50, NA, 50, NA))
 })
 
 # envelope_to_voxel() ----
@@ -459,9 +459,9 @@ test_that("envelope_to_voxel() generates voxel from envelope", {
   occupied <- c(50, 100, 150, 200)
   expected_vox <- lapply(a_depths, function(x) {
     if (x %in% occupied) {
-      r <- terra::setValues(temp_r, 1)
+      r <- terra::setValues(temp_r, 1L)
     } else {
-      r <- terra::setValues(temp_r, NA)
+      r <- terra::setValues(temp_r, NA_integer_)
     }
     names(r) <- paste0("test_depth=", x)
     r
@@ -469,12 +469,9 @@ test_that("envelope_to_voxel() generates voxel from envelope", {
 
   got <- envelope_to_voxel(x = envel, depths = a_depths, varname = "test")
 
-  # identical() is too strict for this: it separates a stack built from seven
-  # single-layer rasters from one seven-layer raster, even when the grid, the
-  # names and every cell value agree.
   expect_s4_class(got, "SpatVoxel")
   expect_identical(names(got), names(expected_vox))
-  expect_equal(terra::values(got), terra::values(expected_vox))
+  expect_identical(terra::values(got), terra::values(expected_vox))
 })
 
 test_that("envelope_to_voxel() catches an envelope that falls between levels", {
@@ -483,7 +480,7 @@ test_that("envelope_to_voxel() catches an envelope that falls between levels", {
   envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 10, depth_max = 20)
 
   expect_no_warning(v <- envelope_to_voxel(envel, depths = c(0, 100)))
-  expect_equal(unname(terra::values(v)[1, ]), c(1, NA))
+  expect_identical(unname(terra::values(v)[1, ]), c(1L, NA_integer_))
 })
 
 test_that("envelope_to_voxel() occupies every slab the envelope overlaps", {
@@ -491,7 +488,7 @@ test_that("envelope_to_voxel() occupies every slab the envelope overlaps", {
   envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 70, depth_max = 210)
   vals <- terra::values(envelope_to_voxel(envel, depths = c(0, 50, 100, 200, 300)))
 
-  expect_equal(unname(vals[1, ]), c(NA, 1, 1, 1, NA))
+  expect_identical(unname(vals[1, ]), c(NA_integer_, 1L, 1L, 1L, NA_integer_))
 })
 
 test_that("envelope_to_voxel() gives a boundary depth to the slab it heads", {
@@ -500,20 +497,20 @@ test_that("envelope_to_voxel() gives a boundary depth to the slab it heads", {
   envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 99)
   vals <- terra::values(envelope_to_voxel(envel, depths = c(0, 50, 100, 200)))
 
-  expect_equal(unname(vals[1, ]), c(NA, 1, NA, NA))
+  expect_identical(unname(vals[1, ]), c(NA_integer_, 1L, NA_integer_, NA_integer_))
 
   # extending it to end exactly at 100 still leaves that level out: the
   # envelope only touches the 100-200 slab and shares no water with it
   envel2 <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 100)
   vals2 <- terra::values(envelope_to_voxel(envel2, depths = c(0, 50, 100, 200)))
 
-  expect_equal(unname(vals2[1, ]), c(NA, 1, NA, NA))
+  expect_identical(unname(vals2[1, ]), c(NA_integer_, 1L, NA_integer_, NA_integer_))
 
   # reaching past 100 by any amount brings that level in
   envel3 <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 101)
   vals3 <- terra::values(envelope_to_voxel(envel3, depths = c(0, 50, 100, 200)))
 
-  expect_equal(unname(vals3[1, ]), c(NA, 1, 1, NA))
+  expect_identical(unname(vals3[1, ]), c(NA_integer_, 1L, 1L, NA_integer_))
 })
 
 test_that("envelope_to_voxel() puts adjacent depth ranges on disjoint levels", {
@@ -539,8 +536,8 @@ test_that("envelope_to_voxel() puts adjacent depth ranges on disjoint levels", {
   # exactly on it is not recorded there either: [100, 200] holds 100 only.
   u <- terra::values(envelope_to_voxel(upper, c(0, 100, 200)))
   l <- terra::values(envelope_to_voxel(lower, c(0, 100, 200)))
-  expect_equal(unname(u[1, ]), c(1, NA, NA))
-  expect_equal(unname(l[1, ]), c(NA, 1, NA))
+  expect_identical(unname(u[1, ]), c(1L, NA, NA))
+  expect_identical(unname(l[1, ]), c(NA, 1L, NA))
 
   # under "midpoint" the 100 m boundary falls inside the 100 m slab when the
   # levels are evenly spaced, so both ranges genuinely share water with that
@@ -548,8 +545,8 @@ test_that("envelope_to_voxel() puts adjacent depth ranges on disjoint levels", {
   depths <- c(0, 50, 100, 150, 200)
   u <- terra::values(envelope_to_voxel(upper, depths, bounds = "midpoint"))
   l <- terra::values(envelope_to_voxel(lower, depths, bounds = "midpoint"))
-  expect_equal(unname(u[1, ]), c(1, 1, 1, NA, NA))
-  expect_equal(unname(l[1, ]), c(NA, NA, 1, 1, 1))
+  expect_identical(unname(u[1, ]), c(1L, 1L, 1L, NA, NA))
+  expect_identical(unname(l[1, ]), c(NA, NA, 1L, 1L, 1L))
 })
 
 test_that("envelope_to_voxel() keeps every level the old point rule found", {
@@ -560,7 +557,7 @@ test_that("envelope_to_voxel() keeps every level the old point rule found", {
   vals <- terra::values(envelope_to_voxel(envel, depths = depths))
 
   inside <- depths >= 50 & depths <= 250
-  expect_true(!any(is.na(unname(vals[1, ]))[inside]))
+  expect_false(any(is.na(unname(vals[1, ]))[inside]))
 })
 
 test_that("envelope_to_voxel() treats the deepest level as a point, not a floor", {
@@ -574,15 +571,15 @@ test_that("envelope_to_voxel() treats the deepest level as a point, not a floor"
   # reaching the deepest level is enough to be recorded at it
   touching <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 290, depth_max = 400)
   vals <- terra::values(envelope_to_voxel(touching, depths = c(0, 100, 200, 300)))
-  expect_equal(unname(vals[1, ]), c(NA, NA, 1, 1))
+  expect_identical(unname(vals[1, ]), c(NA, NA, 1L, 1L))
 })
 
 test_that(".depth_slabs() runs each slab to the next level under 'top'", {
   slab <- .depth_slabs(c(0, 100, 200), "top")
 
-  expect_equal(slab$lower, c(0, 100, 200))
+  expect_identical(slab$lower, c(0, 100, 200))
   # the deepest level has no next one and collapses to a point
-  expect_equal(slab$upper, c(100, 200, 200))
+  expect_identical(slab$upper, c(100, 200, 200))
 })
 
 test_that(".depth_slabs() halves the gaps under 'midpoint', as SPEC.md's WOA does", {
@@ -590,8 +587,8 @@ test_that(".depth_slabs() halves the gaps under 'midpoint', as SPEC.md's WOA doe
   # layer 7.5-12.5
   slab <- .depth_slabs(c(0, 5, 10, 15), "midpoint")
 
-  expect_equal(slab$lower, c(0, 2.5, 7.5, 12.5))
-  expect_equal(slab$upper, c(2.5, 7.5, 12.5, 15))
+  expect_identical(slab$lower, c(0, 2.5, 7.5, 12.5))
+  expect_identical(slab$upper, c(2.5, 7.5, 12.5, 15))
 })
 
 test_that(".depth_slabs() clamps the outer edges rather than extrapolating", {
@@ -599,16 +596,16 @@ test_that(".depth_slabs() clamps the outer edges rather than extrapolating", {
   # a gap below the deepest would invent reach the levels never had
   for (bounds in c("top", "midpoint")) {
     slab <- .depth_slabs(c(0, 100, 200), bounds)
-    expect_equal(min(slab$lower), 0, info = bounds)
-    expect_equal(max(slab$upper), 200, info = bounds)
+    expect_identical(min(slab$lower), 0, info = bounds)
+    expect_identical(max(slab$upper), 200, info = bounds)
   }
 })
 
 test_that(".depth_slabs() collapses a lone level to a point either way", {
   for (bounds in c("top", "midpoint")) {
     slab <- .depth_slabs(100, bounds)
-    expect_equal(slab$lower, 100, info = bounds)
-    expect_equal(slab$upper, 100, info = bounds)
+    expect_identical(slab$lower, 100, info = bounds)
+    expect_identical(slab$upper, 100, info = bounds)
   }
 })
 
@@ -617,7 +614,7 @@ test_that(".depth_slabs() tiles the depth span without gaps or overlaps", {
   # [min(depths), max(depths)]
   for (bounds in c("top", "midpoint")) {
     slab <- .depth_slabs(c(0, 50, 100, 400), bounds)
-    expect_equal(slab$lower[-1], slab$upper[-length(slab$upper)], info = bounds)
+    expect_identical(slab$lower[-1], slab$upper[-length(slab$upper)], info = bounds)
   }
 })
 
@@ -631,15 +628,15 @@ test_that("envelope_to_voxel() reads an envelope against the chosen bounds", {
   mid <- terra::values(envelope_to_voxel(envel, depths = depths,
                                          bounds = "midpoint"))
 
-  expect_equal(unname(top[1, ]), c(1, NA, NA))
-  expect_equal(unname(mid[1, ]), c(NA, 1, NA))
+  expect_identical(unname(top[1, ]), c(1L, NA, NA))
+  expect_identical(unname(mid[1, ]), c(NA, 1L, NA))
 })
 
 test_that("envelope_to_voxel() defaults to the 'top' bounds", {
   envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 210)
   depths <- c(0, 100, 200, 300)
 
-  expect_equal(
+  expect_identical(
     terra::values(envelope_to_voxel(envel, depths = depths)),
     terra::values(envelope_to_voxel(envel, depths = depths, bounds = "top"))
   )
@@ -653,7 +650,7 @@ test_that("envelope_to_voxel() still reaches the deepest level under 'midpoint'"
     envelope_to_voxel(envel, depths = c(0, 100, 200, 300), bounds = "midpoint")
   )
 
-  expect_equal(unname(vals[1, ]), c(NA, NA, NA, 1))
+  expect_identical(unname(vals[1, ]), c(NA, NA, NA, 1L))
 })
 
 test_that("envelope_to_voxel() warns outside the depth span under either bounds", {
@@ -683,7 +680,7 @@ test_that("envelope_to_voxel() occupies the level at its top limit, not at its b
   # 50 heads the slab 50-100, which the envelope runs through, so it is
   # occupied. 200 heads the slab 200-300, which the envelope only touches, so
   # it is not: touching is not overlapping.
-  expect_equal(unname(vals[1, ]), c(NA, 1, 1, NA, NA))
+  expect_identical(unname(vals[1, ]), c(NA, 1L, 1L, NA, NA))
 })
 
 test_that("envelope_to_voxel() leaves cells absent from the envelope empty", {
@@ -691,7 +688,7 @@ test_that("envelope_to_voxel() leaves cells absent from the envelope empty", {
   envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 200)
   vals <- terra::values(envelope_to_voxel(envel, depths = c(0, 100, 200)))
 
-  expect_equal(unname(vals[, 1]), c(1, 1, 1, NA))
+  expect_identical(unname(vals[, 1]), c(1L, 1L, 1L, NA))
   expect_true(all(is.na(vals[4, ])))
 })
 
@@ -704,9 +701,9 @@ test_that("envelope_to_voxel() honours per-cell depth limits", {
   vals <- terra::values(envelope_to_voxel(envel, depths = c(0, 100, 200, 300)))
 
   # each range holds the slabs it runs through and not the one it ends on
-  expect_equal(unname(vals[1, ]), c(1, NA, NA, NA))   # [0, 100]
-  expect_equal(unname(vals[2, ]), c(NA, 1, 1, NA))    # [100, 300]
-  expect_equal(unname(vals[3, ]), c(NA, NA, 1, NA))   # [200, 300]
+  expect_identical(unname(vals[1, ]), c(1L, NA, NA, NA))   # [0, 100]
+  expect_identical(unname(vals[2, ]), c(NA, 1L, 1L, NA))    # [100, 300]
+  expect_identical(unname(vals[3, ]), c(NA, NA, 1L, NA))   # [200, 300]
   expect_true(all(is.na(vals[4, ])))                  # absent footprint
 })
 
@@ -721,8 +718,8 @@ test_that("envelope_to_voxel() writes a constant `values` at every occupied leve
   )
 
   # same occupancy as presence, carrying 5 instead of 1
-  expect_equal(unname(vals[1, ]), c(5, 5, NA, NA))
-  expect_equal(unname(vals[2, ]), rep(5, 4))
+  expect_identical(unname(vals[1, ]), c(5L, 5L, NA, NA))
+  expect_identical(unname(vals[2, ]), rep(5L, 4))
 })
 
 test_that("envelope_to_voxel() writes a per-cell `values` raster", {
@@ -735,8 +732,8 @@ test_that("envelope_to_voxel() writes a per-cell `values` raster", {
                       varname = "effort")
   )
 
-  expect_equal(unname(vals[1, ]), c(NA, 10, 10, 10, NA))
-  expect_equal(unname(vals[4, ]), c(NA, 40, 40, 40, NA))
+  expect_identical(unname(vals[1, ]), c(NA, 10, 10, 10, NA))
+  expect_identical(unname(vals[4, ]), c(NA, 40, 40, 40, NA))
 })
 
 test_that("envelope_to_voxel() profile_equal divides across the occupied depths", {
@@ -750,8 +747,8 @@ test_that("envelope_to_voxel() profile_equal divides across the occupied depths"
   vals <- terra::values(v)
 
   expect_identical(names(v), paste0("time_depth=", c(0, 100, 200, 300)))
-  expect_equal(unname(vals[1, ]), c(0.5, 0.5, NA, NA))
-  expect_equal(unname(vals[2, ]), rep(0.25, 4))
+  expect_identical(unname(vals[1, ]), c(0.5, 0.5, NA, NA))
+  expect_identical(unname(vals[2, ]), rep(0.25, 4))
 })
 
 test_that("envelope_to_voxel() profile_equal conserves each cell's value", {
@@ -766,8 +763,8 @@ test_that("envelope_to_voxel() profile_equal conserves each cell's value", {
   )
 
   # cells occupy 2, 3, 4 and 4 levels respectively; each still sums to its input
-  expect_equal(unname(vals[1, ]), c(5, 5, NA, NA))
-  expect_equal(unname(rowSums(vals, na.rm = TRUE)), c(10, 20, 30, 40))
+  expect_identical(unname(vals[1, ]), c(5, 5, NA, NA))
+  expect_identical(unname(rowSums(vals, na.rm = TRUE)), c(10, 20, 30, 40))
 })
 
 test_that("envelope_to_voxel() without a profile does not divide the value", {
@@ -780,8 +777,8 @@ test_that("envelope_to_voxel() without a profile does not divide the value", {
   )
 
   # full value at all four levels: a footprint map, not a conserved total
-  expect_equal(unname(vals[1, ]), rep(10, 4))
-  expect_equal(unname(rowSums(vals, na.rm = TRUE)), c(40, 80, 120, 160))
+  expect_identical(unname(vals[1, ]), rep(10, 4))
+  expect_identical(unname(rowSums(vals, na.rm = TRUE)), c(40, 80, 120, 160))
 })
 
 test_that("envelope_to_voxel() presence is the same as values = 1", {
@@ -870,10 +867,10 @@ test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
   # carries only the depth limits.
   expect_identical(names(back), names(v))
   present <- !is.na(terra::values(back))
-  expect_equal(unname(present[1, ]), c(TRUE, TRUE, FALSE, FALSE))   # 0-200 -> 0, 100
-  expect_equal(unname(present[2, ]), c(FALSE, TRUE, TRUE, FALSE))   # 100-300 -> 100, 200
-  expect_equal(unname(present[3, ]), c(TRUE, TRUE, TRUE, FALSE))    # 0-300 -> 0, 100, 200
-  expect_equal(unname(present[4, ]), rep(FALSE, 4))                 # absent
+  expect_identical(unname(present[1, ]), c(TRUE, TRUE, FALSE, FALSE))   # 0-200 -> 0, 100
+  expect_identical(unname(present[2, ]), c(FALSE, TRUE, TRUE, FALSE))   # 100-300 -> 100, 200
+  expect_identical(unname(present[3, ]), c(TRUE, TRUE, TRUE, FALSE))    # 0-300 -> 0, 100, 200
+  expect_identical(unname(present[4, ]), rep(FALSE, 4))                 # absent
 })
 
 # vect_to_envelope() ----
@@ -929,7 +926,7 @@ test_that("vect_to_envelope() takes single numeric value for depth_min and depth
 
   result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 10, depth_max = 20) 
 
-  expect_true(identical(result, expected_result))
+  expect_identical(result, expected_result)
 })
 
 test_that("vect_to_envelope() correctly takes deeper minimum depth in the depth_min list params", {
@@ -945,7 +942,7 @@ test_that("vect_to_envelope() correctly takes deeper minimum depth in the depth_
 
   result <- vect_to_envelope(make_polygon(), make_template(), depth_min = c(10, r), depth_max = 25) 
 
-  expect_true(identical(result["depth_min"], expected_result["depth_min"]))
+  expect_identical(result["depth_min"], expected_result["depth_min"])
 })
 
 test_that("vect_to_envelope() correctly takes shallower maximum depth in the depth_max list params", {
@@ -961,7 +958,7 @@ test_that("vect_to_envelope() correctly takes shallower maximum depth in the dep
 
   result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 0, depth_max = c(10, r)) 
 
-  expect_true(identical(result["depth_max"], expected_result["depth_max"]))
+  expect_identical(result["depth_max"], expected_result["depth_max"])
 })
 
 # TODO: deal with case where depth_max is shallower than depth_min
@@ -990,7 +987,7 @@ test_that("vect_to_envelope() fills NA where depth_max is shallower than depth_m
 
   result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 10, depth_max = c(16, r)) 
 
-  expect_true(identical(result, expected_result))
+  expect_identical(result, expected_result)
 })
 
 test_that("vect_to_envelope() catches case where all cells depth_min are deeper than depth_max", {
@@ -1140,15 +1137,15 @@ test_that("masking a voxel by an envelope respects the per-cell depth window", {
   out <- terra::mask(v, envelope_to_voxel(e, depths(v)))
 
   # Layer names survive the mask, so callers can still index by depth.
-  expect_equal(names(out), names(v))
+  expect_identical(names(out), names(v))
   # Every cell holds the 0 m slab. Only the last two run into the 100-500
   # slab; the first two end where it begins and touching is not overlapping.
   # The 500 m level heads a zero-thickness slab that no cell reaches below.
-  expect_equal(sum(!is.na(terra::values(out[["tan_depth=0"]]))), 4)
-  expect_equal(sum(!is.na(terra::values(out[["tan_depth=100"]]))), 2)
-  expect_equal(sum(!is.na(terra::values(out[["tan_depth=500"]]))), 0)
+  expect_identical(sum(!is.na(terra::values(out[["tan_depth=0"]]))), 4L)
+  expect_identical(sum(!is.na(terra::values(out[["tan_depth=100"]]))), 2L)
+  expect_identical(sum(!is.na(terra::values(out[["tan_depth=500"]]))), 0L)
   # Values themselves are untouched where the cell is in window.
-  expect_equal(unique(terra::values(out[["tan_depth=0"]])[, 1]), 1)
+  expect_identical(unique(terra::values(out[["tan_depth=0"]])[, 1]), 1)
 })
 
 test_that("masking keeps a cell whose envelope falls between two depth levels", {
@@ -1166,7 +1163,7 @@ test_that("masking keeps a cell whose envelope falls between two depth levels", 
 
   out <- terra::mask(v, envelope_to_voxel(e, depths(v)))
 
-  expect_equal(sum(!is.na(terra::values(out[["tan_depth=0"]]))), 2)
+  expect_identical(sum(!is.na(terra::values(out[["tan_depth=0"]]))), 2L)
   expect_true(all(is.na(terra::values(out[["tan_depth=100"]]))))
   expect_true(all(is.na(terra::values(out[["tan_depth=200"]]))))
 })
@@ -1183,7 +1180,7 @@ test_that("masking drops cells that are NA in the envelope", {
 
   out <- terra::mask(v, envelope_to_voxel(e, depths(v)))
 
-  expect_equal(sum(!is.na(terra::values(out))), 2)  # one cell x two depths
+  expect_identical(sum(!is.na(terra::values(out))), 2L)  # one cell x two depths
 })
 
 # ---- occupied() -------------------------------------------------------------
@@ -1202,10 +1199,10 @@ test_that("occupied() turns a variable voxel into a 1-or-NA presence voxel", {
   out <- occupied(v)
 
   expect_s4_class(out, "SpatVoxel")
-  expect_equal(names(out), paste0("presence_depth=", c(0, 100, 200, 300)))
-  expect_equal(depths(out), depths(v))
+  expect_identical(names(out), paste0("presence_depth=", c(0, 100, 200, 300)))
+  expect_identical(depths(out), depths(v))
   # Presence is 1 where the variable was recorded, NA where it was not.
-  expect_equal(unname(terra::values(out)),
+  expect_identical(unname(terra::values(out)),
                unname(ifelse(is.na(terra::values(v)), NA, 1)))
 })
 
@@ -1216,15 +1213,15 @@ test_that("occupied() applies the predicate one depth layer at a time", {
 
   vals <- terra::values(v)
   expected <- ifelse(!is.na(vals) & vals > 10, 1, NA)
-  expect_equal(unname(terra::values(out)), unname(expected))
+  expect_identical(unname(terra::values(out)), unname(expected))
 })
 
 test_that("occupied() is idempotent on a presence voxel", {
   v <- as_voxel(make_multidepth_rast())
   once <- occupied(v)
 
-  expect_equal(terra::values(occupied(once)), terra::values(once))
-  expect_equal(names(occupied(once)), names(once))
+  expect_identical(terra::values(occupied(once)), terra::values(once))
+  expect_identical(names(occupied(once)), names(once))
 })
 
 test_that("occupied() rejects input that is not a voxel", {
@@ -1244,12 +1241,12 @@ test_that("occupied() gives a reducing predicate its per-depth meaning", {
   out <- occupied(v, above_mean)
 
   # Above each layer's own mean (2 and 20): the third cell in both layers.
-  expect_equal(unname(terra::values(out)),
+  expect_identical(unname(terra::values(out)),
                unname(cbind(c(NA, NA, 1), c(NA, NA, 1))))
   expect_gt(volume(out), 0)
 
   # ...and it agrees with the same predicate through voxel_to_envelope().
-  expect_equal(terra::values(voxel_to_envelope(v, fun = above_mean)),
+  expect_identical(terra::values(voxel_to_envelope(v, fun = above_mean)),
                terra::values(voxel_to_envelope(out)))
 })
 
@@ -1261,7 +1258,7 @@ test_that("occupied() lets each side of a query use its own predicate", {
   out <- intersect_3d(occupied(temp, function(v) v > 15),
                       occupied(effort, function(v) v > 0))
 
-  expect_equal(unname(terra::values(out)),
+  expect_identical(unname(terra::values(out)),
                unname(cbind(c(NA, 1, NA), c(1, NA, NA))))
 })
 
