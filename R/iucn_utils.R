@@ -79,7 +79,7 @@ fetch_species_assessments <- function(api_key,
     assessment_ids <- assessment_ids[!is.na(assessment_ids)]
   } else {
     assessment_ids <- unlist(lapply(species_names, function(name) {
-      parts <- strsplit(name, " ")[[1]]
+      parts <- strsplit(name, " ", fixed = TRUE)[[1]]
       if (length(parts) < 2) {
         warning("Could not parse scientific name: ", name)
         return(NA)
