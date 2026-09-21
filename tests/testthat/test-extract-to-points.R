@@ -54,7 +54,7 @@ test_that("extract_to_point extracts from a 2D netCDF variable", {
   )
 
   expect_true("temp" %in% names(out))
-  expect_equal(out$temp, 1)
+  expect_identical(out$temp, 1)
 })
 
 test_that("extract_to_point detects a single variable automatically", {
@@ -106,9 +106,9 @@ test_that("3D wrappers return surface, nearest, bottom and all summaries", {
   bottom <- extract3d_bottom(x, f, var = "temp")
   all <- extract3d_all(x, f, var = "temp")
 
-  expect_equal(surface$temp, all$surface_temp)
-  expect_equal(nearest$temp, all$nearest_temp)
-  expect_equal(bottom$temp, all$seabottom_temp)
+  expect_identical(surface$temp, all$surface_temp)
+  expect_identical(nearest$temp, all$nearest_temp)
+  expect_identical(bottom$temp, all$seabottom_temp)
   expect_false(is.na(bottom$temp))
 })
 
@@ -214,8 +214,8 @@ test_that("netCDF input can be a list, opened connection, or data frame", {
     make_obs(), data.frame(file = f), var = "temp", file_col = "file"
   )
 
-  expect_equal(from_list$temp, from_connection$temp)
-  expect_equal(from_list$temp, from_df$temp)
+  expect_identical(from_list$temp, from_connection$temp)
+  expect_identical(from_list$temp, from_df$temp)
 })
 
 test_that("extract_to_point reports missing required observation columns", {
@@ -252,7 +252,7 @@ test_that("extract_to_point extracts a single value from coordinates", {
   )
 
   expect_length(out, 1)
-  expect_equal(as.numeric(out), 5)
+  expect_identical(as.numeric(out), 5)
 })
 
 test_that("extract_to_point requires a valid longitude", {
@@ -335,7 +335,7 @@ test_that("extract_to_point extracts 2d values without depth", {
   )
 
   expect_length(out, 1)
-  expect_equal(as.numeric(out), 1)
+  expect_identical(as.numeric(out), 1)
 })
 
 
@@ -360,7 +360,7 @@ test_that("extract_to_point accepts a matrix", {
     date_col = NULL
   )
 
-  expect_equal(as.numeric(out$temp), 5)
+  expect_identical(as.numeric(out$temp), 5)
 })
 
 test_that("extract_to_point accepts a named list", {
@@ -383,7 +383,7 @@ test_that("extract_to_point accepts a named list", {
     date_col = NULL
   )
 
-  expect_equal(as.numeric(out$temp), 5)
+  expect_identical(as.numeric(out$temp), 5)
 })
 
 test_that("extract_to_point accepts sf point geometries", {
@@ -407,7 +407,7 @@ test_that("extract_to_point accepts sf point geometries", {
     date_col = NULL
   )
 
-  expect_equal(as.numeric(out$temp), 5)
+  expect_identical(as.numeric(out$temp), 5)
 })
 
 test_that("extract_to_point transforms projected sf coordinates", {
@@ -433,7 +433,7 @@ test_that("extract_to_point transforms projected sf coordinates", {
   )
 
   expect_s3_class(out, "sf")
-  expect_equal(as.numeric(out$temp), 5)
+  expect_identical(as.numeric(out$temp), 5)
 })
 
 test_that("extract_to_point accepts tibbles", {
@@ -459,7 +459,7 @@ test_that("extract_to_point accepts tibbles", {
   )
 
   expect_s3_class(out, "tbl_df")
-  expect_equal(as.numeric(out$temp), 5)
+  expect_identical(as.numeric(out$temp), 5)
 })
 
 test_that("extract_to_point accepts coordinate vectors", {
@@ -478,7 +478,7 @@ test_that("extract_to_point accepts coordinate vectors", {
   )
 
   expect_length(out, 2)
-  expect_equal(as.numeric(out), c(5, 12))
+  expect_identical(as.numeric(out), c(5, 12))
 })
 
 test_that("direct coordinate vectors must have compatible lengths", {
@@ -515,8 +515,8 @@ test_that("extract_to_point preserves data frame input behaviour", {
   )
 
   expect_s3_class(out, "data.frame")
-  expect_equal(nrow(out), 2)
-  expect_equal(as.numeric(out$temp), c(5, 12))
+  expect_identical(nrow(out), 2)
+  expect_identical(as.numeric(out$temp), c(5, 12))
 })
 
 test_that("direct inputs recycle scalar values", {
@@ -535,7 +535,7 @@ test_that("direct inputs recycle scalar values", {
   )
 
   expect_length(out, 2)
-  expect_equal(as.numeric(out), c(5, 10))
+  expect_identical(as.numeric(out), c(5, 10))
 })
 
 # Input validation -------------------------------------------------------------
