@@ -939,7 +939,7 @@ for (sp in cr_species_4d) {
 
   tiled <- wrap_plots(sp_plots, ncol = n_cols, nrow = n_rows)
 
-  fname <- gsub(" ", "_", sp)
+  fname <- gsub(" ", "_", sp, fixed = TRUE)
   ggsave(file.path(out_dir_ov, paste0(fname, ".png")),
          tiled, width = 5 * n_cols, height = 6 * n_rows, dpi = 300)
 }
