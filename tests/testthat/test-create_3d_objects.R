@@ -2,8 +2,8 @@ test_that("SpatVoxel and SpatEnvelope are SpatRasters and SpatVolumes", {
   v <- methods::new("SpatVoxel", make_multidepth_rast())
 
   expect_s4_class(v, "SpatVoxel")
-  expect_true(methods::is(v, "SpatRaster"))
-  expect_true(methods::is(v, "SpatVolume"))
+  expect_s4_class(v, "SpatRaster")
+  expect_s4_class(v, "SpatVolume")
   # terra operations still work on the subclass
   expect_equal(terra::nlyr(v), 4)
 })
@@ -28,7 +28,7 @@ test_that("as_envelope() builds a SpatEnvelope from a footprint and constant dep
   e <- as_envelope(make_footprint(), depth_min = 0, depth_max = 200)
 
   expect_s4_class(e, "SpatEnvelope")
-  expect_true(methods::is(e, "SpatVolume"))
+  expect_s4_class(e, "SpatVolume")
   expect_identical(names(e), c("depth_min", "depth_max"))
 
   vals <- terra::values(e)
@@ -164,7 +164,7 @@ test_that("as_voxel() wraps a conforming multi-depth SpatRaster", {
   v <- as_voxel(make_multidepth_rast())
 
   expect_s4_class(v, "SpatVoxel")
-  expect_true(methods::is(v, "SpatVolume"))
+  expect_s4_class(v, "SpatVolume")
   expect_identical(names(v), paste0("temp_depth=", c(0, 100, 200, 300)))
 })
 
@@ -300,7 +300,7 @@ test_that("voxel_to_envelope() gracefully rejects non SpatVoxel object as input 
   expect_error(voxel_to_envelope(not_voxel))
 
   voxel <- as_voxel(not_voxel)
-  expect_true(methods::is(voxel, "SpatVoxel"))
+  expect_s4_class(voxel, "SpatVoxel")
 })
 
 test_that("voxel_to_envelope() rejects a non-function fun", {
