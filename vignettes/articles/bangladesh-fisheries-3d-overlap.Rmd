@@ -128,13 +128,16 @@ species_iucn <- species_iucn %>%
   mutate(fill_missing_depths(upper_depth_limit, lower_depth_limit, genus_name))
 
 # Merge ranges + IUCN depths + provided depths into one sf object
+species_iucn_depth_iucn <- species_iucn %>% 
+  select(
+    scientific_name,
+    depth_min_iucn = upper_depth,
+    depth_max_iucn = lower_depth
+  )
+
 bangladesh_species <- species_ranges %>%
   left_join(
-    species_iucn %>% select(
-      scientific_name,
-      depth_min_iucn = upper_depth,
-      depth_max_iucn = lower_depth
-    ),
+    species_iucn_depth_iucn,
     by = c("sci_name" = "scientific_name")
   ) %>%
   left_join(
