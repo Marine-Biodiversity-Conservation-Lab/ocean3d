@@ -1,7 +1,7 @@
 # ---------------------------------------------------------------------------
-# load_gebco_bathymetry: exercise the validation paths. The happy-path test writes
-# a minimal global NetCDF with terra::writeCDF, which may not be available
-# in all environments.
+# load_gebco_bathymetry: exercise the validation paths. The happy-path test
+# writes a minimal global NetCDF with terra::writeCDF, which may not be
+# available in all environments.
 # ---------------------------------------------------------------------------
 
 test_that("load_gebco_bathymetry errors when file is missing", {
@@ -62,7 +62,8 @@ test_that("load_gebco_bathymetry checks variable name", {
 
   ok <- tryCatch({
     terra::writeCDF(global, tmp_good, overwrite = TRUE, varname = "elevation")
-    terra::writeCDF(global, tmp_bad, overwrite = TRUE, varname = "not_elevation")
+    terra::writeCDF(global, tmp_bad, overwrite = TRUE,
+                    varname = "not_elevation")
     TRUE
   }, error = function(e) FALSE)
   skip_if_not(ok, "terra::writeCDF unavailable")
@@ -70,5 +71,9 @@ test_that("load_gebco_bathymetry checks variable name", {
   r <- load_gebco_bathymetry(tmp_good)
   expect_named(r, "elevation")
 
-  expect_error(load_gebco_bathymetry(tmp_bad), "Expected variable 'elevation' in NetCDF, found: not_elevation")
+  expect_error(
+    load_gebco_bathymetry(tmp_bad),
+    paste0("Expected variable 'elevation' in NetCDF, ",
+           "found: not_elevation")
+  )
 })

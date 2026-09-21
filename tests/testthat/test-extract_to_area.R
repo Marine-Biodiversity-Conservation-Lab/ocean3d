@@ -73,7 +73,8 @@ test_that("extract_to_area() honours a single open depth bound", {
   a <- sf::st_sf(geometry = make_area_polygon())
 
   # min only: from the nearest layer to 90 m down to the deepest layer
-  expect_identical(depths(extract_to_area(a, v, min_depth = 90)), c(100, 500, 1000))
+  expect_identical(depths(extract_to_area(a, v, min_depth = 90)),
+                   c(100, 500, 1000))
   # max only: from the shallowest layer down to the nearest layer to 90 m
   expect_identical(depths(extract_to_area(a, v, max_depth = 90)), c(0, 50, 100))
 })
@@ -89,8 +90,10 @@ test_that("extract_to_area() accepts sf, sfc and SpatVector areas", {
   from_vect <- extract_to_area(terra::vect(poly), v,
                                min_depth = 0, max_depth = 0)
 
-  expect_identical(as.vector(terra::ext(from_sfc)), as.vector(terra::ext(from_sf)))
-  expect_identical(as.vector(terra::ext(from_sfc)), as.vector(terra::ext(from_vect)))
+  expect_identical(as.vector(terra::ext(from_sfc)),
+                   as.vector(terra::ext(from_sf)))
+  expect_identical(as.vector(terra::ext(from_sfc)),
+                   as.vector(terra::ext(from_vect)))
 })
 
 test_that("extract_to_area() reprojects an area in another CRS", {
@@ -113,5 +116,6 @@ test_that("extract_to_area() rejects a rast_3d that is not a SpatVoxel", {
 })
 
 test_that("extract_to_area() rejects an area that is not vector geometry", {
-  expect_error(extract_to_area("nope", make_area_voxel()), "sf, sfc, or SpatVector")
+  expect_error(extract_to_area("nope", make_area_voxel()),
+               "sf, sfc, or SpatVector")
 })

@@ -24,7 +24,7 @@ test_that("profile_equal() splits a cell's value over the levels it occupies", {
   expect_identical(unname(terra::values(w)[1:3, 1]), c(1, 0.5, 0.25))
 })
 
-test_that("profile_equal() weights sum to 1 across each cell's occupied levels", {
+test_that("profile_equal() weights sum to 1 over a cell's occupied levels", {
   ind <- make_occupancy()
   w <- profile_equal(ind, c(0, 100, 200, 300), sum(ind))
 
@@ -111,7 +111,8 @@ test_that("a custom profile sees the depths it is being asked about", {
 
   envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
                     profile = function(ind, depths, n_depths) {
-                      seen <<- depths # nolint: undesirable_operator_linter. test spy
+                      # test spy
+                      seen <<- depths # nolint: undesirable_operator_linter.
                       1
                     })
 
@@ -137,18 +138,19 @@ test_that("a custom profile may return one weight per depth", {
 
 # profile return values ----
 
-test_that("envelope_to_voxel() rejects a profile returning the wrong layer count", {
+test_that("envelope_to_voxel() rejects a profile with a bad layer count", {
   envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
 
   expect_error(
     envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
                       profile = function(ind, depths, n_depths) ind[[1:2]]),
-    "`profile` must return a SpatRaster with 1 layer or one per depth (4); got 2",
+    paste0("`profile` must return a SpatRaster with 1 layer or one per ",
+           "depth (4); got 2"),
     fixed = TRUE
   )
 })
 
-test_that("envelope_to_voxel() rejects a profile returning an off-grid raster", {
+test_that("envelope_to_voxel() rejects an off-grid profile raster", {
   envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
   other <- terra::rast(nrows = 3, ncols = 3, xmin = 0, xmax = 3,
                        ymin = 0, ymax = 3, vals = 1)

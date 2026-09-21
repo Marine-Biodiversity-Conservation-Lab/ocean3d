@@ -47,7 +47,10 @@ test_that("fetch_species_assessments returns data frame via group_code", {
   skip_on_ci()
   skip_on_cran()
   vcr::local_cassette("group_code")
-  out <- fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY"), group_code = "sharks_and_rays")
+  out <- fetch_species_assessments(
+    api_key    = Sys.getenv("IUCN_REDLIST_KEY"),
+    group_code = "sharks_and_rays"
+  )
   expect_s3_class(out, "data.frame")
   expect_gt(nrow(out), 0L)
 })
@@ -77,7 +80,10 @@ test_that("fetch_species_assessments resolves sis_ids to assessments", {
   skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("sis_ids")
-  out <- fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY"), sis_ids = c(44584L, 60191L))
+  out <- fetch_species_assessments(
+    api_key = Sys.getenv("IUCN_REDLIST_KEY"),
+    sis_ids = c(44584L, 60191L)
+  )
   expect_identical(nrow(out), 2L)
 })
 
@@ -86,7 +92,10 @@ test_that("fetch_species_assessments warns and skips bad SIS ID", {
   skip_if_not_installed("vcr")
   vcr::local_cassette("bad_sis_ids")
   expect_warning(
-    out <- fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY"), sis_ids = c(1L, 44584L)),
+    out <- fetch_species_assessments(
+      api_key = Sys.getenv("IUCN_REDLIST_KEY"),
+      sis_ids = c(1L, 44584L)
+    ),
     "1"
   )
   expect_identical(nrow(out), 1L)
@@ -98,7 +107,10 @@ test_that("fetch_species_assessments errors when all SIS IDs fail", {
   vcr::local_cassette("all_sis_ids_fail")
   expect_warning(
     expect_error(
-      fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY"), sis_ids = 99999999L),
+      fetch_species_assessments(
+        api_key = Sys.getenv("IUCN_REDLIST_KEY"),
+        sis_ids = 99999999L
+      ),
       "No Global-scope assessments"
     )
   )

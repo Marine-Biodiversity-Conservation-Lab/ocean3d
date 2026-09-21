@@ -24,7 +24,8 @@ test_that("SpatEnvelope validity requires exactly depth_min, depth_max", {
 
 # as_envelope() ----
 
-test_that("as_envelope() builds a SpatEnvelope from a footprint and constant depths", {
+test_that("as_envelope() builds a SpatEnvelope from constant depth limits", {
+  # a footprint plus a scalar depth_min and depth_max
   e <- as_envelope(make_footprint(), depth_min = 0, depth_max = 200)
 
   expect_s4_class(e, "SpatEnvelope")
@@ -51,7 +52,8 @@ test_that("as_envelope() keeps the grid of the footprint", {
   expect_true(terra::compareGeom(e, fp, stopOnError = FALSE))
 })
 
-test_that("as_envelope() accepts per-cell depth limits as single-layer rasters", {
+test_that("as_envelope() accepts per-cell depth limits as rasters", {
+  # each limit is a single-layer raster on the footprint's grid
   fp <- make_footprint()
   dmin <- terra::setValues(terra::rast(fp), c(0, 50, 100, 150))
   dmax <- terra::setValues(terra::rast(fp), c(100, 200, 300, 400))
@@ -99,7 +101,7 @@ test_that("as_envelope() promotes voxel_to_envelope() output unchanged", {
   expect_identical(terra::values(as_envelope(e)), terra::values(e))
 })
 
-test_that("as_envelope() rejects depth arguments alongside existing depth layers", {
+test_that("as_envelope() rejects depth args if x already has depth layers", {
   e <- as_envelope(make_footprint(), 0, 200)
 
   expect_error(as_envelope(e, depth_min = 0, depth_max = 100),
@@ -111,10 +113,11 @@ test_that("as_envelope() requires depth limits for a bare footprint", {
 })
 
 test_that("as_envelope() rejects a multi-layer footprint", {
-  expect_error(as_envelope(make_multidepth_rast(), 0, 200), "single-layer footprint")
+  expect_error(as_envelope(make_multidepth_rast(), 0, 200),
+               "single-layer footprint")
 })
 
-test_that("as_envelope() rejects vector geometry with a pointer to vect_to_envelope()", {
+test_that("as_envelope() rejects a SpatVector, naming vect_to_envelope()", {
   poly <- terra::vect("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))")
 
   expect_error(as_envelope(poly, 0, 200), "vect_to_envelope")
@@ -139,7 +142,7 @@ test_that("as_envelope() rejects negative depths (positive-down convention)", {
                "positive metres increasing downward")
 })
 
-test_that("as_envelope() rejects depth limits that are not scalars or rasters", {
+test_that("as_envelope() rejects depth limits that aren't scalars or rasters", {
   fp <- make_footprint()
 
   expect_error(as_envelope(fp, depth_min = c(0, 100), depth_max = 200),
@@ -194,7 +197,8 @@ test_that("as_voxel() sorting carries the values with the layers", {
 
   expect_named(v, paste0("temp_depth=", c(0, 300)))
   # the 0 m layer must still hold the values it had before the sort
-  expect_identical(unname(terra::values(v[["temp_depth=0"]])[, 1]), c(5, 6, 7, 8))
+  expect_identical(unname(terra::values(v[["temp_depth=0"]])[, 1]),
+                   c(5, 6, 7, 8))
 })
 
 test_that("as_voxel() builds layer names from `depths`", {
@@ -270,9 +274,10 @@ test_that("as_voxel() catches a SpatVoxel that a terra operation broke", {
   expect_named(rebuilt, names(v))
 })
 
-test_that("as_voxel() repairs a tagged SpatVoxel whose layers are out of order", {
+test_that("as_voxel() repairs a tagged SpatVoxel with unsorted layers", {
   # package functions advise that as_voxel() can be used to repair SpatVoxel
-  # so it should be able to repair when possible from the input invalid SpatVoxel
+  # so it should be able to repair when possible from the input invalid
+  # SpatVoxel
   r <- terra::rast(nrows = 1, ncols = 2, nlyrs = 3)
   terra::values(r) <- cbind(c(1, 1), c(2, 2), c(3, 3))
   v <- as_voxel(r, depths = c(0, 100, 200), varname = "presence")
@@ -295,7 +300,8 @@ test_that("as_voxel() output is accepted by voxel_to_envelope()", {
 })
 
 # voxel_to_envelope() ---- 
-test_that("voxel_to_envelope() gracefully rejects non SpatVoxel object as input param", {
+test_that("voxel_to_envelope() rejects a non-SpatVoxel input", {
+  # a plain multi-depth SpatRaster is refused until wrapped by as_voxel()
   not_voxel <- make_multidepth_rast()
   expect_error(voxel_to_envelope(not_voxel))
 
@@ -390,12 +396,14 @@ test_that("envelope_to_voxel() rejects invalid input param types", {
   # itself, so a name that used to select one is now just the wrong type.
   expect_error(
     envelope_to_voxel(x = good_envel, depths = good_depths, profile = "equal"),
-    "`profile` needs to be NULL or a function of (ind, depths, n_depths); got character",
+    paste0("`profile` needs to be NULL or a function of ",
+           "(ind, depths, n_depths); got character"),
     fixed = TRUE
   )
   expect_error(
     envelope_to_voxel(x = good_envel, depths = good_depths, profile = 100),
-    "`profile` needs to be NULL or a function of (ind, depths, n_depths); got numeric",
+    paste0("`profile` needs to be NULL or a function of ",
+           "(ind, depths, n_depths); got numeric"),
     fixed = TRUE
   )
   expect_error(
@@ -409,10 +417,12 @@ test_that("envelope_to_voxel() rejects invalid input param types", {
     envelope_to_voxel(x = good_envel, depths = good_depths, profile = NULL)
   )
   expect_no_error(
-    envelope_to_voxel(x = good_envel, depths = good_depths, profile = profile_flat)
+    envelope_to_voxel(x = good_envel, depths = good_depths,
+                      profile = profile_flat)
   )
   expect_no_error(
-    envelope_to_voxel(x = good_envel, depths = good_depths, profile = profile_equal)
+    envelope_to_voxel(x = good_envel, depths = good_depths,
+                      profile = profile_equal)
   )
 
   # check for param varname valid string
@@ -477,7 +487,8 @@ test_that("envelope_to_voxel() generates voxel from envelope", {
 test_that("envelope_to_voxel() catches an envelope that falls between levels", {
   # the case the point-in-interval rule missed: [10, 20] contains none of the
   # levels, but lies inside the slab the 0 m level stands for
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 10, depth_max = 20)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 10, depth_max = 20)
 
   expect_no_warning(v <- envelope_to_voxel(envel, depths = c(0, 100)))
   expect_identical(unname(terra::values(v)[1, ]), c(1L, NA_integer_))
@@ -485,8 +496,11 @@ test_that("envelope_to_voxel() catches an envelope that falls between levels", {
 
 test_that("envelope_to_voxel() occupies every slab the envelope overlaps", {
   # [70, 210] starts inside the 50-100 slab and ends inside 200-300
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 70, depth_max = 210)
-  vals <- terra::values(envelope_to_voxel(envel, depths = c(0, 50, 100, 200, 300)))
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 70, depth_max = 210)
+  vals <- terra::values(
+    envelope_to_voxel(envel, depths = c(0, 50, 100, 200, 300))
+  )
 
   expect_identical(unname(vals[1, ]), c(NA_integer_, 1L, 1L, 1L, NA_integer_))
 })
@@ -494,20 +508,25 @@ test_that("envelope_to_voxel() occupies every slab the envelope overlaps", {
 test_that("envelope_to_voxel() gives a boundary depth to the slab it heads", {
   # an envelope sitting wholly inside one slab occupies that slab alone; the
   # level below owns its own top, so it is not dragged in
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 99)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 60, depth_max = 99)
   vals <- terra::values(envelope_to_voxel(envel, depths = c(0, 50, 100, 200)))
 
-  expect_identical(unname(vals[1, ]), c(NA_integer_, 1L, NA_integer_, NA_integer_))
+  expect_identical(unname(vals[1, ]),
+                   c(NA_integer_, 1L, NA_integer_, NA_integer_))
 
   # extending it to end exactly at 100 still leaves that level out: the
   # envelope only touches the 100-200 slab and shares no water with it
-  envel2 <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 100)
+  envel2 <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                        depth_min = 60, depth_max = 100)
   vals2 <- terra::values(envelope_to_voxel(envel2, depths = c(0, 50, 100, 200)))
 
-  expect_identical(unname(vals2[1, ]), c(NA_integer_, 1L, NA_integer_, NA_integer_))
+  expect_identical(unname(vals2[1, ]),
+                   c(NA_integer_, 1L, NA_integer_, NA_integer_))
 
   # reaching past 100 by any amount brings that level in
-  envel3 <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 101)
+  envel3 <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                        depth_min = 60, depth_max = 101)
   vals3 <- terra::values(envelope_to_voxel(envel3, depths = c(0, 50, 100, 200)))
 
   expect_identical(unname(vals3[1, ]), c(NA_integer_, 1L, 1L, NA_integer_))
@@ -552,7 +571,8 @@ test_that("envelope_to_voxel() puts adjacent depth ranges on disjoint levels", {
 test_that("envelope_to_voxel() keeps every level the old point rule found", {
   # overlap is a widening of the rule, never a narrowing: a level whose own
   # value lies inside the envelope is still occupied
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 50, depth_max = 250)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 50, depth_max = 250)
   depths <- c(0, 50, 100, 200, 300)
   vals <- terra::values(envelope_to_voxel(envel, depths = depths))
 
@@ -560,17 +580,21 @@ test_that("envelope_to_voxel() keeps every level the old point rule found", {
   expect_false(any(is.na(unname(vals[1, ]))[inside]))
 })
 
-test_that("envelope_to_voxel() treats the deepest level as a point, not a floor", {
+test_that("envelope_to_voxel() treats the deepest level as a point", {
   # an open-ended deepest slab would swallow any range below the grid and
   # report it as resolved; keeping it a point leaves the gap visible
-  below <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 310, depth_max = 400)
+  below <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 310, depth_max = 400)
   expect_warning(v <- envelope_to_voxel(below, depths = c(0, 100, 200, 300)),
                  "lying entirely outside")
   expect_true(all(is.na(terra::values(v))))
 
   # reaching the deepest level is enough to be recorded at it
-  touching <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 290, depth_max = 400)
-  vals <- terra::values(envelope_to_voxel(touching, depths = c(0, 100, 200, 300)))
+  touching <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                          depth_min = 290, depth_max = 400)
+  vals <- terra::values(
+    envelope_to_voxel(touching, depths = c(0, 100, 200, 300))
+  )
   expect_identical(unname(vals[1, ]), c(NA, NA, 1L, 1L))
 })
 
@@ -582,7 +606,7 @@ test_that(".depth_slabs() runs each slab to the next level under 'top'", {
   expect_identical(slab$upper, c(100, 200, 200))
 })
 
-test_that(".depth_slabs() halves the gaps under 'midpoint', as SPEC.md's WOA does", {
+test_that(".depth_slabs() halves the gaps under 'midpoint'", {
   # SPEC.md: WOA's 0 m layer has bounds 0-2.5, the 5 m layer 2.5-7.5, the 10 m
   # layer 7.5-12.5
   slab <- .depth_slabs(c(0, 5, 10, 15), "midpoint")
@@ -614,14 +638,16 @@ test_that(".depth_slabs() tiles the depth span without gaps or overlaps", {
   # [min(depths), max(depths)]
   for (bounds in c("top", "midpoint")) {
     slab <- .depth_slabs(c(0, 50, 100, 400), bounds)
-    expect_identical(slab$lower[-1], slab$upper[-length(slab$upper)], info = bounds)
+    expect_identical(slab$lower[-1], slab$upper[-length(slab$upper)],
+                     info = bounds)
   }
 })
 
 test_that("envelope_to_voxel() reads an envelope against the chosen bounds", {
   # [60, 70] sits in the 0-100 slab under 'top', but in the 50-150 slab of the
   # 100 m level once the edges move to the midpoints
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 70)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 60, depth_max = 70)
   depths <- c(0, 100, 200)
 
   top <- terra::values(envelope_to_voxel(envel, depths = depths))
@@ -633,7 +659,8 @@ test_that("envelope_to_voxel() reads an envelope against the chosen bounds", {
 })
 
 test_that("envelope_to_voxel() defaults to the 'top' bounds", {
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 60, depth_max = 210)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 60, depth_max = 210)
   depths <- c(0, 100, 200, 300)
 
   expect_identical(
@@ -642,10 +669,11 @@ test_that("envelope_to_voxel() defaults to the 'top' bounds", {
   )
 })
 
-test_that("envelope_to_voxel() still reaches the deepest level under 'midpoint'", {
+test_that("envelope_to_voxel() reaches the deepest level under 'midpoint'", {
   # the deepest slab is closed at max(depths), so an envelope sitting exactly
   # on the last level is caught rather than falling off the bottom
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 300, depth_max = 300)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 300, depth_max = 300)
   vals <- terra::values(
     envelope_to_voxel(envel, depths = c(0, 100, 200, 300), bounds = "midpoint")
   )
@@ -653,8 +681,9 @@ test_that("envelope_to_voxel() still reaches the deepest level under 'midpoint'"
   expect_identical(unname(vals[1, ]), c(NA, NA, NA, 1L))
 })
 
-test_that("envelope_to_voxel() warns outside the depth span under either bounds", {
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 500, depth_max = 600)
+test_that("envelope_to_voxel() warns outside depth span under either bounds", {
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 500, depth_max = 600)
 
   for (bounds in c("top", "midpoint")) {
     expect_warning(
@@ -673,9 +702,12 @@ test_that("envelope_to_voxel() rejects an unknown bounds convention", {
   )
 })
 
-test_that("envelope_to_voxel() occupies the level at its top limit, not at its bottom", {
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 50, depth_max = 200)
-  vals <- terra::values(envelope_to_voxel(envel, depths = c(0, 50, 100, 200, 300)))
+test_that("envelope_to_voxel() occupies the level at its top, not bottom", {
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 50, depth_max = 200)
+  vals <- terra::values(
+    envelope_to_voxel(envel, depths = c(0, 50, 100, 200, 300))
+  )
 
   # 50 heads the slab 50-100, which the envelope runs through, so it is
   # occupied. 200 heads the slab 200-300, which the envelope only touches, so
@@ -707,7 +739,7 @@ test_that("envelope_to_voxel() honours per-cell depth limits", {
   expect_true(all(is.na(vals[4, ])))                  # absent footprint
 })
 
-test_that("envelope_to_voxel() writes a constant `values` at every occupied level", {
+test_that("envelope_to_voxel() writes a scalar `values` at occupied levels", {
   fp <- make_footprint()
   dmax <- terra::setValues(terra::rast(fp), c(150, 350, 350, 350))
   envel <- as_envelope(fp, depth_min = 0, depth_max = dmax)
@@ -736,7 +768,7 @@ test_that("envelope_to_voxel() writes a per-cell `values` raster", {
   expect_identical(unname(vals[4, ]), c(NA, 40, 40, 40, NA))
 })
 
-test_that("envelope_to_voxel() profile_equal divides across the occupied depths", {
+test_that("envelope_to_voxel() profile_equal splits across occupied depths", {
   fp <- make_footprint()
   dmax <- terra::setValues(terra::rast(fp), c(150, 350, 350, 350))
   envel <- as_envelope(fp, depth_min = 0, depth_max = dmax)
@@ -814,33 +846,37 @@ test_that("envelope_to_voxel() rejects an unusable `values`", {
 })
 
 test_that("envelope_to_voxel() sorts and deduplicates the requested depths", {
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 0, depth_max = 300)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 0, depth_max = 300)
 
   v <- envelope_to_voxel(envel, depths = c(200, 0, 100, 200))
 
   expect_named(v, paste0("presence_depth=", c(0, 100, 200)))
 })
 
-test_that("envelope_to_voxel() rejects negative depths (positive-down convention)", {
+test_that("envelope_to_voxel() rejects negative depths", {
+  # depths follow the positive-down convention
   envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 200)
 
   expect_error(envelope_to_voxel(envel, depths = c(-100, 0, 100)),
                "positive metres increasing downward")
 })
 
-test_that("envelope_to_voxel() warns when an envelope lies below every depth level", {
+test_that("envelope_to_voxel() warns when an envelope is below all levels", {
   # the slabs reach only as deep as max(depths), so nothing can hold this cell
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 500, depth_max = 600)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 500, depth_max = 600)
 
   expect_warning(v <- envelope_to_voxel(envel, depths = c(0, 100, 200)),
                  "lying entirely outside")
   expect_true(all(is.na(terra::values(v))))
 })
 
-test_that("envelope_to_voxel() warns when an envelope lies above every depth level", {
+test_that("envelope_to_voxel() warns when an envelope is above all levels", {
   # the shallowest level is the top of the first slab, so a cell entirely
   # above it is out of reach in the same way
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)), depth_min = 5, depth_max = 40)
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 5, depth_max = 40)
 
   expect_warning(v <- envelope_to_voxel(envel, depths = c(50, 100, 200)),
                  "lying entirely outside")
@@ -857,7 +893,8 @@ test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
                                             c(NA, 22, 8, NA)))
   v <- as_voxel(solid)
 
-  back <- envelope_to_voxel(voxel_to_envelope(v), depths = depths, varname = "temp")
+  back <- envelope_to_voxel(voxel_to_envelope(v), depths = depths,
+                            varname = "temp")
 
   # voxel_to_envelope() reports each cell's deepest occupied level as its
   # depth_max, and under "top" a level names the top of its slab. The envelope
@@ -867,10 +904,14 @@ test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
   # carries only the depth limits.
   expect_named(back, names(v))
   present <- !is.na(terra::values(back))
-  expect_identical(unname(present[1, ]), c(TRUE, TRUE, FALSE, FALSE))   # 0-200 -> 0, 100
-  expect_identical(unname(present[2, ]), c(FALSE, TRUE, TRUE, FALSE))   # 100-300 -> 100, 200
-  expect_identical(unname(present[3, ]), c(TRUE, TRUE, TRUE, FALSE))    # 0-300 -> 0, 100, 200
-  expect_identical(unname(present[4, ]), rep(FALSE, 4))                 # absent
+  # 0-200 -> 0, 100
+  expect_identical(unname(present[1, ]), c(TRUE, TRUE, FALSE, FALSE))
+  # 100-300 -> 100, 200
+  expect_identical(unname(present[2, ]), c(FALSE, TRUE, TRUE, FALSE))
+  # 0-300 -> 0, 100, 200
+  expect_identical(unname(present[3, ]), c(TRUE, TRUE, TRUE, FALSE))
+  # absent
+  expect_identical(unname(present[4, ]), rep(FALSE, 4))
 })
 
 # vect_to_envelope() ----
@@ -886,7 +927,7 @@ test_that("vect_to_envelope() checks for correct params", {
   )
 })
 
-test_that("vect_to_envelope() provides meaningful message when polygon and template don't overlap", {
+test_that("vect_to_envelope() errors if polygon and template don't overlap", {
   # Create raster that doesn't overlap with make_polygon()
   template_r <- rast(
     nrows = 5, ncols = 5, 
@@ -894,7 +935,8 @@ test_that("vect_to_envelope() provides meaningful message when polygon and templ
   )
   expect_error(
     vect_to_envelope(make_polygon(), template_r, 0, 10),
-    "All output cell values are NA. `polygon` and `template` may not spatially overlap."
+    paste0("All output cell values are NA. ",
+           "`polygon` and `template` may not spatially overlap.")
   )
 })
 
@@ -911,7 +953,7 @@ test_that("vect_to_envelope() checks for agreement of CRS between inputs", {
   # TODO: implement check for the depth_min and depth_max inputs
 })
 
-test_that("vect_to_envelope() takes single numeric value for depth_min and depth_max", {
+test_that("vect_to_envelope() accepts scalar depth_min and depth_max", {
   r <- make_template() 
 
   expected_result <- rast(c(
@@ -924,12 +966,17 @@ test_that("vect_to_envelope() takes single numeric value for depth_min and depth
     mask(make_polygon())
   expected_result <- as_envelope(expected_result)
 
-  result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 10, depth_max = 20) 
+  result <- vect_to_envelope(make_polygon(), make_template(),
+                             depth_min = 10, depth_max = 20)
 
-  expect_true(terra::identical(result, expected_result)) # nolint: expect_identical_linter. terra objects are pointers, not identical according to expect_identical()
+  # terra objects are pointers, not identical according to expect_identical()
+  # nolint start: expect_identical_linter.
+  expect_true(terra::identical(result, expected_result))
+  # nolint end
 })
 
-test_that("vect_to_envelope() correctly takes deeper minimum depth in the depth_min list params", {
+test_that("vect_to_envelope() takes the deepest of a depth_min list", {
+  # depth_min = c(10, r): each cell takes the deeper of the two
   r <- make_template()
   terra::values(r) <- seq_along(values(r))
 
@@ -940,12 +987,18 @@ test_that("vect_to_envelope() correctly takes deeper minimum depth in the depth_
   expected_result$depth_max <- rast(r, vals = 25)
   expected_result <- as_envelope(expected_result)
 
-  result <- vect_to_envelope(make_polygon(), make_template(), depth_min = c(10, r), depth_max = 25) 
+  result <- vect_to_envelope(make_polygon(), make_template(),
+                             depth_min = c(10, r), depth_max = 25)
 
-  expect_true(terra::identical(result["depth_min"], expected_result["depth_min"])) # nolint: expect_identical_linter. terra objects are pointers, not identical according to expect_identical()
+  # terra objects are pointers, not identical according to expect_identical()
+  # nolint start: expect_identical_linter.
+  expect_true(terra::identical(result["depth_min"],
+                               expected_result["depth_min"]))
+  # nolint end
 })
 
-test_that("vect_to_envelope() correctly takes shallower maximum depth in the depth_max list params", {
+test_that("vect_to_envelope() takes the shallowest of a depth_max list", {
+  # depth_max = c(10, r): each cell takes the shallower of the two
   r <- make_template()
   terra::values(r) <- seq_along(values(r))
 
@@ -956,13 +1009,18 @@ test_that("vect_to_envelope() correctly takes shallower maximum depth in the dep
     min(10) 
   expected_result <- as_envelope(expected_result)
 
-  result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 0, depth_max = c(10, r)) 
+  result <- vect_to_envelope(make_polygon(), make_template(),
+                             depth_min = 0, depth_max = c(10, r))
 
-  expect_true(terra::identical(result["depth_max"], expected_result["depth_max"])) # nolint: expect_identical_linter. terra objects are pointers, not identical according to expect_identical()
+  # terra objects are pointers, not identical according to expect_identical()
+  # nolint start: expect_identical_linter.
+  expect_true(terra::identical(result["depth_max"],
+                               expected_result["depth_max"]))
+  # nolint end
 })
 
 # TODO: deal with case where depth_max is shallower than depth_min
-test_that("vect_to_envelope() fills NA where depth_max is shallower than depth_min", {
+test_that("vect_to_envelope() fills NA where depth_max < depth_min", {
   r <- make_template()
   terra::values(r) <- seq_along(values(r))
 
@@ -985,12 +1043,16 @@ test_that("vect_to_envelope() fills NA where depth_max is shallower than depth_m
     depth_max = depth_max_rast
   )) %>% as_envelope()
 
-  result <- vect_to_envelope(make_polygon(), make_template(), depth_min = 10, depth_max = c(16, r)) 
+  result <- vect_to_envelope(make_polygon(), make_template(),
+                             depth_min = 10, depth_max = c(16, r))
 
-  expect_true(terra::identical(result, expected_result)) # nolint: expect_identical_linter. terra objects are pointers, not identical according to expect_identical()
+  # terra objects are pointers, not identical according to expect_identical()
+  # nolint start: expect_identical_linter.
+  expect_true(terra::identical(result, expected_result))
+  # nolint end
 })
 
-test_that("vect_to_envelope() catches case where all cells depth_min are deeper than depth_max", {
+test_that("vect_to_envelope() warns when all depth_max < depth_min", {
   r <- make_template()
   terra::values(r) <- seq_along(values(r))
 
@@ -1000,8 +1062,11 @@ test_that("vect_to_envelope() catches case where all cells depth_min are deeper 
   names(expected_result) <- "depth_max"
 
   expect_warning(
-    vect_to_envelope(make_polygon(), make_template(), depth_min = 50, depth_max = c(10, r)), 
-    "All depth_max values are shallower than depth_min. Check `depth_min` and `depth_max`, you may have swapped these two."
+    vect_to_envelope(make_polygon(), make_template(),
+                     depth_min = 50, depth_max = c(10, r)),
+    paste0("All depth_max values are shallower than depth_min. ",
+           "Check `depth_min` and `depth_max`, ",
+           "you may have swapped these two.")
   )
 })
 
@@ -1024,12 +1089,14 @@ test_that("vect_to_envelope() returns a valid SpatEnvelope, visibly", {
   expect_named(out, c("depth_min", "depth_max"))
   # The constructor assigns to `out` last; without a trailing bare `out` the
   # result would come back invisibly and never print at the console.
-  expect_true(withVisible(vect_to_envelope(make_polygon(), make_template(), 0, 10))$visible)
+  expect_true(withVisible(
+    vect_to_envelope(make_polygon(), make_template(), 0, 10)
+  )$visible)
 })
 
 # Ported from the retired voxelize_range(): the seafloor is now just another
 # `depth_max` constraint rather than a dedicated `bathymetry` argument.
-test_that("vect_to_envelope() clamps depth_max to the seafloor where it is shallower", {
+test_that("vect_to_envelope() clamps depth_max to a shallower seafloor", {
   seafloor <- make_template(seq(10, 250, length.out = 25))
 
   out <- vect_to_envelope(make_polygon(), make_template(),
@@ -1041,9 +1108,9 @@ test_that("vect_to_envelope() clamps depth_max to the seafloor where it is shall
   expect_true(any(got < 200))
 })
 
-# Ported from the retired voxelize_range(): cells whose bed sits above the shallowest depth
-# the animal occupies carry no envelope at all.
-test_that("vect_to_envelope() drops cells where the seafloor is shallower than depth_min", {
+# Ported from the retired voxelize_range(): cells whose bed sits above the
+# shallowest depth the animal occupies carry no envelope at all.
+test_that("vect_to_envelope() drops cells whose seafloor is above depth_min", {
   seafloor <- make_template(seq(10, 250, length.out = 25))
 
   out <- vect_to_envelope(make_polygon(), make_template(),
@@ -1054,9 +1121,10 @@ test_that("vect_to_envelope() drops cells where the seafloor is shallower than d
   expect_true(all(terra::values(seafloor)[kept] > 100))
 })
 
-# Ported from the retired voxelize_range()'s bathymetry CRS / resolution checks, which now
-# apply to every SpatRaster in a depth list.
-test_that("vect_to_envelope() errors on a depth raster that does not align with template", {
+# Ported from the retired voxelize_range()'s bathymetry CRS / resolution
+# checks, which now apply to every SpatRaster in a depth list.
+test_that("vect_to_envelope() errors on a misaligned depth raster", {
+  # both a resolution and an extent mismatch with `template` are caught
   bad_res <- terra::rast(nrows = 9, ncols = 9, xmin = 0, xmax = 5,
                          ymin = 0, ymax = 5, vals = 50, crs = "EPSG:4326")
   expect_error(
@@ -1103,7 +1171,7 @@ test_that("vect_to_envelope() rejects empty and unusable depth inputs", {
   )
 })
 
-test_that("vect_to_envelope() returns NA values for cells where input raster depth_max is NA", {
+test_that("vect_to_envelope() keeps NA where a depth_max raster is NA", {
   # NA in the depth_max parameter (ex. bathymetry) means there is no valid
   # depth at that cell. These should stay NA in the output as well. 
   vals <- seq(10, 250, length.out = 25)
@@ -1148,7 +1216,7 @@ test_that("masking a voxel by an envelope respects the per-cell depth window", {
   expect_identical(unique(terra::values(out[["tan_depth=0"]])[, 1]), 1)
 })
 
-test_that("masking keeps a cell whose envelope falls between two depth levels", {
+test_that("masking keeps a cell whose envelope lies between two levels", {
   # A [10, 20] envelope contains none of c(0, 100, 200). Slab overlap places it
   # in the 0 m level; the retired point-containment test dropped the cell
   # entirely, which is the bug this idiom fixes.
@@ -1278,7 +1346,7 @@ test_that("SpatVoxel validity rejects duplicate depths, as as_voxel() does", {
   expect_error(volume(dup), "not a valid one")
 })
 
-test_that("SpatEnvelope validity rejects inverted and negative depth intervals", {
+test_that("SpatEnvelope validity rejects inverted and negative intervals", {
   e <- as_envelope(make_footprint(), depth_min = 0, depth_max = 200)
 
   # terra keeps the class tag through subsetting, so swapping the two layers

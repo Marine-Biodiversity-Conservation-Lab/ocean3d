@@ -68,7 +68,8 @@ test_that("extract_to_point detects a single variable automatically", {
   expect_true("surface_oxygen" %in% names(out))
 })
 
-test_that("extract_to_point errors when automatic variable detection is ambiguous", {
+test_that("extract_to_point() errors when var = NULL matches two variables", {
+  # automatic variable detection is ambiguous with more than one candidate
   skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
@@ -183,7 +184,7 @@ test_that("max_time_diff rejects invalid values", {
   )
 })
 
-# Input forms and validation ----------------------------------------------------
+# Input forms and validation ---------------------------------------------------
 
 test_that("multiple netCDF files add one output column per detected variable", {
   skip_if_not_installed("ncdf4")
@@ -242,7 +243,7 @@ test_that("extract_to_point reports missing required observation columns", {
   )
 })
 
-# Direct point extraction -------------------------------------------------------
+# Direct point extraction ------------------------------------------------------
 
 test_that("extract_to_point extracts a single value from coordinates", {
   skip_if_not_installed("ncdf4")
