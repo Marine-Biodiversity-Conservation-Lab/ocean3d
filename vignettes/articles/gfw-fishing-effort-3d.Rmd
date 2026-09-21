@@ -425,7 +425,7 @@ make_cube_mesh <- function(voxels, dx, dy) {
 stack_to_cubes <- function(stack, dx, dy, bands) {
   voxels <- terra::as.data.frame(stack, xy = TRUE, na.rm = FALSE) |>
     pivot_longer(cols = -c(x, y), names_to = "layer", values_to = "effort") |>
-    filter(!is.na(effort) & effort > 0) |>
+    filter(effort > 0) |>
     mutate(depth = as.numeric(str_extract(layer, "(?<=depth=)-?[0-9.]+"))) |>
     group_by(x, y, depth) |>
     summarise(effort = sum(effort), .groups = "drop") |>
