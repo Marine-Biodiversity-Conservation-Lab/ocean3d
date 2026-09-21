@@ -23,14 +23,12 @@ Imports:
     stringr,
     terra,
     rredlist,
-    ncdf4,
-    dplyr,
-    gfwr (>= 3.0)
+    ncdf4
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Suggests:
-    gfwr (>= 3.0),
     dplyr,
+    gfwr (>= 3.0),
     ggplot2,
     here,
     knitr,
