@@ -47,7 +47,8 @@ fetch_species_assessments <- function(api_key,
                                       species_names = NULL,
                                       group_code = NULL) {
   if (!requireNamespace("rredlist", quietly = TRUE)) {
-    stop("Package 'rredlist' is required. Install with: install.packages('rredlist')")
+    stop("Package 'rredlist' is required. ",
+         "Install with: install.packages('rredlist')")
   }
 
   # Validate that exactly one input is provided
@@ -57,7 +58,8 @@ fetch_species_assessments <- function(api_key,
     group_code = !is.null(group_code)
   )
   if (sum(provided) != 1) {
-    stop("Exactly one of 'sis_ids', 'species_names', or 'group_code' must be provided.")
+    stop("Exactly one of 'sis_ids', 'species_names', or 'group_code' ",
+         "must be provided.")
   }
 
   # Resolve to assessment IDs
@@ -186,7 +188,8 @@ fetch_species_assessments <- function(api_key,
 #' # Typical use, unpacking both columns inside dplyr::mutate():
 #' \dontrun{
 #' assessments <- assessments %>%
-#'   mutate(fill_missing_depths(upper_depth_limit, lower_depth_limit, genus_name))
+#'   mutate(fill_missing_depths(upper_depth_limit, lower_depth_limit,
+#'                              genus_name))
 #' }
 #' @export
 fill_missing_depths <- function(upper, lower, genus, method = "genus_mean") {

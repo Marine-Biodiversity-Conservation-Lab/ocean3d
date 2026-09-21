@@ -20,8 +20,8 @@ NULL
 #' @examples
 #' # Two cells sampled at three standard depths. Build one with as_voxel(),
 #' # which names the layers for you and sorts them shallow to deep.
-#' r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1,
-#'                  nlyrs = 3)
+#' r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
+#'                  ymax = 1, nlyrs = 3)
 #' terra::values(r) <- cbind(c(12, 11), c(9, NA), c(6, 5))
 #' v <- as_voxel(r, depths = c(0, 100, 200), varname = "temp")
 #'
@@ -65,7 +65,8 @@ setClass("SpatVoxel", contains = "SpatRaster")
 #' # A two-cell footprint, one cell present and one absent. Build an envelope
 #' # with as_envelope() (from a raster footprint) or vect_to_envelope() (from
 #' # polygons).
-#' fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1)
+#' fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
+#'                   ymax = 1)
 #' terra::values(fp) <- c(1, NA)
 #' e <- as_envelope(fp, depth_min = 50, depth_max = 200)
 #'
@@ -99,7 +100,8 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #'
 #' @examples
 #' # The same 3D domain in both representations.
-#' fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1)
+#' fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
+#'                   ymax = 1)
 #' terra::values(fp) <- c(1, 1)
 #' e <- as_envelope(fp, depth_min = 0, depth_max = 200)
 #' v <- envelope_to_voxel(e, depths = c(0, 100, 200))
