@@ -934,7 +934,7 @@ test_that("vect_to_envelope() takes single numeric value for depth_min and depth
 
 test_that("vect_to_envelope() correctly takes deeper minimum depth in the depth_min list params", {
   r <- make_template()
-  terra::values(r) <- seq_len(length(values(r)))
+  terra::values(r) <- seq_along(values(r))
 
   expected_result <- r %>%
     mask(make_polygon()) %>%
@@ -950,7 +950,7 @@ test_that("vect_to_envelope() correctly takes deeper minimum depth in the depth_
 
 test_that("vect_to_envelope() correctly takes shallower maximum depth in the depth_max list params", {
   r <- make_template()
-  terra::values(r) <- seq_len(length(values(r)))
+  terra::values(r) <- seq_along(values(r))
 
   expected_result <- rast()
   expected_result$depth_min <- rast(r, vals = 0)
@@ -967,7 +967,7 @@ test_that("vect_to_envelope() correctly takes shallower maximum depth in the dep
 # TODO: deal with case where depth_max is shallower than depth_min
 test_that("vect_to_envelope() fills NA where depth_max is shallower than depth_min", {
   r <- make_template()
-  terra::values(r) <- seq_len(length(values(r)))
+  terra::values(r) <- seq_along(values(r))
 
   # minimum depth of envelope is 10
   depth_min_rast <- rast(r, vals = 10) 
@@ -995,7 +995,7 @@ test_that("vect_to_envelope() fills NA where depth_max is shallower than depth_m
 
 test_that("vect_to_envelope() catches case where all cells depth_min are deeper than depth_max", {
   r <- make_template()
-  terra::values(r) <- seq_len(length(values(r)))
+  terra::values(r) <- seq_along(values(r))
 
   expected_result <- r %>%
     mask(make_polygon()) %>%
@@ -1196,7 +1196,7 @@ make_named_voxel <- function(vals, varname, depths = c(0, 100)) {
   as_voxel(r, depths = depths, varname = varname)
 }
 
-test_that("occupied() turns a variable voxel into a 1/NA presence voxel", {
+test_that("occupied() turns a variable voxel into a 1-or-NA presence voxel", {
   v <- as_voxel(make_multidepth_rast())
 
   out <- occupied(v)

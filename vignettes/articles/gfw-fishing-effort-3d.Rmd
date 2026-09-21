@@ -451,7 +451,7 @@ log_breaks <- 10 ^ seq(floor(min(benthic_log_intensity)),
 bathy_x   <- terra::xFromCol(seafloor, seq_len(terra::ncol(seafloor)))
 bathy_y   <- terra::yFromRow(seafloor, seq_len(terra::nrow(seafloor)))
 bathy_mat <- terra::as.matrix(seafloor, wide = TRUE)
-bathy_mat <- bathy_mat[nrow(bathy_mat):1, ]
+bathy_mat <- bathy_mat[rev(seq_len(nrow(bathy_mat))), , drop = FALSE]
 bathy_y   <- rev(bathy_y)
 sea_z     <- matrix(0, nrow = length(bathy_y), ncol = length(bathy_x))
 
