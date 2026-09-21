@@ -11,15 +11,6 @@
 \alias{intersect_3d,ANY,SpatEnvelope-method}
 \alias{intersect_3d,ANY,SpatVoxel-method}
 \alias{intersect_3d,ANY,ANY-method}
-\alias{intersect-guard}
-\alias{intersect,SpatEnvelope,SpatEnvelope-method}
-\alias{intersect,SpatEnvelope,SpatVoxel-method}
-\alias{intersect,SpatVoxel,SpatEnvelope-method}
-\alias{intersect,SpatVoxel,SpatVoxel-method}
-\alias{intersect,SpatEnvelope,SpatRaster-method}
-\alias{intersect,SpatVoxel,SpatRaster-method}
-\alias{intersect,SpatRaster,SpatEnvelope-method}
-\alias{intersect,SpatRaster,SpatVoxel-method}
 \title{The 3D space two objects share}
 \usage{
 intersect_3d(x, y, ...)
@@ -94,14 +85,6 @@ depth interval. A voxel result carries presence: \code{1} where a level is
 shared, \code{NA} elsewhere, in layers named \verb{presence_depth=<value>}. The cell
 values of a voxel input are not carried over. To keep them, use \code{\link[terra:mask]{mask()}}.
 }
-\section{terra's \code{intersect()}}{
-
-\code{terra::intersect()} on two rasters is a 2D test that ignores depth. On a
-\link[=SpatEnvelope-class]{SpatEnvelope} or a \link[=SpatVoxel-class]{SpatVoxel}, in either position, it is an
-error that points to \code{\link[=intersects_3d]{intersects_3d()}} and \code{intersect_3d()}. Plain
-rasters, vectors and extents keep terra's behaviour.
-}
-
 \examples{
 fp <- terra::rast(nrows = 1, ncols = 3, xmin = 0, xmax = 3000,
                   ymin = 0, ymax = 1000,

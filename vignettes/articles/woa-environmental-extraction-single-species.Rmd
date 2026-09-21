@@ -73,7 +73,9 @@ depth_table <- fetch_species_assessments(
 
 # Fill missing depths
 depth_table_complete <- depth_table |>
-  mutate(fill_missing_depths(upper_depth_limit, lower_depth_limit, genus_name)) |>
+  mutate(
+    fill_missing_depths(upper_depth_limit, lower_depth_limit, genus_name)
+  ) |>
   filter(!is.na(upper_depth), !is.na(lower_depth))
 
 # Get the Orectolobus halei depth range
@@ -89,9 +91,13 @@ The IUCN Red List shapefiles have to be downloaded yourself, from this link: htt
 Only the one species is read out of the IUCN shapefile via SQL filtering.
 
 ```{r load-range}
-# Download the IUCN Red List shapefiles from https://www.iucnredlist.org/resources/spatial-data-download 
+# Download the IUCN Red List shapefiles from
+# https://www.iucnredlist.org/resources/spatial-data-download
 # Modify the path to your local save location for the shapefile
-iucn_shp <- here("EXAMPLE_DIRECTORY/SHARKS_RAYS_CHIMAERAS/SHARKS_RAYS_CHIMAERAS.shp")
+iucn_shp <- here(paste0(
+  "EXAMPLE_DIRECTORY/SHARKS_RAYS_CHIMAERAS/",
+  "SHARKS_RAYS_CHIMAERAS.shp"
+))
 layer_name <- sf::st_layers(iucn_shp)$name[1]
 
 # Read in just Orectolobus halei
@@ -111,7 +117,8 @@ sp_range <- sf::st_read(
 ```{r prepare-woa}
 # Annual mean temperature (0.25 deg) is both the environmental raster and the
 # canonical study grid.
-t_annual_path <- woa_download("temperature", period = "annual", resolution = "0.25")
+t_annual_path <- woa_download("temperature", period = "annual",
+                              resolution = "0.25")
 t_annual <- woa_load_nc(t_annual_path, field = "an")
 
 # Crop to the species range (plus a ~1 degree margin) before any heavy work.
@@ -139,8 +146,12 @@ study_grid <- t_annual[[1]]
 # global 15 arc-second grid, which terra otherwise avoids by reading only the
 # window the target grid needs.
 
-# Download the GEBCO bathymetry data from https://www.gebco.net/data-products/gridded-bathymetry-data
-bathy <- load_gebco_bathymetry("EXAMPLE_DIRECTORY/gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc")
+# Download the GEBCO bathymetry data from
+# https://www.gebco.net/data-products/gridded-bathymetry-data
+bathy <- load_gebco_bathymetry(paste0(
+  "EXAMPLE_DIRECTORY/gebco_2025_sub_ice_topo/",
+  "GEBCO_2025_sub_ice.nc"
+))
 seafloor <- (terra::project(bathy, study_grid) * -1) |>
   terra::clamp(lower = 0)
 ```
@@ -180,7 +191,8 @@ long_df <- terra::as.data.frame(masked, xy = TRUE, na.rm = FALSE) |>
   mutate(depth = depths(layer)) |>
   filter(!is.na(value))
 
-# Lock the legend to the global min/max so colour mapping is identical per frame.
+# Lock the legend to the global min/max so colour mapping is identical per
+# frame.
 v_limits <- range(long_df$value, na.rm = TRUE)
 
 # Factor with numerically-sorted levels so frames play 0 m -> deepest.
@@ -241,7 +253,9 @@ surface_depth <- 0
 deepest_depth <- max(occupied_depths)
 # Standard depth closest to the midpoint between surface and deepest occupied.
 halfway_target <- (surface_depth + deepest_depth) / 2
-halfway_depth <- occupied_depths[which.min(abs(occupied_depths - halfway_target))]
+halfway_depth <- occupied_depths[
+  which.min(abs(occupied_depths - halfway_target))
+]
 
 panel_depths <- c(surface_depth, halfway_depth, deepest_depth)
 ```

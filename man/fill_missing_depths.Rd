@@ -51,6 +51,7 @@ fill_missing_depths(c(NA, NA), c(NA, NA), c("Raja", "Raja"))
 # Typical use, unpacking both columns inside dplyr::mutate():
 \dontrun{
 assessments <- assessments \%>\%
-  mutate(fill_missing_depths(upper_depth_limit, lower_depth_limit, genus_name))
+  mutate(fill_missing_depths(upper_depth_limit, lower_depth_limit,
+                             genus_name))
 }
 }

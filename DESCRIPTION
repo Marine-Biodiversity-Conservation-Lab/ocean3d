@@ -1,6 +1,6 @@
 Package: ocean3d
 Title: Three-Dimensional Marine Spatial Analysis
-Version: 0.1.1.9008
+Version: 0.1.1.9009
 Authors@R: c(
     person("Jay", "Matsushiba", , "hello@jmatsushiba.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-0496-9188")),
@@ -23,14 +23,12 @@ Imports:
     stringr,
     terra,
     rredlist,
-    ncdf4,
-    dplyr,
-    gfwr (>= 3.0)
+    ncdf4
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Suggests:
-    gfwr (>= 3.0),
     dplyr,
+    gfwr (>= 3.0),
     ggplot2,
     here,
     knitr,
@@ -45,3 +43,4 @@ Remotes:
     GlobalFishingWatch/gfwr
 Config/roxygen2/version: 8.1.0
 Config/Needs/website: rmarkdown
+Config/testthat/parallel: true

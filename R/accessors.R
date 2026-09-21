@@ -71,7 +71,7 @@ depths <- function(x) {
   if (error && all(is.na(depths))) {
     stop(
       "No layer names match the '{variable}_depth={value}' convention. ",
-      "Got: ", paste(utils::head(layer_names), collapse = ", "),
+      "Got: ", toString(utils::head(layer_names)),
       call. = FALSE
     )
   }

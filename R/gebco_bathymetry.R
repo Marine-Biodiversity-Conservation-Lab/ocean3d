@@ -34,7 +34,9 @@
 #' terra::global(depth, "max", na.rm = TRUE)
 #'
 #' # In practice, point at a downloaded GEBCO NetCDF instead:
-#' # bathy <- load_gebco_bathymetry("gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc")
+#' # bathy <- load_gebco_bathymetry(
+#' #   "gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc"
+#' # )
 #'
 #' unlink(nc_path)
 #' @export
@@ -54,7 +56,7 @@ load_gebco_bathymetry <- function(file_path) {
   if (!("elevation" %in% terra::varnames(bathy))) {
     stop(
       "Expected variable 'elevation' in NetCDF, found: ",
-      paste(terra::varnames(bathy), collapse = ", ")
+      toString(terra::varnames(bathy))
     )
   }
 
@@ -63,7 +65,7 @@ load_gebco_bathymetry <- function(file_path) {
   if (e[1] != -180 || e[2] != 180 || e[3] != -90 || e[4] != 90) {
     stop(
       "Expected global extent (-180, 180, -90, 90), got: (",
-      paste(e, collapse = ", "), ")"
+      toString(e), ")"
     )
   }
 

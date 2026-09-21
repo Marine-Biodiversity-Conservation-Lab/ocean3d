@@ -38,14 +38,14 @@ satisfies \code{fun} at 0 m and 200 m but not at 100 m still yields the envelope
 }
 \examples{
 # Two cells sampled at four standard depths.
-r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1,
-                 nlyrs = 4)
+r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2,
+                 ymin = 0, ymax = 1, nlyrs = 4)
 terra::values(r) <- cbind(c(12, NA), c(11, NA), c(NA, 8), c(6, NA))
 v <- as_voxel(r, depths = c(0, 50, 100, 200), varname = "temp")
 
 # Default predicate: the vertical extent of the data. Cell 1 has values at
-# 0, 50 and 200 m, so it comes back as [0, 200] — the gap at 100 m is filled,
-# because an envelope stores one continuous interval per cell.
+# 0, 50 and 200 m, so it comes back as [0, 200] — the gap at 100 m is
+# filled, because an envelope stores one continuous interval per cell.
 terra::values(voxel_to_envelope(v))
 
 # Another predicate bounds a subset of the values instead: here the depths

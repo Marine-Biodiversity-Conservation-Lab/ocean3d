@@ -7,28 +7,33 @@
 vect_to_envelope(polygon, template, depth_min, depth_max)
 }
 \arguments{
-\item{polygon}{sf or SpatVector, for example species ranges or fishery footprints.}
+\item{polygon}{sf or SpatVector, for example species ranges or fishery
+footprints.}
 
-\item{template}{SpatRaster that defines the horizontal grid of the SpatEnvelope output.}
+\item{template}{SpatRaster that defines the horizontal grid of the
+SpatEnvelope output.}
 
-\item{depth_min}{List. Can contain both numeric and SpatRasters that match CRS,
-resolution, extent of \verb{template`` and contain numeric values. For each cell, the maximum across the }depth_min` list parameters is used as output SpatEnvelope depth_min layer cell
-value.}
+\item{depth_min}{List. Can contain both numeric and SpatRasters that match
+CRS, resolution, extent of \code{template} and contain numeric values. For each
+cell, the maximum across the \code{depth_min} list parameters is used as output
+SpatEnvelope depth_min layer cell value.}
 
-\item{depth_max}{List. Can contain both numeric and SpatRasters that match CRS,
-resolution, extent of \verb{template`` and contain numeric values. For each cell, the minimum across the }depth_max\verb{list parameters is used as output SpatEnvelope depth_max layer cell value. Note that when}depth_min\verb{is exactly}depth_max`, these cell values are dropped and
-replaced with NA.}
+\item{depth_max}{List. Can contain both numeric and SpatRasters that match
+CRS, resolution, extent of \code{template} and contain numeric values. For each
+cell, the minimum across the \code{depth_max} list parameters is used as output
+SpatEnvelope depth_max layer cell value. Note that when \code{depth_min} is
+exactly \code{depth_max}, these cell values are dropped and replaced with NA.}
 }
 \value{
 SpatEnvelope, with depth_min and depth_max layers.
 }
 \description{
-Rasterize polygons onto a template raster grid and assign per-cell depth limits,
-outputting an SpatEnvelope object. The depths are clamped by depth_min (shallowest)
-and depth_max (deepest), and/or by rasters (ex. bathymetry) that are the same
-coordinate and resolution as the template. Where a constraint raster is NA at
-a cell its limit there is unknown, so the cell is dropped rather than falling
-back to the remaining constraints.
+Rasterize polygons onto a template raster grid and assign per-cell depth
+limits, outputting an SpatEnvelope object. The depths are clamped by
+depth_min (shallowest) and depth_max (deepest), and/or by rasters (ex.
+bathymetry) that are the same coordinate and resolution as the template.
+Where a constraint raster is NA at a cell its limit there is unknown, so the
+cell is dropped rather than falling back to the remaining constraints.
 }
 \examples{
 # A 4x4 study grid, and a range polygon covering its middle. `polygon` and
