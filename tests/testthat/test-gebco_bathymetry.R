@@ -68,7 +68,7 @@ test_that("load_gebco_bathymetry checks variable name", {
   skip_if_not(ok, "terra::writeCDF unavailable")
 
   r <- load_gebco_bathymetry(tmp_good)
-  expect_identical(names(r), "elevation")
+  expect_named(r, "elevation")
 
   expect_error(load_gebco_bathymetry(tmp_bad), "Expected variable 'elevation' in NetCDF, found: not_elevation")
 })

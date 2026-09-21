@@ -108,7 +108,7 @@ test_that("intersect_3d() on voxels is the co-occupied set of levels", {
 
   expect_s4_class(out, "SpatVoxel")
   expect_identical(class(out)[[1]], "SpatVoxel")
-  expect_identical(names(out), paste0("presence_depth=", depths))
+  expect_named(out, paste0("presence_depth=", depths))
   expect_identical(depths(out), depths)
   expect_identical(unname(terra::values(out)),
                unname(cbind(c(1, NA, NA), c(NA, NA, NA), c(1, NA, NA))))
@@ -136,7 +136,7 @@ test_that("intersect_3d() on mixed input promotes the envelope by hand's rule", 
   by_hand <- intersect_3d(envelope_to_voxel(e, depths), v)
   expect_identical(terra::values(intersect_3d(e, v)), terra::values(by_hand))
   expect_identical(terra::values(intersect_3d(v, e)), terra::values(by_hand))
-  expect_identical(names(intersect_3d(e, v)), paste0("presence_depth=", depths))
+  expect_named(intersect_3d(e, v), paste0("presence_depth=", depths))
 
   # `bounds` reaches the promotion.
   mid <- intersect_3d(envelope_to_voxel(e, depths, bounds = "midpoint"), v)
@@ -166,7 +166,7 @@ test_that("intersect_3d() with a footprint raster restricts a voxel horizontally
 
   out <- intersect_3d(v, fp)
   expect_identical(class(out)[[1]], "SpatVoxel")
-  expect_identical(names(out), paste0("presence_depth=", depths))
+  expect_named(out, paste0("presence_depth=", depths))
   # Presence, not the field values, and the third cell is gone at every level.
   expect_identical(unname(terra::values(out)),
                unname(cbind(c(1, NA, NA), c(NA, 1, NA))))
@@ -250,7 +250,7 @@ test_that("intersects_3d() on envelopes gives the tri-state truth table", {
 
   expect_identical(class(out)[[1]], "SpatRaster")
   expect_true(terra::is.bool(out))
-  expect_identical(names(out), "intersects")
+  expect_named(out, "intersects")
   expect_identical(terra::values(out)[, 1], c(TRUE, FALSE, FALSE, NA))
   expect_identical(terra::values(intersects_3d(e$b, e$a))[, 1], c(TRUE, FALSE, FALSE, NA))
 })
@@ -408,7 +408,7 @@ test_that("mask(voxel, envelope) equals the hand-written idiom exactly", {
   out <- mask(field, e)
 
   expect_identical(class(out)[[1]], "SpatVoxel")
-  expect_identical(names(out), names(field))
+  expect_named(out, names(field))
   expect_identical(terra::values(out), terra::values(by_hand))
 
   # `bounds` reaches the promotion.
