@@ -1,6 +1,6 @@
 Package: ocean3d
 Title: Three-Dimensional Marine Spatial Analysis
-Version: 0.1.1.9008
+Version: 0.1.1.9009
 Authors@R: c(
     person("Jay", "Matsushiba", , "hello@jmatsushiba.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0003-0496-9188")),
