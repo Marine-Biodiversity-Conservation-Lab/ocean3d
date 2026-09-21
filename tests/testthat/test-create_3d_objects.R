@@ -560,7 +560,7 @@ test_that("envelope_to_voxel() keeps every level the old point rule found", {
   vals <- terra::values(envelope_to_voxel(envel, depths = depths))
 
   inside <- depths >= 50 & depths <= 250
-  expect_true(all(!is.na(unname(vals[1, ]))[inside]))
+  expect_true(!any(is.na(unname(vals[1, ]))[inside]))
 })
 
 test_that("envelope_to_voxel() treats the deepest level as a point, not a floor", {
