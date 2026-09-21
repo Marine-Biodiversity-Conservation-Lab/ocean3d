@@ -73,7 +73,7 @@ as_envelope <- function(x, depth_min, depth_max) {
     if (missing(depth_min) || missing(depth_max)) {
       stop("`depth_min` and `depth_max` are required unless `x` already has ",
            "layers named depth_min and depth_max. Got layers: ",
-           paste(names(x), collapse = ", "), call. = FALSE)
+           toString(names(x)), call. = FALSE)
     }
     if (terra::nlyr(x) != 1) {
       stop("`x` must be a single-layer footprint when depth limits are ",
@@ -208,18 +208,18 @@ as_voxel <- function(x, depths = NULL, varname = "value") {
 
   d <- .parse_depth_layers(x, error = FALSE)
   if (anyNA(d)) {
-    stop("layer(s) ", paste(names(x)[is.na(d)], collapse = ", "),
+    stop("layer(s) ", toString(names(x)[is.na(d)]),
          " do not follow the '{variable}_depth={value}' convention. ",
          "Pass `depths` to build the layer names instead.", call. = FALSE)
   }
   if (any(d < 0)) {
     stop("depths are positive metres increasing downward; got ",
-         paste(d[d < 0], collapse = ", "),
+         toString(d[d < 0]),
          ". Negate the depths in the layer names or in `depths`.",
          call. = FALSE)
   }
   if (anyDuplicated(d)) {
-    stop("duplicate depth(s): ", paste(unique(d[duplicated(d)]), collapse = ", "),
+    stop("duplicate depth(s): ", toString(unique(d[duplicated(d)])),
          ". Each layer must be a distinct depth.", call. = FALSE)
   }
 
@@ -372,7 +372,7 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   }
   if (any(depths < 0)) {
     stop("Input error for envelope_to_voxel(): depths are positive metres ",
-         "increasing downward; got ", paste(depths[depths < 0], collapse = ", "),
+         "increasing downward; got ", toString(depths[depths < 0]),
          ".", call. = FALSE)
   }
   # Checked up front rather than on first use, so a bad profile is an error

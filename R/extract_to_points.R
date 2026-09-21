@@ -18,7 +18,7 @@
       sprintf(
         "Missing required column(s) in `%s`: %s",
         x_name,
-        paste(missing_cols, collapse = ", ")
+        toString(missing_cols)
       ),
       call. = FALSE
     )
@@ -249,7 +249,7 @@
   stop(
     "Automatic variable detection requires exactly one variable in each netCDF file. ",
     "Variables found: ",
-    paste(vars, collapse = ", "),
+    toString(vars),
     ". Please specify `var` manually.",
     call. = FALSE
   )
@@ -315,8 +315,8 @@
       sprintf(
         "Could not find %s. Tried: %s. Available names are: %s",
         what,
-        paste(candidates, collapse = ", "),
-        paste(available, collapse = ", ")
+        toString(candidates),
+        toString(available)
       ),
       call. = FALSE
     )
@@ -456,7 +456,7 @@
   if (!var %in% names(nc$var)) {
     stop(
       "Variable `", var, "` not found in netCDF file. Available variables are: ",
-      paste(names(nc$var), collapse = ", "),
+      toString(names(nc$var)),
       call. = FALSE
     )
   }
