@@ -767,11 +767,11 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 #' @param template SpatRaster that defines the horizontal grid of the
 #'   SpatEnvelope output.
 #' @param depth_min List. Can contain both numeric and SpatRasters that match
-#'   CRS, resolution, extent of `template`` and contain numeric values. For each
+#'   CRS, resolution, extent of `template` and contain numeric values. For each
 #'   cell, the maximum across the `depth_min` list parameters is used as output
 #'   SpatEnvelope depth_min layer cell value.
 #' @param depth_max List. Can contain both numeric and SpatRasters that match
-#'   CRS, resolution, extent of `template`` and contain numeric values. For each
+#'   CRS, resolution, extent of `template` and contain numeric values. For each
 #'   cell, the minimum across the `depth_max` list parameters is used as output
 #'   SpatEnvelope depth_max layer cell value. Note that when `depth_min` is
 #'   exactly `depth_max`, these cell values are dropped and replaced with NA.
