@@ -113,89 +113,35 @@
 }
 
 
-.flatten_list <- function(x) {
-  # Users often pass nested lists when they group files by variable or by year.
-  # This helper flattens nested lists while preserving names where possible.
-  out <- list()
-
-  add_one <- function(z, nm = NULL) {
-    if (is.list(z) && !.is_ncdf4(z) && !is.data.frame(z)) {
-      z_names <- names(z)
-      for (i in seq_along(z)) {
-        child_nm <- if (!is.null(z_names) && nzchar(z_names[i])) z_names[i] else nm
-        add_one(z[[i]], child_nm)
-      }
-    } else {
-      out[[length(out) + 1L]] <<- list(object = z, name = nm)
-    }
-  }
-
-  x_names <- names(x)
-  for (i in seq_along(x)) {
-    nm <- if (!is.null(x_names) && nzchar(x_names[i])) x_names[i] else NULL
-    add_one(x[[i]], nm)
-  }
-
-  out
-}
-
 .as_netcdf_sources <- function(nc, file_col = "file") {
   # This helper standardises all accepted input formats into the same internal
   # representation. Each source keeps the original object plus a type flag telling
   # the extraction code whether the file needs to be opened and closed.
 
   if (is.character(nc)) {
-    sources <- lapply(nc, function(x) list(source = x, type = "path", name = basename(x)))
+    sources <- lapply(nc, function(x) list(source = x, type = "path"))
     return(sources)
   }
 
+  # ncdf4 objects and data frames are lists too, so both are matched before
+  # the list branch below.
   if (.is_ncdf4(nc)) {
-    return(list(list(source = nc, type = "connection", name = NA_character_)))
+    return(list(list(source = nc, type = "connection")))
   }
 
   if (is.data.frame(nc)) {
     .check_required_cols(nc, file_col, "nc")
     files <- as.character(nc[[file_col]])
-    sources <- lapply(files, function(x) list(source = x, type = "path", name = basename(x)))
+    sources <- lapply(files, function(x) list(source = x, type = "path"))
     return(sources)
   }
 
+  # Users often pass nested lists when they group files by variable or by year.
+  # Each element is resolved on its own, recursing into nested lists, and the
+  # results are joined in order.
   if (is.list(nc)) {
-    flat <- .flatten_list(nc)
-    sources <- vector("list", length(flat))
-
-    for (i in seq_along(flat)) {
-      obj <- flat[[i]]$object
-      nm <- flat[[i]]$name
-
-      if (is.character(obj) && length(obj) == 1L) {
-        sources[[i]] <- list(
-          source = obj,
-          type = "path",
-          name = if (!is.null(nm)) nm else basename(obj)
-        )
-      } else if (.is_ncdf4(obj)) {
-        sources[[i]] <- list(
-          source = obj,
-          type = "connection",
-          name = if (!is.null(nm)) nm else NA_character_
-        )
-      } else if (is.data.frame(obj)) {
-        .check_required_cols(obj, file_col, "nc")
-        files <- as.character(obj[[file_col]])
-        sources <- lapply(files, function(x) {
-          list(source = x, type = "path", name = if (!is.null(nm)) nm else basename(x))
-        })
-      } else {
-        stop(
-          "Unsupported object inside `nc`. Use file paths, opened ncdf4 objects, ",
-          "lists of these objects, or a data frame with a file column.",
-          call. = FALSE
-        )
-      }
-    }
-
-    return(sources)
+    sources <- lapply(nc, .as_netcdf_sources, file_col = file_col)
+    return(Reduce(c, sources, list()))
   }
 
   stop(
