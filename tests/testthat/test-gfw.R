@@ -88,7 +88,7 @@ test_that("multiple records in the same cell are aggregated by `fun`", {
   )
 })
 
-test_that("layer_by = NULL produces a single total-effort raster named 'effort'", {
+test_that("layer_by = NULL gives one total-effort layer named 'effort'", {
   # Create test data
   effort <- make_effort(list(
     lat      = c(0.5, 1.5, 2.5),
@@ -165,7 +165,8 @@ test_that("points in EPSG:4326 are reprojected onto a non-4326 grid", {
   )
 })
 
-test_that("gfw_effort_to_raster assumes extent and resolution from input gfwr effort object", {
+test_that("gfw_effort_to_raster() infers extent and resolution if no grid", {
+  # both are assumed from the input gfwr effort object itself
   effort <- make_effort(list(
     lat      = c(0.5, 1.5, 2.5),
     lon      = c(10.5, 11.5, 12.5),
@@ -180,10 +181,16 @@ test_that("gfw_effort_to_raster assumes extent and resolution from input gfwr ef
   # Check correct resolution
   expect_identical(res(out), c(1,1))
   # Check correct extent
-  expect_true(terra::identical(ext(out), ext(10, 13, 0, 3))) # nolint: expect_identical_linter. expect_identical() doesn't work for terra objects, since they are pointers in memory
+  # expect_identical() doesn't work for terra objects, since they are pointers
+  # in memory
+  # nolint start: expect_identical_linter.
+  expect_true(terra::identical(ext(out), ext(10, 13, 0, 3)))
+  # nolint end
 })
 
-test_that("gfw_effort_to_raster cannot assume extent and resolution from irregular interval between effort values", {
+test_that("gfw_effort_to_raster() errors when effort spacing is irregular", {
+  # an irregular interval between effort values leaves no extent and
+  # resolution to assume, so a grid must be provided
   bad_effort <- make_effort(list(
     lat      = c(0.5, 1.6, 2.5),
     lon      = c(10.5, 11.6, 12.5),
@@ -191,5 +198,9 @@ test_that("gfw_effort_to_raster cannot assume extent and resolution from irregul
     hours    = c(4, 5, 6)
   ))
 
-  expect_error(gfw_effort_to_raster(bad_effort), "Unable to assume grid resolution from effort data frame. Please provide grid.")
+  expect_error(
+    gfw_effort_to_raster(bad_effort),
+    paste0("Unable to assume grid resolution from effort data frame. ",
+           "Please provide grid.")
+  )
 })
