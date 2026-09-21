@@ -418,7 +418,7 @@ test_that("mask(voxel, envelope) consults the depth axis", {
   shallow <- make_range_rast(rep(0, 9), rep(75, 9))
 
   out <- mask(field, shallow)
-  expect_true(!any(is.na(terra::values(out[[c("temp_depth=0", "temp_depth=50")]]))))
+  expect_true(!anyNA(terra::values(out[[c("temp_depth=0", "temp_depth=50")]])))
   expect_true(all(is.na(terra::values(out[[c("temp_depth=100", "temp_depth=150",
                                                "temp_depth=200")]]))))
 })
@@ -500,7 +500,7 @@ test_that("mask() on a 3D object by 2D input is still terra's, and plain rasters
   by_raster <- mask(field, fp)
   expect_identical(class(by_raster)[[1]], "SpatVoxel")
   expect_true(all(is.na(terra::values(by_raster)[c(2, 9), ])))
-  expect_true(!any(is.na(terra::values(by_raster)[-c(2, 9), ])))
+  expect_true(!anyNA(terra::values(by_raster)[-c(2, 9), ]))
 
   by_polygon <- mask(field, make_left_polygon())
   expect_identical(class(by_polygon)[[1]], "SpatVoxel")
