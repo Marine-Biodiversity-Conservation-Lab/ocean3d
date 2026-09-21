@@ -90,7 +90,7 @@ gfw_effort_to_raster <- function(effort,
   if (length(missing_cols) > 0) {
     stop(
       "effort is missing required columns: ",
-      paste(missing_cols, collapse = ", "),
+      toString(missing_cols),
       call. = FALSE
     )
   }
