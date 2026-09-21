@@ -5,8 +5,8 @@
 # -----------------------------------------------------------------------------
 # Internal helpers
 # -----------------------------------------------------------------------------
-# These functions are intentionally small and focused. This makes the code easier
-# to test and easier to maintain inside a package.
+# These functions are intentionally small and focused. This makes the code
+# easier to test and easier to maintain inside a package.
 # -----------------------------------------------------------------------------
 
 .check_required_cols <- function(x, cols, x_name = "data") {
@@ -51,7 +51,8 @@
     if (!isTRUE(sf::st_is_longlat(coords_source))) {
       if (is.na(sf::st_crs(coords_source))) {
         stop(
-          "`sf` input must have a geographic CRS or a CRS that can be transformed to longitude/latitude.",
+          "`sf` input must have a geographic CRS or a CRS that can be ",
+          "transformed to longitude/latitude.",
           call. = FALSE
         )
       }
@@ -93,13 +94,18 @@
 
 .recycle_point_inputs <- function(lon, lat, depth = NULL, date = NULL) {
   inputs <- list(lon = lon, lat = lat, depth = depth, date = date)
-  lengths <- vapply(inputs[!vapply(inputs, is.null, logical(1))], length, integer(1))
+  lengths <- vapply(
+    inputs[!vapply(inputs, is.null, logical(1))],
+    length,
+    integer(1)
+  )
   n <- max(lengths)
 
   incompatible <- lengths != 1L & lengths != n
   if (any(incompatible)) {
     stop(
-      "Direct coordinate inputs must have compatible lengths: each must have length 1 or the same maximum length.",
+      "Direct coordinate inputs must have compatible lengths: each must ",
+      "have length 1 or the same maximum length.",
       call. = FALSE
     )
   }
@@ -114,9 +120,10 @@
 
 
 .as_netcdf_sources <- function(nc, file_col = "file") {
-  # This helper standardises all accepted input formats into the same internal
-  # representation. Each source keeps the original object plus a type flag telling
-  # the extraction code whether the file needs to be opened and closed.
+  # This helper standardises all accepted input formats into the same
+  # internal representation. Each source keeps the original object plus a type
+  # flag telling the extraction code whether the file needs to be opened and
+  # closed.
 
   if (is.character(nc)) {
     sources <- lapply(nc, function(x) list(source = x, type = "path"))
@@ -145,8 +152,8 @@
   }
 
   stop(
-    "Unsupported `nc` input. Use a file path, vector of file paths, opened ncdf4 object, ",
-    "list, or data frame with a file column.",
+    "Unsupported `nc` input. Use a file path, vector of file paths, ",
+    "opened ncdf4 object, list, or data frame with a file column.",
     call. = FALSE
   )
 }
@@ -183,8 +190,8 @@
   # salinity.
   #
   # The detection is deliberately conservative. If more than one variable is
-  # present, the function stops and asks the user to provide `var` manually. This
-  # avoids extracting the wrong variable by accident.
+  # present, the function stops and asks the user to provide `var` manually.
+  # This avoids extracting the wrong variable by accident.
 
   vars <- names(nc$var)
 
@@ -193,7 +200,8 @@
   }
 
   stop(
-    "Automatic variable detection requires exactly one variable in each netCDF file. ",
+    "Automatic variable detection requires exactly one variable in each ",
+    "netCDF file. ",
     "Variables found: ",
     toString(vars),
     ". Please specify `var` manually.",
@@ -216,9 +224,10 @@
 }
 
 .resolve_output_prefix <- function(method, var, output_prefix, auto_var) {
-  # If the user provides `output_prefix` or `output_col`, that name is respected.
-  # If `var = NULL`, the output name is generated from the detected variable and
-  # the extraction method, so multi-variable calls create clear column names:
+  # If the user provides `output_prefix` or `output_col`, that name is
+  # respected. If `var = NULL`, the output name is generated from the detected
+  # variable and the extraction method, so multi-variable calls create clear
+  # column names:
   #   bottom  -> seabottom_nppv, seabottom_so
   #   surface -> surface_nppv, surface_so
   #   nearest -> nearest_nppv, nearest_so
@@ -249,7 +258,10 @@
   var
 }
 
-.match_name <- function(available, candidates, required = TRUE, what = "dimension") {
+.match_name <- function(available,
+                        candidates,
+                        required = TRUE,
+                        what = "dimension") {
   hit <- candidates[candidates %in% available]
 
   if (length(hit) > 0) {
@@ -280,19 +292,22 @@
     return(nc$dim[[dim_name]]$vals)
   }
 
-  # Some files store coordinate values as variables rather than only as dimension
-  # values. This fallback covers those files.
+  # Some files store coordinate values as variables rather than only as
+  # dimension values. This fallback covers those files.
   if (dim_name %in% names(nc$var)) {
     return(ncdf4::ncvar_get(nc, dim_name))
   }
 
-  stop("Could not read dimension or coordinate variable: ", dim_name, call. = FALSE)
+  stop(
+    "Could not read dimension or coordinate variable: ", dim_name,
+    call. = FALSE
+  )
 }
 
 .get_time_origin <- function(nc, time_dim) {
   # netCDF time is commonly stored as numeric values with units such as
-  # "days since 1950-01-01". This helper reads that metadata and converts it into
-  # a format that R can use.
+  # "days since 1950-01-01". This helper reads that metadata and converts it
+  # into a format that R can use.
   att <- try(ncdf4::ncatt_get(nc, time_dim, "units"), silent = TRUE)
 
   if (inherits(att, "try-error") || is.null(att$value) || is.na(att$value)) {
@@ -338,9 +353,10 @@
   info <- .get_time_origin(nc, time_dim)
 
   if (is.null(info)) {
-    # If there is no usable time metadata, the function falls back to treating the
-    # values as day offsets from 1970-01-01. This is not ideal, but it keeps the
-    # behaviour explicit and avoids silently assuming a product-specific origin.
+    # If there is no usable time metadata, the function falls back to treating
+    # the values as day offsets from 1970-01-01. This is not ideal, but it keeps
+    # the behaviour explicit and avoids silently assuming a product-specific
+    # origin.
     return(as.Date(vals, origin = "1970-01-01"))
   }
 
@@ -355,7 +371,9 @@
   which.min(abs(values - target))
 }
 
-.match_time_index <- function(values, target, time_match = c("nearest", "exact"),
+.match_time_index <- function(values,
+                              target,
+                              time_match = c("nearest", "exact"),
                               max_time_diff = NULL) {
   time_match <- match.arg(time_match)
 
@@ -386,7 +404,9 @@
     return(lon_target)
   }
 
-  if (min(lon_values, na.rm = TRUE) >= 0 && max(lon_values, na.rm = TRUE) > 180 && lon_target < 0) {
+  if (min(lon_values, na.rm = TRUE) >= 0 &&
+      max(lon_values, na.rm = TRUE) > 180 &&
+      lon_target < 0) {
     lon_target <- lon_target + 360
   }
 
@@ -401,7 +421,8 @@
                          time_dim = NULL) {
   if (!var %in% names(nc$var)) {
     stop(
-      "Variable `", var, "` not found in netCDF file. Available variables are: ",
+      "Variable `", var, "` not found in netCDF file. ",
+      "Available variables are: ",
       toString(names(nc$var)),
       call. = FALSE
     )
@@ -410,15 +431,31 @@
   available_dims <- names(nc$dim)
   var_dims <- vapply(nc$var[[var]]$dim, function(z) z$name, character(1))
 
-  lon_candidates <- unique(stats::na.omit(c(lon_dim, "lon", "longitude", "x", "nav_lon")))
-  lat_candidates <- unique(stats::na.omit(c(lat_dim, "lat", "latitude", "y", "nav_lat")))
-  depth_candidates <- unique(stats::na.omit(c(depth_dim, "depth", "deptht", "lev", "level", "z")))
-  time_candidates <- unique(stats::na.omit(c(time_dim, "time", "time_counter", "t")))
+  lon_candidates <- unique(
+    stats::na.omit(c(lon_dim, "lon", "longitude", "x", "nav_lon"))
+  )
+  lat_candidates <- unique(
+    stats::na.omit(c(lat_dim, "lat", "latitude", "y", "nav_lat"))
+  )
+  depth_candidates <- unique(
+    stats::na.omit(c(depth_dim, "depth", "deptht", "lev", "level", "z"))
+  )
+  time_candidates <- unique(
+    stats::na.omit(c(time_dim, "time", "time_counter", "t"))
+  )
 
-  lon_name <- .match_name(c(var_dims, available_dims), lon_candidates, TRUE, "longitude dimension")
-  lat_name <- .match_name(c(var_dims, available_dims), lat_candidates, TRUE, "latitude dimension")
-  depth_name <- .match_name(c(var_dims, available_dims), depth_candidates, FALSE, "depth dimension")
-  time_name <- .match_name(c(var_dims, available_dims), time_candidates, FALSE, "time dimension")
+  lon_name <- .match_name(
+    c(var_dims, available_dims), lon_candidates, TRUE, "longitude dimension"
+  )
+  lat_name <- .match_name(
+    c(var_dims, available_dims), lat_candidates, TRUE, "latitude dimension"
+  )
+  depth_name <- .match_name(
+    c(var_dims, available_dims), depth_candidates, FALSE, "depth dimension"
+  )
+  time_name <- .match_name(
+    c(var_dims, available_dims), time_candidates, FALSE, "time dimension"
+  )
 
   list(
     lon = lon_name,
@@ -430,9 +467,10 @@
 }
 
 .build_start_count <- function(var_dims, index_list) {
-  # ncdf4::ncvar_get() expects indices in the exact order used by the variable in
-  # the netCDF file. This helper builds `start` and `count` vectors by matching
-  # dimension names rather than assuming a fixed order such as lon-lat-depth-time.
+  # ncdf4::ncvar_get() expects indices in the exact order used by the variable
+  # in the netCDF file. This helper builds `start` and `count` vectors by
+  # matching dimension names rather than assuming a fixed order such as
+  # lon-lat-depth-time.
   start <- integer(length(var_dims))
   count <- integer(length(var_dims))
 
@@ -452,7 +490,14 @@
   list(start = start, count = count)
 }
 
-.extract_array <- function(nc, var, dims, lon_idx, lat_idx, time_idx = NULL, depth_start = NULL, depth_count = NULL) {
+.extract_array <- function(nc,
+                           var,
+                           dims,
+                           lon_idx,
+                           lat_idx,
+                           time_idx = NULL,
+                           depth_start = NULL,
+                           depth_count = NULL) {
   index_list <- list()
   index_list[[dims$lon]] <- list(start = lon_idx, count = 1L)
   index_list[[dims$lat]] <- list(start = lat_idx, count = 1L)
@@ -506,7 +551,10 @@
   )
 
   if (method != "2d" && is.null(dims$depth)) {
-    stop("Method `", method, "` requires a depth dimension, but none was found.", call. = FALSE)
+    stop(
+      "Method `", method, "` requires a depth dimension, but none was found.",
+      call. = FALSE
+    )
   }
 
   lon_values <- .get_dim_values(nc, dims$lon)
@@ -523,10 +571,14 @@
   prefix <- if (is.null(output_prefix)) var else output_prefix
 
   if (method == "all") {
-    out <- data # `all` now returns three summary columns, not one column per depth layer.
-    out[[paste0("nearest_", prefix)]] <- NA_real_ # nearest valid depth summary column.
-    out[[paste0("surface_", prefix)]] <- NA_real_ # surface layer summary column.
-    out[[paste0("seabottom_", prefix)]] <- NA_real_ # deepest valid layer summary column.
+    # `all` now returns three summary columns, not one column per depth layer.
+    out <- data
+    # nearest valid depth summary column.
+    out[[paste0("nearest_", prefix)]] <- NA_real_
+    # surface layer summary column.
+    out[[paste0("surface_", prefix)]] <- NA_real_
+    # deepest valid layer summary column.
+    out[[paste0("seabottom_", prefix)]] <- NA_real_
   } else {
     out <- data
     out[[prefix]] <- NA_real_
@@ -663,16 +715,19 @@
 }
 
 .merge_source_outputs <- function(outputs, original_names) {
-  # When several files are provided, the function extracts from each file and then
-  # combines the results. For ordinary single-variable extraction, the first
-  # non-missing value across files is used. This is useful when files represent
-  # different time periods or spatial tiles.
+  # When several files are provided, the function extracts from each file and
+  # then combines the results. For ordinary single-variable extraction, the
+  # first non-missing value across files is used. This is useful when files
+  # represent different time periods or spatial tiles.
   if (length(outputs) == 1L) {
     return(outputs[[1]])
   }
 
   out <- outputs[[1]][original_names]
-  new_cols <- unique(unlist(lapply(outputs, function(x) setdiff(names(x), original_names))))
+  new_cols <- unique(unlist(lapply(
+    outputs,
+    function(x) setdiff(names(x), original_names)
+  )))
 
   for (col in new_cols) {
     values <- rep(NA_real_, nrow(out))
@@ -699,17 +754,19 @@
 #' values for one or multiple observations. The user chooses the type of
 #' extraction with the `method` argument. The more specific functions
 #' `extract2d()`, `extract3d_surface()`, `extract3d_bottom()`,
-#' `extract3d_nearest()` and `extract3d_all()` are wrappers around this function.
+#' `extract3d_nearest()` and `extract3d_all()` are wrappers around this
+#' function.
 #'
-#' @param data Optional object containing observation points. Can be a data frame,
-#'   tibble, `sf` object with POINT geometries, matrix with column names, or named
-#'   list. If `NULL`, coordinates can be supplied directly through `lon`, `lat`,
-#'   and optionally `depth` and `date`. For `sf` objects, longitude and latitude
-#'   are obtained from the POINT geometries; projected geometries are transformed
-#'   internally to longitude and latitude when a CRS is available.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of file
-#'   paths, opened `ncdf4` object, list of opened objects, or a data frame with a
-#'   file column.
+#' @param data Optional object containing observation points. Can be a data
+#'   frame, tibble, `sf` object with POINT geometries, matrix with column names,
+#'   or named list. If `NULL`, coordinates can be supplied directly through
+#'   `lon`, `lat`, and optionally `depth` and `date`. For `sf` objects,
+#'   longitude and latitude are obtained from the POINT geometries; projected
+#'   geometries are transformed internally to longitude and latitude when a CRS
+#'   is available.
+#' @param nc netCDF source. Can be a file path, vector of file paths, list of
+#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
+#'   with a file column.
 #' @param lon Optional numeric longitude value or vector for direct point
 #'   extraction when `data = NULL`.
 #' @param lat Optional numeric latitude value or vector for direct point
@@ -802,7 +859,9 @@ extract_to_point <- function(data = NULL,
                              depth = NULL,
                              date = NULL,
                              var = NULL,
-                             method = c("2d", "surface", "bottom", "nearest", "all"),
+                             method = c(
+                               "2d", "surface", "bottom", "nearest", "all"
+                             ),
                              lon_col = "lon",
                              lat_col = "lat",
                              date_col = "date",
@@ -824,7 +883,8 @@ extract_to_point <- function(data = NULL,
   if (!is.null(max_time_diff) &&
       (!is.numeric(max_time_diff) || length(max_time_diff) != 1L ||
        is.na(max_time_diff) || max_time_diff < 0)) {
-    stop("`max_time_diff` must be `NULL` or one non-negative numeric value in days.",
+    stop("`max_time_diff` must be `NULL` or one non-negative numeric value ",
+         "in days.",
          call. = FALSE)
   }
 
@@ -842,7 +902,8 @@ extract_to_point <- function(data = NULL,
     if (method %in% c("nearest", "all") &&
         (!is.numeric(depth) || length(depth) == 0L || anyNA(depth))) {
       stop(
-        "`depth` must contain numeric values for `nearest` and `all` extraction.",
+        "`depth` must contain numeric values for `nearest` and `all` ",
+        "extraction.",
         call. = FALSE
       )
     }
@@ -877,7 +938,8 @@ extract_to_point <- function(data = NULL,
 
       if (anyNA(date_value)) {
         stop(
-          "`date` could not be converted to a valid date. Use `YYYY-MM-DD` format, for example `2020-01-03`.",
+          "`date` could not be converted to a valid date. Use `YYYY-MM-DD` ",
+          "format, for example `2020-01-03`.",
           call. = FALSE
         )
       }
@@ -895,22 +957,36 @@ extract_to_point <- function(data = NULL,
     )
   }
 
-  if (!is.null(var) && (!is.character(var) || length(var) != 1L || is.na(var))) {
-    stop("`var` must be `NULL` or a single character value naming one netCDF variable.", call. = FALSE)
+  if (!is.null(var) &&
+      (!is.character(var) || length(var) != 1L || is.na(var))) {
+    stop(
+      "`var` must be `NULL` or a single character value naming one netCDF ",
+      "variable.",
+      call. = FALSE
+    )
   }
 
   # allow users to define the output column name with `output_col`.
   # `output_prefix` is kept for backward compatibility with previous code.
   if (!is.null(output_col)) {
-    if (!is.character(output_col) || length(output_col) != 1L || is.na(output_col)) {
-      stop("`output_col` must be a single character value naming the output column.", call. = FALSE)
+    if (!is.character(output_col) ||
+        length(output_col) != 1L ||
+        is.na(output_col)) {
+      stop(
+        "`output_col` must be a single character value naming the output ",
+        "column.",
+        call. = FALSE
+      )
     }
     output_prefix <- output_col
   }
 
   required_cols <- c(lon_col, lat_col)
   if (!is.null(date_col)) required_cols <- c(required_cols, date_col)
-  if (method %in% c("nearest", "all")) required_cols <- c(required_cols, depth_col) # `all` needs depth to calculate nearest-depth output.
+  # `all` needs depth to calculate nearest-depth output.
+  if (method %in% c("nearest", "all")) {
+    required_cols <- c(required_cols, depth_col)
+  }
   if (!is.null(id_col)) required_cols <- c(required_cols, id_col)
   .check_required_cols(data, required_cols, "data")
 
@@ -971,9 +1047,9 @@ extract_to_point <- function(data = NULL,
 # -----------------------------------------------------------------------------
 # Wrapper functions
 # -----------------------------------------------------------------------------
-# These functions keep explicit names for the most common extraction modes. They
-# are easier to discover and easier to document, while the internal workflow stays
-# centralised in `extract_to_point()`.
+# These functions keep explicit names for the most common extraction modes.
+# They are easier to discover and easier to document, while the internal
+# workflow stays centralised in `extract_to_point()`.
 # -----------------------------------------------------------------------------
 
 #' Extract values from a 2D netCDF variable
@@ -981,11 +1057,12 @@ extract_to_point <- function(data = NULL,
 #' Use this function when the variable has longitude and latitude dimensions,
 #' and optionally a time dimension, but no depth dimension.
 #'
-#' @param data Object containing observation points. Can be a data frame, tibble,
-#'   `sf` object with POINT geometries, matrix with column names, or named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of file
-#'   paths, opened `ncdf4` object, list of opened objects, or a data frame with a
-#'   file column.
+#' @param data Object containing observation points. Can be a data frame,
+#'   tibble, `sf` object with POINT geometries, matrix with column names, or
+#'   named list.
+#' @param nc netCDF source. Can be a file path, vector of file paths, list of
+#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
+#'   with a file column.
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -1023,11 +1100,12 @@ extract2d <- function(data, nc, var = NULL, ...) {
 #' The surface layer is defined as the first available depth layer in the
 #' netCDF file. This is usually the shallowest layer.
 #'
-#' @param data Object containing observation points. Can be a data frame, tibble,
-#'   `sf` object with POINT geometries, matrix with column names, or named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of file
-#'   paths, opened `ncdf4` object, list of opened objects, or a data frame with a
-#'   file column.
+#' @param data Object containing observation points. Can be a data frame,
+#'   tibble, `sf` object with POINT geometries, matrix with column names, or
+#'   named list.
+#' @param nc netCDF source. Can be a file path, vector of file paths, list of
+#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
+#'   with a file column.
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -1067,11 +1145,12 @@ extract3d_surface <- function(data, nc, var = NULL, ...) {
 #' non-missing value. This is useful when the bathymetry of the netCDF grid
 #' means that deeper layers are missing over shallow areas.
 #'
-#' @param data Object containing observation points. Can be a data frame, tibble,
-#'   `sf` object with POINT geometries, matrix with column names, or named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of file
-#'   paths, opened `ncdf4` object, list of opened objects, or a data frame with a
-#'   file column.
+#' @param data Object containing observation points. Can be a data frame,
+#'   tibble, `sf` object with POINT geometries, matrix with column names, or
+#'   named list.
+#' @param nc netCDF source. Can be a file path, vector of file paths, list of
+#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
+#'   with a file column.
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -1111,11 +1190,12 @@ extract3d_bottom <- function(data, nc, var = NULL, ...) {
 #' depth. This avoids returning `NA` when the geometrically closest depth layer
 #' is invalid at that grid cell, for example below the seabed.
 #'
-#' @param data Object containing observation points. Can be a data frame, tibble,
-#'   `sf` object with POINT geometries, matrix with column names, or named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of file
-#'   paths, opened `ncdf4` object, list of opened objects, or a data frame with a
-#'   file column.
+#' @param data Object containing observation points. Can be a data frame,
+#'   tibble, `sf` object with POINT geometries, matrix with column names, or
+#'   named list.
+#' @param nc netCDF source. Can be a file path, vector of file paths, list of
+#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
+#'   with a file column.
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -1156,11 +1236,12 @@ extract3d_nearest <- function(data, nc, var = NULL, ...) {
 #' the nearest longitude, latitude and time cell. It then returns three summary
 #' columns: nearest valid depth, surface and bottom.
 #'
-#' @param data Object containing observation points. Can be a data frame, tibble,
-#'   `sf` object with POINT geometries, matrix with column names, or named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of file
-#'   paths, opened `ncdf4` object, list of opened objects, or a data frame with a
-#'   file column.
+#' @param data Object containing observation points. Can be a data frame,
+#'   tibble, `sf` object with POINT geometries, matrix with column names, or
+#'   named list.
+#' @param nc netCDF source. Can be a file path, vector of file paths, list of
+#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
+#'   with a file column.
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.

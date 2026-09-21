@@ -166,7 +166,8 @@
 
 # Internal: where an envelope is present, as a plain logical layer without NA.
 .envelope_present <- function(x) {
-  !is.na(.envelope_layer(x, "depth_min")) & !is.na(.envelope_layer(x, "depth_max"))
+  !is.na(.envelope_layer(x, "depth_min")) &
+    !is.na(.envelope_layer(x, "depth_max"))
 }
 
 # Internal: drop the SpatVoxel / SpatEnvelope class tag. terra propagates the

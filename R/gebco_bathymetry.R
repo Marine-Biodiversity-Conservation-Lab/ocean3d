@@ -34,7 +34,9 @@
 #' terra::global(depth, "max", na.rm = TRUE)
 #'
 #' # In practice, point at a downloaded GEBCO NetCDF instead:
-#' # bathy <- load_gebco_bathymetry("gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc")
+#' # bathy <- load_gebco_bathymetry(
+#' #   "gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc"
+#' # )
 #'
 #' unlink(nc_path)
 #' @export

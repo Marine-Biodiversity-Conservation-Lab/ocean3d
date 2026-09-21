@@ -38,8 +38,8 @@
 #'   long-format tibble with at minimum `Lat`, `Lon`, a value, and a
 #'   grouping column).
 #' @param grid SpatRaster. Target grid (extent, resolution, CRS) — typically
-#'   the same grid used for species ranges and WOA extraction. If `grid = NULL`, 
-#'   assume target grid from input effort data frame. 
+#'   the same grid used for species ranges and WOA extraction. If
+#'   `grid = NULL`, assume target grid from input effort data frame.
 #' @param layer_by Character. Column in `effort` whose levels become layers.
 #'   `NULL` produces a single-layer total-effort raster. Default
 #'   `"geartype"`.
@@ -126,7 +126,8 @@ gfw_effort_to_raster <- function(effort,
       numeric(1)
     )
     if(length(unique(lat_intervals)) > 1) {
-      stop("Unable to assume grid resolution from effort data frame. Please provide grid.")
+      stop("Unable to assume grid resolution from effort data frame. ",
+           "Please provide grid.")
     } else {
       grid_res <- unique(lat_intervals)
     }
