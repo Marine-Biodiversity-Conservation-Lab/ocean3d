@@ -117,7 +117,7 @@ gfw_effort_to_raster <- function(effort,
   if (is.null(grid)) {
     # determine grid resolution from the input effort
     # ascending order unique Lat column values 
-    lat_vals <- effort$Lat[order(effort$Lat)] %>% unique()
+    lat_vals <- sort(effort$Lat) %>% unique()
     # determine interval between Lat values
     # round to prevent floating point errors
     lat_intervals <- vapply(
