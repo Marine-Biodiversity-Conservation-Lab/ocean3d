@@ -62,7 +62,10 @@ depth values, in metres).
 ```{r load-layers}
 # Load bathymetry
 bathy <- load_gebco_bathymetry(
-  "~/Programming_Projects/Big_Data/gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc"
+  paste0(
+    "~/Programming_Projects/Big_Data/gebco_2025_sub_ice_topo/",
+    "GEBCO_2025_sub_ice.nc"
+  )
 )
 
 # Load Bangladesh EEZ
@@ -97,7 +100,10 @@ species_info <- read_excel(excel_path, sheet = "Spp. depth range") %>%
 # Query the IUCN Red List shapefile for the study species.
 # Filter: presence = 1 (extant), origin in (1, 2) (native/reintroduced),
 # seasonal in (1, 2, 3) (resident/breeding/non-breeding).
-iucn_shp <- "~/Programming_Projects/Big_Data/SHARKS_RAYS_CHIMAERAS/SHARKS_RAYS_CHIMAERAS.shp"
+iucn_shp <- paste0(
+  "~/Programming_Projects/Big_Data/SHARKS_RAYS_CHIMAERAS/",
+  "SHARKS_RAYS_CHIMAERAS.shp"
+)
 layer_name <- sf::st_layers(iucn_shp)$name[1]
 
 sp_list_sql <- paste0("'", species_info$scientific_name, "'", collapse = ", ")
@@ -437,7 +443,9 @@ message("Wrote depth refuge comparison to ", depth_refuge_csv)
 depth_refuge %>%
   filter(overlap_area_km2 > 0) %>%
   arrange(desc(depth_refuge)) %>%
-  select(species, fishery, area_overlap_prop, volume_overlap_prop, depth_refuge) %>%
+  select(
+    species, fishery, area_overlap_prop, volume_overlap_prop, depth_refuge
+  ) %>%
   head(10)
 ```
 
@@ -476,7 +484,8 @@ comparison <- overlap_results %>%
   left_join(reference, by = c("species", "fishery"))
 
 # Compute our area and mean depth for the overlap to compare with reference
-# (calc_volume_overlap returns volume rasters; extract area and depth separately)
+# (calc_volume_overlap returns volume rasters; extract area and depth
+# separately)
 overlap_diagnostics <- lapply(seq_len(nrow(pairs)), function(i) {
   sp <- pairs$species[i]
   fi <- pairs$fishery[i]
@@ -552,7 +561,8 @@ plot(comparison$ref_mean_depth_m, comparison$our_mean_depth_m,
 abline(0, 1, lty = 2, col = "red")
 
 # Volume comparison
-plot(comparison$intersect_volume_m3 / 1e9, comparison$our_intersect_volume_m3 / 1e9,
+plot(comparison$intersect_volume_m3 / 1e9,
+     comparison$our_intersect_volume_m3 / 1e9,
      xlab = "Original volume (km³)", ylab = "ocean3d volume (km³)",
      main = "Overlap Volume",
      pch = 19, col = adjustcolor("steelblue", 0.6))
@@ -678,7 +688,8 @@ fishery_richness_plots <- lapply(cr_species, function(sp) {
   ggplot() +
     geom_sf(data = bangladesh_eez, aes(colour = "Bangladesh EEZ"),
             fill = "white", linewidth = 0.4, linetype = "dashed") +
-    geom_sf(data = land_mask, fill = "grey90", colour = "grey50", linewidth = 0.5) +
+    geom_sf(data = land_mask, fill = "grey90", colour = "grey50",
+            linewidth = 0.5) +
     geom_spatraster(data = sp_presence) +
     scale_fill_gradient(
       low = "#a3fff9", high = "#a3fff9", na.value = "transparent",
@@ -706,14 +717,20 @@ fishery_richness_plots <- lapply(cr_species, function(sp) {
     coord_sf(xlim = plot_bbox[c("xmin", "xmax")],
              ylim = plot_bbox[c("ymin", "ymax")], expand = FALSE) +
     annotate("rect",
-             xmin = plot_bbox[["xmin"]] + 0.02 * diff(plot_bbox[c("xmin", "xmax")]),
-             xmax = plot_bbox[["xmin"]] + 0.55 * diff(plot_bbox[c("xmin", "xmax")]),
-             ymin = plot_bbox[["ymax"]] - 0.05 * diff(plot_bbox[c("ymin", "ymax")]),
-             ymax = plot_bbox[["ymax"]] - 0.00 * diff(plot_bbox[c("ymin", "ymax")]),
+             xmin = plot_bbox[["xmin"]] +
+               0.02 * diff(plot_bbox[c("xmin", "xmax")]),
+             xmax = plot_bbox[["xmin"]] +
+               0.55 * diff(plot_bbox[c("xmin", "xmax")]),
+             ymin = plot_bbox[["ymax"]] -
+               0.05 * diff(plot_bbox[c("ymin", "ymax")]),
+             ymax = plot_bbox[["ymax"]] -
+               0.00 * diff(plot_bbox[c("ymin", "ymax")]),
              fill = "grey90", colour = NA) +
     annotate("text",
-             x = plot_bbox[["xmin"]] + 0.03 * diff(plot_bbox[c("xmin", "xmax")]),
-             y = plot_bbox[["ymax"]] - 0.02 * diff(plot_bbox[c("ymin", "ymax")]),
+             x = plot_bbox[["xmin"]] +
+               0.03 * diff(plot_bbox[c("xmin", "xmax")]),
+             y = plot_bbox[["ymax"]] -
+               0.02 * diff(plot_bbox[c("ymin", "ymax")]),
              label = sp, fontface = "italic", hjust = 0, vjust = 1, size = 4) +
     theme_map()
 })
@@ -730,7 +747,9 @@ fishery_richness_grid <- wrap_plots(tile_plots, ncol = 3) +
         legend.title = element_text(size = 13),
         legend.key.size = unit(1, "cm"))
 
-out_dir_fb <- here("output", "bangladesh-fisheries-3d-overlap", "fishery_by_species")
+out_dir_fb <- here(
+  "output", "bangladesh-fisheries-3d-overlap", "fishery_by_species"
+)
 dir.create(out_dir_fb, recursive = TRUE, showWarnings = FALSE)
 ggsave(file.path(out_dir_fb, "fishery_richness_grid.png"),
        fishery_richness_grid, width = 10, height = 17, dpi = 300)
@@ -759,7 +778,8 @@ species_richness_plots <- lapply(names(fishery_rasters), function(fi) {
   ggplot() +
     geom_sf(data = bangladesh_eez, aes(colour = "Bangladesh EEZ"),
             fill = "white", linewidth = 0.4, linetype = "dashed") +
-    geom_sf(data = land_mask, fill = "grey90", colour = "grey50", linewidth = 0.5) +
+    geom_sf(data = land_mask, fill = "grey90", colour = "grey50",
+            linewidth = 0.5) +
     geom_spatraster(data = count_rast) +
     scale_fill_viridis_c(
       name = "# Species",
@@ -779,21 +799,29 @@ species_richness_plots <- lapply(names(fishery_rasters), function(fi) {
     coord_sf(xlim = plot_bbox[c("xmin", "xmax")],
              ylim = plot_bbox[c("ymin", "ymax")], expand = FALSE) +
     annotate("rect",
-             xmin = plot_bbox[["xmin"]] + 0.02 * diff(plot_bbox[c("xmin", "xmax")]),
-             xmax = plot_bbox[["xmin"]] + 0.55 * diff(plot_bbox[c("xmin", "xmax")]),
-             ymin = plot_bbox[["ymax"]] - 0.05 * diff(plot_bbox[c("ymin", "ymax")]),
-             ymax = plot_bbox[["ymax"]] - 0.00 * diff(plot_bbox[c("ymin", "ymax")]),
+             xmin = plot_bbox[["xmin"]] +
+               0.02 * diff(plot_bbox[c("xmin", "xmax")]),
+             xmax = plot_bbox[["xmin"]] +
+               0.55 * diff(plot_bbox[c("xmin", "xmax")]),
+             ymin = plot_bbox[["ymax"]] -
+               0.05 * diff(plot_bbox[c("ymin", "ymax")]),
+             ymax = plot_bbox[["ymax"]] -
+               0.00 * diff(plot_bbox[c("ymin", "ymax")]),
              fill = "grey90", colour = NA) +
     annotate("text",
-             x = plot_bbox[["xmin"]] + 0.03 * diff(plot_bbox[c("xmin", "xmax")]),
-             y = plot_bbox[["ymax"]] - 0.02 * diff(plot_bbox[c("ymin", "ymax")]),
+             x = plot_bbox[["xmin"]] +
+               0.03 * diff(plot_bbox[c("xmin", "xmax")]),
+             y = plot_bbox[["ymax"]] -
+               0.02 * diff(plot_bbox[c("ymin", "ymax")]),
              label = fi, hjust = 0, vjust = 1, size = 4) +
     theme_map()
 })
 names(species_richness_plots) <- names(fishery_rasters)
 
 # Tile fisheries into a grid with shared legend (exclude LGN)
-grid_plots <- species_richness_plots[setdiff(names(species_richness_plots), "LGN")]
+grid_plots <- species_richness_plots[
+  setdiff(names(species_richness_plots), "LGN")
+]
 species_richness_grid <- wrap_plots(grid_plots, ncol = 2) +
   plot_layout(guides = "collect") &
   theme(legend.position = "bottom",
@@ -801,7 +829,9 @@ species_richness_grid <- wrap_plots(grid_plots, ncol = 2) +
         legend.title = element_text(size = 13),
         legend.key.size = unit(1, "cm"))
 
-out_dir_sb <- here("output", "bangladesh-fisheries-3d-overlap", "species_by_fishery")
+out_dir_sb <- here(
+  "output", "bangladesh-fisheries-3d-overlap", "species_by_fishery"
+)
 dir.create(out_dir_sb, recursive = TRUE, showWarnings = FALSE)
 ggsave(file.path(out_dir_sb, "species_richness_grid.png"),
        species_richness_grid, width = 10, height = 17, dpi = 300)
@@ -822,7 +852,9 @@ or both. Recreates the `species_fishery_overlap_plots_png/` set.
 ```{r overlap-raster-filter}
 # Filter to CR species only, exclude LGN fishery
 cr_pairs <- pairs %>% filter(species %in% cr_species, fishery != "LGN")
-cr_overlap_rasters <- overlap_rasters[pairs$species %in% cr_species & pairs$fishery != "LGN"]
+cr_overlap_rasters <- overlap_rasters[
+  pairs$species %in% cr_species & pairs$fishery != "LGN"
+]
 ```
 
 ```{r overlap-map-plots}
@@ -848,7 +880,8 @@ overlap_map_plots <- lapply(seq_len(nrow(cr_pairs)), function(i) {
   ggplot() +
     geom_sf(data = bangladesh_eez, fill = "white", colour = "red",
             linewidth = 0.4, linetype = "dashed") +
-    geom_sf(data = land_mask, fill = "grey90", colour = "grey50", linewidth = 0.5) +
+    geom_sf(data = land_mask, fill = "grey90", colour = "grey50",
+            linewidth = 0.5) +
     geom_spatraster(data = categ, show.legend = TRUE) +
     scale_fill_manual(
       values = setNames(
@@ -871,7 +904,8 @@ overlap_map_plots <- lapply(seq_len(nrow(cr_pairs)), function(i) {
       legend.text = element_text(size = 8)
     )
 })
-names(overlap_map_plots) <- paste(cr_pairs$species, cr_pairs$fishery, sep = " x ")
+names(overlap_map_plots) <- paste(cr_pairs$species, cr_pairs$fishery,
+                                   sep = " x ")
 ```
 
 ```{r overlap-depth-plots}
@@ -900,7 +934,8 @@ overlap_depth_plots <- lapply(seq_len(nrow(cr_pairs)), function(i) {
                 fill = col_fishery, alpha = 1) +
     geom_ribbon(aes(ymin = -intersect_max, ymax = -intersect_min),
                 fill = col_intersect, alpha = 1) +
-    annotate("text", x = max(df$cell_index) * 0.95, y = min(-df$seafloor_depth) * 0.95,
+    annotate("text", x = max(df$cell_index) * 0.95,
+             y = min(-df$seafloor_depth) * 0.95,
              label = paste0("n = ", max(df$cell_index)),
              hjust = 1, vjust = 0, size = 3) +
     labs(x = NULL, y = "Depth (m)") +
@@ -916,7 +951,8 @@ overlap_depth_plots <- lapply(seq_len(nrow(cr_pairs)), function(i) {
       axis.text.y = element_text(size = 7)
     )
 })
-names(overlap_depth_plots) <- paste(cr_pairs$species, cr_pairs$fishery, sep = " x ")
+names(overlap_depth_plots) <- paste(cr_pairs$species, cr_pairs$fishery,
+                                     sep = " x ")
 ```
 
 ```{r overlap-combine}
@@ -932,7 +968,9 @@ names(overlap_plots) <- paste(cr_pairs$species, cr_pairs$fishery, sep = " x ")
 cr_species_4d <- unique(cr_pairs$species)
 n_cols <- 2
 
-out_dir_ov <- here("output", "bangladesh-fisheries-3d-overlap", "species_fishery_overlap")
+out_dir_ov <- here(
+  "output", "bangladesh-fisheries-3d-overlap", "species_fishery_overlap"
+)
 dir.create(out_dir_ov, recursive = TRUE, showWarnings = FALSE)
 
 for (sp in cr_species_4d) {
