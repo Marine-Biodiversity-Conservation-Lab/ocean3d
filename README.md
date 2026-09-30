@@ -125,7 +125,7 @@ voxel’s depth levels.
 - `extract_to_area()` — crop a `SpatVoxel` to an area polygon and select
   layers within a depth range.
 
-See `vignette("woa-species-range-voxels")` for the full workflow, from a
+See `vignette("ocean3d")` for the full workflow, from a
 range polygon through to summary statistics.
 
 ### Environmental extraction to point observations

@@ -1,8 +1,8 @@
 ---
-title: "Extracting Voxel Values Within a Species' 3D Range"
+title: "Getting started with ocean3d"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Extracting Voxel Values Within a Species' 3D Range}
+  %\VignetteIndexEntry{Getting started with ocean3d}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
