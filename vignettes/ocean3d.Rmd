@@ -18,26 +18,24 @@ knitr::opts_chunk$set(
 ```
 
 ocean3d analyses marine habitat in three dimensions: area *and* depth. It
-represents species ranges, fisheries and oceanographic variables as stacked
-`terra` rasters, so they can be overlapped, masked and summarised by depth.
+can represent things like species ranges, fisheries and oceanographic variables in 3D, 
+so they can be overlapped, masked and summarised by depth. ocean3d does this by representing 
+space with a stacked raster representation, which will be explained further in the next section. 
 
-# Extracting Voxel Values Within a Species' 3D Range
+# Extracting 3D Values Within a Species' 3D Range
 
-This article walks the core operation the package exists for: take a species
-range **polygon**, turn it into a 3D domain, and read the values a
-depth-stratified environmental raster carries inside that domain.
-
-Three objects and two conversions do the whole job:
+This article walks through one core operation of the package: taking a species
+range **polygon**, convert it to 3D, and read the values from a 3D (raster stack by depth) 
+oceanographic dataset. 
 
 | Object | What it is |
 |---|---|
 | `SpatEnvelope` | The species' 3D range. Two layers, `depth_min` and `depth_max`; **depth is the cell value**, so the vertical interval varies per cell. |
 | `SpatVoxel` | The environmental raster. One layer per standard depth, named `{variable}_depth={value}`; **depth is the layer index**. |
-| occupancy voxel | The envelope re-expressed on the raster's depth axis, so the two can be combined layer by layer. |
 
-Everything here is synthetic and runs — no downloads, no local data files. The
-grids are small enough to print, so you can check every step against the
-numbers. The [articles](#next-steps) listed at the end apply the same workflow
+In this Getting Started vignette, we use small synthetic representative datasets. Therefore, 
+this requires no downloads and no local data files, with grids that are small enough to print, 
+so you can follow every step. The [articles](#next-steps) listed at the end apply the same workflow
 to real data.
 
 ```{r setup}
@@ -52,8 +50,8 @@ library(ocean3d)
 > Atlas (`woa_download()`, `woa_load_nc()`).
 
 The study grid defines the geometry everything else is aligned to. The seafloor
-is depth in **positive metres increasing downward**, the package's convention
-throughout — GEBCO-style elevation has to be flipped before it gets here.
+is depth in **positive metres increasing downward**, which is the package's convention. 
+GEBCO's elevation values have to be flipped. 
 
 ```{r grid}
 grid <- terra::rast(
@@ -71,11 +69,11 @@ terra::plot(seafloor, main = "Seafloor depth (m)")
 
 ## Step 2: A WOA-shaped environmental raster, as a `SpatVoxel`
 
-World Ocean Atlas products arrive as one layer per standard depth. Here that
-shape is built by hand, as example data: temperature falling with depth, on a
-latitudinal gradient. `as_voxel()` attaches the layer names and validates the
-depth axis. With real WOA data, `woa_load_nc()` reads the depth layers and
-`as_voxel()` wraps them in the same way.
+World Ocean Atlas data products are organized as one layer per standard depth. 
+Here, this shape is built by hand as example data. This synthetic dataset shows
+temperature decreasing with depth, on a latitudinal gradient. `as_voxel()` 
+attaches the layer names and validates the depth axis. With real WOA data, 
+`woa_load_nc()` reads in the depth layers.
 
 ```{r voxel}
 standard_depths <- c(0, 50, 100, 200, 500)
@@ -83,6 +81,7 @@ standard_depths <- c(0, 50, 100, 200, 500)
 lat <- terra::init(terra::rast(grid), "y")
 t_layers <- lapply(standard_depths, function(d) 26 - 0.03 * d - 0.4 * lat)
 
+# This works with the woa_load_nc() return as input as well
 t_annual <- as_voxel(
   terra::rast(t_layers),
   depths = standard_depths,
@@ -92,8 +91,8 @@ t_annual <- as_voxel(
 names(t_annual)
 ```
 
-`depths()` reads that axis back out. It is the accessor to reach for whenever
-you need the numeric depths rather than the layer names:
+`depths()` reads that axis back out. This is the helper function that 
+returns the numeric depths rather than the layer names:
 
 ```{r depths}
 depths(t_annual)
@@ -102,13 +101,15 @@ depths(t_annual)
 ## Step 3: The species range polygon, as a `SpatEnvelope`
 
 `vect_to_envelope()` rasterises the polygon onto the study grid and attaches
-the depth limits, giving the species' 3D domain. With real data the polygon is
-a species range map, e.g. from the IUCN Red List, and the depth limits come
-from its assessment (`fetch_species_assessments()`).
+the depth limits, giving the species' 3D domain. For real data, the polygon is
+a species range map, e.g. from the IUCN Red List Spatial Download, with the 
+depth limits coming from its IUCN Red List assessment 
+(`fetch_species_assessments()`).
 
-The seafloor is not a special argument — it is simply one more `depth_max`
-constraint. Per cell the **shallowest** `depth_max` wins, so a species with a
-nominal 600 m limit is clamped to the bed wherever the bed is shallower.
+The seafloor is not a special argument, and is treated as simply one more `depth_max`
+constraint. Per cell the **shallowest** `depth_max` wins, so a species with a 600 m 
+limit is clamped to the seabed, in any cells where the seabed is shallower than the 
+species `depth_max`. 
 
 ```{r envelope}
 poly <- terra::vect(
@@ -192,7 +193,7 @@ terra::plot(
 
 ## Step 5: Read the values inside the range
 
-With both objects on the same depth axis, masking is ordinary `terra`:
+With both objects on the same depth axis, masking can use `terra::mask()`:
 
 ```{r mask}
 in_range <- terra::mask(t_annual, occ)
@@ -200,8 +201,8 @@ in_range <- terra::mask(t_annual, occ)
 names(in_range)
 ```
 
-The layer names survive, so a single depth can still be pulled out by name —
-sea surface temperature within the range, for instance:
+The layer names are maintained, so that a single depth can still be pulled out by name. 
+For example, sea surface temperature within the range:
 
 ```{r surface}
 sst <- in_range[["t_an_depth=0"]]
@@ -215,9 +216,8 @@ terra::lines(poly)
 
 ### Vertical profile
 
-`depths()` also accepts a character vector, which is what makes a per-layer
-`terra::global()` result easy to turn into a profile — the layer names are on
-the rows, not on a raster:
+`depths()` also accepts a character vector, making a per-layer
+`terra::global()` result easy to turn into a profile. 
 
 ```{r profile}
 per_depth <- terra::global(in_range, c("mean", "min", "max"), na.rm = TRUE)
@@ -237,57 +237,6 @@ plot(
   xlab = "Mean temperature (°C)", ylab = "Depth (m)"
 )
 ```
-
-### Summary statistics across the whole 3D range
-
-Summaries over the masked voxel are a few lines of base R over
-`terra::values()`, which returns a cells × depths matrix. `n_cells` counts
-occupied **voxels** (cell × depth), while `n_surface_cells` counts the map
-cells with data at any depth:
-
-```{r summarise}
-summarise_voxel <- function(v, name) {
-  vals <- terra::values(v)
-  out <- c(
-    min             = suppressWarnings(min(vals, na.rm = TRUE)),
-    max             = suppressWarnings(max(vals, na.rm = TRUE)),
-    mean            = suppressWarnings(mean(vals, na.rm = TRUE)),
-    n_surface_cells = sum(rowSums(!is.na(vals)) > 0),
-    n_cells         = sum(!is.na(vals)),
-    n_depths        = terra::nlyr(v)
-  )
-  # An all-NA range gives -Inf / Inf from min() and max().
-  out[is.infinite(out)] <- NA_real_
-  names(out) <- paste(name, names(out), sep = "_")
-  as.data.frame(as.list(out))
-}
-
-summarise_voxel(in_range, "temperature")
-```
-
-Across several variables, and several species, this is an `lapply()` over the
-same three lines. Steps 4 and 5 need not be done by hand: given the envelope
-directly, `terra::mask()` places it on each raster's own depth levels before it
-masks.
-
-```{r summarise-many}
-# Example data: a second variable, on its own set of standard depths.
-do_annual <- as_voxel(
-  terra::rast(lapply(c(0, 100, 300), function(d) 300 - 0.2 * d + 2 * lat)),
-  depths = c(0, 100, 300),
-  varname = "o_an"
-)
-
-env_rasters <- list(temperature = t_annual, oxygen = do_annual)
-
-do.call(cbind, unname(Map(function(v, nm) {
-  summarise_voxel(terra::mask(v, range_env, bounds = "midpoint"), nm)
-}, env_rasters, names(env_rasters))))
-```
-
-Each environmental raster gets its own occupancy voxel. Note `oxygen` reports
-three depths against temperature's five: the levels are read from the raster
-being masked, never assumed shared.
 
 ## Step 6: Collapsing back to an envelope
 
