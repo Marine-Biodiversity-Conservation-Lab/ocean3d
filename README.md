@@ -121,7 +121,7 @@ voxel’s depth levels.
   layers within a depth range.
 
 See `vignette("ocean3d")` for the full workflow, from a
-range polygon through to summary statistics.
+range polygon through to a vertical profile of the values inside it.
 
 ### Environmental extraction to point observations
 
