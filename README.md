@@ -1,6 +1,4 @@
 
-<!-- README.md is generated from README.Rmd. Please edit that file -->
-
 # ocean3d
 
 <!-- badges: start -->
@@ -103,9 +101,6 @@ restricts the domain horizontally and without restricting the depths.
   `TRUE`, `FALSE` (both present but disjoint, or only one present), or
   `NA` (neither present). 
 - `mask(x, mask)` — `terra::mask()` made depth-aware. Keeps the values of `x` where the mask domain reaches that cell *at that depth*.
-
-`terra::intersect()` on a 3D object is an error that points to these,
-because terra’s version ignores depth.
 
 ### 3D volume
 

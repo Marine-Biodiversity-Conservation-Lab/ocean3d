@@ -11,9 +11,15 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = TRUE
+  eval = TRUE,
+  fig.width = 6,
+  fig.height = 4
 )
 ```
+
+ocean3d analyses marine habitat in three dimensions: area *and* depth. It
+represents species ranges, fisheries and oceanographic variables as stacked
+`terra` rasters, so they can be overlapped, masked and summarised by depth.
 
 # Extracting Voxel Values Within a Species' 3D Range
 
@@ -29,15 +35,21 @@ Three objects and two conversions do the whole job:
 | `SpatVoxel` | The environmental raster. One layer per standard depth, named `{variable}_depth={value}`; **depth is the layer index**. |
 | occupancy voxel | The envelope re-expressed on the raster's depth axis, so the two can be combined layer by layer. |
 
-Unlike the other articles, everything here is synthetic and runs — no
-downloads, no local data files. The grids are small enough to print, so you can
-check every step against the numbers.
+Everything here is synthetic and runs — no downloads, no local data files. The
+grids are small enough to print, so you can check every step against the
+numbers. The [articles](#next-steps) listed at the end apply the same workflow
+to real data.
 
 ```{r setup}
 library(ocean3d)
 ```
 
 ## Step 1: A study grid and a seafloor
+
+> **Example data.** Steps 1 and 2 build synthetic stand-ins for the inputs a
+> real analysis downloads. In practice the seafloor comes from GEBCO
+> (`load_gebco_bathymetry()`) and the environmental raster from the World Ocean
+> Atlas (`woa_download()`, `woa_load_nc()`).
 
 The study grid defines the geometry everything else is aligned to. The seafloor
 is depth in **positive metres increasing downward**, the package's convention
@@ -54,14 +66,16 @@ grid <- terra::rast(
 seafloor <- terra::rast(grid)
 terra::values(seafloor) <- rep(seq(20, 900, length.out = 20), each = 20)
 
-seafloor
+terra::plot(seafloor, main = "Seafloor depth (m)")
 ```
 
 ## Step 2: A WOA-shaped environmental raster, as a `SpatVoxel`
 
 World Ocean Atlas products arrive as one layer per standard depth. Here that
-shape is built by hand: temperature falling with depth, on a latitudinal
-gradient. `as_voxel()` attaches the layer names and validates the depth axis.
+shape is built by hand, as example data: temperature falling with depth, on a
+latitudinal gradient. `as_voxel()` attaches the layer names and validates the
+depth axis. With real WOA data, `woa_load_nc()` reads the depth layers and
+`as_voxel()` wraps them in the same way.
 
 ```{r voxel}
 standard_depths <- c(0, 50, 100, 200, 500)
@@ -88,13 +102,13 @@ depths(t_annual)
 ## Step 3: The species range polygon, as a `SpatEnvelope`
 
 `vect_to_envelope()` rasterises the polygon onto the study grid and attaches
-the depth limits, giving the species' 3D domain.
+the depth limits, giving the species' 3D domain. With real data the polygon is
+a species range map, e.g. from the IUCN Red List, and the depth limits come
+from its assessment (`fetch_species_assessments()`).
 
 The seafloor is not a special argument — it is simply one more `depth_max`
 constraint. Per cell the **shallowest** `depth_max` wins, so a species with a
-nominal 600 m limit is clamped to the bed wherever the bed is shallower. Cells
-where the bed sits above `depth_min` have no water column left and drop out
-entirely.
+nominal 600 m limit is clamped to the bed wherever the bed is shallower.
 
 ```{r envelope}
 poly <- terra::vect(
@@ -119,60 +133,61 @@ are clamped to a shallow bed, the southern rows reach the full 600 m:
 range(terra::values(range_env[["depth_max"]]), na.rm = TRUE)
 ```
 
+```{r envelope-plot, fig.height = 3.5}
+terra::plot(range_env)
+```
+
+Cells where the bed sits above `depth_min` have no water column left and drop
+out entirely. A species living below 150 m cannot occupy the northernmost row
+of the polygon, where the bed is only about 113 m deep:
+
+```{r envelope-deep}
+deep_env <- vect_to_envelope(
+  polygon   = poly,
+  template  = grid,
+  depth_min = 150,
+  depth_max = list(600, seafloor)
+)
+
+# Occupied cells: the full polygon, then the deeper-living species.
+sum(!is.na(terra::values(range_env[["depth_max"]])))
+sum(!is.na(terra::values(deep_env[["depth_max"]])))
+```
+
+```{r envelope-deep-plot}
+terra::plot(deep_env[["depth_max"]], main = "depth_max, depth_min = 150 m")
+terra::lines(poly)
+```
+
 ## Step 4: Put the envelope on the voxel's depth axis
 
 The envelope and the voxel store depth in different roles, so they cannot be
 combined directly. `envelope_to_voxel()` re-expresses the envelope on the
 voxel's depth levels, giving a `1`/`NA` occupancy voxel with one layer per
-depth:
+depth.
+
+Each depth level stands for a slab of water, not a single depth. WOA levels
+stand for the water halfway to their neighbours, so `bounds = "midpoint"` is
+the convention to use with WOA data. See
+`vignette("depth-levels", package = "ocean3d")` for how slabs are placed and
+why it matters.
 
 ```{r occupancy}
-occ <- envelope_to_voxel(range_env, depths = depths(t_annual))
+occ <- envelope_to_voxel(
+  range_env,
+  depths = depths(t_annual),
+  bounds = "midpoint"
+)
 
 # Cells occupied at each standard depth.
 terra::global(occ, "sum", na.rm = TRUE)
 ```
 
-### A depth level stands for a slab, not a knife edge
-
-A cell occupies a level when its envelope overlaps the slab that level stands
-for by more than a shared edge. This matters for thin intervals. An envelope
-of `[10, 20]` contains none of `c(0, 100, 200)`, but it is clearly within the
-water the 0 m level represents:
-
-```{r thin-envelope}
-fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1)
-terra::values(fp) <- c(1, 1)
-
-thin <- as_envelope(fp, depth_min = 10, depth_max = 20)
-terra::values(envelope_to_voxel(thin, depths = c(0, 100, 200)))
-```
-
-Touching is not overlapping. An envelope of `[0, 100]` ends exactly where the
-100 m slab begins, so it occupies the 0 m level alone, and two envelopes that
-meet at 100 m land on disjoint levels and do not intersect as voxels, the same
-answer `intersect_3d()` gives for the envelopes themselves:
-
-```{r adjacent-envelopes}
-upper <- as_envelope(fp, depth_min = 0, depth_max = 100)
-lower <- as_envelope(fp, depth_min = 100, depth_max = 200)
-terra::values(envelope_to_voxel(upper, depths = c(0, 100, 200)))
-terra::values(intersects_3d(envelope_to_voxel(upper, depths = c(0, 100, 200)),
-                            envelope_to_voxel(lower, depths = c(0, 100, 200))))
-```
-
-Where the slab edges fall is a property of the dataset the levels came from,
-so `bounds` selects the convention. `"top"` (the default) runs each slab from
-its level down to the next; `"midpoint"` puts the edges halfway between
-neighbours, which is what WOA means. An interval of `[60, 70]` lands in a
-different level under each:
-
-```{r bounds}
-shallow <- as_envelope(fp, depth_min = 60, depth_max = 70)
-
-terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200)))
-terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200),
-                                bounds = "midpoint"))
+```{r occupancy-plot, fig.height = 5}
+terra::plot(
+  occ, nc = 3, legend = FALSE, col = "steelblue",
+  main = paste(depths(occ), "m")
+)
 ```
 
 ## Step 5: Read the values inside the range
@@ -193,6 +208,11 @@ sst <- in_range[["t_an_depth=0"]]
 summary(terra::values(sst, na.rm = TRUE)[, 1])
 ```
 
+```{r surface-plot}
+terra::plot(sst, main = "Surface temperature within the range")
+terra::lines(poly)
+```
+
 ### Vertical profile
 
 `depths()` also accepts a character vector, which is what makes a per-layer
@@ -209,6 +229,14 @@ per_depth[, c("depth", "n_cells", "mean", "min", "max")]
 
 The cell count falls with depth: the range is clamped to the bed, so the
 northern rows drop out of the deeper levels.
+
+```{r profile-plot, fig.width = 4, fig.height = 4}
+plot(
+  per_depth$mean, per_depth$depth,
+  type = "b", ylim = rev(range(per_depth$depth)),
+  xlab = "Mean temperature (°C)", ylab = "Depth (m)"
+)
+```
 
 ### Summary statistics across the whole 3D range
 
@@ -238,10 +266,12 @@ summarise_voxel(in_range, "temperature")
 ```
 
 Across several variables, and several species, this is an `lapply()` over the
-same three lines:
+same three lines. Steps 4 and 5 need not be done by hand: given the envelope
+directly, `terra::mask()` places it on each raster's own depth levels before it
+masks.
 
 ```{r summarise-many}
-# A second variable, on its own set of standard depths.
+# Example data: a second variable, on its own set of standard depths.
 do_annual <- as_voxel(
   terra::rast(lapply(c(0, 100, 300), function(d) 300 - 0.2 * d + 2 * lat)),
   depths = c(0, 100, 300),
@@ -251,14 +281,13 @@ do_annual <- as_voxel(
 env_rasters <- list(temperature = t_annual, oxygen = do_annual)
 
 do.call(cbind, unname(Map(function(v, nm) {
-  summarise_voxel(mask(v, range_env), nm)
+  summarise_voxel(terra::mask(v, range_env, bounds = "midpoint"), nm)
 }, env_rasters, names(env_rasters))))
 ```
 
-`mask()` puts the envelope on each raster's own depth levels before it masks,
-so each environmental raster gets its own occupancy voxel. Note `oxygen`
-reports three depths against temperature's five: the levels are read from the
-raster being masked, never assumed shared.
+Each environmental raster gets its own occupancy voxel. Note `oxygen` reports
+three depths against temperature's five: the levels are read from the raster
+being masked, never assumed shared.
 
 ## Step 6: Collapsing back to an envelope
 
@@ -272,33 +301,49 @@ warm <- voxel_to_envelope(in_range, fun = function(x) x > 20)
 range(terra::values(warm[["depth_max"]]), na.rm = TRUE)
 ```
 
-This conversion is **lossy**. An envelope holds one continuous interval per
-cell, so any interior gap in the voxel is filled in — a cell satisfying the
-predicate at 0 m and 200 m but not at 100 m still comes back as `[0, 200]`.
-Where interior gaps matter, stay in the voxel.
+This conversion is **lossy**, so a round trip through `envelope_to_voxel()`
+does not give back the voxel you started from:
+
+- An envelope holds one continuous interval per cell, so any interior gap in
+  the voxel is filled in — a cell satisfying the predicate at 0 m and 200 m but
+  not at 100 m still comes back as `[0, 200]`.
+- The envelope records depth *levels*, not the slabs they stand for. A cell
+  warm only at the 0 m level comes back as `[0, 0]`, although that level stands
+  for 0–25 m of water. Expanded again, such a zero-thickness interval occupies
+  no slab at all, and the cell is lost.
+
+Where either matters, stay in the voxel.
 
 ## Summary
+
+Once the inputs are loaded, the whole workflow is two calls:
 
 ```{r recap, eval = FALSE}
 # 1. the species' 3D range
 range_env <- vect_to_envelope(poly, grid, depth_min = 0,
                               depth_max = list(600, seafloor))
 
-# 2. the environmental raster
-t_annual <- as_voxel(stack, depths = standard_depths, varname = "t_an")
-
-# 3. the values inside the range
-in_range <- mask(t_annual, range_env)
+# 2. the values inside the range
+in_range <- terra::mask(t_annual, range_env, bounds = "midpoint")
 ```
 
-Step 3 is the one line to reach for whenever a voxel needs restricting to a
-species' per-cell depth window. `mask()` is depth-aware for the package's 3D
-classes: it places the envelope on the voxel's own depth levels, as
-`envelope_to_voxel()` did by hand above, and masks layer by layer.
-
-```{r idiom, eval = FALSE}
-mask(rast_3d, range_env)
-```
+The second is the one line to reach for whenever a voxel needs restricting to
+a species' per-cell depth window. `terra::mask()` is depth-aware for the
+package's 3D classes: it places the envelope on the voxel's own depth levels,
+as `envelope_to_voxel()` did by hand in Step 4, and masks layer by layer.
 
 To restrict a voxel to a polygon and a single depth band across the whole area
 instead — no per-cell window — use `extract_to_area()`.
+
+## Next steps
+
+These articles apply the workflow to real data. They download data or need API
+keys, so they are on the package website rather than installed with the
+package:
+
+- [Extracting 3D Environmental Data for a Single Species](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/woa-environmental-extraction-single-species.html)
+  — an IUCN range and World Ocean Atlas 2023 climatologies.
+- [Depth-Stratified Fishing Effort from Global Fishing Watch](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/gfw-fishing-effort-3d.html)
+  — Global Fishing Watch effort by gear type, overlapped with a species range.
+- [3D Volume Overlap Between Species and Fisheries](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.html)
+  — `calc_volume_overlap()` on species ranges and fishery footprints.
