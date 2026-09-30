@@ -296,3 +296,22 @@ package:
   — Global Fishing Watch effort by gear type, overlapped with a species range.
 - [3D Volume Overlap Between Species and Fisheries](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.html)
   — `calc_volume_overlap()` on species ranges and fishery footprints.
+
+## Feedback and contributing
+
+ocean3d is new and under active development, so feedback from first-time users
+is especially valuable. If something in this vignette was unclear, a function
+did not behave as you expected, or there is functionality you wish existed,
+please open an issue on
+[GitHub Issues](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues).
+A small reproducible example makes bugs much quicker to fix.
+
+Contributions are welcome, from fixing a typo to adding a new workflow. If you
+have written code for 3D marine analyses that others could reuse, adding it to
+ocean3d broadens its impact. See the
+[contributing guide](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/CONTRIBUTING.md)
+for how to get set up, and the
+[good first issues](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/labels/good%20first%20issue)
+for places to start. Please note that ocean3d is released with a
+[Contributor Code of Conduct](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/CODE_OF_CONDUCT.md);
+by contributing, you agree to abide by its terms.
