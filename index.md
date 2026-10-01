@@ -123,10 +123,6 @@ restricts the domain horizontally and without restricting the depths.
   made depth-aware. Keeps the values of `x` where the mask domain
   reaches that cell *at that depth*.
 
-[`terra::intersect()`](https://rspatial.github.io/terra/reference/intersect.html)
-on a 3D object is an error that points to these, because terra’s version
-ignores depth.
-
 ### 3D volume
 
 Both dispatch on the 3D representation, so they take either a
@@ -148,8 +144,10 @@ voxel’s depth levels.
   — crop a `SpatVoxel` to an area polygon and select layers within a
   depth range.
 
-See `vignette("woa-species-range-voxels")` for the full workflow, from a
-range polygon through to summary statistics.
+See
+[`vignette("ocean3d")`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/ocean3d.md)
+for the full workflow, from a range polygon through to a vertical
+profile of the values inside it.
 
 ### Environmental extraction to point observations
 

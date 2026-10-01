@@ -27,8 +27,7 @@ sharks and rays.
 
 ### Breaking changes
 
-- [`library(sharkabc3d)`](https://github.com/Marine-Biodiversity-Conservation-Lab/sharkabc3d)
-  becomes
+- [`library(sharkabc3d)`](https://rdrr.io/r/base/library.html) becomes
   [`library(ocean3d)`](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d).
   No function names, arguments or class names changed — only the package
   name.

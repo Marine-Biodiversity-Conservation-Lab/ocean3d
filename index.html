@@ -31,14 +31,15 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
+<li class="nav-item"><a class="nav-link" href="articles/ocean3d.html">Get started</a></li>
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
 <li><a class="dropdown-item" href="articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
+    <li><a class="dropdown-item" href="articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
     <li><a class="dropdown-item" href="articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
-    <li><a class="dropdown-item" href="articles/woa-species-range-voxels.html">Extracting Voxel Values Within a Species' 3D Range</a></li>
   </ul>
 </li>
 <li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
@@ -135,7 +136,6 @@
 <li>
 <code>mask(x, mask)</code> — <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code> made depth-aware. Keeps the values of <code>x</code> where the mask domain reaches that cell <em>at that depth</em>.</li>
 </ul>
-<p><code><a href="https://rspatial.github.io/terra/reference/intersect.html" class="external-link">terra::intersect()</a></code> on a 3D object is an error that points to these, because terra’s version ignores depth.</p>
 </div>
 <div class="section level3">
 <h3 id="id_3d-volume">3D volume<a class="anchor" aria-label="anchor" href="#id_3d-volume"></a>
@@ -155,7 +155,7 @@
 <li>
 <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> — crop a <code>SpatVoxel</code> to an area polygon and select layers within a depth range.</li>
 </ul>
-<p>See <code>vignette("woa-species-range-voxels")</code> for the full workflow, from a range polygon through to summary statistics.</p>
+<p>See <code><a href="articles/ocean3d.html">vignette("ocean3d")</a></code> for the full workflow, from a range polygon through to a vertical profile of the values inside it.</p>
 </div>
 <div class="section level3">
 <h3 id="environmental-extraction-to-point-observations">Environmental extraction to point observations<a class="anchor" aria-label="anchor" href="#environmental-extraction-to-point-observations"></a>

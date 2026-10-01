@@ -25,3 +25,6 @@ Authors:
 
 - Jay Matsushiba <hello@jmatsushiba.com>
   ([ORCID](https://orcid.org/0000-0003-0496-9188))
+
+- David Ruiz-García <david.ruiz-garcia@uv.es>
+  ([ORCID](https://orcid.org/0000-0002-0072-1233))
