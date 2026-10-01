@@ -1,6 +1,4 @@
 
-<!-- README.md is generated from README.Rmd. Please edit that file -->
-
 # ocean3d
 
 <!-- badges: start -->
@@ -104,9 +102,6 @@ restricts the domain horizontally and without restricting the depths.
   `NA` (neither present). 
 - `mask(x, mask)` — `terra::mask()` made depth-aware. Keeps the values of `x` where the mask domain reaches that cell *at that depth*.
 
-`terra::intersect()` on a 3D object is an error that points to these,
-because terra’s version ignores depth.
-
 ### 3D volume
 
 Both dispatch on the 3D representation, so they take either a
@@ -125,8 +120,8 @@ voxel’s depth levels.
 - `extract_to_area()` — crop a `SpatVoxel` to an area polygon and select
   layers within a depth range.
 
-See `vignette("woa-species-range-voxels")` for the full workflow, from a
-range polygon through to summary statistics.
+See `vignette("ocean3d")` for the full workflow, from a
+range polygon through to a vertical profile of the values inside it.
 
 ### Environmental extraction to point observations
 
