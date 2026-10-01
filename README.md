@@ -202,7 +202,7 @@ New contributors: the "Known rough edges / good first issues" section of
 
 Thank you to the people that have inspired and collaborated on this work! 
 
-David Ruiz-García, Rachel Aitchison, Wade VanderWright, Amanda Arnold, Dr. Samm Sherman, Dr. Alifa Haque.
+David Ruiz-García, Rachel Aitchison, Wade VanderWright, Amanda Arnold, Dr. Samm Sherman, Dr. Alifa Haque & Prof. Nicholas Dulvy
 
 ## Citation
 
