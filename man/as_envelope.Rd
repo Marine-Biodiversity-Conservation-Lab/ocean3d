@@ -42,7 +42,8 @@ seafloor depth with land clamped to 0.
 }
 \examples{
 # A 2x2 footprint: three cells present (any non-NA value), one absent.
-fp <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 2)
+fp <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2,
+                  ymin = 0, ymax = 2)
 terra::values(fp) <- c(1, 1, 1, NA)
 
 # A species recorded between 0 and 200 m.

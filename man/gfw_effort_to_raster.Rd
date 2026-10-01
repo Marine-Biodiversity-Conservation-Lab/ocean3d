@@ -18,8 +18,8 @@ long-format tibble with at minimum \code{Lat}, \code{Lon}, a value, and a
 grouping column).}
 
 \item{grid}{SpatRaster. Target grid (extent, resolution, CRS) — typically
-the same grid used for species ranges and WOA extraction. If \code{grid = NULL},
-assume target grid from input effort data frame.}
+the same grid used for species ranges and WOA extraction. If
+\code{grid = NULL}, assume target grid from input effort data frame.}
 
 \item{layer_by}{Character. Column in \code{effort} whose levels become layers.
 \code{NULL} produces a single-layer total-effort raster. Default

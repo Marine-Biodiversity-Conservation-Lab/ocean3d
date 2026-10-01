@@ -18,8 +18,8 @@ at the depths above and below it.
 \examples{
 # Two cells sampled at three standard depths. Build one with as_voxel(),
 # which names the layers for you and sorts them shallow to deep.
-r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1,
-                 nlyrs = 3)
+r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
+                 ymax = 1, nlyrs = 3)
 terra::values(r) <- cbind(c(12, 11), c(9, NA), c(6, 5))
 v <- as_voxel(r, depths = c(0, 100, 200), varname = "temp")
 
