@@ -198,6 +198,18 @@ functions as we progress through the tutorial.
 If you would like to explore complete analyses using real datasets,
 see the [additional articles](#next-steps) at the end of this tutorial.
 
+## Installing `ocean3d`
+
+`ocean3d` is currently available from GitHub. You can install the latest
+development version using:
+
+```{r install-ocean3d, eval=FALSE}
+# install.packages("remotes")
+remotes::install_github("Marine-Biodiversity-Conservation-Lab/ocean3d")
+```
+
+Once installed, load the package with:
+
 ```{r setup}
 library(ocean3d)
 ```
