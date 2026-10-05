@@ -189,7 +189,7 @@ These can then be combined with species-specific depth
 limits and bathymetry using `vect_to_envelope()` to create
 three-dimensional species distributions.
 
-Support for downloading Copernicus Marine data through
+Support for downloading Copernicus data through
 `copernicus_load()` is also under development. Stay tuned!
 
 We will introduce these data sources and their corresponding
@@ -335,8 +335,8 @@ and 500 metres. Each depth will correspond to a separate
 raster layer covering our study area.
 
 ```{r standard-depths}
+# Define the five depth levels represented in our environmental data.
 standard_depths <- c(0, 50, 100, 200, 500)
-
 standard_depths
 ```
 
@@ -360,12 +360,24 @@ We will use the same geographical grid created in Step 1,
 ensuring that our temperature data are spatially aligned
 with the bathymetry.
 
-```{r synthetic-temperature}
+```{r synthetic-temperature, out.width='100%'}
 # Create a raster containing the latitude of each cell.
 lat <- terra::init(terra::rast(grid), "y")
 
 # Generate one temperature raster for each depth level.
-t_layers <- lapply(standard_depths,  function(d) 26 - 0.03 * d - 0.4 * lat)
+t_layers <- lapply(standard_depths,  
+                   # Temperature decreases with both depth and latitude:
+                   function(d) 26 - 0.03 * d - 0.4 * lat)
+
+# Visualise temperature at each depth before introducing ocean3d.
+temperature_layers <- terra::rast(t_layers)
+names(temperature_layers) <- paste0(standard_depths, " m")
+terra::plot(
+  temperature_layers,
+  main = paste0("Temperature at ", standard_depths, " m"),
+  col = hcl.colors(100, "YlOrRd", rev = TRUE),
+  range = range(terra::minmax(temperature_layers), na.rm = TRUE),
+  xlab = "Longitude", ylab = "Latitude")
 ```
 
 Our artificial temperature model starts with a reference
@@ -385,6 +397,8 @@ validates the depth axis, allowing `ocean3d` to recognise
 the depth associated with each raster layer.
 
 ```{r voxel}
+# Organise the same five rasters along a vertical depth axis 
+# by generating a single voxel feature
 t_annual <- as_voxel(
   terra::rast(t_layers),
   depths = standard_depths,
@@ -415,22 +429,16 @@ environmental data from the World Ocean Atlas using
 `woa_download()` and `woa_load_nc()`. 
 
 
-### 2.4. Visualising our environmental data
+### 2.4. Visualising our 3D environmental data
 
-Let's visualise the temperature rasters at each
-of our five depth levels.
+The following visualisation illustrates how our
+temperature layers are organised vertically, with each layer
+positioned at its corresponding depth within our `SpatVoxel`.
 
-```{r temperature-plot, fig.width=6, fig.height=4, out.width='100%'}
-terra::plot(
-  t_annual, 
-  main = paste0("Temperature at ", standard_depths, " m"),
-  col = hcl.colors(100, "YlOrRd", rev = TRUE),
-  range = range(terra::minmax(t_annual),  na.rm = TRUE),
-  xlab = "Longitude",  ylab = "Latitude")
-```
+![](figures/Temperature_3D.png){width=100%}
 
 Each panel represents the same geographical study area,
-but at a different depth.
+but at a different depth. Notice that the vertical distance between layers reflects their actual depth intervals.
 
 Notice how temperature changes both geographically
 and vertically. In our synthetic example, deeper
@@ -442,31 +450,6 @@ This is precisely why incorporating the vertical
 dimension matters: **environmental conditions at
 the same geographical location can differ
 considerably depending on depth.**
-
-
-### Optional: Visualising temperature in three dimensions
-
-So far, we have visualised our environmental data as
-individual maps, one for each depth level. But what would
-these layers look like if we stacked them in three-dimensional
-space?
-
-The following optional visualisation illustrates how our
-temperature layers are organised vertically, with each layer
-positioned at its corresponding depth.
-
-```{r temperature-3d, eval=FALSE, out.width='100%'}
-# Optional: visualise temperature in 3D
-script <- system.file("extdata","temperature_3d.R", package = "ocean3d", mustWork = TRUE)
-source(script)
-plot_temperature_3d(t_annual)
-
-```
-
-Each horizontal surface represents temperature at a
-different depth. Notice that the vertical distance between
-layers reflects their actual depth intervals.
-
 
 ## Step 3: Creating our species' three-dimensional distribution
 
@@ -493,11 +476,14 @@ We will combine these components on a `SpatEnvelope`,  using
 First, let's create a simple polygon representing our
 species' geographical range. For this example, we will use a rectangular polygon covering part of our artificial study area.
 
-```{r species-polygon}
-poly <- terra::vect(
-  "POLYGON ((4 2, 16 2, 16 18, 4 18, 4 2))",
-  crs = "EPSG:4326")
-poly
+```{r species-polygon, out.width='100%'}
+# Create a simple polygon representing the species' geographical range.
+poly <- terra::vect("POLYGON ((4 2, 16 2, 16 18, 4 18, 4 2))", crs = "EPSG:4326")
+
+# Plot the study grid and the species' geographical range.
+terra::plot(seafloor,  main = "Species' geographical distribution",
+  xlab = "Longitude",  ylab = "Latitude")
+terra::plot(poly, add = TRUE, border = "red", lwd = 3)
 ```
 This polygon defines the geographical boundaries of
 our species' potential distribution. However, it does
@@ -545,12 +531,15 @@ Let's combine our geographical polygon, biological
 depth limits and bathymetry:
 
 ```{r envelope}
+# Combine three pieces of information:
+# Convert a geographical polygon into a SpatEnvelope by rasterising the polygon and adding a vertical range to each occupied cell.
 range_env <- vect_to_envelope(
-  polygon = poly,
-  template = grid,
-  depth_min = 0,
-  depth_max = list(600, seafloor))
+  polygon = poly,                  
+  template = grid,                 # Where? -> Common geographical range polygon
+  depth_min = 0,                   # How deep? -> biological depth range (0-600 m)
+  depth_max = list(600, seafloor))  # How deep is possible? -> local seafloor depth
 
+# The result is our species' potential 3D distribution as a SpatEnvelope.
 range_env
 ```
 
@@ -567,9 +556,7 @@ Here:
 
 For example, if the seafloor is at 200 m, our
 species can potentially occupy the water column
-between 0 and 200 m.
-
-However, if the seafloor is at 800 m, its potential
+between 0 and 200 m. However, if the seafloor is at 800 m, its potential
 distribution extends only to its biological
 maximum depth of 600 m.
 
@@ -578,26 +565,10 @@ The resulting `SpatEnvelope` contains two rasters:
 the potential vertical distribution of our species
 at each geographical location within its range.
 
-### 3.3. Exploring our `SpatEnvelope`
-
-Let's examine the maximum depths in our newly
-created `SpatEnvelope`.
-
-```{r envelope-values}
-range(
-  terra::values(range_env[["depth_max"]]),
-  na.rm = TRUE
-)
-```
-
-Although we specified a biological maximum depth
-of 600 m, the resulting maximum depths vary
-geographically because of the bathymetric
-constraint.
-
 Let's visualise both depth limits:
 
 ```{r envelope-plot, fig.width=7, fig.height=4, out.width='100%'}
+# Plot minimum and maximum depth layers
 terra::plot(range_env,
   main = c("Minimum depth (m)", "Maximum depth (m)"),
   xlab = "Longitude",  ylab = "Latitude")
@@ -617,17 +588,30 @@ of our species' potential vertical distribution:
 Notice that the maximum depth is shallower in
 the northern part of the species' range, where
 the seafloor is closer to the surface. Further south, where the seafloor is deeper, our species can reach its full biological
-maximum depth of 600 m.
-
-Importantly, **these maps represent the potential
+maximum depth of 600 m. Importantly, **these maps represent the potential
 vertical limits of our species, not its observed
 depth or abundance**.
+
+Let's examine the maximum depths in our newly
+created `SpatEnvelope`.
+
+```{r envelope-values}
+range(terra::values(range_env[["depth_max"]]),
+  na.rm = TRUE)
+```
+Although we specified a biological maximum depth
+of 600 m, the resulting maximum depths vary
+geographically because of the bathymetric
+constraint.
 
 Our original geographical polygon has now
 become a three-dimensional representation
 of the space our species could potentially
-occupy.
+occupy, as a SpatEnvelope:
 
+![](figures/Comparison_SpatEnvelope_SpatVoxel.png){width=100%}
+
+<!--
 ### 3.4. What happens to a deeper-living species?
 
 So far, our species has been able to occupy
@@ -700,6 +684,7 @@ geographical boundaries, biological depth
 limits and bathymetry, we can identify
 the three-dimensional space that the
 species could potentially occupy.
+-->
 
 ## Step 4: Converting our species' distribution into a `SpatVoxel`
 
@@ -731,12 +716,14 @@ temperature dataset. This ensures that both
 objects share the same vertical structure.
 
 ```{r occupancy}
+# Convert our SpatEnvelope into a SpatVoxel by evaluating potential
+# species occupancy at the same depth levels as our environmental data.
 occ <- envelope_to_voxel(
-  range_env,
-  depths = depths(t_annual),
-  bounds = "midpoint")
+  range_env,                  # Species' potential 3D distribution
+  depths = depths(t_annual),  # Use the same depths as our temperature data
+  bounds = "midpoint")        # Define intervals around each depth level
 
-# Cells occupied at each standard depth.
+# Count how many grid cells the species can potentially occupy at each depth.
 terra::global(occ, "sum", na.rm = TRUE)
 ```
 
@@ -784,7 +771,8 @@ Now that we have converted our species' distribution into a
 distribution changes across our five depth levels.
 
 ```{r occupancy-plot, fig.width=7, fig.height=4, out.width='100%'}
-terra::plot(
+# Visualise the SpatVoxel layers on the species occupancy across our depth levels.
+terra::plot( 
   occ,  nc = 3,  legend = FALSE,  col = "steelblue",
   main = paste("Potential occupancy at", depths(occ), "m"),
   xlab = "Longitude",  ylab = "Latitude")
@@ -831,8 +819,9 @@ We will use `terra::mask()` to retain temperature values
 only in the cells where our species could potentially occur.
 
 ```{r mask}
+# Combine our environmental and species SpatVoxels by keeping temperature values only where the species can potentially occur
 in_range <- terra::mask(t_annual, occ)
-
+# The original environmental layers and their depths are preserved.
 names(in_range)
 ```
 
@@ -848,8 +837,8 @@ Let's start by examining sea surface temperature
 within our species' potential distribution.
 
 ```{r surface}
+# Select the surface layer (0 m) from our masked environmental data.
 sst <- in_range[["t_an_depth=0"]]
-
 summary(terra::values(sst, na.rm = TRUE)[, 1])
 ```
 
@@ -861,13 +850,11 @@ the minimum, median, mean and maximum values.
 Let's visualise these temperatures:
 
 ```{r surface-plot, out.width='100%'}
+# Visualise surface temperature only where the species can potentially occur.
 terra::plot(
   sst,
   main = "Surface temperature within the species' range",
-  xlab = "Longitude",
-  ylab = "Latitude"
-)
-
+  xlab = "Longitude",  ylab = "Latitude")
 terra::lines(poly, col = "red", lwd = 2)
 ```
 
@@ -915,6 +902,7 @@ Finally, let's visualise how mean
 temperature changes with depth.
 
 ```{r profile-plot, fig.width=6, fig.height=5, out.width='100%'}
+# Visualise the mean temperature available to the species at each depth.
 plot(
   per_depth$mean, per_depth$depth,
   type = "b",
@@ -939,7 +927,8 @@ data to characterise the environmental conditions
 available within our species' potential
 three-dimensional distribution.**
 
-## Step 6: Converting our results back into a `SpatEnvelope`
+
+## Step 6 (EXTRA - come back and check it out): Converting our results back into a `SpatEnvelope`
 
 So far, we have used `envelope_to_voxel()` to convert our
 species' potential distribution into predefined depth
