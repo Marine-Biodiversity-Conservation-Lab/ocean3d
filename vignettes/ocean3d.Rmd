@@ -1333,3 +1333,7 @@ for how to get set up, and the
 for places to start. Please note that ocean3d is released with a
 [Contributor Code of Conduct](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/CODE_OF_CONDUCT.md);
 by contributing, you agree to abide by its terms.
+
+### Contact us
+Jay Matsushiba - jay.matsushiba@gmail.com
+David Ruiz-García - davidrg496@gmail.com
