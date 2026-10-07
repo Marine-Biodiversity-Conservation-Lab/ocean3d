@@ -69,18 +69,85 @@
 
     
     
-<p>ocean3d analyses marine habitat in three dimensions: area
-<em>and</em> depth. It can represent things like species ranges,
-fisheries and oceanographic variables in 3D, so they can be overlapped,
-masked and summarised by depth. ocean3d does this by representing space
-with a stacked raster representation, which will be explained further in
-the next section.</p>
+<p>Marine species inhabit a three-dimensional environment. However,
+their geographical distributions are often represented using
+two-dimensional maps, which show where a species occurs without
+considering the depths it occupies.</p>
+<p>This distinction matters. Two species may share the same geographical
+distribution but occupy entirely different depths. Similarly,
+environmental conditions such as temperature can change considerably
+throughout the water column.</p>
+<p><strong>How can we incorporate depth into our spatial analyses to
+better understand the environmental conditions experienced by marine
+species?</strong></p>
+<p><code>ocean3d</code> is an R package designed to incorporate the
+vertical dimension into marine spatial analyses. It provides tools to
+represent species distributions, fisheries and environmental variables
+in three dimensions, allowing us to investigate their spatial
+relationships, identify overlaps and extract or summarise information
+across different depths.</p>
+<p>Rather than treating the ocean as a two-dimensional surface,
+<code>ocean3d</code> allows us to account for how marine habitats and
+environmental conditions vary throughout the water column.</p>
+<p>In this tutorial, we will explore how <code>ocean3d</code> helps us
+answer this question by exploring some of the package’s core
+functionalities through a simple, reproducible example.</p>
 <div class="section level2">
-<h2 id="extracting-3d-values-within-a-species-3d-range">Extracting 3D Values Within a Species’ 3D Range<a class="anchor" aria-label="anchor" href="#extracting-3d-values-within-a-species-3d-range"></a>
+<h2 id="our-research-question">Our research question<a class="anchor" aria-label="anchor" href="#our-research-question"></a>
 </h2>
-<p>This article walks through one core operation of the package: taking
-a species range <strong>polygon</strong>, convert it to 3D, and read the
-values from a 3D (raster stack by depth) oceanographic dataset.</p>
+<p>Imagine we are studying a marine species for which we know:</p>
+<ul>
+<li>Its geographical distribution, represented by a polygon.</li>
+<li>Its vertical distribution (e.g., extending from the surface to a
+maximum depth of 600 metres).</li>
+<li>The bathymetry of our study area.</li>
+</ul>
+<p>Additionally, we know the environmental conditions of such
+three-dimensional space, for example:</p>
+<ul>
+<li>Ocean temperature at several depths throughout the water
+column.</li>
+</ul>
+<p>Using <code>ocean3d</code>, we will combine the species’ geographical
+distribution, depth range and bathymetry to represent its potential
+three-dimensional distribution. We will then integrate environmental
+data to identify and summarise the temperatures occurring within this
+space.</p>
+<p>To keep things simple, we will use small, artificially generated
+datasets. This allows us to focus on understanding the workflow without
+downloading external data.</p>
+<p><img src="figures/Figure1_conceptual3Ddistribution.png" style="width:100.0%"></p>
+<p><em>Figure 1. Conceptual overview of the tutorial. A species’
+geographical distribution and depth range are combined with bathymetry
+to represent its potential three-dimensional distribution. Environmental
+data are then used to characterise the conditions within this
+space.</em></p>
+</div>
+<div class="section level2">
+<h2 id="how-does-ocean3d-represent-three-dimensional-space">How does <code>ocean3d</code> represent three-dimensional
+space?<a class="anchor" aria-label="anchor" href="#how-does-ocean3d-represent-three-dimensional-space"></a>
+</h2>
+<p>To combine species distributions with environmental information, we
+need a way to represent both datasets in three dimensions.</p>
+<p><code>ocean3d</code> uses two main spatial representations:</p>
+<ul>
+<li><p><strong><code>SpatEnvelope</code></strong> represents a
+three-dimensional distribution using two raster layers:
+<code>depth_min</code> and <code>depth_max</code>. Each geographical
+cell contains the minimum and maximum depths defining its vertical
+interval. Consequently, the vertical extent can vary between
+geographical locations.</p></li>
+<li><p><strong><code>SpatVoxel</code></strong> represents
+three-dimensional information using a stack of raster layers, each
+corresponding to a specific depth. Its layers follow the naming
+convention <code>{variable}_depth={value}</code>, allowing environmental
+conditions or other spatial information to be represented at different
+depths.</p></li>
+</ul>
+<p>The key difference is <strong>how depth is represented</strong>. In a
+<code>SpatEnvelope</code>, depth is stored as the cell value, defining a
+vertical interval. In a <code>SpatVoxel</code>, depth identifies the
+raster layer, representing information at a particular depth level.</p>
 <table class="table">
 <colgroup>
 <col width="50%">
@@ -105,101 +172,417 @@ index</strong>.</td>
 </tr>
 </tbody>
 </table>
-<p>In this Getting Started vignette, we use small synthetic
-representative datasets. Therefore, this requires no downloads and no
-local data files, with grids that are small enough to print, so you can
-follow every step. The <a href="#next-steps">articles</a> listed at the
-end apply the same workflow to real data.</p>
+<p>Figure 2 illustrates how the same species’ three-dimensional
+distribution can be represented using either a <code>SpatEnvelope</code>
+or a <code>SpatVoxel</code>. The <code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code>
+function from <code>ocean3d</code> will enable us to convert and
+<code>SpatEnvelope</code> into a <code>SpatVoxel</code>, distributing
+the species’ potential presence across a set of predefined depth levels.
+Each level represents an interval of water rather than an infinitely
+thin horizontal plane. Consequently, the geographical area occupied by
+the species may differ between depth levels.</p>
+<p><img src="figures/Comparison_SpatEnvelope_SpatVoxel.png" style="width:100.0%"><em>Figure 2. Comparison of the two
+three-dimensional spatial representations used by <code>ocean3d</code>.
+(A) A <code>SpatEnvelope</code> defines a species’ potential
+distribution using minimum and maximum depths, constrained by the local
+bathymetry. (B) The same distribution is converted into a
+<code>SpatVoxel</code>, representing potential species presence at five
+predefined depth levels (0, 50, 100, 200 and 500 m) using
+<code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code>. The illustration is conceptual and
+based on the synthetic example presented in this tutorial.</em></p>
+<p>A <code>SpatEnvelope</code> is particularly useful when we know the
+geographical distribution and vertical limits of a species, but do not
+have detailed information about how it is distributed throughout the
+water column. For example, we may have an IUCN distribution polygon and
+the species’ minimum and maximum recorded depths. Combining these with
+bathymetry allows us to represent its potential three-dimensional
+distribution without assuming that we know its precise distribution at
+each depth.</p>
+<p>A <code>SpatVoxel</code>, on the other hand, is useful when we need
+to represent or analyse information at specific depth levels. For
+example, oceanographic datasets often provide temperature or dissolved
+oxygen measurements at several standard depths. This representation also
+allows us to examine species distributions or fishing activity at
+different depths, including situations where occupancy or intensity
+varies throughout the water column.</p>
+<p><strong>The two representations are complementary.</strong> We can
+use a <code>SpatEnvelope</code> to define a species’ potential
+three-dimensional distribution and convert it into a
+<code>SpatVoxel</code> to compare it with environmental datasets
+organised into depth layers.</p>
+<p>In this tutorial, we will create both representations, convert
+between them and use them together to identify the temperatures
+occurring within our species’ potential three-dimensional
+distribution.</p>
+<p>Don’t worry if these concepts are not immediately clear. We will
+build each object step by step and explore its structure as we progress
+through the tutorial.</p>
+</div>
+<div class="section level2">
+<h2 id="getting-started-preparing-our-data">Getting started: preparing our data<a class="anchor" aria-label="anchor" href="#getting-started-preparing-our-data"></a>
+</h2>
+<p>Now that we have defined our research question, let’s start building
+the datasets we need to answer it.</p>
+<p>As illustrated in Figure 1, our analysis requires four main
+inputs:</p>
+<ol style="list-style-type: decimal">
+<li>A <strong>study area</strong>, defining the geographical extent of
+our analysis.</li>
+<li>
+<strong>Bathymetry</strong>, describing the depth of the seafloor
+across our study area.</li>
+<li>A species’ <strong>geographical distribution and depth
+range</strong>, which together define its potential three-dimensional
+distribution.</li>
+<li>
+<strong>Environmental data</strong>, in our case ocean temperature
+at different depths.</li>
+</ol>
+<p>Throughout this tutorial, we will use small, artificially generated
+datasets that represent these inputs. This allows us to explore the main
+functionalities of <code>ocean3d</code> without downloading external
+datasets or requiring API credentials.</p>
+<p>For real-world applications, <code>ocean3d</code> provides several
+functions to facilitate data acquisition and preparation. These include
+<code><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code> for bathymetric data from GEBCO,
+<code><a href="../reference/woa_download.html">woa_download()</a></code> and <code><a href="../reference/woa_load_nc.html">woa_load_nc()</a></code> for
+environmental data from the World Ocean Atlas, and
+<code><a href="../reference/fetch_species_assessments.html">fetch_species_assessments()</a></code> for retrieving species
+information, including depth limits, from the IUCN Red List API.</p>
+<p>Species distribution polygons can be obtained separately, for
+example, from the IUCN Red List spatial datasets. These can then be
+combined with species-specific depth limits and bathymetry using
+<code><a href="../reference/vect_to_envelope.html">vect_to_envelope()</a></code> to create three-dimensional species
+distributions.</p>
+<p>Support for downloading Copernicus data through
+<code>copernicus_load()</code> is also under development. Stay
+tuned!</p>
+<p>We will introduce these data sources and their corresponding
+functions as we progress through the tutorial.</p>
+<p>If you would like to explore complete analyses using real datasets,
+see the <a href="#next-steps">additional articles</a> at the end of this
+tutorial.</p>
+</div>
+<div class="section level2">
+<h2 id="installing-ocean3d">Installing <code>ocean3d</code><a class="anchor" aria-label="anchor" href="#installing-ocean3d"></a>
+</h2>
+<p><code>ocean3d</code> is currently available from GitHub. You can
+install the latest development version using:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d" class="external-link">ocean3d</a></span><span class="op">)</span></span></code></pre></div>
-<div class="section level3">
-<h3 id="step-1-a-study-grid-and-a-seafloor">Step 1: A study grid and a seafloor<a class="anchor" aria-label="anchor" href="#step-1-a-study-grid-and-a-seafloor"></a>
-</h3>
-<blockquote>
-<p><strong>Example data.</strong> Steps 1 and 2 build synthetic
-stand-ins for the inputs a real analysis downloads. In practice the
-seafloor comes from GEBCO (<code><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code>) and the
-environmental raster from the World Ocean Atlas
-(<code><a href="../reference/woa_download.html">woa_download()</a></code>, <code><a href="../reference/woa_load_nc.html">woa_load_nc()</a></code>).</p>
-</blockquote>
-<p>The study grid defines the geometry everything else is aligned to.
-The seafloor is depth in <strong>positive metres increasing
-downward</strong>, which is the package’s convention. GEBCO’s elevation
-values have to be flipped.</p>
+<code class="sourceCode R"><span><span class="co"># install.packages("remotes")</span></span>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"Marine-Biodiversity-Conservation-Lab/ocean3d"</span><span class="op">)</span></span></code></pre></div>
+<p>Once installed, load the package with:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span></span>
-<span>  nrows <span class="op">=</span> <span class="fl">20</span>, ncols <span class="op">=</span> <span class="fl">20</span>,</span>
-<span>  xmin <span class="op">=</span> <span class="fl">0</span>, xmax <span class="op">=</span> <span class="fl">20</span>, ymin <span class="op">=</span> <span class="fl">0</span>, ymax <span class="op">=</span> <span class="fl">20</span>,</span>
-<span>  crs <span class="op">=</span> <span class="st">"EPSG:4326"</span></span>
-<span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d" class="external-link">ocean3d</a></span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="step-1-creating-our-study-area-and-bathymetry">Step 1: Creating our study area and bathymetry<a class="anchor" aria-label="anchor" href="#step-1-creating-our-study-area-and-bathymetry"></a>
+</h2>
+<p>Before representing our species’ distribution in three dimensions, we
+need to define the geographical area where our analysis will take place
+and understand the bathymetry landscape within it.</p>
+<div class="section level3">
+<h3 id="defining-our-study-area">1.1. Defining our study area<a class="anchor" aria-label="anchor" href="#defining-our-study-area"></a>
+</h3>
+<p>We begin by creating a simple geographical grid using the
+<code>terra</code> package. A grid divides our study area into
+individual cells, allowing us to organise and analyse spatial
+information.</p>
+<p>Each cell represents a geographical location where we can store
+information about the seafloor, species distributions or environmental
+conditions.</p>
+<p>For simplicity, our example uses a grid of 20 × 20 cells,
+representing a total of 400 geographical cells.</p>
+<p>All subsequent datasets will use this same grid, ensuring that their
+spatial information is aligned.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Create a geographical grid with 20 rows and 20 columns.</span></span>
+<span><span class="va">grid</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span>nrows <span class="op">=</span> <span class="fl">20</span>, ncols <span class="op">=</span> <span class="fl">20</span>, </span>
+<span>                    xmin <span class="op">=</span> <span class="fl">0</span>, xmax <span class="op">=</span> <span class="fl">20</span>, ymin <span class="op">=</span> <span class="fl">0</span>, ymax <span class="op">=</span> <span class="fl">20</span>,  </span>
+<span>                    crs <span class="op">=</span> <span class="st">"EPSG:4326"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># A shelf that deepens from north to south, 20 m down to 900 m.</span></span>
-<span><span class="va">seafloor</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span><span class="va">grid</span><span class="op">)</span></span>
-<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">seafloor</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">20</span>, <span class="fl">900</span>, length.out <span class="op">=</span> <span class="fl">20</span><span class="op">)</span>, each <span class="op">=</span> <span class="fl">20</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">seafloor</span>, main <span class="op">=</span> <span class="st">"Seafloor depth (m)"</span><span class="op">)</span></span></code></pre></div>
-<p><img src="ocean3d_files/figure-html/grid-1.png" class="r-plt" alt="" width="576"></p>
+<span><span class="va">grid</span></span>
+<span><span class="co">#&gt; class       : SpatRaster</span></span>
+<span><span class="co">#&gt; size        : 20, 20, 1  (nrow, ncol, nlyr)</span></span>
+<span><span class="co">#&gt; resolution  : 1, 1  (x, y)</span></span>
+<span><span class="co">#&gt; extent      : 0, 20, 0, 20  (xmin, xmax, ymin, ymax)</span></span>
+<span><span class="co">#&gt; coord. ref. : lon/lat WGS 84 (EPSG:4326)</span></span></code></pre></div>
+<p>Our grid contains 400 cells, each covering one degree of latitude and
+longitude. This artificial study area provides the common spatial
+framework for the datasets we will create next.</p>
 </div>
 <div class="section level3">
-<h3 id="step-2-a-woa-shaped-environmental-raster-as-a-spatvoxel">Step 2: A WOA-shaped environmental raster, as a
-<code>SpatVoxel</code><a class="anchor" aria-label="anchor" href="#step-2-a-woa-shaped-environmental-raster-as-a-spatvoxel"></a>
+<h3 id="representing-the-seafloor">1.2. Representing the seafloor<a class="anchor" aria-label="anchor" href="#representing-the-seafloor"></a>
 </h3>
-<p>World Ocean Atlas data products are organized as one layer per
-standard depth. Here, this shape is built by hand as example data. This
-synthetic dataset shows temperature decreasing with depth, on a
-latitudinal gradient. <code><a href="../reference/as_voxel.html">as_voxel()</a></code> attaches the layer names
-and validates the depth axis. With real WOA data,
-<code><a href="../reference/woa_load_nc.html">woa_load_nc()</a></code> reads in the depth layers.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">standard_depths</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">50</span>, <span class="fl">100</span>, <span class="fl">200</span>, <span class="fl">500</span><span class="op">)</span></span>
+<p>The next step is to represent the bathymetry of our study area.</p>
+<p>This is particularly important when working in three dimensions
+because the seafloor defines the lower boundary of the water column.</p>
+<p>For example, a species may inhabit depths of up to 600 metres, but it
+cannot occupy depths below the seafloor. Where the seabed is only 200
+metres deep, the available water column is limited to those first 200
+metres.</p>
+<p>In our example, we will create an artificial continental shelf that
+gradually deepens from north to south, with seafloor depths ranging from
+20 to 900 metres.</p>
+<p><strong>Depth convention:</strong> Throughout <code>ocean3d</code>,
+depths are expressed as positive values increasing downwards. For
+example, a depth of 200 metres is represented as <code>200</code>,
+rather than <code>-200</code>.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Create a raster using the geometry of our study grid.</span></span>
+<span><span class="va">seafloor</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span><span class="va">grid</span><span class="op">)</span></span>
 <span></span>
+<span><span class="co"># Assign seafloor depths ranging from 20 to 900 metres.</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">seafloor</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">20</span>, <span class="fl">900</span>, length.out <span class="op">=</span> <span class="fl">20</span><span class="op">)</span>,  each <span class="op">=</span> <span class="fl">20</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Visualise the bathymetry of our study area.</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">seafloor</span>, main <span class="op">=</span> <span class="st">"Seafloor depth (m)"</span>, xlab <span class="op">=</span> <span class="st">"Longitude"</span>,  ylab <span class="op">=</span> <span class="st">"Latitude"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="ocean3d_files/figure-html/seafloor-1.png" class="r-plt" alt="" width="85%"></p>
+<p>The resulting map shows our artificial bathymetry. Each grid cell
+contains the seafloor depth at a particular geographical location, with
+shallower waters in the north and deeper waters in the south.</p>
+<p>But what does an individual grid cell actually represent?</p>
+<p>As illustrated in Figure 3, each cell corresponds to a geographical
+location with its own water column, extending from the ocean surface to
+the local seafloor. Consequently, the maximum depth of the water column
+(i.e. bathymetry) varies across our study area.</p>
+<p><img src="figures/Bathymetry_Example.png" style="width:100.0%"><em>Figure 3. Illustrated concept of bathymetry grid. (A) Our synthetic
+study area, represented by a 20 × 20 grid in which each cell stores the
+local seafloor depth (i.e. bathymetry). The highlighted cell illustrates
+a location with a bathymetry of approximately 700 m. (B) Conceptual
+representation of the corresponding water column, extending from the
+ocean surface (0 m) to the local seafloor. Depths are expressed as
+positive values increasing downwards.</em></p>
+<p>This variation will become important when we introduce our species’
+distribution. Although the species may have a maximum depth limit of 600
+metres, its potential vertical distribution will also depend on the
+local seafloor depth.</p>
+<p>In other words, <strong>the species’ depth range and the bathymetry
+must be considered together</strong> to identify the three-dimensional
+space it could potentially occupy.</p>
+<p><strong>Working with real data:</strong> In real-world applications,
+bathymetric data can be obtained from GEBCO using
+<code><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code>. Since GEBCO provides elevation
+values, underwater elevations must be converted to positive-down depths
+before using them in this workflow.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="step-2-creating-our-environmental-data">Step 2: Creating our environmental data<a class="anchor" aria-label="anchor" href="#step-2-creating-our-environmental-data"></a>
+</h2>
+<p>Now that we have defined our study area and its bathymetry, we need
+to represent the environmental conditions throughout the water
+column.</p>
+<p>In our example, we will use ocean temperature. Unlike bathymetry,
+which provides one value per geographical cell, temperature can vary
+both geographically and with depth.</p>
+<p>To represent this variation, we will create a synthetic environmental
+dataset organised as a <code>SpatVoxel</code> (i.e., one layer per
+standard depth).</p>
+<div class="section level3">
+<h3 id="defining-our-depth-levels">2.1. Defining our depth levels<a class="anchor" aria-label="anchor" href="#defining-our-depth-levels"></a>
+</h3>
+<p>Oceanographic datasets, such as those provided by the World Ocean
+Atlas (WOA), commonly organise environmental variables into raster
+layers corresponding to standard depth levels.</p>
+<p>For our example, we will use five depths: 0, 50, 100, 200 and 500
+metres. Each depth will correspond to a separate raster layer covering
+our study area.</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Define the five depth levels represented in our environmental data.</span></span>
+<span><span class="va">standard_depths</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">50</span>, <span class="fl">100</span>, <span class="fl">200</span>, <span class="fl">500</span><span class="op">)</span></span>
+<span><span class="va">standard_depths</span></span>
+<span><span class="co">#&gt; [1]   0  50 100 200 500</span></span></code></pre></div>
+<p>Notice that the intervals between consecutive depth levels are not
+necessarily equal. This is common in oceanographic datasets, where
+vertical sampling resolution may vary throughout the water column.</p>
+</div>
+<div class="section level3">
+<h3 id="generating-synthetic-temperature-data">2.2. Generating synthetic temperature data<a class="anchor" aria-label="anchor" href="#generating-synthetic-temperature-data"></a>
+</h3>
+<p>Next, we will generate artificial temperature values for each of our
+five depth levels.</p>
+<p>To make our example more realistic, we will introduce two simple
+environmental gradients:</p>
+<ul>
+<li>
+<strong>Vertical variation:</strong> temperature decreases with
+depth.</li>
+<li>
+<strong>Horizontal variation:</strong> temperature varies with
+latitude.</li>
+</ul>
+<p>We will use the same geographical grid created in Step 1, ensuring
+that our temperature data are spatially aligned with the bathymetry.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Create a raster containing the latitude of each cell.</span></span>
 <span><span class="va">lat</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/init.html" class="external-link">init</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span><span class="va">grid</span><span class="op">)</span>, <span class="st">"y"</span><span class="op">)</span></span>
-<span><span class="va">t_layers</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">standard_depths</span>, <span class="kw">function</span><span class="op">(</span><span class="va">d</span><span class="op">)</span> <span class="fl">26</span> <span class="op">-</span> <span class="fl">0.03</span> <span class="op">*</span> <span class="va">d</span> <span class="op">-</span> <span class="fl">0.4</span> <span class="op">*</span> <span class="va">lat</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># This works with the woa_load_nc() return as input as well</span></span>
+<span><span class="co"># Generate one temperature raster for each depth level.</span></span>
+<span><span class="va">t_layers</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">standard_depths</span>,  </span>
+<span>                   <span class="co"># Temperature decreases with both depth and latitude:</span></span>
+<span>                   <span class="kw">function</span><span class="op">(</span><span class="va">d</span><span class="op">)</span> <span class="fl">26</span> <span class="op">-</span> <span class="fl">0.03</span> <span class="op">*</span> <span class="va">d</span> <span class="op">-</span> <span class="fl">0.4</span> <span class="op">*</span> <span class="va">lat</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Visualise temperature at each depth before introducing ocean3d.</span></span>
+<span><span class="va">temperature_layers</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span><span class="va">t_layers</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rspatial.github.io/terra/reference/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">temperature_layers</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">standard_depths</span>, <span class="st">" m"</span><span class="op">)</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span></span>
+<span>  <span class="va">temperature_layers</span>,</span>
+<span>  main <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="st">"Temperature at "</span>, <span class="va">standard_depths</span>, <span class="st">" m"</span><span class="op">)</span>,</span>
+<span>  col <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grDevices/palettes.html" class="external-link">hcl.colors</a></span><span class="op">(</span><span class="fl">100</span>, <span class="st">"YlOrRd"</span>, rev <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  range <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/minmax.html" class="external-link">minmax</a></span><span class="op">(</span><span class="va">temperature_layers</span><span class="op">)</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>  xlab <span class="op">=</span> <span class="st">"Longitude"</span>, ylab <span class="op">=</span> <span class="st">"Latitude"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="ocean3d_files/figure-html/synthetic-temperature-1.png" class="r-plt" alt="" width="100%"></p>
+<p>Our artificial temperature model starts with a reference temperature
+of 26 °C and decreases by 0.03 °C per metre of depth and 0.4 °C per
+degree of latitude (These values are illustrative and are not intended
+to represent the actual oceanographic conditions of any particular
+region).</p>
+<p>The result is a collection of five temperature rasters, each
+representing the environmental conditions at a different standard
+depth.</p>
+</div>
+<div class="section level3">
+<h3 id="creating-our-spatvoxel">2.3. Creating our <code>SpatVoxel</code><a class="anchor" aria-label="anchor" href="#creating-our-spatvoxel"></a>
+</h3>
+<p>We can now combine these temperature rasters into a single
+three-dimensional representation using <code><a href="../reference/as_voxel.html">as_voxel()</a></code> (i.e.,
+each raster will become a layer of our <code>SpatVoxel</code>)</p>
+<p>This function assigns the appropriate layer names and validates the
+depth axis, allowing <code>ocean3d</code> to recognise the depth
+associated with each raster layer.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Organise the same five rasters along a vertical depth axis </span></span>
+<span><span class="co"># by generating a single voxel feature</span></span>
 <span><span class="va">t_annual</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_voxel.html">as_voxel</a></span><span class="op">(</span></span>
 <span>  <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span><span class="va">t_layers</span><span class="op">)</span>,</span>
 <span>  depths <span class="op">=</span> <span class="va">standard_depths</span>,</span>
-<span>  varname <span class="op">=</span> <span class="st">"t_an"</span></span>
-<span><span class="op">)</span></span>
+<span>  varname <span class="op">=</span> <span class="st">"t_an"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">t_annual</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "t_an_depth=0"   "t_an_depth=50"  "t_an_depth=100" "t_an_depth=200"</span></span>
 <span><span class="co">#&gt; [5] "t_an_depth=500"</span></span></code></pre></div>
-<p><code><a href="../reference/depths.html">depths()</a></code> reads that axis back out. This is the helper
-function that returns the numeric depths rather than the layer
-names:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<p>Notice that each layer name contains two pieces of information: the
+environmental variable (<code>t_an</code>, annual temperature) and its
+corresponding depth. For example, <code>t_an_depth=100</code> represents
+the temperature raster at a depth of 100 metres.</p>
+<p>Rather than extracting depth information manually from the layer
+names, we can use the <code><a href="../reference/depths.html">depths()</a></code> function to retrieve the
+numerical depth axis.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">t_annual</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1]   0  50 100 200 500</span></span></code></pre></div>
+<p>We now have a <code>SpatVoxel</code> containing temperature
+information across our study area at five different depth levels.</p>
+<p><strong>Working with real data:</strong> Instead of generating
+artificial temperature rasters, we could obtain environmental data from
+the World Ocean Atlas using <code><a href="../reference/woa_download.html">woa_download()</a></code> and
+<code><a href="../reference/woa_load_nc.html">woa_load_nc()</a></code>.</p>
 </div>
 <div class="section level3">
-<h3 id="step-3-the-species-range-polygon-as-a-spatenvelope">Step 3: The species range polygon, as a
-<code>SpatEnvelope</code><a class="anchor" aria-label="anchor" href="#step-3-the-species-range-polygon-as-a-spatenvelope"></a>
+<h3 id="visualising-our-3d-environmental-data">2.4. Visualising our 3D environmental data<a class="anchor" aria-label="anchor" href="#visualising-our-3d-environmental-data"></a>
 </h3>
-<p><code><a href="../reference/vect_to_envelope.html">vect_to_envelope()</a></code> rasterises the polygon onto the study
-grid and attaches the depth limits, giving the species’ 3D domain. For
-real data, the polygon is a species range map, e.g. from the IUCN Red
-List Spatial Download, with the depth limits coming from its IUCN Red
-List assessment (<code><a href="../reference/fetch_species_assessments.html">fetch_species_assessments()</a></code>).</p>
-<p>The seafloor is not a special argument, and is treated as simply one
-more <code>depth_max</code> constraint. Per cell the
-<strong>shallowest</strong> <code>depth_max</code> wins, so a species
-with a 600 m limit is clamped to the seabed, in any cells where the
-seabed is shallower than the species <code>depth_max</code>.</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">poly</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/vect.html" class="external-link">vect</a></span><span class="op">(</span></span>
-<span>  <span class="st">"POLYGON ((4 2, 16 2, 16 18, 4 18, 4 2))"</span>,</span>
-<span>  crs <span class="op">=</span> <span class="st">"EPSG:4326"</span></span>
-<span><span class="op">)</span></span>
+<p>The following visualisation illustrates how our temperature layers
+are organised vertically, with each layer positioned at its
+corresponding depth within our <code>SpatVoxel</code>.</p>
+<p><img src="figures/Temperature_3D.png" style="width:100.0%"></p>
+<p>Each panel represents the same geographical study area, but at a
+different depth. Notice that the vertical distance between layers
+reflects their actual depth intervals.</p>
+<p>Notice how temperature changes both geographically and vertically. In
+our synthetic example, deeper layers contain lower temperatures, while
+the latitudinal gradient is preserved across all five depth levels.</p>
+<p>This is precisely why incorporating the vertical dimension matters:
+<strong>environmental conditions at the same geographical location can
+differ considerably depending on depth.</strong></p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="step-3-creating-our-species-three-dimensional-distribution">Step 3: Creating our species’ three-dimensional distribution<a class="anchor" aria-label="anchor" href="#step-3-creating-our-species-three-dimensional-distribution"></a>
+</h2>
+<p>We now have two important components of our study area: its
+bathymetry (Step 1) and environmental conditions at different depths
+(Step 2). The next step is to represent the three-dimensional space that
+our species could potentially occupy within those.</p>
+<p>To do this, we need three pieces of information:</p>
+<ul>
+<li>
+<strong>Geographical distribution:</strong> where our species could
+potentially occur.</li>
+<li>
+<strong>Vertical distribution:</strong> the minimum and maximum
+depths at which the species can occur.</li>
+<li>
+<strong>Bathymetry:</strong> the local seafloor depth, which limits
+the available water column.</li>
+</ul>
+<p>We will combine these components on a <code>SpatEnvelope</code>,
+using <code><a href="../reference/vect_to_envelope.html">vect_to_envelope()</a></code> which will represent the potential
+vertical distribution of our species at each geographical location.</p>
+<div class="section level3">
+<h3 id="defining-our-species-geographical-distribution">3.1. Defining our species’ geographical distribution<a class="anchor" aria-label="anchor" href="#defining-our-species-geographical-distribution"></a>
+</h3>
+<p>First, let’s create a simple polygon representing our species’
+geographical range. For this example, we will use a rectangular polygon
+covering part of our artificial study area.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Create a simple polygon representing the species' geographical range.</span></span>
+<span><span class="va">poly</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/vect.html" class="external-link">vect</a></span><span class="op">(</span><span class="st">"POLYGON ((4 2, 16 2, 16 18, 4 18, 4 2))"</span>, crs <span class="op">=</span> <span class="st">"EPSG:4326"</span><span class="op">)</span></span>
 <span></span>
+<span><span class="co"># Plot the study grid and the species' geographical range.</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">seafloor</span>,  main <span class="op">=</span> <span class="st">"Species' geographical distribution"</span>,</span>
+<span>  xlab <span class="op">=</span> <span class="st">"Longitude"</span>,  ylab <span class="op">=</span> <span class="st">"Latitude"</span><span class="op">)</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">poly</span>, add <span class="op">=</span> <span class="cn">TRUE</span>, border <span class="op">=</span> <span class="st">"red"</span>, lwd <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+<p><img src="ocean3d_files/figure-html/species-polygon-1.png" class="r-plt" alt="" width="100%">
+This polygon defines the geographical boundaries of our species’
+potential distribution. However, it does not provide information about
+the depths at which the species can occur.</p>
+<p>In a real application, these two types of information can be obtained
+from the IUCN Red List:</p>
+<ul>
+<li>
+<strong>Geographical distribution:</strong> species range polygons
+can be obtained from the <a href="https://www.iucnredlist.org/resources/spatial-data-download" class="external-link">IUCN
+Red List Spatial Data</a>.</li>
+<li>
+<strong>Vertical distribution:</strong> species depth limits can be
+retrieved from their Red List assessments using
+<code><a href="../reference/fetch_species_assessments.html">fetch_species_assessments()</a></code>.</li>
+</ul>
+<p>For our synthetic example, we will assume that our species can occur
+between the ocean surface (0 m) and a maximum depth of 600 m.</p>
+</div>
+<div class="section level3">
+<h3 id="combining-the-polygon-depth-limits-and-bathymetry">3.2. Combining the polygon, depth limits and bathymetry<a class="anchor" aria-label="anchor" href="#combining-the-polygon-depth-limits-and-bathymetry"></a>
+</h3>
+<p>We can now create our species’ potential three-dimensional
+distribution.</p>
+<p>We will combine these components into a SpatEnvelope using
+<code><a href="../reference/vect_to_envelope.html">vect_to_envelope()</a></code>, which represents our species’ potential
+vertical distribution at each geographical location. The function
+<code><a href="../reference/vect_to_envelope.html">vect_to_envelope()</a></code> rasterises our polygon onto the study
+grid and assigns minimum and maximum depths to each occupied cell.</p>
+<p>Importantly, we must also consider the local bathymetry. Even if our
+species can occur down to 600 m, it cannot occupy depths below the
+seafloor.</p>
+<p>To account for this, <code><a href="../reference/vect_to_envelope.html">vect_to_envelope()</a></code> accepts multiple
+maximum depth constraints through its <code>depth_max</code>
+argument.</p>
+<p><strong>The seafloor is not a special argument:</strong> it is simply
+another maximum depth constraint. For each cell, the function applies
+the shallowest of the supplied maximum-depth constraints.</p>
+<p>Let’s combine our geographical polygon, biological depth limits and
+bathymetry:</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Combine three pieces of information:</span></span>
+<span><span class="co"># Convert a geographical polygon into a SpatEnvelope by rasterising the polygon and adding a vertical range to each occupied cell.</span></span>
 <span><span class="va">range_env</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vect_to_envelope.html">vect_to_envelope</a></span><span class="op">(</span></span>
-<span>  polygon   <span class="op">=</span> <span class="va">poly</span>,</span>
-<span>  template  <span class="op">=</span> <span class="va">grid</span>,</span>
-<span>  depth_min <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  depth_max <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fl">600</span>, <span class="va">seafloor</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
+<span>  polygon <span class="op">=</span> <span class="va">poly</span>,                  </span>
+<span>  template <span class="op">=</span> <span class="va">grid</span>,                 <span class="co"># Where? -&gt; Common geographical range polygon</span></span>
+<span>  depth_min <span class="op">=</span> <span class="fl">0</span>,                   <span class="co"># How deep? -&gt; biological depth range (0-600 m)</span></span>
+<span>  depth_max <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fl">600</span>, <span class="va">seafloor</span><span class="op">)</span><span class="op">)</span>  <span class="co"># How deep is possible? -&gt; local seafloor depth</span></span>
 <span></span>
+<span><span class="co"># The result is our species' potential 3D distribution as a SpatEnvelope.</span></span>
 <span><span class="va">range_env</span></span>
 <span><span class="co">#&gt; class       : SpatRaster</span></span>
 <span><span class="co">#&gt; size        : 20, 20, 2  (nrow, ncol, nlyr)</span></span>
@@ -210,58 +593,184 @@ seabed is shallower than the species <code>depth_max</code>.</p>
 <span><span class="co">#&gt; names       : depth_min,  depth_max</span></span>
 <span><span class="co">#&gt; min values  :         0, 112.631579</span></span>
 <span><span class="co">#&gt; max values  :         0,        600</span></span></code></pre></div>
-<p>Depth is the cell value here, and the interval is per cell — the
-northern rows are clamped to a shallow bed, the southern rows reach the
-full 600 m:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">range_env</span><span class="op">[[</span><span class="st">"depth_max"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<p>Here:</p>
+<ul>
+<li>
+<code>polygon</code> defines our species’ geographical range.</li>
+<li>
+<code>template</code> specifies the grid onto which the polygon will
+be rasterised.</li>
+<li>
+<code>depth_min = 0</code> defines the shallowest depth at which our
+species can occur.</li>
+<li>
+<code>depth_max = list(600, seafloor)</code> combines the species’
+biological maximum depth with the local seafloor depth.</li>
+</ul>
+<p>For example, if the seafloor is at 200 m, our species can potentially
+occupy the water column between 0 and 200 m. However, if the seafloor is
+at 800 m, its potential distribution extends only to its biological
+maximum depth of 600 m.</p>
+<p>The resulting <code>SpatEnvelope</code> contains two rasters:
+<code>depth_min</code> and <code>depth_max</code>. Together, they define
+the potential vertical distribution of our species at each geographical
+location within its range.</p>
+<p>Let’s visualise both depth limits:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Plot minimum and maximum depth layers</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">range_env</span>,</span>
+<span>  main <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Minimum depth (m)"</span>, <span class="st">"Maximum depth (m)"</span><span class="op">)</span>,</span>
+<span>  xlab <span class="op">=</span> <span class="st">"Longitude"</span>,  ylab <span class="op">=</span> <span class="st">"Latitude"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="ocean3d_files/figure-html/envelope-plot-1.png" class="r-plt" alt="" width="100%"></p>
+<p>The two maps represent different components of our species’ potential
+vertical distribution:</p>
+<ul>
+<li>
+<strong><code>depth_min</code>:</strong> the shallowest depth our
+species can potentially occupy. In this example, it is 0 m throughout
+its geographical distribution.</li>
+<li>
+<strong><code>depth_max</code>:</strong> the deepest limit of its
+potential distribution at each geographical location, constrained by
+both its biological depth limit and the local bathymetry.</li>
+</ul>
+<p>Notice that the maximum depth is shallower in the northern part of
+the species’ range, where the seafloor is closer to the surface. Further
+south, where the seafloor is deeper, our species can reach its full
+biological maximum depth of 600 m. Importantly, <strong>these maps
+represent the potential vertical limits of our species, not its observed
+depth or abundance</strong>.</p>
+<p>Let’s examine the maximum depths in our newly created
+<code>SpatEnvelope</code>.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">range_env</span><span class="op">[[</span><span class="st">"depth_max"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>,</span>
+<span>  na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] 112.6316 600.0000</span></span></code></pre></div>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">range_env</span><span class="op">)</span></span></code></pre></div>
-<p><img src="ocean3d_files/figure-html/envelope-plot-1.png" class="r-plt" alt="" width="576"></p>
-<p>Cells where the bed sits above <code>depth_min</code> have no water
-column left and drop out entirely. A species living below 150 m cannot
-occupy the northernmost row of the polygon, where the bed is only about
-113 m deep:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">deep_env</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vect_to_envelope.html">vect_to_envelope</a></span><span class="op">(</span></span>
-<span>  polygon   <span class="op">=</span> <span class="va">poly</span>,</span>
-<span>  template  <span class="op">=</span> <span class="va">grid</span>,</span>
-<span>  depth_min <span class="op">=</span> <span class="fl">150</span>,</span>
-<span>  depth_max <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fl">600</span>, <span class="va">seafloor</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="co"># Occupied cells: the full polygon, then the deeper-living species.</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">range_env</span><span class="op">[[</span><span class="st">"depth_max"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 192</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">deep_env</span><span class="op">[[</span><span class="st">"depth_max"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 180</span></span></code></pre></div>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">deep_env</span><span class="op">[[</span><span class="st">"depth_max"</span><span class="op">]</span><span class="op">]</span>, main <span class="op">=</span> <span class="st">"depth_max, depth_min = 150 m"</span><span class="op">)</span></span>
-<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">poly</span><span class="op">)</span></span></code></pre></div>
-<p><img src="ocean3d_files/figure-html/envelope-deep-plot-1.png" class="r-plt" alt="" width="576"></p>
+<p>Although we specified a biological maximum depth of 600 m, the
+resulting maximum depths vary geographically because of the bathymetric
+constraint.</p>
+<p>Our original geographical polygon has now become a three-dimensional
+representation of the space our species could potentially occupy, as a
+SpatEnvelope:</p>
+<p><img src="figures/Comparison_SpatEnvelope_SpatVoxel.png" style="width:100.0%"></p>
+<!--
+### 3.4. What happens to a deeper-living species?
+
+So far, our species has been able to occupy
+the water column from the surface down to
+a maximum depth of 600 m.
+
+But what happens if we consider a species
+that can only occur between 150 and 600 m?
+
+We can explore this by creating another
+`SpatEnvelope`, changing only the minimum
+depth while keeping the same geographical
+polygon, bathymetry and maximum depth.
+
+
+``` r
+deep_env <- vect_to_envelope(
+  polygon = poly,
+  template = grid,
+  depth_min = 150,
+  depth_max = list(600, seafloor)
+)
+
+# Compare the number of occupied geographical cells by the species inhabiting the surface and the deeper-dwelling one
+sum(!is.na(terra::values(range_env[["depth_max"]])))
+#> [1] 192
+
+sum(!is.na(terra::values(deep_env[["depth_max"]])))
+#> [1] 180
+```
+
+Notice that the deeper-dwelling species occupies
+fewer geographical cells, even though both
+species have exactly the same geographical
+range polygon.
+
+This happens because some areas within the
+polygon are too shallow to accommodate
+the species' minimum depth of 150 m.
+
+Where the seafloor is shallower than 150 m,
+there is no suitable water column available
+within the species' specified depth range.
+These cells are therefore excluded from
+the resulting `SpatEnvelope`.
+
+Let's visualise the result:
+
+
+``` r
+terra::plot(
+  deep_env[["depth_max"]],
+  main = "Maximum depth (minimum species depth: 150 m)",
+  xlab = "Longitude",
+  ylab = "Latitude"
+)
+
+terra::lines(poly, col = "red", lwd = 2)
+```
+
+<img src="ocean3d_files/figure-html/envelope-deep-plot-1.png" class="r-plt" alt="" width="100%" />
+
+The red outline represents the original
+geographical range polygon, while the coloured
+cells show the maximum potential depth of
+our deeper-living species.
+
+Notice that some areas inside the polygon
+are excluded because the seafloor is
+too shallow.
+
+**This illustrates why geographical range
+maps alone cannot fully describe a species'
+potential distribution.** By combining
+geographical boundaries, biological depth
+limits and bathymetry, we can identify
+the three-dimensional space that the
+species could potentially occupy.
+-->
 </div>
+</div>
+<div class="section level2">
+<h2 id="step-4-converting-our-species-distribution-into-a-spatvoxel">Step 4: Converting our species’ distribution into a
+<code>SpatVoxel</code><a class="anchor" aria-label="anchor" href="#step-4-converting-our-species-distribution-into-a-spatvoxel"></a>
+</h2>
+<p>We now have two three-dimensional datasets:</p>
+<ul>
+<li>
+<strong>Our species’ potential distribution</strong>, represented by
+a <code>SpatEnvelope</code>, which stores the minimum and maximum depths
+that the species could occupy at each location.</li>
+<li>
+<strong>Our environmental data</strong>, represented by a
+<code>SpatVoxel</code>, which stores temperature values at five
+predefined depth levels: 0, 50, 100, 200 and 500 m.</li>
+</ul>
+<p>However, these two objects represent depth differently. Before we can
+combine our species’ distribution with environmental conditions, we need
+to express them using the same vertical structure.</p>
+<p>We can achieve this using <code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code>.</p>
 <div class="section level3">
-<h3 id="step-4-put-the-envelope-on-the-voxels-depth-axis">Step 4: Put the envelope on the voxel’s depth axis<a class="anchor" aria-label="anchor" href="#step-4-put-the-envelope-on-the-voxels-depth-axis"></a>
+<h3 id="converting-our-spatenvelope">4.1. Converting our <code>SpatEnvelope</code><a class="anchor" aria-label="anchor" href="#converting-our-spatenvelope"></a>
 </h3>
-<p>The envelope and the voxel store depth in different roles, so they
-cannot be combined directly. <code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code>
-re-expresses the envelope on the voxel’s depth levels, giving a
-<code>1</code>/<code>NA</code> occupancy voxel with one layer per
-depth.</p>
-<p>Each depth level stands for a slab of water, not a single depth. WOA
-levels stand for the water halfway to their neighbours, so
-<code>bounds = "midpoint"</code> is the convention to use with WOA data.
-See <code><a href="../articles/depth-levels.html">vignette("depth-levels", package = "ocean3d")</a></code> for how
-slabs are placed and why it matters.</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">occ</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span></span>
-<span>  <span class="va">range_env</span>,</span>
-<span>  depths <span class="op">=</span> <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">t_annual</span><span class="op">)</span>,</span>
-<span>  bounds <span class="op">=</span> <span class="st">"midpoint"</span></span>
-<span><span class="op">)</span></span>
+<p>The function <code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> converts the continuous
+depth intervals stored in our <code>SpatEnvelope</code> into a series of
+raster layers corresponding to predefined depth levels.</p>
+<p>We will use exactly the same depth levels as our temperature dataset.
+This ensures that both objects share the same vertical structure.</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Convert our SpatEnvelope into a SpatVoxel by evaluating potential</span></span>
+<span><span class="co"># species occupancy at the same depth levels as our environmental data.</span></span>
+<span><span class="va">occ</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span></span>
+<span>  <span class="va">range_env</span>,                  <span class="co"># Species' potential 3D distribution</span></span>
+<span>  depths <span class="op">=</span> <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">t_annual</span><span class="op">)</span>,  <span class="co"># Use the same depths as our temperature data</span></span>
+<span>  bounds <span class="op">=</span> <span class="st">"midpoint"</span><span class="op">)</span>        <span class="co"># Define intervals around each depth level</span></span>
 <span></span>
-<span><span class="co"># Cells occupied at each standard depth.</span></span>
+<span><span class="co"># Count how many grid cells the species can potentially occupy at each depth.</span></span>
 <span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">occ</span>, <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt;                    sum</span></span>
 <span><span class="co">#&gt; presence_depth=0   192</span></span>
@@ -269,47 +778,156 @@ slabs are placed and why it matters.</p>
 <span><span class="co">#&gt; presence_depth=100 192</span></span>
 <span><span class="co">#&gt; presence_depth=200 180</span></span>
 <span><span class="co">#&gt; presence_depth=500 120</span></span></code></pre></div>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span></span>
-<span>  <span class="va">occ</span>, nc <span class="op">=</span> <span class="fl">3</span>, legend <span class="op">=</span> <span class="cn">FALSE</span>, col <span class="op">=</span> <span class="st">"steelblue"</span>,</span>
-<span>  main <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">occ</span><span class="op">)</span>, <span class="st">"m"</span><span class="op">)</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p><img src="ocean3d_files/figure-html/occupancy-plot-1.png" class="r-plt" alt="" width="576"></p>
+<p>The resulting <code>SpatVoxel</code> contains five layers, one for
+each depth level in our temperature dataset. Unlike our temperature
+data, this object represents potential species occupancy:</p>
+<ul>
+<li>
+<code>1</code>: the species could potentially occupy the
+corresponding part of the water column.</li>
+<li>
+<code>NA</code>: that part of the water column falls outside the
+species’ potential distribution.</li>
+</ul>
+<p>Because occupied cells contain a value of <code>1</code>,
+<code><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">terra::global()</a></code> allows us to count how many geographical
+cells are potentially occupied at each depth level. Notice that our
+species can potentially occupy 192 geographical cells at 0, 50 and 100
+m. However, this decreases to 180 cells at 200 m and 120 cells at 500
+m.</p>
+<p>Why does the number of occupied cells decrease with depth?</p>
+<p>Remember that our species has a maximum depth limit of 600 m, but its
+potential distribution is also constrained by the local bathymetry. As
+we move into deeper layers, some geographical cells no longer contain
+sufficient water depth to fall within the corresponding depth intervals.
+Importantly, these values represent the number of potentially occupied
+geographical cells, not the number of individual animals or observations
+of the species.</p>
+<p>You may have noticed an additional argument in our code:
+<code>bounds = "midpoint"</code>. Why do we need it?</p>
+<p>Our temperature data are organised into five standard depth levels.
+To combine these data with our species’ potential distribution, we need
+to represent both datasets using the same depth levels.</p>
+<p>The argument <code>bounds = "midpoint"</code> defines how the water
+column is divided into intervals around those depths. We will use this
+convention throughout our example.</p>
+<p>For further details, including how these intervals are calculated and
+why they matter, see the <a href="depth-levels.html">Understanding depth
+levels</a> vignette.</p>
 </div>
 <div class="section level3">
-<h3 id="step-5-read-the-values-inside-the-range">Step 5: Read the values inside the range<a class="anchor" aria-label="anchor" href="#step-5-read-the-values-inside-the-range"></a>
+<h3 id="visualising-our-species-potential-occupancy">4.2. Visualising our species’ potential occupancy<a class="anchor" aria-label="anchor" href="#visualising-our-species-potential-occupancy"></a>
 </h3>
-<p>With both objects on the same depth axis, masking can use
-<code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code>:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">in_range</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">t_annual</span>, <span class="va">occ</span><span class="op">)</span></span>
-<span></span>
+<p>Now that we have converted our species’ distribution into a
+<code>SpatVoxel</code>, let’s visualise how its potential geographical
+distribution changes across our five depth levels.</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Visualise the SpatVoxel layers on the species occupancy across our depth levels.</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span> </span>
+<span>  <span class="va">occ</span>,  nc <span class="op">=</span> <span class="fl">3</span>,  legend <span class="op">=</span> <span class="cn">FALSE</span>,  col <span class="op">=</span> <span class="st">"steelblue"</span>,</span>
+<span>  main <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span><span class="st">"Potential occupancy at"</span>, <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">occ</span><span class="op">)</span>, <span class="st">"m"</span><span class="op">)</span>,</span>
+<span>  xlab <span class="op">=</span> <span class="st">"Longitude"</span>,  ylab <span class="op">=</span> <span class="st">"Latitude"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="ocean3d_files/figure-html/occupancy-plot-1.png" class="r-plt" alt="" width="100%"></p>
+<p>Each panel represents the species’ potential geographical
+distribution at a different depth level. The blue cells indicate areas
+where the species could potentially occur, while empty cells represent
+areas outside its potential distribution. This pattern reflects the
+influence of bathymetry: although our species can potentially occur down
+to 600 m, some geographical locations have a shallower seafloor and
+therefore cannot accommodate its full vertical range.</p>
+<p>We now have two <code>SpatVoxel</code> objects sharing the same
+geographical grid and depth levels: (1) one representing our species’
+potential occupancy and (2) another containing environmental temperature
+data.</p>
+<p>In the next step, we will combine them to explore the environmental
+conditions within our species’ potential three-dimensional
+distribution.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="step-5-exploring-environmental-conditions-within-our-species-potential-distribution">Step 5: Exploring environmental conditions within our species’
+potential distribution<a class="anchor" aria-label="anchor" href="#step-5-exploring-environmental-conditions-within-our-species-potential-distribution"></a>
+</h2>
+<p>We now have everything we need to explore the environmental
+conditions within our species’ potential three-dimensional
+distribution.</p>
+<p>In the previous steps, we created two <code>SpatVoxel</code> objects
+sharing the same geographical grid and depth levels:</p>
+<ul>
+<li>
+<code>t_annual</code>: temperature values at five different
+depths.</li>
+<li>
+<code>occ</code>: our species’ potential occupancy at those same
+depths.</li>
+</ul>
+<p>By combining these objects, we can identify the environmental
+conditions within the space our species could potentially occupy.</p>
+<div class="section level3">
+<h3 id="extracting-temperature-within-our-species-distribution">5.1. Extracting temperature within our species’ distribution<a class="anchor" aria-label="anchor" href="#extracting-temperature-within-our-species-distribution"></a>
+</h3>
+<p>We will use <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code> to retain temperature values
+only in the cells where our species could potentially occur.</p>
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Combine our environmental and species SpatVoxels by keeping temperature values only where the species can potentially occur</span></span>
+<span><span class="va">in_range</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">t_annual</span>, <span class="va">occ</span><span class="op">)</span></span>
+<span><span class="co"># The original environmental layers and their depths are preserved.</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">in_range</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "t_an_depth=0"   "t_an_depth=50"  "t_an_depth=100" "t_an_depth=200"</span></span>
 <span><span class="co">#&gt; [5] "t_an_depth=500"</span></span></code></pre></div>
-<p>The layer names are maintained, so that a single depth can still be
-pulled out by name. For example, sea surface temperature within the
-range:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">sst</span> <span class="op">&lt;-</span> <span class="va">in_range</span><span class="op">[[</span><span class="st">"t_an_depth=0"</span><span class="op">]</span><span class="op">]</span></span>
+<p>The resulting object contains our original temperature layers, but
+values outside the species’ potential distribution have been replaced
+with <code>NA</code>. Importantly, the original layer names and depth
+levels are preserved. This means that we can continue working with
+individual depths or analyse the entire water column.</p>
+</div>
+<div class="section level3">
+<h3 id="exploring-temperature-at-a-specific-depth">5.2. Exploring temperature at a specific depth<a class="anchor" aria-label="anchor" href="#exploring-temperature-at-a-specific-depth"></a>
+</h3>
+<p>Let’s start by examining sea surface temperature within our species’
+potential distribution.</p>
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Select the surface layer (0 m) from our masked environmental data.</span></span>
+<span><span class="va">sst</span> <span class="op">&lt;-</span> <span class="va">in_range</span><span class="op">[[</span><span class="st">"t_an_depth=0"</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/summary.html" class="external-link">summary</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">sst</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="co">#&gt;    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. </span></span>
 <span><span class="co">#&gt;    19.0    20.5    22.0    22.0    23.5    25.0</span></span></code></pre></div>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">sst</span>, main <span class="op">=</span> <span class="st">"Surface temperature within the range"</span><span class="op">)</span></span>
-<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">poly</span><span class="op">)</span></span></code></pre></div>
-<p><img src="ocean3d_files/figure-html/surface-plot-1.png" class="r-plt" alt="" width="576"></p>
-<div class="section level4">
-<h4 id="vertical-profile">Vertical profile<a class="anchor" aria-label="anchor" href="#vertical-profile"></a>
-</h4>
-<p><code><a href="../reference/depths.html">depths()</a></code> also accepts a character vector, making a
-per-layer <code><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">terra::global()</a></code> result easy to turn into a
-profile.</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">per_depth</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">in_range</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mean"</span>, <span class="st">"min"</span>, <span class="st">"max"</span><span class="op">)</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<p>The summary provides descriptive statistics for sea surface
+temperature within the species’ potential geographical distribution,
+including the minimum, median, mean and maximum values.</p>
+<p>Let’s visualise these temperatures:</p>
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Visualise surface temperature only where the species can potentially occur.</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span></span>
+<span>  <span class="va">sst</span>,</span>
+<span>  main <span class="op">=</span> <span class="st">"Surface temperature within the species' range"</span>,</span>
+<span>  xlab <span class="op">=</span> <span class="st">"Longitude"</span>,  ylab <span class="op">=</span> <span class="st">"Latitude"</span><span class="op">)</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/lines.html" class="external-link">lines</a></span><span class="op">(</span><span class="va">poly</span>, col <span class="op">=</span> <span class="st">"red"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
+<p><img src="ocean3d_files/figure-html/surface-plot-1.png" class="r-plt" alt="" width="100%"></p>
+<p>The coloured cells show sea surface temperature within our species’
+potential distribution, while the red outline represents its original
+geographical range polygon (temperature values outside the species’
+potential distribution have previously been excluded).</p>
+</div>
+<div class="section level3">
+<h3 id="exploring-the-vertical-temperature-profile">5.3. Exploring the vertical temperature profile<a class="anchor" aria-label="anchor" href="#exploring-the-vertical-temperature-profile"></a>
+</h3>
+<p>We can investigate how environmental conditions change throughout the
+water column. Let’s calculate the mean, minimum and maximum temperatures
+within our species’ potential distribution at each depth level and count
+the number of geographical cells contributing to these calculations.</p>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Calculate the mean, minimum and maximum temperature within the species' potential distribution at each depth.</span></span>
+<span><span class="va">per_depth</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">in_range</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mean"</span>, <span class="st">"min"</span>, <span class="st">"max"</span><span class="op">)</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Extract the numerical depth associated with each layer.</span></span>
 <span><span class="va">per_depth</span><span class="op">$</span><span class="va">depth</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">per_depth</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#`depths()` accepts a character vector, making a per-layer</span></span>
+<span></span>
+<span><span class="co"># Count how many cells contain temperature data at each depth (excluding cells outside the species' potential distribution).</span></span>
 <span><span class="va">per_depth</span><span class="op">$</span><span class="va">n_cells</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">in_range</span><span class="op">)</span>, <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">[</span>, <span class="fl">1</span><span class="op">]</span></span>
 <span></span>
+<span><span class="co"># Display the results.</span></span>
 <span><span class="va">per_depth</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"depth"</span>, <span class="st">"n_cells"</span>, <span class="st">"mean"</span>, <span class="st">"min"</span>, <span class="st">"max"</span><span class="op">)</span><span class="op">]</span></span>
 <span><span class="co">#&gt;                depth n_cells mean  min  max</span></span>
 <span><span class="co">#&gt; t_an_depth=0       0     192 22.0 19.0 25.0</span></span>
@@ -317,91 +935,327 @@ profile.</p>
 <span><span class="co">#&gt; t_an_depth=100   100     192 19.0 16.0 22.0</span></span>
 <span><span class="co">#&gt; t_an_depth=200   200     180 16.2 13.4 19.0</span></span>
 <span><span class="co">#&gt; t_an_depth=500   500     120  8.2  6.4 10.0</span></span></code></pre></div>
-<p>The cell count falls with depth: the range is clamped to the bed, so
-the northern rows drop out of the deeper levels.</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span></span>
+<p>Each row corresponds to one of our five depth levels. For each depth,
+we obtain:</p>
+<ul>
+<li>
+<code>depth</code>: the corresponding depth level in metres.</li>
+<li>
+<code>n_cells</code>: the number of geographical cells contributing
+temperature values.</li>
+<li>
+<code>mean</code>, <code>min</code> and <code>max</code>: the
+temperature statistics calculated within our species’ potential
+distribution.</li>
+</ul>
+<p>Finally, let’s visualise how mean temperature changes with depth.</p>
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Visualise the mean temperature available to the species at each depth.</span></span>
+<span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span></span>
 <span>  <span class="va">per_depth</span><span class="op">$</span><span class="va">mean</span>, <span class="va">per_depth</span><span class="op">$</span><span class="va">depth</span>,</span>
-<span>  type <span class="op">=</span> <span class="st">"b"</span>, ylim <span class="op">=</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/flip.html" class="external-link">rev</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">per_depth</span><span class="op">$</span><span class="va">depth</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  xlab <span class="op">=</span> <span class="st">"Mean temperature (°C)"</span>, ylab <span class="op">=</span> <span class="st">"Depth (m)"</span></span>
-<span><span class="op">)</span></span></code></pre></div>
-<p><img src="ocean3d_files/figure-html/profile-plot-1.png" class="r-plt" alt="" width="384"></p>
+<span>  type <span class="op">=</span> <span class="st">"b"</span>,</span>
+<span>  ylim <span class="op">=</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/flip.html" class="external-link">rev</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">per_depth</span><span class="op">$</span><span class="va">depth</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  xlab <span class="op">=</span> <span class="st">"Mean temperature (°C)"</span>,  ylab <span class="op">=</span> <span class="st">"Depth (m)"</span>,</span>
+<span>  main <span class="op">=</span> <span class="st">"Temperature within the species' potential distribution"</span>,</span>
+<span>  pch <span class="op">=</span> <span class="fl">19</span><span class="op">)</span></span></code></pre></div>
+<p><img src="ocean3d_files/figure-html/profile-plot-1.png" class="r-plt" alt="" width="100%"></p>
+<p>This vertical profile shows the mean temperature within our species’
+potential distribution at each depth level. Remember that the mean at
+each depth is calculated using only the cells where our species could
+potentially occur. Consequently, the geographical area contributing to
+these statistics changes between depth levels.</p>
+<p><strong>We have now combined geographical distribution, biological
+depth limits, bathymetry and environmental data to characterise the
+environmental conditions available within our species’ potential
+three-dimensional distribution.</strong></p>
 </div>
 </div>
+<div class="section level2">
+<h2 id="step-6-extra---come-back-and-check-it-out-converting-our-results-back-into-a-spatenvelope">Step 6 (EXTRA - come back and check it out): Converting our results
+back into a <code>SpatEnvelope</code><a class="anchor" aria-label="anchor" href="#step-6-extra---come-back-and-check-it-out-converting-our-results-back-into-a-spatenvelope"></a>
+</h2>
+<p>So far, we have used <code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> to convert our
+species’ potential distribution into predefined depth levels and combine
+it with environmental temperature data.</p>
+<p>But what if we want to identify the minimum and maximum depths at
+which a particular environmental condition occurs?</p>
+<p>We can do this using <code><a href="../reference/voxel_to_envelope.html">voxel_to_envelope()</a></code>, which converts
+a <code>SpatVoxel</code> back into a <code>SpatEnvelope</code>.</p>
 <div class="section level3">
-<h3 id="step-6-collapsing-back-to-an-envelope">Step 6: Collapsing back to an envelope<a class="anchor" aria-label="anchor" href="#step-6-collapsing-back-to-an-envelope"></a>
+<h3 id="identifying-suitable-temperature-ranges">6.1. Identifying suitable temperature ranges<a class="anchor" aria-label="anchor" href="#identifying-suitable-temperature-ranges"></a>
 </h3>
-<p><code><a href="../reference/voxel_to_envelope.html">voxel_to_envelope()</a></code> is the return trip: it reduces a
-voxel to the envelope bounding it. A predicate decides what counts as
-present, so it can bound a subset of the values rather than just the
-data extent — here, the depths over which the range is warmer than 20
-°C:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">warm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/voxel_to_envelope.html">voxel_to_envelope</a></span><span class="op">(</span><span class="va">in_range</span>, fun <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span> <span class="op">&gt;</span> <span class="fl">20</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">warm</span><span class="op">[[</span><span class="st">"depth_max"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1]   0 100</span></span></code></pre></div>
-<p>This conversion is <strong>lossy</strong>, so a round trip through
-<code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> does not give back the voxel you
-started from:</p>
-<ul>
-<li>An envelope holds one continuous interval per cell, so any interior
-gap in the voxel is filled in — a cell satisfying the predicate at 0 m
-and 200 m but not at 100 m still comes back as
-<code>[0, 200]</code>.</li>
-<li>The envelope records depth <em>levels</em>, not the slabs they stand
-for. A cell warm only at the 0 m level comes back as
-<code>[0, 0]</code>, although that level stands for 0–25 m of water.
-Expanded again, such a zero-thickness interval occupies no slab at all,
-and the cell is lost.</li>
-</ul>
-<p>Where either matters, stay in the voxel.</p>
-</div>
-<div class="section level3">
-<h3 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
-</h3>
-<p>Once the inputs are loaded, the whole workflow is two calls:</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># 1. the species' 3D range</span></span>
-<span><span class="va">range_env</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vect_to_envelope.html">vect_to_envelope</a></span><span class="op">(</span><span class="va">poly</span>, <span class="va">grid</span>, depth_min <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>                              depth_max <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fl">600</span>, <span class="va">seafloor</span><span class="op">)</span><span class="op">)</span></span>
+<p>Let’s imagine that we are interested in identifying the depths within
+our species’ potential distribution where temperature exceeds 20 °C.</p>
+<p>We can use <code><a href="../reference/voxel_to_envelope.html">voxel_to_envelope()</a></code> with a condition that
+selects only temperature values above this threshold.</p>
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Identify the depth range where temperature exceeds 20 °C</span></span>
+<span><span class="co"># within our species' potential distribution.</span></span>
+<span><span class="va">warm</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/voxel_to_envelope.html">voxel_to_envelope</a></span><span class="op">(</span><span class="va">in_range</span>,  fun <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span> <span class="op">&gt;</span> <span class="fl">20</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># 2. the values inside the range</span></span>
-<span><span class="va">in_range</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">t_annual</span>, <span class="va">range_env</span>, bounds <span class="op">=</span> <span class="st">"midpoint"</span><span class="op">)</span></span></code></pre></div>
-<p>The second is the one line to reach for whenever a voxel needs
-restricting to a species’ per-cell depth window.
-<code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code> is depth-aware for the package’s 3D classes:
-it places the envelope on the voxel’s own depth levels, as
-<code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> did by hand in Step 4, and masks layer
-by layer.</p>
-<p>To restrict a voxel to a polygon and a single depth band across the
-whole area instead — no per-cell window — use
-<code><a href="../reference/extract_to_area.html">extract_to_area()</a></code>.</p>
+<span><span class="co"># Examine the maximum depth of these warmer conditions.</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">warm</span><span class="op">[[</span><span class="st">"depth_max"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span>,  na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="co">#&gt; [1]   0 100</span></span></code></pre></div>
+<p>The resulting <code>SpatEnvelope</code> contains two raster layers:
+<code>depth_min</code> and <code>depth_max</code>.</p>
+<p>For each geographical cell, these layers describe the shallowest and
+deepest sampled depth levels where temperature exceeds 20 °C within our
+species’ potential distribution.</p>
+<p>Notice that we are no longer representing temperature values at
+individual depth levels. Instead, we are summarising the vertical extent
+of the selected environmental condition.</p>
+<p>Let’s visualise the resulting <code>SpatEnvelope</code> to see how
+the vertical extent of warmer conditions varies across our species’
+potential distribution.</p>
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">warm</span>,</span>
+<span>  main <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Minimum depth (m)"</span>, <span class="st">"Maximum depth (m)"</span><span class="op">)</span>,</span>
+<span>  xlab <span class="op">=</span> <span class="st">"Longitude"</span>,  ylab <span class="op">=</span> <span class="st">"Latitude"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="ocean3d_files/figure-html/warm-envelope-plot-1.png" class="r-plt" alt="" width="100%"></p>
+<p>The first map represents the shallowest depth level satisfying our
+temperature condition, while the second represents the deepest.
+Together, they define the vertical envelope of warmer conditions within
+our species’ potential distribution.</p>
+<p><img src="figures/VoxelConstructionFromTemp.png" style="width:100.0%"><strong>Figure 4.</strong> Conceptual
+representation of the identification of warmer waters (&gt;20 °C) within
+a species’ potential three-dimensional distribution.
+<strong>(1)</strong> Temperature at five predefined depth levels.
+<strong>(2)</strong> Minimum and maximum depths at which temperature
+exceeds 20 °C, summarised as a <code>SpatEnvelope</code>.
+<strong>(3)</strong> Three-dimensional representation of the selected
+voxels. <strong>(4)</strong> Illustrative vertical temperature profiles
+showing how the depth range satisfying the threshold varies between
+locations. This figure is schematic and does not represent the exact
+numerical outputs of the tutorial.</p>
 </div>
 <div class="section level3">
-<h3 id="next-steps">Next steps<a class="anchor" aria-label="anchor" href="#next-steps"></a>
+<h3 id="understanding-the-limitations-of-this-conversion">6.2. Understanding the limitations of this conversion<a class="anchor" aria-label="anchor" href="#understanding-the-limitations-of-this-conversion"></a>
 </h3>
-<p>These articles apply the workflow to real data. They download data or
-need API keys, so they are on the package website rather than installed
-with the package:</p>
+<p>There is one important difference between <code>SpatVoxel</code> and
+<code>SpatEnvelope</code>. A <code>SpatVoxel</code> can represent
+separate occupied depth levels, including gaps between them. In
+contrast, a <code>SpatEnvelope</code> stores a single continuous depth
+interval for each geographical cell. Consequently, converting a
+<code>SpatVoxel</code> into a <code>SpatEnvelope</code> can result in a
+loss of information.</p>
+<p>For example, imagine that a geographical cell satisfies our
+temperature condition at 0 m and 200 m, but not at 100 m. The resulting
+<code>SpatEnvelope</code> would store a continuous interval from 0 to
+200 m, even though the condition was not satisfied at every intermediate
+depth (still comes back as <code>[0, 200]</code>).</p>
+<p>Additionally, the envelope records the original depth levels rather
+than the intervals represented by those levels. This means that
+converting the resulting envelope back into a voxel may not reproduce
+the original data exactly.</p>
+<p><strong>If preserving individual depth levels or gaps between them is
+important for your analysis, keep your results as a
+<code>SpatVoxel</code>.</strong></p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="summary">Summary<a class="anchor" aria-label="anchor" href="#summary"></a>
+</h2>
+<p>Congratulations! We have completed our first three-dimensional
+spatial analysis using <code>ocean3d</code>.</p>
+<p>Throughout this tutorial, we have:</p>
+<ol style="list-style-type: decimal">
+<li>Created a synthetic study area with bathymetry and temperature data
+at five depth levels.</li>
+<li>Represented our species’ potential three-dimensional distribution
+using a <code>SpatEnvelope</code>.</li>
+<li>Converted this distribution into a <code>SpatVoxel</code> sharing
+the same depth levels as our temperature data.</li>
+<li>Combined both datasets to characterise the environmental conditions
+available within our species’ potential distribution.</li>
+<li>Converted our results back into a <code>SpatEnvelope</code> to
+identify the vertical extent of a selected environmental condition.</li>
+</ol>
+<p>Although we explored each step separately to understand how these
+objects work, <code>ocean3d</code> also provides a shorter approach.</p>
+<p>Once our input data are ready, we can obtain temperature values
+within our species’ three-dimensional distribution using just two main
+operations:</p>
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># 1. Create the species' potential 3D distribution.</span></span>
+<span><span class="va">range_env</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vect_to_envelope.html">vect_to_envelope</a></span><span class="op">(</span><span class="va">poly</span>, <span class="va">grid</span>, depth_min <span class="op">=</span> <span class="fl">0</span>, depth_max <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fl">600</span>, <span class="va">seafloor</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># 2. Retain temperature values within that distribution.</span></span>
+<span><span class="va">in_range</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">t_annual</span>, <span class="va">range_env</span>, bounds <span class="op">=</span> <span class="st">"midpoint"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">in_range</span></span></code></pre></div>
+<p>Here, <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code> automatically accounts for the
+species’ depth limits and local bathymetry. It applies the envelope to
+the temperature dataset’s depth levels, without requiring us to
+explicitly create an intermediate occupancy voxel.</p>
+<p>Alternatively, if we simply want to extract environmental data within
+a geographical area and a fixed depth interval, we can use
+<code><a href="../reference/extract_to_area.html">extract_to_area()</a></code>.</p>
+<p>You can now adapt this workflow to your own species distributions,
+bathymetric datasets and environmental variables.</p>
+<p>Throughout this tutorial, we have combined a species’ geographical
+distribution, biological depth limits, bathymetry and environmental data
+to characterise its potential three-dimensional habitat.</p>
+<p>But this is only one of the possible applications of
+<code>ocean3d</code>. The package includes additional tools for
+preparing real-world datasets, extracting environmental information and
+quantifying three-dimensional spatial overlap.</p>
+<p>Below, we introduce some of these possibilities and provide resources
+to help you take the next steps in your own research.</p>
+<div class="section level3">
+<h3 id="next-steps-what-else-can-you-do-with-ocean3d">Next steps: What else can you do with <code>ocean3d</code>?<a class="anchor" aria-label="anchor" href="#next-steps-what-else-can-you-do-with-ocean3d"></a>
+</h3>
+<p><strong>1. Prepare and integrate real-world marine data</strong></p>
+<p>Throughout this tutorial, we have used synthetic data to understand
+how <code>ocean3d</code> represents and analyses three-dimensional
+marine environments.</p>
+<p>However, the package also provides tools to prepare and integrate
+real-world datasets. We introduced several of these functions earlier in
+the <em>Getting started: preparing our data</em> section.</p>
+<p><strong>Species distributions and depth information</strong></p>
+<ul>
+<li><p><code><a href="../reference/fetch_species_assessments.html">fetch_species_assessments()</a></code> retrieves species
+information from the IUCN Red List API, including taxonomic information,
+conservation status and reported depth limits. As mentioned earlier,
+geographical range polygons must be downloaded separately from the IUCN
+Spatial Data resources.</p></li>
+<li><p><code><a href="../reference/fill_missing_depths.html">fill_missing_depths()</a></code> helps prepare species depth
+information for subsequent analyses. It corrects inconsistent minimum
+and maximum depth values and can estimate missing depth limits using
+genus-level averages. Remember that these estimated values introduce
+additional uncertainty into the analysis.</p></li>
+</ul>
+<p><strong>Bathymetry and environmental data</strong></p>
+<ul>
+<li><p><code><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code> loads GEBCO bathymetric data
+from NetCDF files, providing information about seafloor depth that can
+be used to constrain species’ potential vertical distributions.</p></li>
+<li><p><code><a href="../reference/woa_download.html">woa_download()</a></code> and <code><a href="../reference/woa_load_nc.html">woa_load_nc()</a></code>
+provide access to World Ocean Atlas 2023 climatologies. They allow you
+to download and prepare environmental variables, including temperature,
+salinity, dissolved oxygen and nutrients, at different geographical
+resolutions and temporal scales.</p></li>
+<li><p><code>copernicus_load()</code> is being developed to facilitate
+access to Copernicus Marine products, including oceanographic datasets
+with temporal and vertical dimensions. Unlike climatological datasets,
+these products can support analyses of environmental conditions over
+specific periods. Check the package’s latest development version for
+availability.</p></li>
+</ul>
+<p><strong>Preparing spatial data for analysis</strong></p>
+<ul>
+<li><p><code><a href="../reference/create_study_raster.html">create_study_raster()</a></code> creates a common geographical
+grid covering the extent of one or more spatial datasets. This helps
+ensure that subsequent analyses use a consistent spatial
+framework.</p></li>
+<li><p><code><a href="../reference/as_envelope.html">as_envelope()</a></code> and <code><a href="../reference/as_voxel.html">as_voxel()</a></code> allow you
+to construct the two principal three-dimensional representations used by
+<code>ocean3d</code> from existing raster datasets.</p></li>
+<li><p><code><a href="../reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code> converts Global Fishing Watch
+apparent fishing-effort data into raster layers, which can be organised
+by fishing gear or other categories. These layers can subsequently be
+combined with assumptions about fishing-gear operating depths to
+investigate fishing activity in three dimensions.</p></li>
+</ul>
+<p>Together, these functions provide the foundations for replacing our
+synthetic example with real species distributions, environmental
+datasets and human-pressure data.</p>
+<p><strong>2. Extract environmental conditions from marine
+observations</strong></p>
+<p>Our example characterised environmental conditions across a species’
+potential distribution. However, you may also want to extract
+environmental information at individual observation locations.</p>
+<p>For example, you might have records of species captures, animal
+tracking positions or biological sampling stations, each associated with
+a location, date and depth.</p>
+<p><code><a href="../reference/extract_to_point.html">extract_to_point()</a></code> allows you to associate these
+observations with environmental information from NetCDF datasets.</p>
+<p>Different extraction methods are available, including:</p>
 <ul>
 <li>
-<a href="https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/woa-environmental-extraction-single-species.html">Extracting
-3D Environmental Data for a Single Species</a> — an IUCN range and World
-Ocean Atlas 2023 climatologies.</li>
+<code><a href="../reference/extract2d.html">extract2d()</a></code> for environmental variables without a depth
+dimension.</li>
 <li>
-<a href="https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/gfw-fishing-effort-3d.html">Depth-Stratified
-Fishing Effort from Global Fishing Watch</a> — Global Fishing Watch
-effort by gear type, overlapped with a species range.</li>
+<code><a href="../reference/extract3d_nearest.html">extract3d_nearest()</a></code> for values at the nearest valid
+depth.</li>
 <li>
-<a href="https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.html">3D
-Volume Overlap Between Species and Fisheries</a> —
-<code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> on species ranges and fishery
-footprints.</li>
+<code><a href="../reference/extract3d_surface.html">extract3d_surface()</a></code> and <code><a href="../reference/extract3d_bottom.html">extract3d_bottom()</a></code>
+for surface and bottom conditions.</li>
+<li>
+<code><a href="../reference/extract3d_all.html">extract3d_all()</a></code> for obtaining several depth-specific
+values together.</li>
 </ul>
+<p>Alternatively, <code><a href="../reference/extract_to_area.html">extract_to_area()</a></code> allows you to extract
+environmental data within a geographical area and selected depth
+range.</p>
+<p><strong>3. Investigate three-dimensional spatial overlap</strong></p>
+<p>Another important application of <code>ocean3d</code> is
+investigating how different marine distributions overlap in
+three-dimensional space.</p>
+<p>For example:</p>
+<ul>
+<li>Where do the potential distributions of two species overlap?</li>
+<li>Which parts of a species’ habitat intersect with fishing
+activities?</li>
+<li>How does their overlap change when depth is considered?</li>
+</ul>
+<p>The package provides <code><a href="../reference/intersect_3d.html">intersect_3d()</a></code> to identify shared
+three-dimensional space and <code><a href="../reference/intersects_3d.html">intersects_3d()</a></code> to determine
+whether spatial overlap occurs.</p>
+<p>These functions allow you to investigate interactions that
+conventional two-dimensional analyses may overlook.</p>
+<p><strong>4. Quantify habitat volume and overlap</strong></p>
+<p>Beyond identifying shared space, you may want to quantify its
+three-dimensional extent.</p>
+<p><code><a href="../reference/volume.html">volume()</a></code> calculates the volume represented by a
+<code>SpatEnvelope</code> or <code>SpatVoxel</code>.</p>
+<p>Similarly, <code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> calculates the
+spatially explicit volumes of two distributions and their
+intersection.</p>
+<p>These tools can support research questions involving habitat
+availability, species interactions and potential exposure to human
+activities.</p>
 </div>
 <div class="section level3">
-<h3 id="feedback-and-contributing">Feedback and contributing<a class="anchor" aria-label="anchor" href="#feedback-and-contributing"></a>
+<h3 id="apply-the-workflow-to-real-world-datasets">Apply the workflow to real-world datasets<a class="anchor" aria-label="anchor" href="#apply-the-workflow-to-real-world-datasets"></a>
 </h3>
+<p>Ready to explore these applications in more detail?</p>
+<p>The following articles demonstrate how to use <code>ocean3d</code>
+with real-world marine datasets.</p>
+<p>Because these workflows involve downloading external data or require
+API credentials, they are available on the package website rather than
+installed with the package.</p>
+<p><strong><a href="https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/woa-environmental-extraction-single-species.html">Extracting
+3D Environmental Data for a Single Species</a></strong></p>
+<p>Learn how to combine an IUCN species distribution with World Ocean
+Atlas 2023 climatologies to characterise environmental conditions
+throughout a species’ potential three-dimensional habitat.</p>
+<p><strong><a href="https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/gfw-fishing-effort-3d.html">Depth-Stratified
+Fishing Effort from Global Fishing Watch</a></strong></p>
+<p>Explore how fishing-effort data from Global Fishing Watch can be
+organised by fishing gear and depth to investigate their spatial overlap
+with a species’ potential distribution.</p>
+<p><strong><a href="https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.html">3D
+Volume Overlap Between Species and Fisheries</a></strong></p>
+<p>Discover how <code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> can be applied to
+species distributions and fishing footprints to quantify their
+three-dimensional overlap.</p>
+</div>
+<div class="section level3">
+<h3 id="explore-the-full-package-documentation">Explore the full package documentation<a class="anchor" aria-label="anchor" href="#explore-the-full-package-documentation"></a>
+</h3>
+<p>These examples represent only some of the possible applications of
+<code>ocean3d</code>.</p>
+<p>For further information about the available functions, their
+arguments and additional examples, visit the <a href="https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/">complete
+function reference</a>.</p>
+<p>You can also explore the <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d" class="external-link">package’s
+GitHub repository</a> to follow its development, report issues or
+contribute to the project.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="feedback-and-contributing">Feedback and contributing<a class="anchor" aria-label="anchor" href="#feedback-and-contributing"></a>
+</h2>
 <p>ocean3d is new and under active development, so feedback from
 first-time users is especially valuable. If something in this vignette
 was unclear, a function did not behave as you expected, or there is
@@ -416,6 +1270,10 @@ first issues</a> for places to start. Please note that ocean3d is
 released with a <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/CODE_OF_CONDUCT.md" class="external-link">Contributor
 Code of Conduct</a>; by contributing, you agree to abide by its
 terms.</p>
+<div class="section level3">
+<h3 id="contact-us">Contact us<a class="anchor" aria-label="anchor" href="#contact-us"></a>
+</h3>
+<p>Jay Matsushiba - <a href="mailto:jay.matsushiba@gmail.com" class="email">jay.matsushiba@gmail.com</a> David Ruiz-García - <a href="mailto:davidrg496@gmail.com" class="email">davidrg496@gmail.com</a></p>
 </div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
