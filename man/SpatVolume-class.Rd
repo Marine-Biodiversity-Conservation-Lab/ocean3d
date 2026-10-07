@@ -17,7 +17,8 @@ depth axis directly should dispatch on the concrete class instead.
 }
 \examples{
 # The same 3D domain in both representations.
-fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1)
+fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
+                  ymax = 1)
 terra::values(fp) <- c(1, 1)
 e <- as_envelope(fp, depth_min = 0, depth_max = 200)
 v <- envelope_to_voxel(e, depths = c(0, 100, 200))

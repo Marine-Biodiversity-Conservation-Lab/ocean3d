@@ -31,16 +31,17 @@ extract_to_point(
 )
 }
 \arguments{
-\item{data}{Optional object containing observation points. Can be a data frame,
-tibble, \code{sf} object with POINT geometries, matrix with column names, or named
-list. If \code{NULL}, coordinates can be supplied directly through \code{lon}, \code{lat},
-and optionally \code{depth} and \code{date}. For \code{sf} objects, longitude and latitude
-are obtained from the POINT geometries; projected geometries are transformed
-internally to longitude and latitude when a CRS is available.}
+\item{data}{Optional object containing observation points. Can be a data
+frame, tibble, \code{sf} object with POINT geometries, matrix with column names,
+or named list. If \code{NULL}, coordinates can be supplied directly through
+\code{lon}, \code{lat}, and optionally \code{depth} and \code{date}. For \code{sf} objects,
+longitude and latitude are obtained from the POINT geometries; projected
+geometries are transformed internally to longitude and latitude when a CRS
+is available.}
 
-\item{nc}{netCDF source. Can be a file path, vector of file paths, list of file
-paths, opened \code{ncdf4} object, list of opened objects, or a data frame with a
-file column.}
+\item{nc}{netCDF source. Can be a file path, vector of file paths, list of
+file paths, opened \code{ncdf4} object, list of opened objects, or a data frame
+with a file column.}
 
 \item{lon}{Optional numeric longitude value or vector for direct point
 extraction when \code{data = NULL}.}
@@ -123,7 +124,8 @@ This is the general point-extraction interface. It can extract environmental
 values for one or multiple observations. The user chooses the type of
 extraction with the \code{method} argument. The more specific functions
 \code{extract2d()}, \code{extract3d_surface()}, \code{extract3d_bottom()},
-\code{extract3d_nearest()} and \code{extract3d_all()} are wrappers around this function.
+\code{extract3d_nearest()} and \code{extract3d_all()} are wrappers around this
+function.
 }
 \examples{
 nc_file <- system.file(

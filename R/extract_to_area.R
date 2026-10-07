@@ -65,7 +65,11 @@ extract_to_area <- function(area, rast_3d, min_depth = NULL, max_depth = NULL) {
   # NULL means "run to that end of the voxel", so each bound falls back to the
   # depth that already sits there and the nearest-layer snap is unchanged.
   idx_min <- if (is.null(min_depth)) 1L else which.min(abs(d - min_depth))
-  idx_max <- if (is.null(max_depth)) length(d) else which.min(abs(d - max_depth))
+  idx_max <- if (is.null(max_depth)) {
+    length(d)
+  } else {
+    which.min(abs(d - max_depth))
+  }
   idx <- sort(c(idx_min, idx_max))
   selected <- rast_3d[[seq.int(idx[1], idx[2])]]
 

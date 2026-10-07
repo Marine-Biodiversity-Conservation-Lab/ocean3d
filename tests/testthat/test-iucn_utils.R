@@ -47,7 +47,10 @@ test_that("fetch_species_assessments returns data frame via group_code", {
   skip_on_ci()
   skip_on_cran()
   vcr::local_cassette("group_code")
-  out <- fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY"), group_code = "sharks_and_rays")
+  out <- fetch_species_assessments(
+    api_key    = Sys.getenv("IUCN_REDLIST_KEY"),
+    group_code = "sharks_and_rays"
+  )
   expect_s3_class(out, "data.frame")
   expect_gt(nrow(out), 0L)
 })
@@ -77,8 +80,11 @@ test_that("fetch_species_assessments resolves sis_ids to assessments", {
   skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("sis_ids")
-  out <- fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY"), sis_ids = c(44584L, 60191L))
-  expect_equal(nrow(out), 2L)
+  out <- fetch_species_assessments(
+    api_key = Sys.getenv("IUCN_REDLIST_KEY"),
+    sis_ids = c(44584L, 60191L)
+  )
+  expect_identical(nrow(out), 2L)
 })
 
 test_that("fetch_species_assessments warns and skips bad SIS ID", {
@@ -86,10 +92,13 @@ test_that("fetch_species_assessments warns and skips bad SIS ID", {
   skip_if_not_installed("vcr")
   vcr::local_cassette("bad_sis_ids")
   expect_warning(
-    out <- fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY"), sis_ids = c(1L, 44584L)),
+    out <- fetch_species_assessments(
+      api_key = Sys.getenv("IUCN_REDLIST_KEY"),
+      sis_ids = c(1L, 44584L)
+    ),
     "1"
   )
-  expect_equal(nrow(out), 1L)
+  expect_identical(nrow(out), 1L)
 })
 
 test_that("fetch_species_assessments errors when all SIS IDs fail", {
@@ -98,7 +107,10 @@ test_that("fetch_species_assessments errors when all SIS IDs fail", {
   vcr::local_cassette("all_sis_ids_fail")
   expect_warning(
     expect_error(
-      fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY"), sis_ids = 99999999L),
+      fetch_species_assessments(
+        api_key = Sys.getenv("IUCN_REDLIST_KEY"),
+        sis_ids = 99999999L
+      ),
       "No Global-scope assessments"
     )
   )
@@ -117,7 +129,7 @@ test_that("fetch_species_assessments resolves species names to assessments", {
     species_names = "Sphyrna lewini"
   )
   expect_s3_class(out, "data.frame")
-  expect_equal(nrow(out), 1L)
+  expect_identical(nrow(out), 1L)
 })
 
 test_that("fetch_species_assessments warns on unparseable species name", {
@@ -131,7 +143,7 @@ test_that("fetch_species_assessments warns on unparseable species name", {
     ),
     "Sphyrna"
   )
-  expect_equal(nrow(out), 1L)
+  expect_identical(nrow(out), 1L)
 })
 
 test_that("fetch_species_assessments warns and skips species name not in API", {
@@ -145,7 +157,7 @@ test_that("fetch_species_assessments warns and skips species name not in API", {
     ),
     "Foo unknownus"
   )
-  expect_equal(nrow(out), 1L)
+  expect_identical(nrow(out), 1L)
 })
 
 # ---------------------------------------------------------------------------
@@ -173,7 +185,7 @@ test_that("fetch_species_assessments populates systems_code from assessment", {
     api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
     species_names = "Sphyrna lewini"
   )
-  expect_true(is.character(out$systems_code))
+  expect_type(out$systems_code, "character")
   expect_false(is.na(out$systems_code))
 })
 
@@ -193,14 +205,14 @@ test_that("fetch_species_assessments depth fields are numeric or NA", {
 # fill_missing_depths
 # ---------------------------------------------------------------------------
 
-test_that("fill_missing_depths swaps reversed upper/lower values", {
+test_that("fill_missing_depths swaps reversed upper and lower values", {
   out <- fill_missing_depths(
     upper = c(100, 50),
     lower = c(10, 500),  # first row reversed
     genus = c("Carcharodon", "Sphyrna")
   )
-  expect_equal(out$upper_depth, c(10, 50))
-  expect_equal(out$lower_depth, c(100, 500))
+  expect_identical(out$upper_depth, c(10, 50))
+  expect_identical(out$lower_depth, c(100, 500))
 })
 
 test_that("fill_missing_depths fills NAs with genus means", {
@@ -210,8 +222,8 @@ test_that("fill_missing_depths fills NAs with genus means", {
     genus = c("Carcharhinus", "Carcharhinus", "Carcharhinus")
   )
   # Mean of non-NA values in the genus: upper = 5, lower = 150
-  expect_equal(out$upper_depth[3], 5)
-  expect_equal(out$lower_depth[3], 150)
+  expect_identical(out$upper_depth[3], 5)
+  expect_identical(out$lower_depth[3], 150)
 })
 
 test_that("fill_missing_depths leaves NA when entire genus is NA", {
@@ -239,5 +251,5 @@ test_that("fill_missing_depths returns a data frame with expected columns", {
   )
   expect_s3_class(out, "data.frame")
   expect_named(out, c("upper_depth", "lower_depth"))
-  expect_equal(nrow(out), 2)
+  expect_identical(nrow(out), 2L)
 })
