@@ -249,7 +249,7 @@ Thank you to the people that have inspired and collaborated on this
 work!
 
 David Ruiz-García, Rachel Aitchison, Wade VanderWright, Amanda Arnold,
-Dr. Samm Sherman, Dr. Alifa Haque.
+Dr. Samm Sherman, Dr. Alifa Haque, Prof Nicholas K. Dulvy.
 
 ## Citation
 
