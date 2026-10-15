@@ -3,13 +3,6 @@
 Housekeeping release addressing `goodpractice` checks (#58). Apart from the
 changes below, behaviour is unchanged.
 
-## Breaking changes
-
-* `terra::intersect()` is no longer intercepted for `SpatEnvelope` and
-  `SpatVoxel`. It previously raised an error pointing to `intersects_3d()` and
-  `intersect_3d()`; it now falls through to terra's 2D method, which ignores
-  depth. Use `intersects_3d()` / `intersect_3d()` for 3D questions.
-
 ## Bug fixes
 
 * Point extraction functions (`extract_to_point()`, `extract2d()`,
