@@ -38,7 +38,7 @@
   nms <- names(extra)
   nms <- if (is.null(nms)) rep("", length(extra)) else nms
   nms[nms == ""] <- "<unnamed>"
-  stop("unused argument(s): ", paste(nms, collapse = ", "),
+  stop("unused argument(s): ", toString(nms),
        ". `bounds` applies to SpatVoxel input only; a SpatEnvelope ",
        "carries its depth interval per cell.", call. = FALSE)
 }
@@ -114,7 +114,7 @@
   dy <- .parse_depth_layers(y)
   if (!isTRUE(all.equal(dx, dy))) {
     stop("`x` and `y` must be sampled at the same depth levels; got ",
-         paste(dx, collapse = ", "), " and ", paste(dy, collapse = ", "),
+         toString(dx), " and ", toString(dy),
          ". Rebuild one on the other's depths.", call. = FALSE)
   }
   dx
@@ -166,7 +166,8 @@
 
 # Internal: where an envelope is present, as a plain logical layer without NA.
 .envelope_present <- function(x) {
-  !is.na(.envelope_layer(x, "depth_min")) & !is.na(.envelope_layer(x, "depth_max"))
+  !is.na(.envelope_layer(x, "depth_min")) &
+    !is.na(.envelope_layer(x, "depth_max"))
 }
 
 # Internal: drop the SpatVoxel / SpatEnvelope class tag. terra propagates the

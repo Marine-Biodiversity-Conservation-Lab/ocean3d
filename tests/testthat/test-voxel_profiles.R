@@ -9,7 +9,7 @@ test_that("profile_flat() weights every level the same", {
   w <- profile_flat(ind, c(0, 100, 200, 300), sum(ind))
 
   # a bare 1 broadcasts across cells and levels alike, leaving the value whole
-  expect_equal(w, 1)
+  expect_identical(w, 1)
 })
 
 # profile_equal() ----
@@ -19,19 +19,19 @@ test_that("profile_equal() splits a cell's value over the levels it occupies", {
   w <- profile_equal(ind, c(0, 100, 200, 300), sum(ind))
 
   expect_s4_class(w, "SpatRaster")
-  expect_equal(terra::nlyr(w), 1)
+  expect_identical(terra::nlyr(w), 1)
   # cells occupy 1, 2 and 4 levels, so carry 1, 1/2 and 1/4 at each
-  expect_equal(unname(terra::values(w)[1:3, 1]), c(1, 0.5, 0.25))
+  expect_identical(unname(terra::values(w)[1:3, 1]), c(1, 0.5, 0.25))
 })
 
-test_that("profile_equal() weights sum to 1 across each cell's occupied levels", {
+test_that("profile_equal() weights sum to 1 over a cell's occupied levels", {
   ind <- make_occupancy()
   w <- profile_equal(ind, c(0, 100, 200, 300), sum(ind))
 
   # the weight lands only where the cell is occupied, so this is the total the
   # cell's value is spread over — 1 wherever there is anywhere to put it
   totals <- terra::values(sum(ind * w))
-  expect_equal(unname(totals[1:3, 1]), c(1, 1, 1))
+  expect_identical(unname(totals[1:3, 1]), c(1, 1, 1))
 })
 
 test_that("profile_equal() gives NA, not Inf, where no level is occupied", {
@@ -52,7 +52,7 @@ test_that("profile_equal() carries NA cells of the envelope through", {
   w <- profile_equal(ind, c(0, 100, 200, 300), sum(ind))
 
   expect_true(is.na(terra::values(w)[2, 1]))
-  expect_equal(unname(terra::values(w)[c(1, 3), 1]), c(0.5, 0.25))
+  expect_identical(unname(terra::values(w)[c(1, 3), 1]), c(0.5, 0.25))
 })
 
 test_that("profile_equal() does not depend on the depth values themselves", {
@@ -63,7 +63,7 @@ test_that("profile_equal() does not depend on the depth values themselves", {
   near <- profile_equal(ind, c(0, 1, 2, 3), n)
   far <- profile_equal(ind, c(0, 500, 1000, 4000), n)
 
-  expect_equal(terra::values(near), terra::values(far))
+  expect_identical(terra::values(near), terra::values(far))
 })
 
 # custom profiles ----
@@ -89,8 +89,8 @@ test_that("envelope_to_voxel() accepts a profile written by the caller", {
   )
 
   # shares of 2:2:1:1 out of 6, and the cell total is preserved
-  expect_equal(unname(vals[1, ]), c(2, 2, 1, 1))
-  expect_equal(unname(rowSums(vals, na.rm = TRUE)), rep(6, 4))
+  expect_identical(unname(vals[1, ]), c(2, 2, 1, 1))
+  expect_identical(unname(rowSums(vals, na.rm = TRUE)), rep(6, 4))
 })
 
 test_that("a custom profile may name its arguments however it likes", {
@@ -102,7 +102,7 @@ test_that("a custom profile may name its arguments however it likes", {
                       profile = function(occ, z, n) 1 / n)
   )
 
-  expect_equal(unname(vals[1, ]), rep(2, 4))
+  expect_identical(unname(vals[1, ]), rep(2, 4))
 })
 
 test_that("a custom profile sees the depths it is being asked about", {
@@ -111,11 +111,12 @@ test_that("a custom profile sees the depths it is being asked about", {
 
   envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
                     profile = function(ind, depths, n_depths) {
-                      seen <<- depths
+                      # test spy
+                      seen <<- depths # nolint: undesirable_operator_linter.
                       1
                     })
 
-  expect_equal(seen, c(0, 100, 200, 300))
+  expect_identical(seen, c(0, 100, 200, 300))
 })
 
 test_that("a custom profile may return one weight per depth", {
@@ -132,23 +133,24 @@ test_that("a custom profile may return one weight per depth", {
                       })
   )
 
-  expect_equal(unname(vals[1, ]), c(5, 10, 10, 10))
+  expect_identical(unname(vals[1, ]), c(5, 10, 10, 10))
 })
 
 # profile return values ----
 
-test_that("envelope_to_voxel() rejects a profile returning the wrong layer count", {
+test_that("envelope_to_voxel() rejects a profile with a bad layer count", {
   envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
 
   expect_error(
     envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
                       profile = function(ind, depths, n_depths) ind[[1:2]]),
-    "`profile` must return a SpatRaster with 1 layer or one per depth (4); got 2",
+    paste0("`profile` must return a SpatRaster with 1 layer or one per ",
+           "depth (4); got 2"),
     fixed = TRUE
   )
 })
 
-test_that("envelope_to_voxel() rejects a profile returning an off-grid raster", {
+test_that("envelope_to_voxel() rejects an off-grid profile raster", {
   envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
   other <- terra::rast(nrows = 3, ncols = 3, xmin = 0, xmax = 3,
                        ymin = 0, ymax = 3, vals = 1)
