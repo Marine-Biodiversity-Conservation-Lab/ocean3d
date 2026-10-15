@@ -22,7 +22,8 @@ setMethod("volume", "SpatEnvelope", function(x, ...) {
   .no_extra_args(...)
   .check_3d(x, "x")
 
-  depth_extent <- .envelope_layer(x, "depth_max") - .envelope_layer(x, "depth_min")
+  depth_extent <- .envelope_layer(x, "depth_max") -
+    .envelope_layer(x, "depth_min")
 
   # Volume per cell in km³ (depth in m, converted to km)
   vol_rast <- .cell_area_km2(x) * (depth_extent / 1000)
@@ -131,8 +132,10 @@ setMethod(
     dmax_a <- .named_layer(bounds_a, "depth_max", "depth_max_a")
     dmin_b <- .named_layer(bounds_b, "depth_min", "depth_min_b")
     dmax_b <- .named_layer(bounds_b, "depth_max", "depth_max_b")
-    overlap_min <- .named_layer(bounds_overlap, "depth_min", "depth_min_overlap")
-    overlap_max <- .named_layer(bounds_overlap, "depth_max", "depth_max_overlap")
+    overlap_min <- .named_layer(bounds_overlap, "depth_min",
+                                "depth_min_overlap")
+    overlap_max <- .named_layer(bounds_overlap, "depth_max",
+                                "depth_max_overlap")
 
     # Volumes come from the occupancy stacks, so interior gaps are excluded
     # even though the depth bounds above span them.

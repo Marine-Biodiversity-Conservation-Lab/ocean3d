@@ -422,22 +422,7 @@ setMethod(
     terra::mask(x, .footprint(mask), ...)
   }
 )
-
 # ---- terra::intersect() guard -----------------------------------------------
-
-# terra's intersect() for two rasters is a 2D "both have data" test, and terra
-# propagates the subclass, so intersect(envelope_a, envelope_b) came back as a
-# SpatEnvelope holding TRUE/FALSE that ignored depth and still passed
-# validity. On a 3D object that answer is misleading under any class tag, so
-# it is an error that names the two replacements. Plain rasters, vectors and
-# extents keep terra's methods: none of the signatures below match them, and
-# terra's generic has no `...`, so these methods take exactly (x, y).
-.stop_intersect_3d_object <- function(x, y) {
-  stop("intersect() is terra's 2D test and ignores the depth axis. For a ",
-       "SpatEnvelope or SpatVoxel, use intersects_3d() to ask whether two ",
-       "objects share 3D space, or intersect_3d() for the space they share.",
-       call. = FALSE)
-}
 
 #' @rdname intersect_3d
 #' @section terra's `intersect()`:
@@ -446,10 +431,24 @@ setMethod(
 #' error that points to [intersects_3d()] and `intersect_3d()`. Plain
 #' rasters, vectors and extents keep terra's behaviour.
 #' @name intersect-guard
-#' @aliases intersect,SpatEnvelope,SpatEnvelope-method intersect,SpatEnvelope,SpatVoxel-method intersect,SpatVoxel,SpatEnvelope-method intersect,SpatVoxel,SpatVoxel-method intersect,SpatEnvelope,SpatRaster-method intersect,SpatVoxel,SpatRaster-method intersect,SpatRaster,SpatEnvelope-method intersect,SpatRaster,SpatVoxel-method
+#' @aliases intersect,SpatEnvelope,SpatEnvelope-method
+#' @aliases intersect,SpatEnvelope,SpatVoxel-method
+#' @aliases intersect,SpatVoxel,SpatEnvelope-method
+#' @aliases intersect,SpatVoxel,SpatVoxel-method
+#' @aliases intersect,SpatEnvelope,SpatRaster-method
+#' @aliases intersect,SpatVoxel,SpatRaster-method
+#' @aliases intersect,SpatRaster,SpatEnvelope-method
+#' @aliases intersect,SpatRaster,SpatVoxel-method
 #' @exportMethod intersect
 NULL
 
+# terra's intersect() for two rasters is a 2D "both have data" test, and terra
+# propagates the subclass, so intersect(envelope_a, envelope_b) came back as a
+# SpatEnvelope holding TRUE/FALSE that ignored depth and still passed
+# validity. On a 3D object that answer is misleading under any class tag, so
+# it is an error that names the two replacements. Plain rasters, vectors and
+# extents keep terra's methods: none of the signatures below match them, and
+# terra's generic has no `...`, so these methods take exactly (x, y).
 for (sig in list(c("SpatEnvelope", "SpatEnvelope"),
                  c("SpatEnvelope", "SpatVoxel"),
                  c("SpatVoxel", "SpatEnvelope"),
@@ -458,6 +457,11 @@ for (sig in list(c("SpatEnvelope", "SpatEnvelope"),
                  c("SpatVoxel", "SpatRaster"),
                  c("SpatRaster", "SpatEnvelope"),
                  c("SpatRaster", "SpatVoxel"))) {
-  setMethod("intersect", sig, .stop_intersect_3d_object)
+  setMethod("intersect", sig, function(x, y) {
+    stop("intersect() is terra's 2D test and ignores the depth axis. For a ",
+         "SpatEnvelope or SpatVoxel, use intersects_3d() to ask whether two ",
+         "objects share 3D space, or intersect_3d() for the space they share.",
+         call. = FALSE)
+  })
 }
 rm(sig)

@@ -20,8 +20,9 @@ envelope_to_voxel(
 represents metres depth below sea level. Sorted shallow to deep, and
 deduplicated, before use.}
 
-\item{values}{Optional numeric or SpatRaster of same CRS, resolution, extent as \code{x}.
-Defines values to write for voxel cells that are within depth intervals.
+\item{values}{Optional numeric or SpatRaster of same CRS, resolution, extent
+as \code{x}. Defines values to write for voxel cells that are within depth
+intervals.
 \code{NULL} (the default) writes \code{1} at every occupied level, giving simple
 presence/absence.}
 
@@ -35,10 +36,11 @@ the depths a cell occupies. Any function meeting the contract in
 \item{bounds}{How to place the edges of the slab each depth level stands for.
 \code{"top"} (the default) runs the slab from the level down to the next, so the
 level is its shallow edge; \code{"midpoint"} puts the edges halfway between
-neighbouring levels. Under both, the outer edges are clamped to \code{range(depths)}
-rather than extrapolated.}
+neighbouring levels. Under both, the outer edges are clamped to
+\code{range(depths)} rather than extrapolated.}
 
-\item{varname}{Name to use for depth layer, taking on form of \verb{\{varname\}_depth=\{depths[i]\}}}
+\item{varname}{Name to use for depth layer, taking on form of
+\verb{\{varname\}_depth=\{depths[i]\}}}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} with one layer per depth in \code{depths}, on the
@@ -53,14 +55,16 @@ envelope, are \code{NA} in every layer.
 }
 \details{
 \itemize{
-\item \code{values} is the magnitude, which can be a single number for the whole grid or a
-SpatRaster carrying a value per cell. Default value is \code{1}, which makes the
-output a presence mask. Ex. \code{values} can be 2D fisheries effort rasters.
+\item \code{values} is the magnitude, which can be a single number for the
+whole grid or a SpatRaster carrying a value per cell. Default value is
+\code{1}, which makes the output a presence mask. Ex. \code{values} can be 2D
+fisheries effort rasters.
 \item \code{profile} decides how that magnitude is spread down the water
-column. Default \code{NULL} means the full value is written at every occupied level.
-Providing a \verb{profile_*} function determines how \code{values} is transformed for each
-depth level. Ex. \code{\link[=profile_equal]{profile_equal()}} divides it evenly over the levels the cell occupies,
-so sum of all depth levels in the voxel equals \code{values}.
+column. Default \code{NULL} means the full value is written at every
+occupied level. Providing a \verb{profile_*} function determines how
+\code{values} is transformed for each depth level. Ex. \code{\link[=profile_equal]{profile_equal()}}
+divides it evenly over the levels the cell occupies, so sum of all
+depth levels in the voxel equals \code{values}.
 }
 
 A depth level stands for a slab of water rather than a knife-edge, and a cell
@@ -82,24 +86,25 @@ so a level names the top of what it stands for. Levels \code{c(0, 100, 200)}
 give slabs \code{0-100}, \code{100-200}.
 \item \code{"midpoint"} puts the edges halfway between neighbouring levels, so a
 level sits in the middle of what it stands for. This is the World Ocean
-Atlas convention: \verb{0, 5, 10, ...} the 0 m layer covers \code{0-2.5} m, the 5 m
-layer \code{2.5-7.5} m, the 10 m layer \code{7.5-12.5} m, and so on.
+Atlas convention: \verb{0, 5, 10, ...} the 0 m layer covers \code{0-2.5} m, the
+5 m layer \code{2.5-7.5} m, the 10 m layer \code{7.5-12.5} m, and so on.
 }
 
 Under either convention the slabs cover the span from the shallowest level to
 the deepest and no further: outer edges are clamped to \code{range(depths)} rather
 than extrapolated, which is why WOA's 0 m layer starts at the surface rather
 than half a gap above it. The expansion is therefore limited only at the two
-ends when a cell whose envelope lies wholly above \code{min(depths)} or wholly below
-\code{max(depths)}. Under \code{"top"} the deepest level has no next level to run to,
-so it stands for a zero-thickness slab: an envelope is recorded there only
-when it reaches below \code{max(depths)}, and one that ends exactly at
+ends when a cell whose envelope lies wholly above \code{min(depths)} or wholly
+below \code{max(depths)}. Under \code{"top"} the deepest level has no next level to
+run to, so it stands for a zero-thickness slab: an envelope is recorded
+there only when it reaches below \code{max(depths)}, and one that ends exactly at
 \code{max(depths)} stops at the level above. For the same reason a
 \code{\link[=voxel_to_envelope]{voxel_to_envelope()}} round trip drops each cell's deepest occupied level:
 the envelope's \code{depth_max} names that level, which is the top of its slab.
 }
 \examples{
-fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1)
+fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2,
+                  ymin = 0, ymax = 1)
 terra::values(fp) <- c(1, NA)
 e <- as_envelope(fp, depth_min = 50, depth_max = 200)
 
