@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9008</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9009</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,19 @@
       <small>Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.1.1.9009" id="ocean3d-0119009">ocean3d 0.1.1.9009<a class="anchor" aria-label="anchor" href="#ocean3d-0119009"></a></h2>
+<p>Housekeeping release addressing <code>goodpractice</code> checks (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/58" class="external-link">#58</a>). Apart from the changes below, behaviour is unchanged.</p>
+<div class="section level3">
+<h3 id="bug-fixes-0-1-1-9009">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-1-1-9009"></a></h3>
+<ul><li>Point extraction functions (<code><a href="../reference/extract_to_point.html">extract_to_point()</a></code>, <code><a href="../reference/extract2d.html">extract2d()</a></code>, <code>extract3d_*()</code>) no longer drop netCDF sources when <code>nc</code> is a list that contains a data frame of file paths; previously the data frame replaced every source listed before it. A vector of paths inside a list is now accepted too.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="minor-improvements-0-1-1-9009">Minor improvements<a class="anchor" aria-label="anchor" href="#minor-improvements-0-1-1-9009"></a></h3>
+<ul><li>
+<code>dplyr</code> and <code>gfwr</code> move from <code>Imports</code> to <code>Suggests</code>; no package code uses them, so installing ocean3d no longer pulls them in.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.1.9008" id="ocean3d-0119008">ocean3d 0.1.1.9008<a class="anchor" aria-label="anchor" href="#ocean3d-0119008"></a></h2>
 <p>The <code>copernicus_*</code> family is withdrawn for now. It is not abandoned: the code is preserved on the <code>feat/7-copernicus</code> branch and in the history of this one, and it will return once it is properly covered by tests (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/50" class="external-link">#50</a>).</p>

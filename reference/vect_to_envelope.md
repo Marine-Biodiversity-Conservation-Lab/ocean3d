@@ -28,17 +28,18 @@ vect_to_envelope(polygon, template, depth_min, depth_max)
 - depth_min:
 
   List. Can contain both numeric and SpatRasters that match CRS,
-  resolution, extent of
-  ``` template`` and contain numeric values. For each cell, the maximum across the  ```depth_min\`
-  list parameters is used as output SpatEnvelope depth_min layer cell
-  value.
+  resolution, extent of `template` and contain numeric values. For each
+  cell, the maximum across the `depth_min` list parameters is used as
+  output SpatEnvelope depth_min layer cell value.
 
 - depth_max:
 
   List. Can contain both numeric and SpatRasters that match CRS,
-  resolution, extent of
-  ``` template`` and contain numeric values. For each cell, the minimum across the  ```depth_max`list parameters is used as output SpatEnvelope depth_max layer cell value. Note that when`depth_min`is exactly`depth_max\`,
-  these cell values are dropped and replaced with NA.
+  resolution, extent of `template` and contain numeric values. For each
+  cell, the minimum across the `depth_max` list parameters is used as
+  output SpatEnvelope depth_max layer cell value. Note that when
+  `depth_min` is exactly `depth_max`, these cell values are dropped and
+  replaced with NA.
 
 ## Value
 

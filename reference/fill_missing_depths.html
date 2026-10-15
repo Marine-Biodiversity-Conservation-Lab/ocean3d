@@ -15,7 +15,7 @@ Designed for use inside dplyr::mutate() — returns a two-column tibble
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9008</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9009</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -122,7 +122,8 @@ for use with <code><a href="https://dplyr.tidyverse.org/reference/mutate.html" c
 <span class="r-in"><span><span class="co"># Typical use, unpacking both columns inside dplyr::mutate():</span></span></span>
 <span class="r-in"><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># \dontrun{</span></span></span>
 <span class="r-in"><span><span class="va">assessments</span> <span class="op">&lt;-</span> <span class="va">assessments</span> <span class="op">%&gt;%</span></span></span>
-<span class="r-in"><span>  <span class="fu">mutate</span><span class="op">(</span><span class="fu">fill_missing_depths</span><span class="op">(</span><span class="va">upper_depth_limit</span>, <span class="va">lower_depth_limit</span>, <span class="va">genus_name</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="fu">mutate</span><span class="op">(</span><span class="fu">fill_missing_depths</span><span class="op">(</span><span class="va">upper_depth_limit</span>, <span class="va">lower_depth_limit</span>,</span></span>
+<span class="r-in"><span>                             <span class="va">genus_name</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
     </div>

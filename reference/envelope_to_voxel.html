@@ -15,7 +15,7 @@ envelope, are NA in every layer."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9008</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9009</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -84,8 +84,9 @@ deduplicated, before use.</p></dd>
 
 
 <dt id="arg-values">values<a class="anchor" aria-label="anchor" href="#arg-values"></a></dt>
-<dd><p>Optional numeric or SpatRaster of same CRS, resolution, extent as <code>x</code>.
-Defines values to write for voxel cells that are within depth intervals.
+<dd><p>Optional numeric or SpatRaster of same CRS, resolution, extent
+as <code>x</code>. Defines values to write for voxel cells that are within depth
+intervals.
 <code>NULL</code> (the default) writes <code>1</code> at every occupied level, giving simple
 presence/absence.</p></dd>
 
@@ -103,12 +104,13 @@ the depths a cell occupies. Any function meeting the contract in
 <dd><p>How to place the edges of the slab each depth level stands for.
 <code>"top"</code> (the default) runs the slab from the level down to the next, so the
 level is its shallow edge; <code>"midpoint"</code> puts the edges halfway between
-neighbouring levels. Under both, the outer edges are clamped to <code>range(depths)</code>
-rather than extrapolated.</p></dd>
+neighbouring levels. Under both, the outer edges are clamped to
+<code>range(depths)</code> rather than extrapolated.</p></dd>
 
 
 <dt id="arg-varname">varname<a class="anchor" aria-label="anchor" href="#arg-varname"></a></dt>
-<dd><p>Name to use for depth layer, taking on form of <code>{varname}_depth={depths[i]}</code></p></dd>
+<dd><p>Name to use for depth layer, taking on form of
+<code>{varname}_depth={depths[i]}</code></p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -119,14 +121,16 @@ grid of <code>x</code>, layers ordered shallow to deep.</p>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
 
-<ul><li><p><code>values</code> is the magnitude, which can be a single number for the whole grid or a
-SpatRaster carrying a value per cell. Default value is <code>1</code>, which makes the
-output a presence mask. Ex. <code>values</code> can be 2D fisheries effort rasters.</p></li>
+<ul><li><p><code>values</code> is the magnitude, which can be a single number for the
+whole grid or a SpatRaster carrying a value per cell. Default value is
+<code>1</code>, which makes the output a presence mask. Ex. <code>values</code> can be 2D
+fisheries effort rasters.</p></li>
 <li><p><code>profile</code> decides how that magnitude is spread down the water
-column. Default <code>NULL</code> means the full value is written at every occupied level.
-Providing a <code>profile_*</code> function determines how <code>values</code> is transformed for each
-depth level. Ex. <code><a href="voxel_profiles.html">profile_equal()</a></code> divides it evenly over the levels the cell occupies,
-so sum of all depth levels in the voxel equals <code>values</code>.</p></li>
+column. Default <code>NULL</code> means the full value is written at every
+occupied level. Providing a <code>profile_*</code> function determines how
+<code>values</code> is transformed for each depth level. Ex. <code><a href="voxel_profiles.html">profile_equal()</a></code>
+divides it evenly over the levels the cell occupies, so sum of all
+depth levels in the voxel equals <code>values</code>.</p></li>
 </ul><p>A depth level stands for a slab of water rather than a knife-edge, and a cell
 occupies that level when its envelope overlaps the slab by more than a
 shared edge. An interval of <code>[10, 20]</code> against levels <code>c(0, 100)</code> therefore
@@ -143,16 +147,16 @@ so a level names the top of what it stands for. Levels <code>c(0, 100, 200)</cod
 give slabs <code>0-100</code>, <code>100-200</code>.</p></li>
 <li><p><code>"midpoint"</code> puts the edges halfway between neighbouring levels, so a
 level sits in the middle of what it stands for. This is the World Ocean
-Atlas convention: <code>0, 5, 10, ...</code> the 0 m layer covers <code>0-2.5</code> m, the 5 m
-layer <code>2.5-7.5</code> m, the 10 m layer <code>7.5-12.5</code> m, and so on.</p></li>
+Atlas convention: <code>0, 5, 10, ...</code> the 0 m layer covers <code>0-2.5</code> m, the
+5 m layer <code>2.5-7.5</code> m, the 10 m layer <code>7.5-12.5</code> m, and so on.</p></li>
 </ul><p>Under either convention the slabs cover the span from the shallowest level to
 the deepest and no further: outer edges are clamped to <code>range(depths)</code> rather
 than extrapolated, which is why WOA's 0 m layer starts at the surface rather
 than half a gap above it. The expansion is therefore limited only at the two
-ends when a cell whose envelope lies wholly above <code>min(depths)</code> or wholly below
-<code>max(depths)</code>. Under <code>"top"</code> the deepest level has no next level to run to,
-so it stands for a zero-thickness slab: an envelope is recorded there only
-when it reaches below <code>max(depths)</code>, and one that ends exactly at
+ends when a cell whose envelope lies wholly above <code>min(depths)</code> or wholly
+below <code>max(depths)</code>. Under <code>"top"</code> the deepest level has no next level to
+run to, so it stands for a zero-thickness slab: an envelope is recorded
+there only when it reaches below <code>max(depths)</code>, and one that ends exactly at
 <code>max(depths)</code> stops at the level above. For the same reason a
 <code><a href="voxel_to_envelope.html">voxel_to_envelope()</a></code> round trip drops each cell's deepest occupied level:
 the envelope's <code>depth_max</code> names that level, which is the top of its slab.</p>
@@ -164,7 +168,8 @@ the envelope's <code>depth_max</code> names that level, which is the top of its 
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">fp</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span>nrows <span class="op">=</span> <span class="fl">1</span>, ncols <span class="op">=</span> <span class="fl">2</span>, xmin <span class="op">=</span> <span class="fl">0</span>, xmax <span class="op">=</span> <span class="fl">2</span>, ymin <span class="op">=</span> <span class="fl">0</span>, ymax <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">fp</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span>nrows <span class="op">=</span> <span class="fl">1</span>, ncols <span class="op">=</span> <span class="fl">2</span>, xmin <span class="op">=</span> <span class="fl">0</span>, xmax <span class="op">=</span> <span class="fl">2</span>,</span></span>
+<span class="r-in"><span>                  ymin <span class="op">=</span> <span class="fl">0</span>, ymax <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">fp</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="cn">NA</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">e</span> <span class="op">&lt;-</span> <span class="fu"><a href="as_envelope.html">as_envelope</a></span><span class="op">(</span><span class="va">fp</span>, depth_min <span class="op">=</span> <span class="fl">50</span>, depth_max <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>

@@ -11,7 +11,7 @@ following the {variable}_depth={value} convention."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9008</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9009</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -88,10 +88,10 @@ return a plain <code>SpatRaster</code> instead. Re-wrapping is cheap either way,
 <code>as_voxel()</code> is idempotent — given a valid <code>SpatVoxel</code> and no <code>depths</code> it
 returns it untouched.</p>
 <p>Propagating the class does not re-run the validity rules, so an operation
-that changes the raster layer set can leave an object still labelled <code>SpatVoxel</code>
-even if invalid. Passing an invalid <code>SpatVoxel</code> to <code>as_voxel()</code> rebuilds
-from layer names, passing through the function as if a plain multi-layer raster.
-Pass <code>depths</code> to rebuild the layer names.</p>
+that changes the raster layer set can leave an object still labelled
+<code>SpatVoxel</code> even if invalid. Passing an invalid <code>SpatVoxel</code> to <code>as_voxel()</code>
+rebuilds from layer names, passing through the function as if a plain
+multi-layer raster. Pass <code>depths</code> to rebuild the layer names.</p>
 <p>Depths are positive metres increasing downward, matching the World Ocean
 Atlas convention. Negative depths are an error rather than being silently
 negated, since flipping the sign would change what the data mean.</p>

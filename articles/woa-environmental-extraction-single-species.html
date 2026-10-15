@@ -20,7 +20,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9008</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9009</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -135,7 +135,9 @@ assessment, so there is no 30-minute group download.</p>
 <span></span>
 <span><span class="co"># Fill missing depths</span></span>
 <span><span class="va">depth_table_complete</span> <span class="op">&lt;-</span> <span class="va">depth_table</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="fu"><a href="../reference/fill_missing_depths.html">fill_missing_depths</a></span><span class="op">(</span><span class="va">upper_depth_limit</span>, <span class="va">lower_depth_limit</span>, <span class="va">genus_name</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span></span>
+<span>    <span class="fu"><a href="../reference/fill_missing_depths.html">fill_missing_depths</a></span><span class="op">(</span><span class="va">upper_depth_limit</span>, <span class="va">lower_depth_limit</span>, <span class="va">genus_name</span><span class="op">)</span></span>
+<span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">upper_depth</span><span class="op">)</span>, <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">lower_depth</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Get the Orectolobus halei depth range</span></span>
@@ -151,9 +153,13 @@ this link: <a href="https://www.iucnredlist.org/resources/spatial-data-download"
 <p>Only the one species is read out of the IUCN shapefile via SQL
 filtering.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># Download the IUCN Red List shapefiles from https://www.iucnredlist.org/resources/spatial-data-download </span></span>
+<code class="sourceCode R"><span><span class="co"># Download the IUCN Red List shapefiles from</span></span>
+<span><span class="co"># https://www.iucnredlist.org/resources/spatial-data-download</span></span>
 <span><span class="co"># Modify the path to your local save location for the shapefile</span></span>
-<span><span class="va">iucn_shp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="st">"EXAMPLE_DIRECTORY/SHARKS_RAYS_CHIMAERAS/SHARKS_RAYS_CHIMAERAS.shp"</span><span class="op">)</span></span>
+<span><span class="va">iucn_shp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://here.r-lib.org/reference/here.html" class="external-link">here</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span>
+<span>  <span class="st">"EXAMPLE_DIRECTORY/SHARKS_RAYS_CHIMAERAS/"</span>,</span>
+<span>  <span class="st">"SHARKS_RAYS_CHIMAERAS.shp"</span></span>
+<span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">layer_name</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_layers.html" class="external-link">st_layers</a></span><span class="op">(</span><span class="va">iucn_shp</span><span class="op">)</span><span class="op">$</span><span class="va">name</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span></span>
 <span><span class="co"># Read in just Orectolobus halei</span></span>
@@ -173,7 +179,8 @@ filtering.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Annual mean temperature (0.25 deg) is both the environmental raster and the</span></span>
 <span><span class="co"># canonical study grid.</span></span>
-<span><span class="va">t_annual_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/woa_download.html">woa_download</a></span><span class="op">(</span><span class="st">"temperature"</span>, period <span class="op">=</span> <span class="st">"annual"</span>, resolution <span class="op">=</span> <span class="st">"0.25"</span><span class="op">)</span></span>
+<span><span class="va">t_annual_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/woa_download.html">woa_download</a></span><span class="op">(</span><span class="st">"temperature"</span>, period <span class="op">=</span> <span class="st">"annual"</span>,</span>
+<span>                              resolution <span class="op">=</span> <span class="st">"0.25"</span><span class="op">)</span></span>
 <span><span class="va">t_annual</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/woa_load_nc.html">woa_load_nc</a></span><span class="op">(</span><span class="va">t_annual_path</span>, field <span class="op">=</span> <span class="st">"an"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Crop to the species range (plus a ~1 degree margin) before any heavy work.</span></span>
@@ -199,8 +206,12 @@ filtering.</p>
 <span><span class="co"># global 15 arc-second grid, which terra otherwise avoids by reading only the</span></span>
 <span><span class="co"># window the target grid needs.</span></span>
 <span></span>
-<span><span class="co"># Download the GEBCO bathymetry data from https://www.gebco.net/data-products/gridded-bathymetry-data</span></span>
-<span><span class="va">bathy</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry</a></span><span class="op">(</span><span class="st">"EXAMPLE_DIRECTORY/gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc"</span><span class="op">)</span></span>
+<span><span class="co"># Download the GEBCO bathymetry data from</span></span>
+<span><span class="co"># https://www.gebco.net/data-products/gridded-bathymetry-data</span></span>
+<span><span class="va">bathy</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span></span>
+<span>  <span class="st">"EXAMPLE_DIRECTORY/gebco_2025_sub_ice_topo/"</span>,</span>
+<span>  <span class="st">"GEBCO_2025_sub_ice.nc"</span></span>
+<span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">seafloor</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/project.html" class="external-link">project</a></span><span class="op">(</span><span class="va">bathy</span>, <span class="va">study_grid</span><span class="op">)</span> <span class="op">*</span> <span class="op">-</span><span class="fl">1</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/clamp.html" class="external-link">clamp</a></span><span class="op">(</span>lower <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -238,7 +249,8 @@ temperature range so colours are comparable across frames.</p>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>depth <span class="op">=</span> <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">layer</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">value</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Lock the legend to the global min/max so colour mapping is identical per frame.</span></span>
+<span><span class="co"># Lock the legend to the global min/max so colour mapping is identical per</span></span>
+<span><span class="co"># frame.</span></span>
 <span><span class="va">v_limits</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">long_df</span><span class="op">$</span><span class="va">value</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Factor with numerically-sorted levels so frames play 0 m -&gt; deepest.</span></span>
@@ -299,7 +311,9 @@ and the deepest layer with data inside the range.</p>
 <span><span class="va">deepest_depth</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/Extremes.html" class="external-link">max</a></span><span class="op">(</span><span class="va">occupied_depths</span><span class="op">)</span></span>
 <span><span class="co"># Standard depth closest to the midpoint between surface and deepest occupied.</span></span>
 <span><span class="va">halfway_target</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">surface_depth</span> <span class="op">+</span> <span class="va">deepest_depth</span><span class="op">)</span> <span class="op">/</span> <span class="fl">2</span></span>
-<span><span class="va">halfway_depth</span> <span class="op">&lt;-</span> <span class="va">occupied_depths</span><span class="op">[</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/summarize-generics.html" class="external-link">which.min</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">occupied_depths</span> <span class="op">-</span> <span class="va">halfway_target</span><span class="op">)</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="va">halfway_depth</span> <span class="op">&lt;-</span> <span class="va">occupied_depths</span><span class="op">[</span></span>
+<span>  <span class="fu"><a href="https://rspatial.github.io/terra/reference/summarize-generics.html" class="external-link">which.min</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">occupied_depths</span> <span class="op">-</span> <span class="va">halfway_target</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">]</span></span>
 <span></span>
 <span><span class="va">panel_depths</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">surface_depth</span>, <span class="va">halfway_depth</span>, <span class="va">deepest_depth</span><span class="op">)</span></span></code></pre></div>
 <p>The <code>plot_range_at_depth()</code> helper below is defined in

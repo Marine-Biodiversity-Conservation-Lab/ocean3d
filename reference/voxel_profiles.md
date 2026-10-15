@@ -89,20 +89,23 @@ to 1 within each cell, whatever that cell's interval.
 ## Examples
 
 ``` r
-fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1)
+fp <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
+                  ymax = 1)
 terra::values(fp) <- c(1, 1)
 dmax <- terra::setValues(terra::rast(fp), c(100, 300))
 e <- as_envelope(fp, depth_min = 0, depth_max = dmax)
 depths <- c(0, 100, 200, 300)
 
 # the whole value at every occupied level
-terra::values(envelope_to_voxel(e, depths, values = 12, profile = profile_flat))
+terra::values(envelope_to_voxel(e, depths, values = 12,
+                                profile = profile_flat))
 #>      presence_depth=0 presence_depth=100 presence_depth=200 presence_depth=300
 #> [1,]               12                 NA                 NA                 NA
 #> [2,]               12                 12                 12                 NA
 
 # an even share instead, so each cell's levels sum back to its value
-terra::values(envelope_to_voxel(e, depths, values = 12, profile = profile_equal))
+terra::values(envelope_to_voxel(e, depths, values = 12,
+                                profile = profile_equal))
 #>      presence_depth=0 presence_depth=100 presence_depth=200 presence_depth=300
 #> [1,]               12                 NA                 NA                 NA
 #> [2,]                4                  4                  4                 NA
@@ -110,7 +113,8 @@ terra::values(envelope_to_voxel(e, depths, values = 12, profile = profile_equal)
 # a profile of your own: weight the shallow levels twice as heavily as the
 # deep ones, still conserving each cell's total
 surface_weighted <- function(ind, depths, n_depths) {
-  w <- terra::rast(lapply(depths, function(d) ifelse(d <= 100, 2, 1) * ind[[1]]))
+  w <- terra::rast(lapply(depths,
+                          function(d) ifelse(d <= 100, 2, 1) * ind[[1]]))
   w <- w * ind
   w / sum(w)
 }

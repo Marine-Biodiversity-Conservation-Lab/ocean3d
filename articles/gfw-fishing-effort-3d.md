@@ -88,6 +88,7 @@ effort <- gfw_ais_fishing_hours(
 )
 
 head(effort)
+# nolint start: line_length_linter.
 #> # A tibble: 6 x 6
 #>     Lat   Lon `Time Range` geartype           `Vessel IDs` `Apparent Fishing Hours`
 #>   <dbl> <dbl>        <dbl> <chr>                     <dbl>                    <dbl>
@@ -96,6 +97,7 @@ head(effort)
 #> 3  35.1 139.7         2022 fishing                       1                     3.05
 #> 4  33.2 137.4         2022 drifting_longlines            1                     2.38
 #> ...
+# nolint end
 ```
 
 GFW returns gear labels in lower case, such as `trawlers` and
@@ -113,7 +115,10 @@ returns one layer per level of `layer_by`.
 
 # Use the bathymetry grid as the canonical study grid.
 bathy <- load_gebco_bathymetry(
-  here("/home/jay/Programming_Projects/Big_Data/gebco_2025_sub_ice_topo/GEBCO_2025_sub_ice.nc")
+  here(paste0(
+    "/home/jay/Programming_Projects/Big_Data/gebco_2025_sub_ice_topo/",
+    "GEBCO_2025_sub_ice.nc"
+  ))
 )
 
 # Crop bathymetry to the effort footprint (with a small buffer) before
@@ -180,8 +185,10 @@ depth_lookup <- data.frame(
     "other_purse_seines", "seiners", "squid_jigger",
     "pots_and_traps", "fixed_gear", "fishing", "inconclusive"
   ),
-  depth_min      = c(  0, NA,   0, NA, NA,   0,   0,   0,   0,   0,   0,   0, NA, NA, NA, NA),
-  depth_max      = c(400, NA, 140, NA, NA,  20, 150, 200, 250, 100, 200, 100, NA, NA, NA, NA),
+  depth_min      = c(  0, NA,   0, NA, NA,   0,   0,   0,
+                       0,   0,   0,   0, NA, NA, NA, NA),
+  depth_max      = c(400, NA, 140, NA, NA,  20, 150, 200,
+                     250, 100, 200, 100, NA, NA, NA, NA),
   mode = c(
     "pelagic", "benthic", "pelagic",
     "benthic", "benthic", "pelagic",
@@ -189,7 +196,8 @@ depth_lookup <- data.frame(
     "pelagic", "pelagic", "pelagic",
     "benthic", "benthic", "unknown", "unknown"
   ),
-  benthic_buffer = c( NA, 50,  NA, 50, 10,  NA,  NA,  NA,  NA,  NA,  NA,  NA, 50, 50, NA, NA),
+  benthic_buffer = c( NA, 50,  NA, 50, 10,  NA,  NA,  NA,
+                       NA,  NA,  NA,  NA, 50, 50, NA, NA),
   stringsAsFactors = FALSE
 )
 ```
@@ -223,8 +231,10 @@ know about:
 
 # Use WOA's 57 standard depths (0–1500 m) as the vertical grid.
 standard_depths <- c(
-  0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100,
-  125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400, 425, 450, 475, 500,
+  0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50,
+  55, 60, 65, 70, 75, 80, 85, 90, 95, 100,
+  125, 150, 175, 200, 225, 250, 275, 300,
+  325, 350, 375, 400, 425, 450, 475, 500,
   550, 600, 650, 700, 750, 800, 850, 900, 950, 1000,
   1050, 1100, 1150, 1200, 1250, 1300, 1350, 1400, 1450, 1500
 )
@@ -434,7 +444,7 @@ make_cube_mesh <- function(voxels, dx, dy) {
 stack_to_cubes <- function(stack, dx, dy, bands) {
   voxels <- terra::as.data.frame(stack, xy = TRUE, na.rm = FALSE) |>
     pivot_longer(cols = -c(x, y), names_to = "layer", values_to = "effort") |>
-    filter(!is.na(effort) & effort > 0) |>
+    filter(effort > 0) |>
     mutate(depth = as.numeric(str_extract(layer, "(?<=depth=)-?[0-9.]+"))) |>
     group_by(x, y, depth) |>
     summarise(effort = sum(effort), .groups = "drop") |>
@@ -460,7 +470,7 @@ log_breaks <- 10 ^ seq(floor(min(benthic_log_intensity)),
 bathy_x   <- terra::xFromCol(seafloor, seq_len(terra::ncol(seafloor)))
 bathy_y   <- terra::yFromRow(seafloor, seq_len(terra::nrow(seafloor)))
 bathy_mat <- terra::as.matrix(seafloor, wide = TRUE)
-bathy_mat <- bathy_mat[nrow(bathy_mat):1, ]
+bathy_mat <- bathy_mat[rev(seq_len(nrow(bathy_mat))), , drop = FALSE]
 bathy_y   <- rev(bathy_y)
 sea_z     <- matrix(0, nrow = length(bathy_y), ncol = length(bathy_x))
 
@@ -567,11 +577,17 @@ of the package exactly as WOA rasters do:
 # tuna purse seines around FADs).
 # The IUCN shark/ray/chimaera shapefile carries one row per species range
 # polygon. Filter at read time with SQL so the in-memory object is small.
-iucn_shp <- "/home/jay/Programming_Projects/Big_Data/SHARKS_RAYS_CHIMAERAS/SHARKS_RAYS_CHIMAERAS.shp"
+iucn_shp <- paste0(
+  "/home/jay/Programming_Projects/Big_Data/SHARKS_RAYS_CHIMAERAS/",
+  "SHARKS_RAYS_CHIMAERAS.shp"
+)
 
 sp_range <- sf::st_read(
   iucn_shp,
-  query = "SELECT * FROM SHARKS_RAYS_CHIMAERAS WHERE sci_name = 'Carcharhinus falciformis'",
+  query = paste0(
+    "SELECT * FROM SHARKS_RAYS_CHIMAERAS ",
+    "WHERE sci_name = 'Carcharhinus falciformis'"
+  ),
   quiet = TRUE
 )
 

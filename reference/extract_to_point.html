@@ -3,11 +3,13 @@
 values for one or multiple observations. The user chooses the type of
 extraction with the method argument. The more specific functions
 extract2d(), extract3d_surface(), extract3d_bottom(),
-extract3d_nearest() and extract3d_all() are wrappers around this function."><meta property="og:description" content="This is the general point-extraction interface. It can extract environmental
+extract3d_nearest() and extract3d_all() are wrappers around this
+function."><meta property="og:description" content="This is the general point-extraction interface. It can extract environmental
 values for one or multiple observations. The user chooses the type of
 extraction with the method argument. The more specific functions
 extract2d(), extract3d_surface(), extract3d_bottom(),
-extract3d_nearest() and extract3d_all() are wrappers around this function."></head><body>
+extract3d_nearest() and extract3d_all() are wrappers around this
+function."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -15,7 +17,7 @@ extract3d_nearest() and extract3d_all() are wrappers around this function."></he
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9008</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9009</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -54,7 +56,8 @@ extract3d_nearest() and extract3d_all() are wrappers around this function."></he
 values for one or multiple observations. The user chooses the type of
 extraction with the <code>method</code> argument. The more specific functions
 <code><a href="extract2d.html">extract2d()</a></code>, <code><a href="extract3d_surface.html">extract3d_surface()</a></code>, <code><a href="extract3d_bottom.html">extract3d_bottom()</a></code>,
-<code><a href="extract3d_nearest.html">extract3d_nearest()</a></code> and <code><a href="extract3d_all.html">extract3d_all()</a></code> are wrappers around this function.</p>
+<code><a href="extract3d_nearest.html">extract3d_nearest()</a></code> and <code><a href="extract3d_all.html">extract3d_all()</a></code> are wrappers around this
+function.</p>
     </div>
 
     <div class="section level2">
@@ -91,18 +94,19 @@ extraction with the <code>method</code> argument. The more specific functions
 
 
 <dl><dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
-<dd><p>Optional object containing observation points. Can be a data frame,
-tibble, <code>sf</code> object with POINT geometries, matrix with column names, or named
-list. If <code>NULL</code>, coordinates can be supplied directly through <code>lon</code>, <code>lat</code>,
-and optionally <code>depth</code> and <code>date</code>. For <code>sf</code> objects, longitude and latitude
-are obtained from the POINT geometries; projected geometries are transformed
-internally to longitude and latitude when a CRS is available.</p></dd>
+<dd><p>Optional object containing observation points. Can be a data
+frame, tibble, <code>sf</code> object with POINT geometries, matrix with column names,
+or named list. If <code>NULL</code>, coordinates can be supplied directly through
+<code>lon</code>, <code>lat</code>, and optionally <code>depth</code> and <code>date</code>. For <code>sf</code> objects,
+longitude and latitude are obtained from the POINT geometries; projected
+geometries are transformed internally to longitude and latitude when a CRS
+is available.</p></dd>
 
 
 <dt id="arg-nc">nc<a class="anchor" aria-label="anchor" href="#arg-nc"></a></dt>
-<dd><p>netCDF source. Can be a file path, vector of file paths, list of file
-paths, opened <code>ncdf4</code> object, list of opened objects, or a data frame with a
-file column.</p></dd>
+<dd><p>netCDF source. Can be a file path, vector of file paths, list of
+file paths, opened <code>ncdf4</code> object, list of opened objects, or a data frame
+with a file column.</p></dd>
 
 
 <dt id="arg-lon">lon<a class="anchor" aria-label="anchor" href="#arg-lon"></a></dt>
