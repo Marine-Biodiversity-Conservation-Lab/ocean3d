@@ -1440,3 +1440,416 @@ test_that("every depth wrapper forwards output naming arguments", {
     }
   }
 })
+
+
+# Issue #72: variable-scoped netCDF dimensions -------------------------------
+
+test_that("dimension detection uses only the selected variable", {
+  skip_if_not_installed("ncdf4")
+  
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
+  other_lon <- ncdf4::ncdim_def(
+    "longitude", "degrees_east", c(10, 11)
+  )
+  time <- ncdf4::ncdim_def(
+    "time", "days since 2020-01-01", c(0, 1)
+  )
+  
+  static <- ncdf4::ncvar_def(
+    "static", "1", list(lon, lat), -9999
+  )
+  dynamic <- ncdf4::ncvar_def(
+    "dynamic", "1", list(other_lon, lat, time), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, list(static, dynamic))
+  ncdf4::ncvar_put(nc, "static", matrix(1:4, 2, 2))
+  ncdf4::ncvar_put(
+    nc, "dynamic", array(1:8, c(2, 2, 2))
+  )
+  ncdf4::nc_close(nc)
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  dims <- .detect_dims(nc, "static")
+  
+  expect_identical(dims$lon, "lon")
+  expect_identical(dims$lat, "lat")
+  expect_null(dims$time)
+  expect_identical(dims$var_dims, c("lon", "lat"))
+})
+
+
+test_that("valid_time is recognised as a time dimension", {
+  skip_if_not_installed("ncdf4")
+  
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
+  valid_time <- ncdf4::ncdim_def(
+    "valid_time", "days since 2020-01-01", c(0, 1)
+  )
+  
+  v <- ncdf4::ncvar_def(
+    "temp", "1", list(lon, lat, valid_time), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, v)
+  ncdf4::ncvar_put(nc, "temp", array(1:8, c(2, 2, 2)))
+  ncdf4::nc_close(nc)
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  dims <- .detect_dims(nc, "temp")
+  
+  expect_identical(dims$time, "valid_time")
+})
+
+
+test_that("unknown non-singleton dimensions are rejected", {
+  skip_if_not_installed("ncdf4")
+  
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
+  member <- ncdf4::ncdim_def("member", "1", 1:3)
+  
+  v <- ncdf4::ncvar_def(
+    "temp", "1", list(lon, lat, member), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, v)
+  ncdf4::nc_close(nc)
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expect_error(
+    .detect_dims(nc, "temp"),
+    "Unrecognised non-singleton dimension"
+  )
+})
+
+
+test_that("unknown singleton dimensions are identified", {
+  skip_if_not_installed("ncdf4")
+  
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
+  member <- ncdf4::ncdim_def("member", "1", 1)
+  
+  v <- ncdf4::ncvar_def(
+    "temp", "1", list(lon, lat, member), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, v)
+  ncdf4::nc_close(nc)
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  dims <- .detect_dims(nc, "temp")
+  
+  expect_identical(dims$singleton_dims, "member")
+  
+  sc <- .build_start_count(
+    dims$var_dims,
+    list(
+      lon = list(start = 1L, count = 1L),
+      lat = list(start = 1L, count = 1L)
+    ),
+    singleton_dims = dims$singleton_dims
+  )
+  
+  expect_identical(sc$start, c(1L, 1L, 1L))
+  expect_identical(sc$count, c(1L, 1L, 1L))
+})
+
+
+test_that("explicit dimensions are validated", {
+  skip_if_not_installed("ncdf4")
+  
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  make_test_netcdf(
+    f, with_depth = FALSE, with_time = FALSE
+  )
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expect_identical(
+    .detect_dims(nc, "temp", lon_dim = "lon")$lon,
+    "lon"
+  )
+  
+  expect_error(
+    .detect_dims(nc, "temp", lon_dim = "longitude"),
+    "not a dimension of the selected variable"
+  )
+})
+
+
+test_that("projected coordinates are rejected", {
+  skip_if_not_installed("ncdf4")
+  
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  x <- ncdf4::ncdim_def("x", "m", c(1000, 2000))
+  y <- ncdf4::ncdim_def("y", "m", c(3000, 4000))
+  
+  v <- ncdf4::ncvar_def(
+    "temp", "1", list(x, y), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, v)
+  ncdf4::nc_close(nc)
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expect_error(
+    .detect_dims(nc, "temp"),
+    "projected coordinates"
+  )
+})
+
+
+test_that("2d extraction rejects variables with multiple depth levels", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  make_test_netcdf(
+    f,
+    with_depth = TRUE,
+    with_time = FALSE
+  )
+  
+  x <- data.frame(lon = 0, lat = 40)
+  
+  expect_error(
+    extract2d(x, f, var = "temp", date_col = NULL),
+    "multiple depth levels"
+  )
+})
+
+
+test_that("2d extraction accepts a single depth level", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
+  depth <- ncdf4::ncdim_def("depth", "m", 5)
+  
+  v <- ncdf4::ncvar_def(
+    "temp", "degree_Celsius",
+    list(lon, lat, depth), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, v)
+  ncdf4::ncvar_put(
+    nc, "temp",
+    array(c(11, 12, 13, 14), dim = c(2, 2, 1))
+  )
+  ncdf4::nc_close(nc)
+  
+  x <- data.frame(lon = 0, lat = 40)
+  
+  out <- extract2d(
+    x, f, var = "temp", date_col = NULL
+  )
+  
+  expect_equal(out$temp, 11)
+})
+
+
+test_that("unassigned dimensions cannot be read silently", {
+  expect_error(
+    .build_start_count(
+      c("lon", "lat", "member"),
+      list(
+        lon = list(start = 1L, count = 1L),
+        lat = list(start = 1L, count = 1L)
+      )
+    ),
+    "No extraction index was assigned"
+  )
+})
+
+
+# additional dimension-detection regression tests ----------------
+
+test_that("CF metadata identifies axes with non-standard names", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  dim_x <- ncdf4::ncdim_def(
+    "horizontal_a", "degrees_east", c(0, 1)
+  )
+  dim_y <- ncdf4::ncdim_def(
+    "horizontal_b", "degrees_north", c(40, 41)
+  )
+  dim_t <- ncdf4::ncdim_def(
+    "forecast_step", "days since 2020-01-01", c(0, 1)
+  )
+  
+  v <- ncdf4::ncvar_def(
+    "temp", "degree_Celsius",
+    list(dim_x, dim_y, dim_t), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, v)
+  ncdf4::ncvar_put(
+    nc, "temp", array(1:8, dim = c(2, 2, 2))
+  )
+  ncdf4::nc_close(nc)
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  dims <- .detect_dims(nc, "temp")
+  
+  expect_identical(dims$lon, "horizontal_a")
+  expect_identical(dims$lat, "horizontal_b")
+  expect_identical(dims$time, "forecast_step")
+})
+
+
+test_that("ambiguous longitude dimensions produce an informative error", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  lon <- ncdf4::ncdim_def(
+    "lon", "degrees_east", c(0, 1)
+  )
+  longitude <- ncdf4::ncdim_def(
+    "longitude", "degrees_east", c(10, 11)
+  )
+  lat <- ncdf4::ncdim_def(
+    "lat", "degrees_north", c(40, 41)
+  )
+  
+  v <- ncdf4::ncvar_def(
+    "temp", "degree_Celsius",
+    list(lon, longitude, lat), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, v)
+  ncdf4::nc_close(nc)
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expect_error(
+    .detect_dims(nc, "temp"),
+    "Ambiguous lon axis"
+  )
+})
+
+
+test_that("2D auxiliary geographic coordinates are rejected", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  x <- ncdf4::ncdim_def("x", "1", c(1, 2))
+  y <- ncdf4::ncdim_def("y", "1", c(1, 2))
+  
+  temp <- ncdf4::ncvar_def(
+    "temp", "degree_Celsius",
+    list(x, y), -9999
+  )
+  longitude <- ncdf4::ncvar_def(
+    "longitude", "degrees_east",
+    list(x, y), -9999
+  )
+  latitude <- ncdf4::ncvar_def(
+    "latitude", "degrees_north",
+    list(x, y), -9999
+  )
+  
+  nc <- ncdf4::nc_create(
+    f, list(temp, longitude, latitude)
+  )
+  
+  ncdf4::ncatt_put(
+    nc, "temp", "coordinates", "longitude latitude"
+  )
+  ncdf4::ncatt_put(
+    nc, "longitude", "standard_name", "longitude"
+  )
+  ncdf4::ncatt_put(
+    nc, "latitude", "standard_name", "latitude"
+  )
+  
+  ncdf4::nc_close(nc)
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expect_error(
+    .detect_dims(nc, "temp"),
+    "Curvilinear longitude/latitude grids are not"
+  )
+})
+
+
+test_that("static extraction ignores unrelated temporal dimensions", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  lon <- ncdf4::ncdim_def(
+    "lon", "degrees_east", c(0, 1)
+  )
+  lat <- ncdf4::ncdim_def(
+    "lat", "degrees_north", c(40, 41)
+  )
+  time <- ncdf4::ncdim_def(
+    "time", "days since 2020-01-01", c(0, 1)
+  )
+  
+  static <- ncdf4::ncvar_def(
+    "static", "1", list(lon, lat), -9999
+  )
+  dynamic <- ncdf4::ncvar_def(
+    "dynamic", "1", list(lon, lat, time), -9999
+  )
+  
+  nc <- ncdf4::nc_create(f, list(static, dynamic))
+  
+  ncdf4::ncvar_put(
+    nc, "static", matrix(c(11, 12, 13, 14), 2, 2)
+  )
+  ncdf4::ncvar_put(
+    nc, "dynamic", array(1:8, c(2, 2, 2))
+  )
+  
+  ncdf4::nc_close(nc)
+  
+  x <- data.frame(
+    lon = c(0, 1),
+    lat = c(40, 41)
+  )
+  
+  out <- extract2d(
+    x, f, var = "static", date_col = NULL
+  )
+  
+  expect_equal(out$static, c(11, 14))
+  expect_equal(nrow(out), 2L)
+})
