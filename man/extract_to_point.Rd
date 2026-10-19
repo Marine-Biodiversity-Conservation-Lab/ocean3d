@@ -27,7 +27,8 @@ extract_to_point(
   max_time_diff = NULL,
   output_prefix = NULL,
   output_col = NULL,
-  verbose = FALSE
+  verbose = FALSE,
+  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly")
 )
 }
 \arguments{
@@ -55,7 +56,8 @@ point extraction. Required when \code{data = NULL} and \code{method = "nearest"}
 
 \item{date}{Optional observation date or vector of dates for direct point
 extraction. Used when \code{data = NULL} and the netCDF variable has a time
-dimension. Character dates should use \code{"YYYY-MM-DD"} format. Direct input
+dimension. Accepts Date and POSIXt objects, or character values in
+"YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" format (UTC). Direct input
 vectors may have length 1 or a common compatible length.}
 
 \item{var}{Name of the variable to extract from the netCDF file. If \code{NULL},
@@ -109,6 +111,19 @@ to define the exact name of the output column directly. If both
 
 \item{verbose}{Logical. If \code{TRUE}, progress messages are printed every 100
 rows.}
+
+\item{time_resolution}{Precision used to compare observation times with
+dataset timestamps. "auto" uses daily comparison for Date objects
+and date-only text, and datetime comparison for POSIXt objects and
+date-time text. Explicit alternatives are "datetime", "daily",
+"monthly" and "yearly". Calendar comparisons use UTC.
+These options compare timestamp labels; they do not infer averaging
+intervals or calculate temporal summaries. Multiple dataset records
+mapping to the same comparison value cause an error.
+With nearest matching, monthly and yearly comparisons use the start
+of the labelled month or year. max_time_diff remains in days and
+applies to these comparison values. Use exact matching to require
+the same labelled day, month or year.}
 }
 \value{
 If \code{data} is provided, the input observations with extracted values
@@ -126,6 +141,24 @@ extraction with the \code{method} argument. The more specific functions
 \code{extract2d()}, \code{extract3d_surface()}, \code{extract3d_bottom()},
 \code{extract3d_nearest()} and \code{extract3d_all()} are wrappers around this
 function.
+}
+\details{
+Numeric netCDF time coordinates must provide units expressed as
+milliseconds, seconds, minutes, hours or days since a reference
+date-time. Singular and plural unit names are accepted.
+
+Reference date-times are interpreted in UTC. A trailing "Z" or
+"UTC" is accepted; numeric timezone offsets such as "+02:00"
+are not currently supported.
+
+Supported calendars are "standard", "gregorian" and
+"proleptic_gregorian". The first two are supported only for
+reference dates and timestamps on or after 1582-10-15.
+Unsupported units, calendars or missing time units produce an error.
+
+Temporal resolution controls comparison of timestamp labels.
+It does not identify averaging intervals, calculate temporal means,
+or interpret climatological periods.
 }
 \examples{
 nc_file <- system.file(
@@ -154,5 +187,31 @@ extract_to_point(
   var = "temp",
   method = "nearest"
 )
+
+# Match a complete observation timestamp.
+# The example file has a reading at midnight on 2020-01-03.
+extract_to_point(
+  nc = nc_file,
+  lon = 0,
+  lat = 40,
+  depth = 60,
+  date = as.POSIXct("2020-01-03 00:15:00", tz = "UTC"),
+  var = "temp",
+  method = "nearest",
+  time_resolution = "datetime",
+  max_time_diff = 30 / 1440
+)
+
+# Compare monthly labels when the file has one record per month.
+# Here the timestamp labels are illustrative.
+monthly_labels <- as.Date(c("2020-01-15", "2020-02-15"))
+observation_date <- as.Date("2020-02-28")
+format(monthly_labels, "\%Y-\%m") ==
+  format(observation_date, "\%Y-\%m")
+
+# For extraction from such a file, use:
+# time_resolution = "monthly", time_match = "exact".
+# Multiple records in the same month cause an error;
+# they are not averaged automatically.
 
 }
