@@ -1,8 +1,10 @@
 # Helpers ----------------------------------------------------------------------
 
 make_test_netcdf <- function(path, var = "temp", with_depth = TRUE,
-                             with_time = TRUE, bottom_na = FALSE) {
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", vals = c(0, 1))
+                             with_time = TRUE, bottom_na = FALSE,
+                             time_units = "days since 2020-01-01",
+                             lon_vals = c(0, 1), coordinate_var = FALSE) {
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", vals = lon_vals)
   lat <- ncdf4::ncdim_def("lat", "degrees_north", vals = c(40, 41))
   dims <- list(lon, lat)
 
@@ -13,14 +15,21 @@ make_test_netcdf <- function(path, var = "temp", with_depth = TRUE,
 
   if (with_time) {
     time <- ncdf4::ncdim_def(
-      "time", "days since 2020-01-01",
-      vals = c(0, 2, 5), unlim = FALSE
+      "time", if (is.null(time_units)) "" else time_units,
+      vals = if (is.null(time_units)) 1:3 else c(0, 2, 5),
+      unlim = FALSE, create_dimvar = !is.null(time_units)
     )
     dims <- c(dims, list(time))
   }
 
   v <- ncdf4::ncvar_def(var, "1", dim = dims, missval = -9999, prec = "double")
-  nc <- ncdf4::nc_create(path, v)
+  vars <- list(v)
+  if (coordinate_var) {
+    vars <- c(vars, list(ncdf4::ncvar_def(
+      "longitude", "degrees_east", list(lon), prec = "double"
+    )))
+  }
+  nc <- ncdf4::nc_create(path, vars)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
 
   shape <- vapply(dims, function(x) length(x$vals), integer(1))
@@ -31,6 +40,7 @@ make_test_netcdf <- function(path, var = "temp", with_depth = TRUE,
     else values[1, 1, 3] <- NA_real_
   }
 
+  if (coordinate_var) ncdf4::ncvar_put(nc, "longitude", lon_vals)
   ncdf4::ncvar_put(nc, var, values)
   invisible(path)
 }
@@ -628,6 +638,385 @@ test_that("extract_to_point rejects unsupported data input types", {
       date_col = NULL
     ),
     "`data` must be a data frame"
+  )
+})
+
+
+# Public entry points and netCDF helpers ----------------------------------------
+
+test_that("extract2d preserves observations and extracts known cells", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
+  x <- data.frame(id = c("a", "b"), lon = c(0, 1), lat = c(40, 41))
+  out <- extract2d(x, f, var = "temp", date_col = NULL)
+  expect_equal(out[names(x)], x)
+  expect_equal(out$temp, c(1, 4))
+})
+
+test_that("variable and output column names must be single strings", {
+  x <- data.frame(lon = 0, lat = 40)
+  for (bad in list(42, c("a", "b"), character(), NA_character_)) {
+    expect_error(extract_to_point(
+      x, "unused.nc", var = bad, method = "2d", date_col = NULL
+    ), "var.*must be")
+    expect_error(extract_to_point(
+      x, "unused.nc", var = "temp", output_col = bad,
+      method = "2d", date_col = NULL
+    ), "output_col.*must be")
+  }
+})
+
+test_that("depth methods reject files without a depth axis", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
+  for (method in c("surface", "bottom", "nearest", "all")) {
+    expect_error(extract_to_point(
+      make_obs(), f, var = "temp", method = method, date_col = NULL
+    ), "requires a depth dimension")
+  }
+})
+
+test_that("a single direct observation returns named depth summaries", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_time = FALSE)
+  out <- extract_to_point(nc = f, lon = 0, lat = 40, depth = 60,
+                          var = "temp", method = "all")
+  expect_equal(out, c(nearest_temp = 5, surface_temp = 1, seabottom_temp = 9))
+})
+
+test_that("verbose extraction reports progress without changing results", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
+  x <- data.frame(lon = rep(0, 100), lat = rep(40, 100))
+  expect_message(
+    out <- extract2d(x, f, var = "temp", date_col = NULL, verbose = TRUE),
+    "Extracting row 100 of 100"
+  )
+  expect_equal(out$temp, rep(1, 100))
+  expect_silent(extract2d(x, f, var = "temp", date_col = NULL))
+})
+
+test_that("source handling rejects unsupported inputs and missing paths", {
+  expect_error(ocean3d:::.as_netcdf_sources(42), "Unsupported")
+  expect_error(ocean3d:::.as_netcdf_sources(list(42)), "Unsupported")
+  expect_error(
+    ocean3d:::.open_source(list(type = "path", source = tempfile())),
+    "netCDF file does not exist"
+  )
+})
+
+test_that("extraction leaves caller-owned netCDF connections open", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  opened <- ocean3d:::.open_source(list(type = "connection", source = nc))
+  expect_identical(opened$nc, nc)
+  expect_false(opened$close)
+  out <- extract2d(data.frame(lon = 0, lat = 40), nc,
+                   var = "temp", date_col = NULL)
+  expect_equal(out$temp, 1)
+  expect_equal(ncdf4::ncvar_get(nc, "temp"), matrix(1:4, 2, 2))
+})
+
+test_that("dimension helpers read coordinate variables and report missing names", {
+  expect_error(
+    ocean3d:::.match_name(c("x", "y"), "lon"),
+    "Available names are: x, y"
+  )
+  expect_null(ocean3d:::.match_name("x", "lon", required = FALSE))
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, coordinate_var = TRUE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  expect_equal(as.vector(ocean3d:::.get_dim_values(nc, "longitude")), c(0, 1))
+  expect_null(ocean3d:::.get_dim_values(nc, NULL))
+  expect_error(ocean3d:::.get_dim_values(nc, "missing"),
+               "Could not read dimension or coordinate variable")
+  expect_error(ocean3d:::.detect_dims(nc, "missing"),
+               "Available variables are: temp, longitude")
+  expect_equal(
+    ocean3d:::.build_start_count(
+      c("lon", "lat"), list(lon = list(start = 2L, count = 1L))
+    ), list(start = c(2L, 1L), count = c(1L, -1L))
+  )
+})
+
+test_that("longitude conversion and missing coordinates are handled", {
+  expect_equal(ocean3d:::.prepare_lon(c(0, 359), -1), 359)
+  expect_true(is.na(ocean3d:::.prepare_lon(c(0, 359), NA_real_)))
+  expect_identical(ocean3d:::.nearest_index(numeric(), 0), NA_integer_)
+  expect_identical(ocean3d:::.nearest_index(c(NA_real_, NA_real_), 0),
+                   NA_integer_)
+  expect_identical(ocean3d:::.nearest_index(c(0, 1), NA_real_), NA_integer_)
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE,
+                   lon_vals = c(0, 359))
+  x <- data.frame(lon = c(-1, NA, 0), lat = c(40, 40, NA))
+  out <- extract2d(x, f, var = "temp", date_col = NULL)
+  expect_equal(out$temp, c(2, NA, NA))
+  expect_equal(nrow(out), 3L)
+})
+
+test_that("time helpers convert seconds minutes and hours to days", {
+  paths <- character()
+  on.exit(unlink(paths), add = TRUE)
+  for (unit in c("seconds", "minutes", "hours")) {
+    f <- tempfile(fileext = ".nc")
+    paths <- c(paths, f)
+    make_test_netcdf(f, time_units = paste(unit, "since 2020-01-01"))
+    nc <- ncdf4::nc_open(f)
+    tryCatch({
+      per_day <- switch(unit, seconds = 86400, minutes = 1440, hours = 24)
+      info <- ocean3d:::.get_time_origin(nc, "time")
+      expect_equal(info$origin, "2020-01-01")
+      expect_equal(info$multiplier, 1 / per_day)
+      expect_equal(
+        c(ocean3d:::.convert_time_values(nc, "time")),
+        as.Date(c(0, 2, 5) / per_day, origin = "2020-01-01")
+      )
+      expect_null(ocean3d:::.convert_time_values(nc, NULL))
+    }, finally = ncdf4::nc_close(nc))
+  }
+})
+
+test_that("time without units falls back to days since the Unix epoch", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, time_units = NULL)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  expect_null(ocean3d:::.get_time_origin(nc, "time"))
+  expect_equal(c(ocean3d:::.convert_time_values(nc, "time")),
+               as.Date(1:3, origin = "1970-01-01"))
+})
+
+test_that("output prefixes respect automatic and explicit naming", {
+  for (method in c("surface", "bottom", "nearest")) {
+    prefix <- switch(method, surface = "surface_", bottom = "seabottom_",
+                     nearest = "nearest_")
+    expect_equal(
+      ocean3d:::.resolve_output_prefix(method, "temp", NULL, TRUE),
+      paste0(prefix, "temp")
+    )
+    expect_null(ocean3d:::.resolve_output_prefix(method, "temp", NULL, FALSE))
+    expect_equal(
+      ocean3d:::.resolve_output_prefix(method, "temp", "custom", TRUE),
+      "custom"
+    )
+  }
+})
+test_that("multiple files fill missing values and preserve first-file priority", {
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  for (f in paths) make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
+  nc <- ncdf4::nc_open(paths[1], write = TRUE)
+  tryCatch(
+    ncdf4::ncvar_put(nc, "temp", matrix(c(NA, 2, 3, 4), 2, 2)),
+    finally = ncdf4::nc_close(nc)
+  )
+  nc <- ncdf4::nc_open(paths[2], write = TRUE)
+  tryCatch(
+    ncdf4::ncvar_put(nc, "temp", matrix(11:14, 2, 2)),
+    finally = ncdf4::nc_close(nc)
+  )
+  x <- data.frame(lon = c(0, 1), lat = c(40, 41))
+  out <- extract2d(x, paths, var = "temp", date_col = NULL)
+  expect_equal(out$temp, c(11, 4))
+  reverse <- extract2d(x, rev(paths), var = "temp", date_col = NULL)
+  expect_equal(reverse$temp, c(11, 14))
+  expect_equal(out[names(x)], x)
+})
+
+test_that("entirely missing profiles return missing depth summaries", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_time = FALSE)
+  nc <- ncdf4::nc_open(f, write = TRUE)
+  tryCatch(
+    ncdf4::ncvar_put(nc, "temp", rep(NA_real_, 3),
+                     start = c(1, 1, 1), count = c(1, 1, 3)),
+    finally = ncdf4::nc_close(nc)
+  )
+  for (method in c("nearest", "bottom", "all")) {
+    out <- extract_to_point(make_obs(), f, var = "temp", method = method,
+                            date_col = NULL)
+    result_cols <- setdiff(names(out), names(make_obs()))
+    expect_true(all(is.na(out[result_cols])))
+    expect_equal(nrow(out), 1L)
+  }
+})
+
+test_that("missing target depth preserves surface and bottom summaries", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_time = FALSE)
+  x <- make_obs(depth = NA_real_)
+  nearest <- extract3d_nearest(x, f, var = "temp", date_col = NULL)
+  all <- extract3d_all(x, f, var = "temp", date_col = NULL)
+  expect_true(is.na(nearest$temp))
+  expect_true(is.na(all$nearest_temp))
+  expect_equal(all$surface_temp, 1)
+  expect_equal(all$seabottom_temp, 9)
+})
+
+test_that("output_col overrides output_prefix in public extraction", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
+  x <- data.frame(lon = 0, lat = 40)
+  for (var in list(NULL, "temp")) {
+    out <- extract2d(x, f, var = var, date_col = NULL,
+                     output_prefix = "ignored", output_col = "chosen")
+    expect_equal(names(out), c("lon", "lat", "chosen"))
+    expect_equal(out$chosen, 1)
+  }
+})
+
+test_that("named nested sources accept paths and caller-owned connections", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  x <- data.frame(lon = c(0, 1), lat = c(40, 41))
+  expected <- extract2d(x, f, var = "temp", date_col = NULL)
+  nested <- list(year = list(path = f, opened = list(connection = nc)))
+  out <- extract2d(x, nested, var = "temp", date_col = NULL)
+  expect_equal(out, expected)
+  expect_equal(ncdf4::ncvar_get(nc, "temp"), matrix(1:4, 2, 2))
+})
+
+test_that("direct coordinate vectors return all depth summaries as a data frame", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_time = FALSE)
+  out <- extract_to_point(
+    nc = f, lon = c(0, 1), lat = c(40, 41), depth = c(60, 100),
+    var = "temp", method = "all"
+  )
+  expect_equal(out, data.frame(
+    nearest_temp = c(5, 12), surface_temp = c(1, 4),
+    seabottom_temp = c(9, 12)
+  ))
+})
+
+test_that("max_time_diff rejects non-scalar non-numeric and missing limits", {
+  x <- data.frame(lon = 0, lat = 40)
+  for (bad in list("1", c(1, 2), numeric(), NA_real_)) {
+    expect_error(extract_to_point(
+      x, "unused.nc", var = "temp", method = "2d",
+      date_col = NULL, max_time_diff = bad
+    ), "non-negative numeric value")
+  }
+})
+
+test_that("id_col must exist and is preserved when supplied", {
+  x <- data.frame(lon = 0, lat = 40)
+  expect_error(extract2d(
+    x, "unused.nc", var = "temp", date_col = NULL, id_col = "sample"
+  ), "Missing required column.*sample")
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
+  x$sample <- "station-a"
+  out <- extract2d(x, f, var = "temp", date_col = NULL, id_col = "sample")
+  expect_equal(out$sample, "station-a")
+  expect_equal(out$temp, 1)
+})
+test_that("direct coordinates and a valid date select the correct time slice", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f)
+  for (date in list("2020-01-03", as.Date("2020-01-03"))) {
+    out <- extract_to_point(
+      nc = f, lon = 0, lat = 40, depth = 60, date = date,
+      var = "temp", method = "nearest", time_match = "exact"
+    )
+    expect_equal(out, 17)
+  }
+})
+
+test_that("exact temporal matching selects known values and skips missing dates", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f)
+  x <- data.frame(
+    lon = c(0, 0, 0), lat = c(40, 40, 40),
+    date = as.Date(c("2020-01-01", "2020-01-03", NA))
+  )
+  exact <- extract3d_surface(x, f, var = "temp", time_match = "exact")
+  nearest <- extract3d_surface(x, f, var = "temp", time_match = "nearest")
+  expect_equal(exact$temp, c(1, 13, NA))
+  expect_equal(nearest$temp, c(1, 13, NA))
+  expect_equal(exact[names(x)], x)
+})
+
+test_that("temporal matching handles empty and entirely missing time axes", {
+  for (values in list(as.Date(character()), as.Date(c(NA, NA)))) {
+    for (method in c("nearest", "exact")) {
+      expect_identical(
+        ocean3d:::.match_time_index(
+          values, as.Date("2020-01-03"), time_match = method
+        ),
+        NA_integer_
+      )
+    }
+  }
+})
+
+test_that("public depth wrappers automatically name columns and extract values", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f)
+  cases <- list(
+    list(fun = extract3d_surface, col = "surface_temp", value = 13),
+    list(fun = extract3d_nearest, col = "nearest_temp", value = 17),
+    list(fun = extract3d_bottom, col = "seabottom_temp", value = 21)
+  )
+  x <- make_obs()
+  for (case in cases) {
+    out <- case$fun(x, f, var = NULL)
+    expect_equal(names(out), c(names(x), case$col))
+    expect_equal(out[[case$col]], case$value)
+    expect_equal(out[names(x)], x)
+  }
+})
+
+test_that("extract2d automatically names the detected variable with time matching", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  make_test_netcdf(f, var = "oxygen", with_depth = FALSE)
+  x <- data.frame(lon = c(0, 1), lat = c(40, 41),
+                  date = as.Date(c("2020-01-01", "2020-01-03")))
+  out <- extract2d(x, f, time_match = "exact")
+  expect_equal(names(out), c(names(x), "oxygen"))
+  expect_equal(out$oxygen, c(1, 8))
+})
+
+test_that("nested data frame sources read every file using a custom file column", {
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_test_netcdf(paths[1], var = "temp")
+  make_test_netcdf(paths[2], var = "salt")
+  sources <- list(year = list(files = data.frame(nc_path = paths)))
+  x <- make_obs()
+  out <- extract3d_surface(x, sources, file_col = "nc_path")
+  expect_equal(out[names(x)], x)
+  expect_equal(out$surface_temp, 13)
+  expect_equal(out$surface_salt, 13)
+  expect_equal(out, extract3d_surface(x, paths))
+  expect_error(
+    extract3d_surface(x, list(data.frame(wrong = paths)),
+                      file_col = "nc_path"),
+    "Missing required column.*nc_path"
   )
 })
 
