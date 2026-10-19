@@ -675,12 +675,203 @@
   lon_target
 }
 
+# Read a coordinate attribute, including dimension metadata.
+.axis_attribute <- function(nc, dim_name, attribute) {
+  if (dim_name %in% names(nc$var)) {
+    att <- ncdf4::ncatt_get(nc, dim_name, attribute)
+    if (isTRUE(att$hasatt)) return(att$value)
+  }
+  if (dim_name %in% names(nc$dim) && attribute == "units") {
+    return(nc$dim[[dim_name]]$units)
+  }
+  NULL
+}
+
+
+.normalise_axis_attribute <- function(x) {
+  if (!is.character(x) || length(x) != 1L ||
+        is.na(x)) {
+    return("")
+  }
+ tolower(trimws(x))
+}
+
+
+# Detect CF axis metadata associated with a dimension.
+.axis_from_metadata <- function(nc, dim_name) {
+  axis <- toupper(.normalise_axis_attribute(
+    .axis_attribute(nc, dim_name, "axis")
+  ))
+  standard_name <- .normalise_axis_attribute(
+    .axis_attribute(nc, dim_name, "standard_name")
+  )
+  units <- .normalise_axis_attribute(
+    .axis_attribute(nc, dim_name, "units")
+  )
+  lon_units <- c(
+    "degrees_east", "degree_east",
+    "degrees_e", "degree_e")
+  
+  lat_units <- c(
+    "degrees_north", "degree_north",
+    "degrees_n", "degree_n"
+  )
+  if (standard_name == "longitude" || units %in% lon_units) {
+    return("lon")
+  }
+  if (standard_name == "latitude" || units %in% lat_units) {
+   return("lat")
+  }
+  if (standard_name == "time" ||
+    grepl(
+        "^(milliseconds?|seconds?|minutes?|hours?|days?) since ",
+        units
+      )) {
+  return("time")
+  }
+  if (standard_name %in% c("depth", "height", "altitude")) {
+    return("depth")
+  }
+  
+  if (axis == "X") return("lon")
+  if (axis == "Y") return("lat")
+if (axis == "Z") return("depth")
+  if (axis == "T") return("time")
+  
+  NULL
+}
+
+
+# Find one dimension belonging to the selected variable.
+.resolve_variable_axis <- function(
+    nc, var_dims, explicit, candidates, axis_name,
+    required = FALSE) {
+  
+  if (!is.null(explicit)) {
+    if (!is.character(explicit) ||
+        length(explicit) != 1L ||
+        is.na(explicit) ||
+        !nzchar(trimws(explicit))) {
+      stop(
+        "`", axis_name,
+        "_dim` must be a single non-empty dimension name.",
+        call. = FALSE
+      )
+    }
+    
+    if (!explicit %in% var_dims) {
+      stop(
+        "Explicit `", axis_name, "_dim = '", explicit,
+        "'` is not a dimension of the selected variable. ",
+        "Available dimensions: ", toString(var_dims),
+        call. = FALSE
+      )
+    }
+    
+    return(explicit)
+  }
+  
+  metadata_matches <- var_dims[
+    vapply(
+      var_dims,
+      function(d) {
+        identical(.axis_from_metadata(nc, d), axis_name)
+      },
+      logical(1)
+    )
+  ]
+  
+  if (length(metadata_matches) > 1L) {
+    stop(
+      "Ambiguous ", axis_name, " axis: ",
+      toString(metadata_matches),
+      ". Specify `", axis_name, "_dim` explicitly.",
+      call. = FALSE
+    )
+  }
+  
+  if (length(metadata_matches) == 1L) {
+    return(metadata_matches)
+  }
+  
+  name_matches <- candidates[candidates %in% var_dims]
+  
+  if (length(name_matches) > 1L) {
+    stop(
+      "Ambiguous ", axis_name, " dimension names: ",
+      toString(name_matches),
+      ". Specify `", axis_name, "_dim` explicitly.",
+      call. = FALSE
+    )
+  }
+  
+  if (length(name_matches) == 1L) {
+    return(name_matches)
+  }
+  
+  if (isTRUE(required)) {
+    stop(
+      "Could not identify the ", axis_name,
+      " dimension of the selected variable. ",
+      "Available dimensions: ", toString(var_dims),
+      ". Specify `", axis_name, "_dim` if necessary.",
+      call. = FALSE
+    )
+  }
+  
+  NULL
+}
+
+
+# Reject grids that need unsupported 2D coordinate lookup.
+.check_auxiliary_coordinates <- function(nc, var, var_dims) {
+  coordinates <- .axis_attribute(nc, var, "coordinates")
+  
+  if (is.null(coordinates)) return(invisible(TRUE))
+  
+  coordinates <- strsplit(
+    trimws(as.character(coordinates)[1]),
+    "\\s+"
+  )[[1]]
+  
+  for (coordinate in coordinates) {
+    if (!coordinate %in% names(nc$var)) next
+    
+    standard_name <- .normalise_axis_attribute(
+      .axis_attribute(nc, coordinate, "standard_name")
+    )
+    
+    if (!standard_name %in% c("longitude", "latitude")) next
+    
+    coord_dims <- vapply(
+      nc$var[[coordinate]]$dim,
+      function(d) d$name,
+      character(1)
+    )
+    
+    if (length(coord_dims) > 1L &&
+        all(coord_dims %in% var_dims)) {
+      stop(
+        "Variable `", var, "` uses a two-dimensional ",
+        "geographic coordinate `", coordinate, "`. ",
+        "Curvilinear longitude/latitude grids are not ",
+        "yet supported by extract_to_point().",
+        call. = FALSE
+      )
+    }
+  }
+  
+  invisible(TRUE)
+}
+
+
 .detect_dims <- function(nc,
                          var,
                          lon_dim = NULL,
                          lat_dim = NULL,
                          depth_dim = NULL,
                          time_dim = NULL) {
+  
   if (!var %in% names(nc$var)) {
     stop(
       "Variable `", var, "` not found in netCDF file. ",
@@ -689,68 +880,149 @@
       call. = FALSE
     )
   }
-
-  available_dims <- names(nc$dim)
-  var_dims <- vapply(nc$var[[var]]$dim, function(z) z$name, character(1))
-
-  lon_candidates <- unique(
-    stats::na.omit(c(lon_dim, "lon", "longitude", "x", "nav_lon"))
+  
+  variable_dims <- nc$var[[var]]$dim
+  
+  var_dims <- vapply(
+    variable_dims,
+    function(d) d$name,
+    character(1)
   )
-  lat_candidates <- unique(
-    stats::na.omit(c(lat_dim, "lat", "latitude", "y", "nav_lat"))
+  
+  dim_lengths <- vapply(
+    variable_dims,
+    function(d) as.integer(d$len),
+    integer(1)
   )
-  depth_candidates <- unique(
-    stats::na.omit(c(depth_dim, "depth", "deptht", "lev", "level", "z"))
+  
+  .check_auxiliary_coordinates(nc, var, var_dims)
+  
+  lon_name <- .resolve_variable_axis(
+    nc, var_dims, lon_dim,
+    c("lon", "longitude", "x", "nav_lon"),
+    "lon", required = TRUE
   )
-  time_candidates <- unique(
-    stats::na.omit(c(time_dim, "time", "time_counter", "t"))
+  
+  lat_name <- .resolve_variable_axis(
+    nc, var_dims, lat_dim,
+    c("lat", "latitude", "y", "nav_lat"),
+    "lat", required = TRUE
   )
-
-  lon_name <- .match_name(
-    c(var_dims, available_dims), lon_candidates, TRUE, "longitude dimension"
+  
+  depth_name <- .resolve_variable_axis(
+    nc, var_dims, depth_dim,
+    c("depth", "deptht", "lev", "level", "z"),
+    "depth"
   )
-  lat_name <- .match_name(
-    c(var_dims, available_dims), lat_candidates, TRUE, "latitude dimension"
+  
+  time_name <- .resolve_variable_axis(
+    nc, var_dims, time_dim,
+    c("time", "time_counter", "valid_time", "t"),
+    "time"
   )
-  depth_name <- .match_name(
-    c(var_dims, available_dims), depth_candidates, FALSE, "depth dimension"
+  
+  assigned <- unlist(
+    list(lon_name, lat_name, depth_name, time_name),
+    use.names = FALSE
   )
-  time_name <- .match_name(
-    c(var_dims, available_dims), time_candidates, FALSE, "time dimension"
+  
+  if (anyDuplicated(assigned)) {
+    stop(
+      "A netCDF dimension was assigned to multiple axes. ",
+      "Check the dimension names and CF metadata.",
+      call. = FALSE
+    )
+  }
+  
+  unknown <- setdiff(var_dims, assigned)
+  
+  unknown_lengths <- dim_lengths[
+    match(unknown, var_dims)
+  ]
+  
+  unsupported <- unknown[unknown_lengths > 1L]
+  
+  if (length(unsupported) > 0L) {
+    stop(
+      "Unrecognised non-singleton dimension(s) ",
+      "in variable `", var, "`: ",
+      toString(unsupported), ". ",
+      "Specify the appropriate *_dim argument or ",
+      "use a dataset with supported dimensions.",
+      call. = FALSE
+    )
+  }
+  
+  singleton_dims <- unknown[unknown_lengths == 1L]
+  
+  projected_units <- c(
+    "m", "meter", "meters", "metre", "metres",
+    "km", "kilometer", "kilometers",
+    "kilometre", "kilometres"
   )
-
+  
+  for (axis_info in list(
+    list(name = lon_name, axis = "longitude"),
+    list(name = lat_name, axis = "latitude")
+  )) {
+    units <- .normalise_axis_attribute(
+      .axis_attribute(nc, axis_info$name, "units")
+    )
+    
+    if (units %in% projected_units) {
+      stop(
+        "Dimension `", axis_info$name,
+        "` uses projected coordinates (", units, "). ",
+        "Geographic longitude/latitude extraction ",
+        "requires coordinates in degrees. ",
+        "Projected grids are not yet supported.",
+        call. = FALSE
+      )
+    }
+  }
+  
   list(
     lon = lon_name,
     lat = lat_name,
     depth = depth_name,
     time = time_name,
-    var_dims = var_dims
+    var_dims = var_dims,
+    singleton_dims = singleton_dims
   )
 }
 
-.build_start_count <- function(var_dims, index_list) {
-  # ncdf4::ncvar_get() expects indices in the exact order used by the variable
-  # in the netCDF file. This helper builds `start` and `count` vectors by
-  # matching dimension names rather than assuming a fixed order such as
-  # lon-lat-depth-time.
+
+.build_start_count <- function(var_dims, index_list,
+                               singleton_dims = character(0)) {
+  # Build start/count in the exact dimension order of the variable.
+  # Every dimension must be explicitly indexed, except known singletons.
+  
   start <- integer(length(var_dims))
   count <- integer(length(var_dims))
-
+  
   for (i in seq_along(var_dims)) {
     dim_name <- var_dims[i]
     idx <- index_list[[dim_name]]
-
-    if (is.null(idx)) {
-      start[i] <- 1L
-      count[i] <- -1L
-    } else {
+    
+    if (!is.null(idx)) {
       start[i] <- as.integer(idx$start)
       count[i] <- as.integer(idx$count)
+    } else if (dim_name %in% singleton_dims) {
+      start[i] <- 1L
+      count[i] <- 1L
+    } else {
+      stop(
+        "No extraction index was assigned to dimension `",
+        dim_name, "`. Refusing to read the full dimension ",
+        "because this could return an incorrect value.",
+        call. = FALSE
+      )
     }
   }
-
+  
   list(start = start, count = count)
 }
+
 
 .extract_array <- function(nc,
                            var,
@@ -768,12 +1040,30 @@
     index_list[[dims$time]] <- list(start = time_idx, count = 1L)
   }
 
-  if (!is.null(dims$depth) && !is.null(depth_start)) {
-    index_list[[dims$depth]] <- list(start = depth_start, count = depth_count)
+  if (!is.null(dims$depth)) {
+    if (!is.null(depth_start)) {
+      # Explicit depth selection for 3D extraction methods.
+      index_list[[dims$depth]] <- list(
+        start = depth_start,
+        count = depth_count
+      )
+    } else if (nc$dim[[dims$depth]]$len == 1L) {
+      # A single depth level can be selected without ambiguity.
+      index_list[[dims$depth]] <- list(
+        start = 1L,
+        count = 1L
+      )
+    } else {
+      stop(
+        "Variable `", var, "` has multiple depth levels ",
+        "but no depth index was provided.",
+        call. = FALSE
+      )
+    }
   }
-
-  sc <- .build_start_count(dims$var_dims, index_list)
-
+  
+  sc <- .build_start_count(dims$var_dims, index_list, singleton_dims = dims$singleton_dims)
+  
   ncdf4::ncvar_get(
     nc = nc,
     varid = var,
@@ -819,7 +1109,19 @@
       call. = FALSE
     )
   }
-
+  
+  # A 2D extraction cannot choose between multiple depth levels.
+  if (method == "2d" && !is.null(dims$depth)) {
+    if (length(.get_dim_values(nc, dims$depth)) > 1L) {
+      stop(
+        "Variable `", var, "` has multiple depth levels. ",
+        "Use method = 'surface' or another 3D method ",
+        "(bottom, nearest, all).",
+        call. = FALSE
+      )
+    }
+  }
+  
   lon_values <- .get_dim_values(nc, dims$lon)
   lat_values <- .get_dim_values(nc, dims$lat)
   depth_values <- .get_dim_values(nc, dims$depth)
