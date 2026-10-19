@@ -315,7 +315,7 @@
 }
 
 
-.decode_netcdf_time <- function(nc, time_dim) {
+.decode_netcdf_time <- function(nc, time_dim, offsets = NULL) {
   if (is.null(time_dim)) {
     return(NULL)
   }
@@ -433,7 +433,11 @@
     )
   }
 
-  values <- as.vector(.get_dim_values(nc, time_dim))
+  values <- if (is.null(offsets)) {
+    as.vector(.get_dim_values(nc, time_dim))
+  } else {
+    as.vector(offsets)
+  }
 
   if (!is.numeric(values) || any(!is.finite(values))) {
     stop(
@@ -463,6 +467,684 @@
   }
 
   timestamps
+}
+
+
+# Read temporal metadata while the connection is open. Bounds describe
+# represented intervals; their widths are not sampling cadences.
+.read_temporal_metadata <- function(nc, time_dim, var, timestamps) {
+  if (is.null(time_dim)) return(list(static = TRUE, variable = var))
+  bounds_name <- .read_time_attribute(nc, time_dim, "bounds")
+  climatology <- .read_time_attribute(nc, time_dim, "climatology")
+  bounds_variable <- which(vapply(nc$var, function(x) {
+    identical(x$name, bounds_name)
+  }, logical(1)))
+  bounds <- NULL
+  bounds_status <- "absent"
+  if (!is.null(bounds_name)) {
+    bounds_status <- "unavailable"
+    if (is.character(bounds_name) && length(bounds_name) == 1L &&
+          !is.na(bounds_name) && length(bounds_variable) == 1L) {
+      bounds <- tryCatch({
+        raw <- ncdf4::ncvar_get(nc, bounds_name, collapse_degen = FALSE)
+        axes <- vapply(
+          nc$var[[bounds_variable]]$dim,
+          function(x) x$name, character(1)
+        )
+        time_axis <- which(axes == time_dim)
+        if (length(dim(raw)) != 2L || length(time_axis) != 1L) {
+          stop("Unrecognised temporal bounds axes")
+        }
+        if (time_axis == 1L) raw <- t(raw)
+        if (!identical(dim(raw), c(2L, length(timestamps)))) {
+          stop("Unrecognised temporal bounds shape")
+        }
+        bound_units <- .read_time_attribute(nc, bounds_name, "units")
+        if (!is.null(bound_units) &&
+          !identical(
+            bound_units, .read_time_attribute(nc, time_dim, "units")
+          )) {
+          stop("Temporal bounds use different units")
+        }
+        decoded <- .decode_netcdf_time(nc, time_dim, as.vector(raw))
+        intervals <- matrix(as.numeric(decoded), nrow = 2L)
+        if (any(intervals[1L, ] > intervals[2L, ])) {
+          stop("Temporal bounds are not ordered")
+        }
+        intervals
+      }, error = function(e) NULL)
+      if (!is.null(bounds)) bounds_status <- "read"
+    }
+  }
+  calendar <- .read_time_attribute(nc, time_dim, "calendar")
+  if (is.null(calendar)) calendar <- "standard"
+  list(
+    static = FALSE, variable = var,
+    units = .read_time_attribute(nc, time_dim, "units"),
+    calendar = tolower(calendar),
+    variable_units = .read_time_attribute(nc, var, "units"),
+    cell_methods = .read_time_attribute(nc, var, "cell_methods"),
+    bounds_name = bounds_name, bounds = bounds,
+    bounds_status = bounds_status, climatology = climatology,
+    timestamps = timestamps,
+    cadence = .infer_temporal_cadence(timestamps)
+  )
+}
+
+.infer_temporal_cadence <- function(timestamps, basis = "source") {
+  values <- sort(unique(as.numeric(timestamps[!is.na(timestamps)])))
+  result <- list(type = "unknown", seconds = NA_real_, months = NA_integer_,
+                 basis = basis, n = length(values))
+  if (length(values) < 2L) return(result)
+  dates <- as.POSIXct(values, origin = "1970-01-01", tz = "UTC")
+  parts <- as.POSIXlt(dates, tz = "UTC")
+  month_index <- (parts$year + 1900L) * 12L + parts$mon
+  month_steps <- diff(month_index)
+  clock <- format(dates, "%H:%M:%OS6", tz = "UTC")
+  day <- as.integer(format(dates, "%d", tz = "UTC"))
+  next_month <- as.Date(format(as.Date(dates) + 32 - day, "%Y-%m-01"))
+  month_end <- as.Date(dates) == next_month - 1
+  calendar_regular <- all(month_steps > 0) &&
+    length(unique(month_steps)) == 1L && length(unique(clock)) == 1L &&
+    (length(unique(day)) == 1L || all(month_end))
+  if (calendar_regular) {
+    result$months <- as.integer(month_steps[1L])
+    result$type <- if (result$months %% 12L == 0L) "yearly" else "monthly"
+    return(result)
+  }
+  steps <- diff(values)
+  tolerance <- max(1e-6, abs(steps[1L]) * 1e-9)
+  if (all(abs(steps - steps[1L]) <= tolerance)) {
+    result$type <- if (abs(steps[1L] - 86400) <= tolerance) "daily" else "fixed"
+    result$seconds <- steps[1L]
+  } else {
+    result$type <- "irregular"
+  }
+  result
+}
+
+# Calendar shifts clamp the day to the final day of the destination month.
+.shift_temporal_months <- function(value, months) {
+  parts <- as.POSIXlt(value, tz = "UTC")
+  index <- (parts$year + 1900L) * 12L + parts$mon + months
+  first <- as.Date(sprintf("%04d-%02d-01", index %/% 12L, index %% 12L + 1L))
+  next_index <- index + 1L
+  next_first <- as.Date(sprintf(
+    "%04d-%02d-01", next_index %/% 12L, next_index %% 12L + 1L
+  ))
+  last_day <- as.integer(next_first - first)
+  as.POSIXct(first + min(parts$mday, last_day) - 1L, tz = "UTC") +
+    parts$hour * 3600 + parts$min * 60 + parts$sec
+}
+
+.diagnose_temporal_selection <- function(provenance, requested, resolution,
+                                         metadata, custom_seconds = NULL) {
+  records <- list()
+  for (column in names(provenance)) {
+    selected <- provenance[[column]]
+    for (i in seq_len(nrow(selected))) {
+      source <- selected$source_index[i]
+      timestamp <- selected$timestamp[i]
+      if (is.na(source) || is.na(timestamp) || is.na(requested[i])) next
+      info <- metadata[[source]]
+      if (isTRUE(info$static)) next
+      cadence <- info$cadence
+      # A singleton may borrow an observed cadence from compatible sources
+      # of the same variable. Never pool different calendars or units.
+      if (identical(cadence$type, "unknown") && is.null(info$climatology)) {
+        compatible <- vapply(metadata, function(x) {
+          !isTRUE(x$static) && is.null(x$climatology) &&
+            identical(x$variable, info$variable) &&
+            identical(x$calendar, info$calendar) &&
+            identical(x$variable_units, info$variable_units) &&
+            identical(x$cell_methods, info$cell_methods)
+        }, logical(1))
+        combined <- unlist(lapply(metadata[compatible], function(x) {
+          as.numeric(x$timestamps)
+        }), use.names = FALSE)
+        cadence <- .infer_temporal_cadence(
+          as.POSIXct(combined, origin = "1970-01-01", tz = "UTC"),
+          basis = "source_collection"
+        )
+      }
+      delta <- as.numeric(difftime(timestamp, requested[i], units = "secs"))
+      exceeds_cadence <- FALSE
+      if (cadence$type %in% c("daily", "fixed")) {
+        exceeds_cadence <- abs(delta) > cadence$seconds + 1e-6
+      } else if (cadence$type %in% c("monthly", "yearly")) {
+        earliest <- .shift_temporal_months(timestamp, -cadence$months)
+        latest <- .shift_temporal_months(timestamp, cadence$months)
+        exceeds_cadence <- requested[i] < earliest || requested[i] > latest
+      }
+      reason <- NA_character_
+      if (resolution == "custom") {
+        if (abs(delta) > custom_seconds) {
+          reason <- "custom_interval_exceeded"
+        }
+      } else if (resolution %in% c("daily", "monthly", "yearly")) {
+        pattern <- switch(resolution, daily = "%Y-%m-%d",
+                          monthly = "%Y-%m", yearly = "%Y")
+        if (format(timestamp, pattern, tz = "UTC") !=
+              format(requested[i], pattern, tz = "UTC")) {
+          reason <- "period_changed"
+        }
+      } else if (delta != 0) {
+        if (!is.null(info$climatology) ||
+              cadence$type %in% c("unknown", "irregular")) {
+          reason <- "cadence_unknown"
+        } else if (cadence$type == "daily" &&
+                     format(timestamp, "%Y-%m-%d", tz = "UTC") !=
+                       format(requested[i], "%Y-%m-%d", tz = "UTC")) {
+          reason <- "period_changed"
+        } else if (exceeds_cadence) {
+          reason <- "cadence_exceeded"
+        }
+      }
+      records[[length(records) + 1L]] <- data.frame(
+        row = i, column = column, source_index = source,
+        variable = selected$variable[i],
+        requested = requested[i], selected = timestamp,
+        difference_seconds = delta, resolution = resolution,
+        cadence = cadence$type, cadence_basis = cadence$basis,
+        cadence_seconds = cadence$seconds, cadence_months = cadence$months,
+        custom_seconds = if (is.null(custom_seconds)) {
+          NA_real_
+        } else {
+          custom_seconds
+        },
+        cadence_exceeded = exceeds_cadence,
+        source_file = if (is.null(info$source_file)) {
+          NA_character_
+        } else {
+          info$source_file
+        },
+        status = if (delta == 0) "matched" else "shifted",
+        reason = reason, stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (!length(records)) return(data.frame())
+  do.call(rbind, records)
+}
+
+.validate_custom_time_interval <- function(resolution, interval) {
+  if (resolution != "custom") {
+    if (!is.null(interval)) {
+      stop(
+        "`custom_time_interval` requires time_resolution = 'custom'. ",
+        "Set that resolution or remove custom_time_interval.",
+        call. = FALSE
+      )
+    }
+    return(NULL)
+  }
+  if (!inherits(interval, "difftime") || length(interval) != 1L) {
+    stop(
+      "`custom_time_interval` must be one difftime value. ",
+      "For example, use as.difftime(3, units = 'hours').",
+      call. = FALSE
+    )
+  }
+  seconds <- as.numeric(interval, units = "secs")
+  if (is.na(seconds) || !is.finite(seconds) || seconds <= 0) {
+    stop(
+      "`custom_time_interval` must be finite and greater than zero. ",
+      "Use a positive duration, such as as.difftime(3, units = 'hours').",
+      call. = FALSE
+    )
+  }
+  seconds
+}
+
+.temporal_duration_text <- function(seconds) {
+  seconds <- abs(seconds)
+  if (!is.finite(seconds)) return("an unknown interval")
+  divisor <- if (seconds >= 3600) 3600 else if (seconds >= 60) 60 else 1
+  unit <- if (divisor == 3600) {
+    "hour"
+  } else if (divisor == 60) {
+    "minute"
+  } else {
+    "second"
+  }
+  amount <- seconds / divisor
+  paste0(
+    format(signif(amount, 6), trim = TRUE, scientific = FALSE), " ",
+    unit, if (amount == 1) "" else "s"
+  )
+}
+
+.temporal_cadence_text <- function(record) {
+  type <- record$cadence
+  if (type == "daily") return("daily (one observed step is 24 hours)")
+  if (type == "fixed") {
+    return(paste0("one observed step every ",
+                  .temporal_duration_text(record$cadence_seconds)))
+  }
+  if (type %in% c("monthly", "yearly")) {
+    months <- record$cadence_months
+    number <- if (type == "yearly") months / 12 else months
+    unit <- if (type == "yearly") "year" else "month"
+    return(paste0(number, " calendar ", unit, if (number == 1) "" else "s"))
+  }
+  if (type == "irregular") return("irregular; no reliable sampling interval")
+  "unknown; not enough information to infer a sampling interval"
+}
+
+# Combine depth-summary columns only when they describe the same selection.
+.temporal_example_rows <- function(records) {
+  keys <- setdiff(names(records), "column")
+  examples <- unique(records[keys])
+  examples$column <- vapply(seq_len(nrow(examples)), function(i) {
+    same <- rep(TRUE, nrow(records))
+    for (key in keys) {
+      value <- examples[[key]][i]
+      matches <- if (is.na(value)) {
+        is.na(records[[key]])
+      } else {
+        !is.na(records[[key]]) & records[[key]] == value
+      }
+      same <- same & matches
+    }
+    paste(unique(records$column[same]), collapse = ", ")
+  }, character(1))
+  head(examples, 3L)
+}
+
+.format_temporal_example <- function(record) {
+  reason <- record$reason
+  status <- record$status
+  delta <- record$difference_seconds
+  location <- paste0(
+    "Row ", record$row, "; variable: ", record$variable,
+    "; output: ", record$column, "."
+  )
+  requested <- if (is.na(record$requested)) {
+    "unavailable"
+  } else {
+    format(record$requested, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+  }
+  if (status == "no_value") {
+    return(paste0(
+      "No value was extracted.\n", location,
+      "\nObservation: ", requested,
+      "\nNo source supplied a valid value under the requested settings.",
+      " The result is NA; no selected timestamp or file can be assigned.",
+      "\nCheck the observation, source coverage and matching limits."
+    ))
+  }
+  if (status == "not_assessable") {
+    return(paste0(
+      "The temporal comparison could not be completed.\n", location,
+      "\nObservation: ", requested,
+      "\nA requested or selected timestamp is unavailable."
+    ))
+  }
+  title <- "A value with a different timestamp was selected."
+  if (!is.na(reason)) {
+    title <- switch(reason,
+      period_changed = "A value from a different calendar period was selected.",
+      cadence_exceeded = paste0(
+        "The selected value is more than one sampling interval away."
+      ),
+      custom_interval_exceeded = paste0(
+        "The selected value exceeds your custom time interval."
+      ),
+      cadence_unknown = paste0(
+        "A different timestamp was selected, but its cadence is unknown."
+      )
+    )
+  }
+  explanation <- ""
+  if (identical(reason, "period_changed")) {
+    period <- if (record$resolution == "datetime") "day" else switch(
+      record$resolution, daily = "day", monthly = "month", yearly = "year"
+    )
+    explanation <- if (record$resolution == "datetime") {
+      paste0(
+        "The dataset has a daily cadence. The selected value belongs to a ",
+        "different day. This warning is based on the calendar day, ",
+        "not only the number of elapsed hours."
+      )
+    } else {
+      paste0(
+        "The requested comparison uses ", record$resolution,
+        " precision. The selected value belongs to a different ", period,
+        ", so a warning is required even if the elapsed time is short."
+      )
+    }
+    if (isTRUE(record$cadence_exceeded)) {
+      explanation <- paste0(
+        explanation,
+        " It is also more than one observed sampling interval away."
+      )
+    }
+  } else if (identical(reason, "custom_interval_exceeded")) {
+    explanation <- paste0(
+      "Your custom warning interval is ",
+      .temporal_duration_text(record$custom_seconds),
+      ". The selected value is further away than this interval.",
+      " This warning does not reject the extracted value."
+    )
+  } else if (identical(reason, "cadence_exceeded")) {
+    explanation <- paste0(
+      "The time difference exceeds one observed sampling interval.",
+      " The extracted value is returned, but it is further away in time ",
+      "than the detected cadence."
+    )
+  } else if (identical(reason, "cadence_unknown")) {
+    explanation <- paste0(
+      "The available timestamps do not establish a reliable sampling interval.",
+      " The time difference cannot be assessed against a detected cadence.",
+      " Use time_resolution = 'custom' with custom_time_interval ",
+      "if you know the appropriate warning interval."
+    )
+  } else if (record$resolution == "custom") {
+    explanation <- paste0(
+      "The difference is within your custom warning interval of ",
+      .temporal_duration_text(record$custom_seconds),
+      ". No temporal warning is required."
+    )
+  } else if (record$resolution %in% c("daily", "monthly", "yearly")) {
+    explanation <- paste0(
+      "The selected value remains within the requested ",
+      record$resolution, " calendar period. No temporal warning is required."
+    )
+  } else {
+    explanation <- paste0(
+      "The difference is within one observed sampling interval.",
+      " No temporal warning is required."
+    )
+  }
+  file <- if (is.na(record$source_file)) {
+    paste0("source ", record$source_index)
+  } else {
+    basename(gsub("\\", "/", record$source_file, fixed = TRUE))
+  }
+  direction <- if (delta > 0) {
+    "later"
+  } else if (delta < 0) {
+    "earlier"
+  } else {
+    "unchanged"
+  }
+  paste0(
+    title, "\n", location,
+    "\nObservation: ", requested,
+    "\nSelected data: ",
+    format(record$selected, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC"),
+    "\nDifference: ", .temporal_duration_text(delta), " ", direction, ".",
+    "\nComparison resolution: ", record$resolution, ".",
+    "\nDetected cadence: ", .temporal_cadence_text(record), ".",
+    "\n", explanation, "\nFile: ", file
+  )
+}
+
+.warn_temporal_selection <- function(diagnostics) {
+  if (!nrow(diagnostics)) return(invisible(NULL))
+  flagged <- diagnostics[!is.na(diagnostics$reason), , drop = FALSE]
+  if (!nrow(flagged)) return(invisible(NULL))
+  examples <- .temporal_example_rows(flagged)
+  detail <- vapply(seq_len(nrow(examples)), function(i) {
+    .format_temporal_example(examples[i, , drop = FALSE])
+  }, character(1))
+  warning(structure(list(
+    message = paste0(
+      "Temporal warning: ", length(unique(flagged$row)),
+      " observation(s) need attention.\n\n",
+      paste(detail, collapse = "\n\n")
+    ),
+    call = NULL, diagnostics = flagged
+  ), class = c("ocean3d_time_warning", "warning", "condition")))
+  invisible(NULL)
+}
+
+.show_time_report <- function(provenance, requested, metadata,
+                              diagnostics, sources) {
+  rows <- list()
+  for (column in names(provenance)) {
+    selected <- provenance[[column]]
+    for (i in seq_len(nrow(selected))) {
+      source_index <- selected$source_index[i]
+      timestamp <- selected$timestamp[i]
+      hit <- if (nrow(diagnostics)) {
+        which(diagnostics$row == i & diagnostics$column == column)
+      } else {
+        integer()
+      }
+      if (length(hit)) {
+        rows[[length(rows) + 1L]] <- diagnostics[hit[1L], , drop = FALSE]
+        next
+      }
+      if (!is.na(source_index) && isTRUE(metadata[[source_index]]$static)) {
+        next
+      }
+      rows[[length(rows) + 1L]] <- data.frame(
+        row = i, column = column, source_index = source_index,
+        variable = if (is.na(selected$variable[i])) {
+          column
+        } else {
+          selected$variable[i]
+        },
+        requested = requested[i], selected = timestamp,
+        difference_seconds = NA_real_, resolution = NA_character_,
+        cadence = "unknown", cadence_basis = NA_character_,
+        cadence_seconds = NA_real_, cadence_months = NA_integer_,
+        custom_seconds = NA_real_, cadence_exceeded = FALSE,
+        source_file = NA_character_,
+        status = if (is.na(source_index)) "no_value" else "not_assessable",
+        reason = NA_character_, stringsAsFactors = FALSE
+      )
+    }
+  }
+  if (!length(rows)) return(invisible(NULL))
+  report <- do.call(rbind, rows)
+  interesting <- report[report$status != "matched", , drop = FALSE]
+  if (!nrow(interesting)) return(invisible(report))
+  # Warning examples already explain flagged selections.
+  # Do not print them twice.
+  information <- interesting[is.na(interesting$reason), , drop = FALSE]
+  if (!nrow(information)) return(invisible(report))
+  examples <- .temporal_example_rows(information)
+  detail <- vapply(seq_len(nrow(examples)), function(i) {
+    .format_temporal_example(examples[i, , drop = FALSE])
+  }, character(1))
+  message(structure(list(
+    message = paste0(
+      "Temporal report: ", length(unique(information$row)),
+      " observation(s) have additional information.\n\n",
+      paste(detail, collapse = "\n\n"), "\n"
+    ),
+    call = NULL, report = report
+  ), class = c("ocean3d_time_report", "message", "condition")))
+  invisible(report)
+}
+
+
+.output_column_names <- function(method, var, prefix = NULL) {
+  prefix <- if (is.null(prefix)) var else prefix
+  if (method == "all") {
+    return(paste0(c("nearest_", "surface_", "seabottom_"), prefix))
+  }
+  prefix
+}
+
+.source_output_columns <- function(output, original_names) {
+  candidate <- attr(output, ".source_candidate", exact = TRUE)
+  if (!is.null(candidate$columns)) return(candidate$columns)
+  # Compatibility with existing internal merge tests.
+  setdiff(names(output), original_names)
+}
+
+.plan_source_outputs <- function(sources, var, method, output_prefix,
+                                 protected_names) {
+  if (!length(sources)) {
+    stop("At least one netCDF source is required.", call. = FALSE)
+  }
+  plan <- lapply(sources, function(source) {
+    variable <- .resolve_source_var(source, var)
+    prefix <- .resolve_output_prefix(
+      method = method, var = variable, output_prefix = output_prefix,
+      auto_var = is.null(var)
+    )
+    list(
+      variable = variable, prefix = prefix,
+      columns = .output_column_names(method, variable, prefix)
+    )
+  })
+  mapping <- do.call(rbind, lapply(plan, function(item) {
+    data.frame(
+      column = item$columns, variable = item$variable,
+      stringsAsFactors = FALSE
+    )
+  }))
+  protected <- intersect(mapping$column, protected_names)
+  if (length(protected)) {
+    stop(
+      "Output columns would overwrite extraction inputs: ",
+      toString(unique(protected)), ". Choose another output name.",
+      call. = FALSE
+    )
+  }
+  variables_by_column <- split(mapping$variable, mapping$column)
+  collisions <- names(Filter(
+    function(x) length(unique(x)) > 1L, variables_by_column
+  ))
+  if (length(collisions)) {
+    stop(
+      "Different variables cannot share these output columns: ",
+      toString(collisions), ". Use separate output names.",
+      call. = FALSE
+    )
+  }
+  plan
+}
+
+.unwrap_longitude <- function(values) {
+  if (length(values) < 2L) return(values)
+  original_steps <- diff(values)
+  steps <- (original_steps + 180) %% 360 - 180
+  ambiguous <- abs(abs(steps) - 180) < 1e-8
+  steps[ambiguous] <- original_steps[ambiguous]
+  values[1L] + c(0, cumsum(steps))
+}
+
+.read_spatial_bounds <- function(nc, coordinate, values) {
+  name <- .read_time_attribute(nc, coordinate, "bounds")
+  if (is.null(name)) return(NULL)
+  if (!is.character(name) || length(name) != 1L || is.na(name)) {
+    stop("Invalid spatial bounds reference.", call. = FALSE)
+  }
+  index <- which(vapply(
+    nc$var, function(x) identical(x$name, name), logical(1)
+  ))
+  if (length(index) != 1L) {
+    stop("Spatial bounds variable was not found: ", name, call. = FALSE)
+  }
+  variable <- nc$var[[index]]
+  axes <- vapply(variable$dim, function(x) x$name, character(1))
+  coordinate_axis <- which(axes == coordinate)
+  raw <- ncdf4::ncvar_get(nc, name, collapse_degen = FALSE)
+  if (length(dim(raw)) != 2L || length(coordinate_axis) != 1L) {
+    stop("Unsupported spatial bounds dimensions.", call. = FALSE)
+  }
+  if (coordinate_axis == 1L) raw <- t(raw)
+  if (!identical(dim(raw), c(2L, length(values))) ||
+        any(!is.finite(raw))) {
+    stop("Invalid spatial bounds values.", call. = FALSE)
+  }
+  coordinate_units <- .read_time_attribute(nc, coordinate, "units")
+  bounds_units <- .read_time_attribute(nc, name, "units")
+  if (!is.null(bounds_units) &&
+        !identical(bounds_units, coordinate_units)) {
+    stop(
+      "Spatial bounds and coordinates use different units.",
+      call. = FALSE
+    )
+  }
+  raw
+}
+
+.prepare_spatial_axis <- function(nc, coordinate, values, longitude = FALSE) {
+  if (!is.numeric(values) || !length(values) ||
+        any(!is.finite(values))) {
+    stop("Spatial coordinates must be finite numbers.", call. = FALSE)
+  }
+  if (!longitude && any(values < -90 | values > 90)) {
+    stop("Latitude coordinates are outside [-90, 90].", call. = FALSE)
+  }
+  centres <- if (longitude) .unwrap_longitude(values) else values
+  steps <- diff(centres)
+  if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
+    stop("Spatial coordinates must form a monotonic axis.", call. = FALSE)
+  }
+  explicit <- .read_spatial_bounds(nc, coordinate, values)
+  if (!is.null(explicit)) {
+    intervals <- explicit
+    if (longitude) {
+      for (j in seq_along(values)) {
+        width <- abs(diff(explicit[, j]))
+        if (width >= 360) {
+          intervals[, j] <- centres[j] + c(-180, 180)
+        } else {
+          offsets <- (explicit[, j] - values[j] + 180) %% 360 - 180
+          intervals[, j] <- centres[j] + offsets
+        }
+      }
+    }
+    lower <- apply(intervals, 2L, min)
+    upper <- apply(intervals, 2L, max)
+    if (any(centres < lower - 1e-8 | centres > upper + 1e-8)) {
+      stop(
+        "Spatial bounds do not contain their cell centres.",
+        call. = FALSE
+      )
+    }
+    basis <- "explicit_bounds"
+  } else if (length(centres) == 1L) {
+    lower <- upper <- centres
+    basis <- "singleton_coordinate"
+  } else {
+    order <- order(centres)
+    sorted <- centres[order]
+    gaps <- diff(sorted)
+    edges <- c(
+      sorted[1L] - gaps[1L] / 2,
+      head(sorted, -1L) + gaps / 2,
+      tail(sorted, 1L) + tail(gaps, 1L) / 2
+    )
+    lower <- upper <- numeric(length(centres))
+    lower[order] <- head(edges, -1L)
+    upper[order] <- tail(edges, -1L)
+    regular <- all(
+      abs(gaps - gaps[1L]) <= max(1e-8, gaps[1L] * 1e-8)
+    )
+    basis <- if (regular) "inferred_regular" else "inferred_irregular"
+  }
+  if (!longitude) {
+    lower <- pmax(lower, -90)
+    upper <- pmin(upper, 90)
+  }
+  list(
+    centres = centres, lower = lower, upper = upper,
+    longitude = longitude, basis = basis
+  )
+}
+
+.spatial_axis_index <- function(axis, target) {
+  if (length(target) != 1L || !is.finite(target)) return(NA_integer_)
+  if (axis$longitude) {
+    targets <- target + 360 * round((axis$centres - target) / 360)
+  } else {
+    if (target < -90 || target > 90) return(NA_integer_)
+    targets <- rep(target, length(axis$centres))
+  }
+  contained <- which(
+    targets >= axis$lower - 1e-8 & targets <= axis$upper + 1e-8
+  )
+  if (!length(contained)) return(NA_integer_)
+  distances <- abs(axis$centres[contained] - targets[contained])
+  as.integer(contained[which.min(distances)])
 }
 
 
@@ -658,6 +1340,18 @@
   as.integer(idx)
 }
 
+
+# A source may offer a temporal candidate without implying a coverage interval.
+# Matching and tolerance are handled by .match_time_index().
+.temporal_source_eligible <- function(time_values, target, resolution) {
+  if (is.null(time_values)) return(TRUE)
+  if (length(time_values) == 0L || is.na(target)) return(FALSE)
+
+  available <- .time_comparison_values(time_values, resolution)
+  requested <- .time_comparison_values(target, resolution)
+  !is.na(requested) && any(!is.na(available))
+}
+
 .prepare_lon <- function(lon_values, lon_target) {
   # Many global netCDF files store longitude from 0 to 360, whereas observation
   # tables often use -180 to 180. This conversion is applied only when the file
@@ -687,13 +1381,12 @@
   NULL
 }
 
-
 .normalise_axis_attribute <- function(x) {
   if (!is.character(x) || length(x) != 1L ||
         is.na(x)) {
     return("")
   }
- tolower(trimws(x))
+  tolower(trimws(x))
 }
 
 
@@ -709,9 +1402,9 @@
     .axis_attribute(nc, dim_name, "units")
   )
   lon_units <- c(
-    "degrees_east", "degree_east",
-    "degrees_e", "degree_e")
-  
+                 "degrees_east", "degree_east",
+                 "degrees_e", "degree_e")
+
   lat_units <- c(
     "degrees_north", "degree_north",
     "degrees_n", "degree_n"
@@ -720,45 +1413,45 @@
     return("lon")
   }
   if (standard_name == "latitude" || units %in% lat_units) {
-   return("lat")
+    return("lat")
   }
   if (standard_name == "time" ||
     grepl(
-        "^(milliseconds?|seconds?|minutes?|hours?|days?) since ",
-        units
-      )) {
-  return("time")
+      "^(milliseconds?|seconds?|minutes?|hours?|days?) since ",
+      units
+    )) {
+    return("time")
   }
   if (standard_name %in% c("depth", "height", "altitude")) {
     return("depth")
   }
-  
+
   if (axis == "X") return("lon")
   if (axis == "Y") return("lat")
-if (axis == "Z") return("depth")
+  if (axis == "Z") return("depth")
   if (axis == "T") return("time")
-  
+
   NULL
 }
 
 
 # Find one dimension belonging to the selected variable.
 .resolve_variable_axis <- function(
-    nc, var_dims, explicit, candidates, axis_name,
-    required = FALSE) {
-  
+  nc, var_dims, explicit, candidates, axis_name,
+  required = FALSE) {
+
   if (!is.null(explicit)) {
     if (!is.character(explicit) ||
-        length(explicit) != 1L ||
-        is.na(explicit) ||
-        !nzchar(trimws(explicit))) {
+          length(explicit) != 1L ||
+          is.na(explicit) ||
+          !nzchar(trimws(explicit))) {
       stop(
         "`", axis_name,
         "_dim` must be a single non-empty dimension name.",
         call. = FALSE
       )
     }
-    
+
     if (!explicit %in% var_dims) {
       stop(
         "Explicit `", axis_name, "_dim = '", explicit,
@@ -767,10 +1460,10 @@ if (axis == "Z") return("depth")
         call. = FALSE
       )
     }
-    
+
     return(explicit)
   }
-  
+
   metadata_matches <- var_dims[
     vapply(
       var_dims,
@@ -780,7 +1473,7 @@ if (axis == "Z") return("depth")
       logical(1)
     )
   ]
-  
+
   if (length(metadata_matches) > 1L) {
     stop(
       "Ambiguous ", axis_name, " axis: ",
@@ -789,13 +1482,13 @@ if (axis == "Z") return("depth")
       call. = FALSE
     )
   }
-  
+
   if (length(metadata_matches) == 1L) {
     return(metadata_matches)
   }
-  
+
   name_matches <- candidates[candidates %in% var_dims]
-  
+
   if (length(name_matches) > 1L) {
     stop(
       "Ambiguous ", axis_name, " dimension names: ",
@@ -804,11 +1497,11 @@ if (axis == "Z") return("depth")
       call. = FALSE
     )
   }
-  
+
   if (length(name_matches) == 1L) {
     return(name_matches)
   }
-  
+
   if (isTRUE(required)) {
     stop(
       "Could not identify the ", axis_name,
@@ -818,7 +1511,7 @@ if (axis == "Z") return("depth")
       call. = FALSE
     )
   }
-  
+
   NULL
 }
 
@@ -826,31 +1519,31 @@ if (axis == "Z") return("depth")
 # Reject grids that need unsupported 2D coordinate lookup.
 .check_auxiliary_coordinates <- function(nc, var, var_dims) {
   coordinates <- .axis_attribute(nc, var, "coordinates")
-  
+
   if (is.null(coordinates)) return(invisible(TRUE))
-  
+
   coordinates <- strsplit(
     trimws(as.character(coordinates)[1]),
     "\\s+"
   )[[1]]
-  
+
   for (coordinate in coordinates) {
     if (!coordinate %in% names(nc$var)) next
-    
+
     standard_name <- .normalise_axis_attribute(
       .axis_attribute(nc, coordinate, "standard_name")
     )
-    
+
     if (!standard_name %in% c("longitude", "latitude")) next
-    
+
     coord_dims <- vapply(
       nc$var[[coordinate]]$dim,
       function(d) d$name,
       character(1)
     )
-    
+
     if (length(coord_dims) > 1L &&
-        all(coord_dims %in% var_dims)) {
+          all(coord_dims %in% var_dims)) {
       stop(
         "Variable `", var, "` uses a two-dimensional ",
         "geographic coordinate `", coordinate, "`. ",
@@ -860,7 +1553,7 @@ if (axis == "Z") return("depth")
       )
     }
   }
-  
+
   invisible(TRUE)
 }
 
@@ -871,7 +1564,7 @@ if (axis == "Z") return("depth")
                          lat_dim = NULL,
                          depth_dim = NULL,
                          time_dim = NULL) {
-  
+
   if (!var %in% names(nc$var)) {
     stop(
       "Variable `", var, "` not found in netCDF file. ",
@@ -880,52 +1573,52 @@ if (axis == "Z") return("depth")
       call. = FALSE
     )
   }
-  
+
   variable_dims <- nc$var[[var]]$dim
-  
+
   var_dims <- vapply(
     variable_dims,
     function(d) d$name,
     character(1)
   )
-  
+
   dim_lengths <- vapply(
     variable_dims,
     function(d) as.integer(d$len),
     integer(1)
   )
-  
+
   .check_auxiliary_coordinates(nc, var, var_dims)
-  
+
   lon_name <- .resolve_variable_axis(
     nc, var_dims, lon_dim,
     c("lon", "longitude", "x", "nav_lon"),
     "lon", required = TRUE
   )
-  
+
   lat_name <- .resolve_variable_axis(
     nc, var_dims, lat_dim,
     c("lat", "latitude", "y", "nav_lat"),
     "lat", required = TRUE
   )
-  
+
   depth_name <- .resolve_variable_axis(
     nc, var_dims, depth_dim,
     c("depth", "deptht", "lev", "level", "z"),
     "depth"
   )
-  
+
   time_name <- .resolve_variable_axis(
     nc, var_dims, time_dim,
     c("time", "time_counter", "valid_time", "t"),
     "time"
   )
-  
+
   assigned <- unlist(
     list(lon_name, lat_name, depth_name, time_name),
     use.names = FALSE
   )
-  
+
   if (anyDuplicated(assigned)) {
     stop(
       "A netCDF dimension was assigned to multiple axes. ",
@@ -933,15 +1626,15 @@ if (axis == "Z") return("depth")
       call. = FALSE
     )
   }
-  
+
   unknown <- setdiff(var_dims, assigned)
-  
+
   unknown_lengths <- dim_lengths[
     match(unknown, var_dims)
   ]
-  
+
   unsupported <- unknown[unknown_lengths > 1L]
-  
+
   if (length(unsupported) > 0L) {
     stop(
       "Unrecognised non-singleton dimension(s) ",
@@ -952,15 +1645,15 @@ if (axis == "Z") return("depth")
       call. = FALSE
     )
   }
-  
+
   singleton_dims <- unknown[unknown_lengths == 1L]
-  
+
   projected_units <- c(
     "m", "meter", "meters", "metre", "metres",
     "km", "kilometer", "kilometers",
     "kilometre", "kilometres"
   )
-  
+
   for (axis_info in list(
     list(name = lon_name, axis = "longitude"),
     list(name = lat_name, axis = "latitude")
@@ -968,7 +1661,7 @@ if (axis == "Z") return("depth")
     units <- .normalise_axis_attribute(
       .axis_attribute(nc, axis_info$name, "units")
     )
-    
+
     if (units %in% projected_units) {
       stop(
         "Dimension `", axis_info$name,
@@ -980,7 +1673,7 @@ if (axis == "Z") return("depth")
       )
     }
   }
-  
+
   list(
     lon = lon_name,
     lat = lat_name,
@@ -996,14 +1689,14 @@ if (axis == "Z") return("depth")
                                singleton_dims = character(0)) {
   # Build start/count in the exact dimension order of the variable.
   # Every dimension must be explicitly indexed, except known singletons.
-  
+
   start <- integer(length(var_dims))
   count <- integer(length(var_dims))
-  
+
   for (i in seq_along(var_dims)) {
     dim_name <- var_dims[i]
     idx <- index_list[[dim_name]]
-    
+
     if (!is.null(idx)) {
       start[i] <- as.integer(idx$start)
       count[i] <- as.integer(idx$count)
@@ -1019,7 +1712,7 @@ if (axis == "Z") return("depth")
       )
     }
   }
-  
+
   list(start = start, count = count)
 }
 
@@ -1061,9 +1754,12 @@ if (axis == "Z") return("depth")
       )
     }
   }
-  
-  sc <- .build_start_count(dims$var_dims, index_list, singleton_dims = dims$singleton_dims)
-  
+
+  sc <- .build_start_count(
+    dims$var_dims, index_list,
+    singleton_dims = dims$singleton_dims
+  )
+
   ncdf4::ncvar_get(
     nc = nc,
     varid = var,
@@ -1089,7 +1785,8 @@ if (axis == "Z") return("depth")
                               max_time_diff,
                               output_prefix,
                               verbose,
-                              time_resolution = "auto") {
+                              time_resolution = "auto",
+                              multi_source = FALSE) {
   opened <- .open_source(source)
   on.exit(.close_source(opened), add = TRUE)
   nc <- opened$nc
@@ -1109,7 +1806,7 @@ if (axis == "Z") return("depth")
       call. = FALSE
     )
   }
-  
+
   # A 2D extraction cannot choose between multiple depth levels.
   if (method == "2d" && !is.null(dims$depth)) {
     if (length(.get_dim_values(nc, dims$depth)) > 1L) {
@@ -1121,11 +1818,28 @@ if (axis == "Z") return("depth")
       )
     }
   }
-  
+
   lon_values <- .get_dim_values(nc, dims$lon)
   lat_values <- .get_dim_values(nc, dims$lat)
+  spatial_axes <- NULL
+  if (isTRUE(multi_source)) {
+    spatial_axes <- list(
+      lon = .prepare_spatial_axis(
+        nc, dims$lon, lon_values, longitude = TRUE
+      ),
+      lat = .prepare_spatial_axis(
+        nc, dims$lat, lat_values, longitude = FALSE
+      )
+    )
+  }
   depth_values <- .get_dim_values(nc, dims$depth)
   time_values <- .decode_netcdf_time(nc, dims$time)
+  temporal_metadata <- .read_temporal_metadata(nc, dims$time, var, time_values)
+  temporal_metadata$source_file <- if (source$type == "path") {
+    source$source
+  } else {
+    nc$filename
+  }
   resolved_time_resolution <- time_resolution
 
   if (!is.null(dims$time) && !is.null(date_col)) {
@@ -1160,21 +1874,46 @@ if (axis == "Z") return("depth")
     out[[prefix]] <- NA_real_
   }
 
+  candidate_distance <- rep(Inf, nrow(data))
+  candidate_time <- rep(NA_real_, nrow(data))
+  candidate_index <- rep(NA_integer_, nrow(data))
+
   for (i in seq_len(nrow(data))) {
     if (isTRUE(verbose) && i %% 100 == 0) {
       message("Extracting row ", i, " of ", nrow(data))
     }
 
-    lon_target <- .prepare_lon(lon_values, data[[lon_col]][i])
-    lat_target <- data[[lat_col]][i]
-
-    lon_idx <- .nearest_index(lon_values, lon_target)
-    lat_idx <- .nearest_index(lat_values, lat_target)
+    if (isTRUE(multi_source)) {
+      lon_idx <- .spatial_axis_index(
+        spatial_axes$lon, data[[lon_col]][i]
+      )
+      lat_idx <- .spatial_axis_index(
+        spatial_axes$lat, data[[lat_col]][i]
+      )
+    } else {
+      lon_target <- .prepare_lon(lon_values, data[[lon_col]][i])
+      lat_target <- data[[lat_col]][i]
+      lon_idx <- .nearest_index(lon_values, lon_target)
+      lat_idx <- .nearest_index(lat_values, lat_target)
+    }
 
     if (is.na(lon_idx) || is.na(lat_idx)) next
 
+
     time_idx <- NULL
     if (!is.null(time_values)) {
+
+      # Single-timestamp sources can offer nearest candidates too.
+      # Compare their distances across sources during merging.
+      if (isTRUE(multi_source) &&
+        !.temporal_source_eligible(
+          time_values = time_values,
+          target = date_values[i],
+          resolution = resolved_time_resolution
+        )) {
+        next
+      }
+
       time_idx <- .match_time_index(
         values = time_values,
         target = date_values[i],
@@ -1182,7 +1921,25 @@ if (axis == "Z") return("depth")
         max_time_diff = max_time_diff,
         time_resolution = resolved_time_resolution
       )
+
       if (is.na(time_idx)) next
+
+      available <- .time_comparison_values(
+        time_values[time_idx], resolved_time_resolution
+      )
+      requested <- .time_comparison_values(
+        date_values[i], resolved_time_resolution
+      )
+      candidate_distance[i] <- abs(as.numeric(
+        difftime(available, requested, units = "days")
+      ))
+      candidate_time[i] <- as.numeric(time_values[time_idx])
+      candidate_index[i] <- time_idx
+    }
+
+    if (is.null(time_values)) {
+      # Static sources retain first-valid-source priority.
+      candidate_distance[i] <- 0
     }
 
     if (method == "2d") {
@@ -1288,39 +2045,103 @@ if (axis == "Z") return("depth")
     }
   }
 
+  attr(out, ".source_candidate") <- list(
+    distance_days = candidate_distance,
+    timestamp = candidate_time,
+    time_index = candidate_index,
+    variable = var,
+    metadata = temporal_metadata,
+    columns = .output_column_names(method, var, output_prefix)
+  )
   out
 }
 
-.merge_source_outputs <- function(outputs, original_names) {
-  # When several files are provided, the function extracts from each file and
-  # then combines the results. For ordinary single-variable extraction, the
-  # first non-missing value across files is used. This is useful when files
-  # represent different time periods or spatial tiles.
+.merge_source_outputs <- function(
+  outputs,
+  original_names,
+  return_provenance = FALSE
+) {
   if (length(outputs) == 1L) {
-    return(outputs[[1]])
+    out <- outputs[[1L]]
+    candidate <- attr(out, ".source_candidate", exact = TRUE)
+    output_columns <- .source_output_columns(out, original_names)
+    attr(out, ".source_candidate") <- NULL
+    if (isTRUE(return_provenance)) {
+      provenance <- list()
+      for (col in output_columns) {
+        valid <- !is.na(out[[col]]) & is.finite(candidate$distance_days)
+        provenance[[col]] <- data.frame(
+          source_index = ifelse(valid, 1L, NA_integer_),
+          variable = ifelse(valid, candidate$variable, NA_character_),
+          time_index = ifelse(valid, candidate$time_index, NA_integer_),
+          timestamp = as.POSIXct(
+            ifelse(valid, candidate$timestamp, NA_real_),
+            origin = "1970-01-01", tz = "UTC"
+          ),
+          distance_days = ifelse(valid, candidate$distance_days, NA_real_),
+          stringsAsFactors = FALSE
+        )
+      }
+      return(list(data = out, provenance = provenance))
+    }
+    return(out)
   }
 
-  out <- outputs[[1]][original_names]
+  out <- outputs[[1L]][original_names]
+  attr(out, ".source_candidate") <- NULL
   new_cols <- unique(unlist(lapply(
-    outputs,
-    function(x) setdiff(names(x), original_names)
+    outputs, .source_output_columns, original_names = original_names
   )))
+  provenance <- list()
 
   for (col in new_cols) {
     values <- rep(NA_real_, nrow(out))
+    best_distance <- rep(Inf, nrow(out))
+    selected_source <- rep(NA_integer_, nrow(out))
+    selected_time <- rep(NA_real_, nrow(out))
+    selected_index <- rep(NA_integer_, nrow(out))
+    selected_variable <- rep(NA_character_, nrow(out))
 
-    for (x in outputs) {
-      if (!col %in% names(x)) next
-      replace <- is.na(values) & !is.na(x[[col]])
+    for (j in seq_along(outputs)) {
+      x <- outputs[[j]]
+      produced_columns <- .source_output_columns(x, original_names)
+      if (!col %in% produced_columns) next
+      candidate <- attr(x, ".source_candidate", exact = TRUE)
+      if (is.null(candidate)) {
+        stop("Missing internal source-candidate metadata.", call. = FALSE)
+      }
+      distance <- candidate$distance_days
+      # Strict inequality preserves input priority only for temporal ties.
+      replace <- !is.na(x[[col]]) & is.finite(distance) &
+        (is.na(values) | distance < best_distance)
       values[replace] <- x[[col]][replace]
+      best_distance[replace] <- distance[replace]
+      selected_source[replace] <- j
+      selected_time[replace] <- candidate$timestamp[replace]
+      selected_index[replace] <- candidate$time_index[replace]
+      selected_variable[replace] <- candidate$variable
     }
 
     out[[col]] <- values
+    provenance[[col]] <- data.frame(
+      source_index = selected_source,
+      variable = selected_variable,
+      time_index = selected_index,
+      timestamp = as.POSIXct(
+        selected_time, origin = "1970-01-01", tz = "UTC"
+      ),
+      distance_days = ifelse(
+        is.na(selected_source), NA_real_, best_distance
+      ),
+      stringsAsFactors = FALSE
+    )
   }
 
+  if (isTRUE(return_provenance)) {
+    return(list(data = out, provenance = provenance))
+  }
   out
 }
-
 # -----------------------------------------------------------------------------
 # Main extraction function
 # -----------------------------------------------------------------------------
@@ -1389,11 +2210,48 @@ if (axis == "Z") return("depth")
 #'   `output_col` and `output_prefix` are provided, `output_col` is used. With
 #'   `method = "all"`, this name is used as the suffix in `nearest_*`,
 #'   `surface_*` and `seabottom_*` columns.
+#' @section Multiple sources:
+#' With multiple sources, only cells containing the observation are eligible.
+#' Explicit spatial cell bounds are preferred. Otherwise, edges are inferred
+#' from adjacent centres; singleton axes without bounds require coincidence.
+#' Longitude comparisons support equivalent coordinates across the antimeridian.
+#' Among eligible sources the closest temporal candidate with a valid value
+#' wins, with input order breaking ties. Existing output columns are replaced,
+#' including by NA. Output names cannot overwrite extraction inputs or combine
+#' different variables in the same column.
+#' @section Custom temporal intervals:
+#' With time_resolution = "custom", observations require hours as for datetime.
+#' For example, custom_time_interval = as.difftime(3, units = "hours") warns
+#' above three hours of displacement. Exact matching requires the same
+#' timestamp.
+#' Auto matching remains unchanged and uses the observed cadence for
+#' diagnostics.
+#' @section Temporal diagnostics:
+#' Diagnostics are emitted after source selection, for values actually returned.
+#' Daily, monthly and yearly comparisons warn on a change of calendar period
+#' in UTC. Datetime comparisons warn when displacement exceeds one observed
+#' cadence step, or when a nonzero displacement has no reliable cadence.
+#' With a detected daily cadence, datetime comparison also warns when the
+#' selected value falls on a different UTC day, even below 24 hours.
+#' Explanatory warnings include the requested and selected timestamps, their
+#' difference, the comparison resolution, cadence, row, variable and file name.
+#' Reports explain non-warning displacements and missing outputs without
+#' repeating examples already explained by a temporal warning.
+#' Cadence inference does not change matching or impose a maximum time gap.
+#' Singleton sources may use the observed sequence of compatible files for the
+#' same variable. Time bounds describe intervals, not sampling frequency.
+#' @param custom_time_interval Positive difftime value used as the warning
+#'   interval when time_resolution = "custom". Matching uses full timestamps.
+#'   This interval does not reject candidates; use max_time_diff for that.
+#' @param time_report Logical. If TRUE, the default, display a temporal summary
+#'   when returned values are displaced in time or outputs are missing.
+#'   The return format is unchanged. FALSE hides the summary but does not
+#'   suppress temporal warnings.
 #' @param time_resolution Precision used to compare observation times with
 #'   dataset timestamps. "auto" uses daily comparison for Date objects
 #'   and date-only text, and datetime comparison for POSIXt objects and
 #'   date-time text. Explicit alternatives are "datetime", "daily",
-#'   "monthly" and "yearly". Calendar comparisons use UTC.
+#'   "monthly", "yearly" and "custom". Calendar comparisons use UTC.
 #'   These options compare timestamp labels; they do not infer averaging
 #'   intervals or calculate temporal summaries. Multiple dataset records
 #'   mapping to the same comparison value cause an error.
@@ -1513,11 +2371,29 @@ extract_to_point <- function(data = NULL,
                              verbose = FALSE,
                              time_resolution = c(
                                "auto", "datetime", "daily",
-                               "monthly", "yearly"
-                             )) {
+                               "monthly", "yearly", "custom"
+                             ),
+                             custom_time_interval = NULL,
+                             time_report = TRUE) {
   method <- match.arg(method)
   time_match <- match.arg(time_match)
   time_resolution <- match.arg(time_resolution)
+  custom_seconds <- .validate_custom_time_interval(
+    time_resolution, custom_time_interval
+  )
+  if (!is.logical(time_report) || length(time_report) != 1L ||
+        is.na(time_report)) {
+    stop(
+      "`time_report` must be TRUE or FALSE. ",
+      "Use TRUE to show explanatory reports or FALSE to hide them; ",
+      "temporal warnings remain active.", call. = FALSE
+    )
+  }
+  comparison_resolution <- if (time_resolution == "custom") {
+    "datetime"
+  } else {
+    time_resolution
+  }
 
   if (!is.null(max_time_diff) &&
         (!is.numeric(max_time_diff) || length(max_time_diff) != 1L ||
@@ -1569,7 +2445,7 @@ extract_to_point <- function(data = NULL,
 
     if (!is.null(direct_values$date)) {
       # Validate without replacing the original precision.
-      .prepare_time_input(direct_values$date, time_resolution)
+      .prepare_time_input(direct_values$date, comparison_resolution)
       data$date <- direct_values$date
       date_col <- "date"
     } else {
@@ -1618,17 +2494,22 @@ extract_to_point <- function(data = NULL,
 
   sources <- .as_netcdf_sources(nc, file_col = file_col)
 
-  auto_var <- is.null(var)
-
-  outputs <- lapply(sources, function(src) {
-    source_var <- .resolve_source_var(src, var)
-
-    source_output_prefix <- .resolve_output_prefix(
-      method = method,
-      var = source_var,
-      output_prefix = output_prefix,
-      auto_var = auto_var
-    )
+  protected_names <- intersect(
+    c(lon_col, lat_col, date_col, depth_col, id_col), names(data)
+  )
+  if (inherits(data, "sf")) {
+    protected_names <- unique(c(
+      protected_names, attr(data, "sf_column")
+    ))
+  }
+  source_plan <- .plan_source_outputs(
+    sources = sources, var = var, method = method,
+    output_prefix = output_prefix, protected_names = protected_names
+  )
+  outputs <- lapply(seq_along(sources), function(j) {
+    src <- sources[[j]]
+    source_var <- source_plan[[j]]$variable
+    source_output_prefix <- source_plan[[j]]$prefix
 
     .extract_one_file(
       data = data,
@@ -1648,14 +2529,50 @@ extract_to_point <- function(data = NULL,
       max_time_diff = max_time_diff,
       output_prefix = source_output_prefix,
       verbose = verbose,
-      time_resolution = time_resolution
+      time_resolution = comparison_resolution,
+      multi_source = length(sources) > 1L
     )
   })
 
-  out <- .merge_source_outputs(outputs, original_names = names(data))
+  merged <- .merge_source_outputs(
+    outputs,
+    original_names = names(data),
+    return_provenance = TRUE
+  )
+  out <- merged$data
+  source_provenance <- merged$provenance
+  temporal_metadata <- lapply(outputs, function(x) {
+    attr(x, ".source_candidate", exact = TRUE)$metadata
+  })
+  temporal_diagnostics <- data.frame()
+  has_temporal_source <- any(vapply(
+    temporal_metadata, function(x) !isTRUE(x$static), logical(1)
+  ))
+  if (has_temporal_source &&
+        !is.null(date_col)) {
+    prepared <- .prepare_time_input(data[[date_col]], comparison_resolution)
+    diagnostic_resolution <- if (time_resolution == "custom") {
+      "custom"
+    } else {
+      prepared$resolution
+    }
+    temporal_diagnostics <- .diagnose_temporal_selection(
+      source_provenance, prepared$values, diagnostic_resolution,
+      temporal_metadata, custom_seconds = custom_seconds
+    )
+    .warn_temporal_selection(temporal_diagnostics)
+    if (isTRUE(time_report)) {
+      .show_time_report(
+        source_provenance, prepared$values, temporal_metadata,
+        temporal_diagnostics, sources
+      )
+    }
+  }
 
   if (direct_input) {
-    value_cols <- setdiff(names(out), names(data))
+    value_cols <- unique(unlist(lapply(
+      source_plan, function(x) x$columns
+    )))
 
     if (length(value_cols) == 1L) {
       return(out[[value_cols]])
