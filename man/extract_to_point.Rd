@@ -114,14 +114,6 @@ to define the exact name of the output column directly. If both
 \item{verbose}{Logical. If \code{TRUE}, progress messages are printed every 100
 rows.}
 
-\item{custom_time_interval}{Positive difftime value used as the warning
-interval when time_resolution = "custom". Matching uses full timestamps.
-This interval does not reject candidates; use max_time_diff for that.}
-
-\item{time_report}{Logical. If TRUE, the default, display a temporal summary
-when returned values are displaced in time or outputs are missing.
-The return format is unchanged. FALSE hides the summary but does not
-suppress temporal warnings.}
 \item{time_resolution}{Precision used to compare observation times with
 dataset timestamps. "auto" uses daily comparison for Date objects
 and date-only text, and datetime comparison for POSIXt objects and
@@ -134,6 +126,15 @@ With nearest matching, monthly and yearly comparisons use the start
 of the labelled month or year. max_time_diff remains in days and
 applies to these comparison values. Use exact matching to require
 the same labelled day, month or year.}
+
+\item{custom_time_interval}{Positive difftime value used as the warning
+interval when time_resolution = "custom". Matching uses full timestamps.
+This interval does not reject candidates; use max_time_diff for that.}
+
+\item{time_report}{Logical. If TRUE, the default, display a temporal summary
+when returned values are displaced in time or outputs are missing.
+The return format is unchanged. FALSE hides the summary but does not
+suppress temporal warnings.}
 }
 \value{
 If \code{data} is provided, the input observations with extracted values
@@ -171,6 +172,7 @@ It does not identify averaging intervals, calculate temporal means,
 or interpret climatological periods.
 }
 \section{Multiple sources}{
+
 With multiple sources, only cells containing the observation are eligible.
 Explicit spatial cell bounds are preferred. Otherwise, edges are inferred
 from adjacent centres; singleton axes without bounds require coincidence.
@@ -182,13 +184,17 @@ different variables in the same column.
 }
 
 \section{Custom temporal intervals}{
+
 With time_resolution = "custom", observations require hours as for datetime.
 For example, custom_time_interval = as.difftime(3, units = "hours") warns
-above three hours of displacement. Exact matching requires the same timestamp.
-Auto matching remains unchanged and uses the observed cadence for diagnostics.
+above three hours of displacement. Exact matching requires the same
+timestamp.
+Auto matching remains unchanged and uses the observed cadence for
+diagnostics.
 }
 
 \section{Temporal diagnostics}{
+
 Diagnostics are emitted after source selection, for values actually returned.
 Daily, monthly and yearly comparisons warn on a change of calendar period
 in UTC. Datetime comparisons warn when displacement exceeds one observed
