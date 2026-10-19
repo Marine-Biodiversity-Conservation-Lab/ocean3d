@@ -28,7 +28,9 @@ extract_to_point(
   output_prefix = NULL,
   output_col = NULL,
   verbose = FALSE,
-  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly")
+  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly", "custom"),
+  custom_time_interval = NULL,
+  time_report = TRUE
 )
 }
 \arguments{
@@ -112,11 +114,19 @@ to define the exact name of the output column directly. If both
 \item{verbose}{Logical. If \code{TRUE}, progress messages are printed every 100
 rows.}
 
+\item{custom_time_interval}{Positive difftime value used as the warning
+interval when time_resolution = "custom". Matching uses full timestamps.
+This interval does not reject candidates; use max_time_diff for that.}
+
+\item{time_report}{Logical. If TRUE, the default, display a temporal summary
+when returned values are displaced in time or outputs are missing.
+The return format is unchanged. FALSE hides the summary but does not
+suppress temporal warnings.}
 \item{time_resolution}{Precision used to compare observation times with
 dataset timestamps. "auto" uses daily comparison for Date objects
 and date-only text, and datetime comparison for POSIXt objects and
 date-time text. Explicit alternatives are "datetime", "daily",
-"monthly" and "yearly". Calendar comparisons use UTC.
+"monthly", "yearly" and "custom". Calendar comparisons use UTC.
 These options compare timestamp labels; they do not infer averaging
 intervals or calculate temporal summaries. Multiple dataset records
 mapping to the same comparison value cause an error.
@@ -160,6 +170,40 @@ Temporal resolution controls comparison of timestamp labels.
 It does not identify averaging intervals, calculate temporal means,
 or interpret climatological periods.
 }
+\section{Multiple sources}{
+With multiple sources, only cells containing the observation are eligible.
+Explicit spatial cell bounds are preferred. Otherwise, edges are inferred
+from adjacent centres; singleton axes without bounds require coincidence.
+Longitude comparisons support equivalent coordinates across the antimeridian.
+Among eligible sources the closest temporal candidate with a valid value
+wins, with input order breaking ties. Existing output columns are replaced,
+including by NA. Output names cannot overwrite extraction inputs or combine
+different variables in the same column.
+}
+
+\section{Custom temporal intervals}{
+With time_resolution = "custom", observations require hours as for datetime.
+For example, custom_time_interval = as.difftime(3, units = "hours") warns
+above three hours of displacement. Exact matching requires the same timestamp.
+Auto matching remains unchanged and uses the observed cadence for diagnostics.
+}
+
+\section{Temporal diagnostics}{
+Diagnostics are emitted after source selection, for values actually returned.
+Daily, monthly and yearly comparisons warn on a change of calendar period
+in UTC. Datetime comparisons warn when displacement exceeds one observed
+cadence step, or when a nonzero displacement has no reliable cadence.
+With a detected daily cadence, datetime comparison also warns when the
+selected value falls on a different UTC day, even below 24 hours.
+Explanatory warnings include the requested and selected timestamps, their
+difference, the comparison resolution, cadence, row, variable and file name.
+Reports explain non-warning displacements and missing outputs without
+repeating examples already explained by a temporal warning.
+Cadence inference does not change matching or impose a maximum time gap.
+Singleton sources may use the observed sequence of compatible files for the
+same variable. Time bounds describe intervals, not sampling frequency.
+}
+
 \examples{
 nc_file <- system.file(
   "extdata", "example_3d.nc",
