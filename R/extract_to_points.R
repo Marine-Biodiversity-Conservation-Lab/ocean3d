@@ -304,6 +304,170 @@
   )
 }
 
+.read_time_attribute <- function(nc, coordinate, attribute) {
+  att <- ncdf4::ncatt_get(nc, coordinate, attribute)
+  
+  if (!isTRUE(att$hasatt)) {
+    return(NULL)
+  }
+  
+  att$value
+}
+
+
+.decode_netcdf_time <- function(nc, time_dim) {
+  if (is.null(time_dim)) {
+    return(NULL)
+  }
+  
+  units <- .read_time_attribute(nc, time_dim, "units")
+  
+  if (!is.character(units) || length(units) != 1L ||
+      is.na(units) || !nzchar(trimws(units))) {
+    stop(
+      "Time coordinate `", time_dim,
+      "` has no usable `units` attribute. ",
+      "Expected units such as 'hours since 2020-01-01 00:00:00'. ",
+      "Check the file metadata or use a corrected dataset.",
+      call. = FALSE
+    )
+  }
+  
+  calendar <- .read_time_attribute(nc, time_dim, "calendar")
+  
+  if (is.null(calendar)) {
+    calendar <- "standard"
+  }
+  
+  supported <- c("standard", "gregorian", "proleptic_gregorian")
+  
+  if (!is.character(calendar) || length(calendar) != 1L ||
+      is.na(calendar) ||
+      !tolower(calendar) %in% supported) {
+    stop(
+      "Time coordinate `", time_dim,
+      "` uses an unsupported calendar: ", toString(calendar), ". ",
+      "This reader currently supports standard, gregorian and ",
+      "proleptic_gregorian calendars.",
+      call. = FALSE
+    )
+  }
+  
+  pattern <- paste0(
+    "^\\s*",
+    "(milliseconds?|seconds?|minutes?|hours?|days?)",
+    "\\s+since\\s+(.+?)\\s*$"
+  )
+  
+  parts <- regmatches(
+    units,
+    regexec(pattern, units, ignore.case = TRUE, perl = TRUE)
+  )[[1]]
+  
+  if (length(parts) != 3L) {
+    stop(
+      "Unsupported time units for `", time_dim, "`: '", units, "'. ",
+      "Expected milliseconds, seconds, minutes, hours or days ",
+      "followed by 'since' and a reference date-time. ",
+      "Months, years and climatologies require separate handling.",
+      call. = FALSE
+    )
+  }
+  
+  unit <- sub("s$", "", tolower(parts[2]))
+  
+  seconds_per_unit <- switch(
+    unit,
+    millisecond = 0.001,
+    second = 1,
+    minute = 60,
+    hour = 3600,
+    day = 86400
+  )
+  
+  origin_text <- trimws(parts[3])
+  origin_text <- sub("T", " ", origin_text, fixed = TRUE)
+  origin_text <- sub(
+    "\\s*(UTC|Z)$", "",
+    origin_text,
+    ignore.case = TRUE
+  )
+  origin_text <- trimws(origin_text)
+  
+  # This first reader supports origins written in UTC without
+  # numeric timezone offsets. Reject other forms explicitly.
+  date_pattern <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+  datetime_pattern <- paste0(
+    "^[0-9]{4}-[0-9]{2}-[0-9]{2} ",
+    "[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?$"
+  )
+  
+  if (grepl(date_pattern, origin_text)) {
+    origin_text <- paste(origin_text, "00:00:00")
+  } else if (!grepl(datetime_pattern, origin_text)) {
+    stop(
+      "Unsupported reference date-time in units '", units, "'. ",
+      "Expected YYYY-MM-DD or YYYY-MM-DD HH:MM:SS in UTC, ",
+      "optionally followed by Z or UTC. ",
+      "Numeric timezone offsets are not supported by this reader yet.",
+      call. = FALSE
+    )
+  }
+  
+  origin <- as.POSIXct(
+    strptime(
+      origin_text,
+      format = "%Y-%m-%d %H:%M:%OS",
+      tz = "UTC"
+    )
+  )
+  
+  # Round-trip validation catches invalid dates and times that
+  # a platform might otherwise normalise.
+  if (is.na(origin) ||
+      format(origin, "%Y-%m-%d %H:%M:%S", tz = "UTC") !=
+      substr(origin_text, 1L, 19L)) {
+    stop(
+      "Invalid reference date-time in units '", units, "'.",
+      call. = FALSE
+    )
+  }
+  
+  values <- as.vector(.get_dim_values(nc, time_dim))
+  
+  if (!is.numeric(values) || any(!is.finite(values))) {
+    stop(
+      "Time coordinate `", time_dim,
+      "` must contain finite numeric offsets.",
+      call. = FALSE
+    )
+  }
+  
+  timestamps <- origin + values * seconds_per_unit
+  
+  # R's ordinary date-time arithmetic does not implement the
+  # historical mixed Julian/Gregorian calendar.
+  if (tolower(calendar) %in% c("standard", "gregorian")) {
+    transition <- as.POSIXct(
+      "1582-10-15 00:00:00",
+      tz = "UTC"
+    )
+    
+    if (origin < transition || any(timestamps < transition)) {
+      stop(
+        "Historical standard/gregorian dates before 1582-10-15 ",
+        "require a calendar-aware decoder.",
+        call. = FALSE
+      )
+    }
+  }
+  
+  timestamps
+}
+
+
+
+
 .get_time_origin <- function(nc, time_dim) {
   # netCDF time is commonly stored as numeric values with units such as
   # "days since 1950-01-01". This helper reads that metadata and converts it

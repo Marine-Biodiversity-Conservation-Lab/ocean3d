@@ -631,3 +631,154 @@ test_that("extract_to_point rejects unsupported data input types", {
   )
 })
 
+make_time_decoder_fixture <- function(
+    path,
+    values,
+    units = "hours since 2020-01-01 00:00:00",
+    calendar = "standard") {
+  time <- ncdf4::ncdim_def(
+    "time",
+    units,
+    vals = values
+  )
+  
+  variable <- ncdf4::ncvar_def(
+    "example",
+    "1",
+    dim = list(time),
+    prec = "double"
+  )
+  
+  nc <- ncdf4::nc_create(path, variable)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  ncdf4::ncatt_put(nc, "time", "calendar", calendar)
+  ncdf4::ncvar_put(nc, "example", seq_along(values))
+  
+  invisible(path)
+}
+
+
+test_that("time decoding preserves noon across multiple days", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  make_time_decoder_fixture(f, values = c(12, 36, 132))
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expected <- as.POSIXct(
+    c(
+      "2020-01-01 12:00:00",
+      "2020-01-02 12:00:00",
+      "2020-01-06 12:00:00"
+    ),
+    tz = "UTC"
+  )
+  
+  expect_equal(.decode_netcdf_time(nc, "time"), expected)
+})
+
+
+test_that("time decoding preserves the hour in the reference origin", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  make_time_decoder_fixture(
+    f,
+    values = c(0, 1, 24),
+    units = "hours since 2020-01-01 06:30:00"
+  )
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expected <- as.POSIXct(
+    c(
+      "2020-01-01 06:30:00",
+      "2020-01-01 07:30:00",
+      "2020-01-02 06:30:00"
+    ),
+    tz = "UTC"
+  )
+  
+  expect_equal(.decode_netcdf_time(nc, "time"), expected)
+})
+
+
+test_that("supported time units decode to independently known instants", {
+  cases <- list(
+    list(unit = "milliseconds", values = c(0, 3600000)),
+    list(unit = "second", values = c(0, 3600)),
+    list(unit = "minutes", values = c(0, 60)),
+    list(unit = "hour", values = c(0, 1)),
+    list(unit = "days", values = c(0, 1 / 24))
+  )
+  
+  paths <- character()
+  on.exit(unlink(paths), add = TRUE)
+  
+  expected <- as.POSIXct(
+    c("2020-01-01 00:00:00", "2020-01-01 01:00:00"),
+    tz = "UTC"
+  )
+  
+  for (case in cases) {
+    f <- tempfile(fileext = ".nc")
+    paths <- c(paths, f)
+    
+    make_time_decoder_fixture(
+      f,
+      values = case$values,
+      units = paste(case$unit, "since 2020-01-01")
+    )
+    
+    nc <- ncdf4::nc_open(f)
+    
+    tryCatch(
+      expect_equal(.decode_netcdf_time(nc, "time"), expected),
+      finally = ncdf4::nc_close(nc)
+    )
+  }
+})
+
+
+test_that("time decoding rejects empty units instead of inventing an origin", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  make_time_decoder_fixture(
+    f,
+    values = c(0, 2, 5),
+    units = ""
+  )
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expect_error(
+    .decode_netcdf_time(nc, "time"),
+    "no usable.*units"
+  )
+})
+
+
+test_that("time decoding rejects unsupported calendars", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  
+  make_time_decoder_fixture(
+    f,
+    values = c(0, 24),
+    calendar = "360_day"
+  )
+  
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  
+  expect_error(
+    .decode_netcdf_time(nc, "time"),
+    "unsupported calendar"
+  )
+})
