@@ -65,6 +65,12 @@ You can install the development version of ocean3d from
 devtools::install_github("Marine-Biodiversity-Conservation-Lab/ocean3d")
 ```
 
+## Learning resources
+
+New to ocean3d? Watch the recording of the EEA 2026 workshop, which walks through the package and its main workflows:
+
+[![EEA 2026 workshop recording](https://img.youtube.com/vi/KOjN21PWtHk/hqdefault.jpg)](https://www.youtube.com/watch?v=KOjN21PWtHk)
+
 ## Function overview
 
 ### Create a raster covering extent of multiple spatial inputs
