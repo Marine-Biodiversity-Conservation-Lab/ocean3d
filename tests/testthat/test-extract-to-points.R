@@ -723,9 +723,7 @@ test_that("extract2d preserves observations and extracts known cells", {
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
   x <- data.frame(id = c("a", "b"), lon = c(0, 1), lat = c(40, 41))
-  out <- extract2d(x, f, var = "temp", date_col = NULL,
-    time_report = FALSE
-  )
+  out <- extract2d(x, f, var = "temp", time_report = FALSE)
   expect_equal(out[names(x)], x)
   expect_equal(out$temp, c(1, 4))
 })
@@ -1981,12 +1979,19 @@ test_that("static extraction ignores unrelated temporal dimensions", {
   )
 
   out <- extract2d(
-    x, f, var = "static", date_col = NULL,
+    x, f, var = "static",
     time_report = FALSE
   )
 
   expect_equal(out$static, c(11, 14))
   expect_equal(nrow(out), 2L)
+  expect_error(extract2d(x, f, var = "dynamic"), "has a time dimension",
+               fixed = TRUE)
+  dated <- x
+  dated$date <- as.Date("2020-01-02")
+  dynamic_out <- extract2d(dated, f, var = "dynamic")
+  expect_named(dynamic_out, c("lon", "lat", "date", "dynamic"))
+  expect_equal(dynamic_out$dynamic, c(5, 8))
 })
 
 
@@ -4045,4 +4050,354 @@ test_that("depth threshold text distinguishes a small excess", {
   expect_match(result$text, "50.001 m deeper", fixed = TRUE)
   expect_match(result$text, "50 m apart", fixed = TRUE)
   expect_match(result$text, "exceeds this spacing", fixed = TRUE)
+})
+
+# Issue #75 A: dates are required by the selected variable, not date_col.
+test_that("static variables use default date_col without a date column", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
+  x <- data.frame(id = c("a", "b"), lon = c(0, 1), lat = c(40, 41))
+  out <- extract2d(x, path, var = "temp")
+  expect_named(out, c("id", "lon", "lat", "temp"))
+  expect_equal(out$temp, c(1, 4))
+  expect_equal(out[names(x)], x)
+  expect_equal(extract_to_point(
+    nc = path, lon = 0, lat = 40, var = "temp", method = "2d"
+  ), 1)
+})
+
+test_that("temporal variables reject absent table and direct date inputs", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_test_netcdf(path, with_depth = FALSE)
+  x <- data.frame(lon = 0, lat = 40)
+  expect_error(extract2d(x, path, var = "temp"), "Column `date` is missing",
+               fixed = TRUE)
+  expect_error(extract2d(x, path, var = "temp", date_col = NULL),
+               "Set `date_col` to an existing date column", fixed = TRUE)
+  expect_error(extract2d(x, path, var = "temp", date_col = "observed_at"),
+               "Column `observed_at` is missing", fixed = TRUE)
+  expect_error(extract_to_point(
+    nc = path, lon = 0, lat = 40, var = "temp", method = "2d"
+  ), "Supply the `date` argument", fixed = TRUE)
+  error <- tryCatch(extract2d(x, path, var = "temp"), error = identity)
+  expect_match(conditionMessage(error), "netCDF variable `temp`", fixed = TRUE)
+  expect_match(conditionMessage(error), basename(path), fixed = TRUE)
+  expect_match(conditionMessage(error), "has a time dimension", fixed = TRUE)
+})
+
+test_that("an existing typed NA date preserves observations & missing values", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_test_netcdf(path, with_depth = FALSE)
+  x <- data.frame(id = c("a", "b"), lon = c(0, 1), lat = c(40, 41),
+                  date = as.Date(c("2020-01-03", NA_character_)))
+  out <- without_selection_reports(extract2d(x, path, var = "temp"))
+  expect_named(out, c("id", "lon", "lat", "date", "temp"))
+  expect_equal(out[names(x)], x)
+  expect_equal(out$temp, c(5, NA_real_))
+  value <- without_selection_reports(extract_to_point(
+    nc = path, lon = 0, lat = 40, date = as.Date(NA_character_),
+    var = "temp", method = "2d"
+  ))
+  expect_length(value, 1L)
+  expect_true(is.na(value))
+})
+
+test_that("static inputs do not parse unused date values", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
+  x <- data.frame(lon = 0, lat = 40, date = "not-a-date")
+  out <- extract2d(x, path, var = "temp")
+  expect_named(out, c("lon", "lat", "date", "temp"))
+  expect_equal(out$temp, 1)
+  expect_equal(out$date, "not-a-date")
+  expect_equal(extract_to_point(
+    nc = path, lon = 0, lat = 40, date = "not-a-date",
+    var = "temp", method = "2d"
+  ), 1)
+})
+
+test_that("custom date columns and scalar date recycling keep known values", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_test_netcdf(path, with_depth = FALSE)
+  x <- data.frame(lon = c(0, 1), lat = c(40, 41),
+                  observed_at = as.Date(c("2020-01-01", "2020-01-03")))
+  out <- extract2d(x, path, var = "temp", date_col = "observed_at")
+  expect_named(out, c("lon", "lat", "observed_at", "temp"))
+  expect_equal(out$observed_at, x$observed_at)
+  expect_equal(out$temp, c(1, 8))
+  expect_equal(extract_to_point(
+    nc = path, lon = c(0, 1), lat = c(40, 41),
+    date = as.Date("2020-01-03"), var = "temp", method = "2d"
+  ), c(5, 8))
+})
+
+test_that("mixed source time requirements hold in either source order", {
+  skip_if_not_installed("ncdf4")
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_test_netcdf(paths[1], var = "bathymetry", with_depth = FALSE,
+                   with_time = FALSE)
+  make_test_netcdf(paths[2], var = "temp", with_depth = FALSE)
+  x <- data.frame(lon = c(0, 1), lat = c(40, 41))
+  for (sources in list(paths, rev(paths))) {
+    expect_error(extract2d(x, sources), "netCDF variable `temp`",
+                 fixed = TRUE)
+    expect_error(extract_to_point(
+      nc = sources, lon = 0, lat = 40, method = "2d"
+    ), "Supply the `date` argument", fixed = TRUE)
+    dated <- x
+    dated$date <- as.Date(c("2020-01-03", NA_character_))
+    out <- without_selection_reports(extract2d(dated, sources))
+    expect_setequal(names(out), c("lon", "lat", "date", "bathymetry", "temp"))
+    expect_equal(out[names(dated)], dated)
+    expect_equal(out$bathymetry, c(1, 4))
+    expect_equal(out$temp, c(5, NA_real_))
+  }
+})
+
+# Issue #75 B: strict formats, explicit missing dates and UTC comparisons.
+test_that("minute and second ISO text share datetime precision", {
+  x <- c("2020-01-02 19:54", "2020-01-02T19:54Z",
+         "2020-01-02 19:54:30", NA_character_)
+  parsed <- .prepare_time_input(x)
+  expect_identical(parsed$resolution, "datetime")
+  expect_equal(format(parsed$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+               c("2020-01-02 19:54:00", "2020-01-02 19:54:00",
+                 "2020-01-02 19:54:30", NA_character_))
+  expect_identical(.prepare_time_input("2020-01-02")$resolution, "daily")
+  expect_error(.prepare_time_input(c("2020-01-02", "2020-01-02 19:54")),
+               "mixes dates", fixed = TRUE)
+})
+
+test_that("explicit missing vectors are not conversion failures", {
+  for (x in list(NA, c(NA, NA), NA_real_, NA_character_,
+                  as.Date(NA_character_))) {
+    for (resolution in c("auto", "datetime", "daily", "monthly", "yearly")) {
+      parsed <- .prepare_time_input(x, resolution)
+      expect_length(parsed$values, length(x))
+      expect_true(all(is.na(parsed$values)))
+    }
+  }
+  mixed <- .prepare_time_input(c("2020-01-02 19:54", NA_character_))
+  expect_false(is.na(mixed$values[1L]))
+  expect_true(is.na(mixed$values[2L]))
+  expect_error(.prepare_time_input(c(1, NA_real_)), "Unsupported input type",
+               fixed = TRUE)
+})
+
+test_that("time errors identify values and IDs while bounding examples", {
+  x <- c("2020-01-02", NA_character_, "06/01/2020", "2020-02-30",
+         rep("2020-01-02junk", 5))
+  error <- tryCatch(.prepare_time_input(
+    x, input_name = "`data$observed_at`", ids = paste0("station-", 1:9)
+  ), error = identity)
+  expect_s3_class(error, "error")
+  text <- conditionMessage(error)
+  expect_match(text, "Input: `data$observed_at`", fixed = TRUE)
+  expect_match(text, "Affected observations: 7", fixed = TRUE)
+  expect_match(text, "row/position 3 (id: \"station-3\"): \"06/01/2020\"",
+               fixed = TRUE)
+  expect_match(text, "2020-02-30", fixed = TRUE)
+  expect_match(text, "Showing 5 of 7 cases", fixed = TRUE)
+  expect_false(grepl("row/position 2", text, fixed = TRUE))
+  expect_false(grepl("station-8", text, fixed = TRUE))
+  expect_match(text, "YYYY-MM-DD HH:MM", fixed = TRUE)
+  single <- tryCatch(.prepare_time_input("2020-01-02junk"), error = identity)
+  expect_false(grepl("Showing", conditionMessage(single), fixed = TRUE))
+})
+
+test_that("public date errors distinguish direct inputs and named columns", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_test_netcdf(path, with_depth = FALSE)
+  x <- data.frame(lon = c(0, 1), lat = c(40, 41),
+                  observed_at = c("2020-01-03", "06/01/2020"),
+                  sample = c("a", "b"))
+  error <- tryCatch(extract2d(
+    x, path, var = "temp", date_col = "observed_at", id_col = "sample"
+  ), error = identity)
+  text <- conditionMessage(error)
+  expect_match(text, "Input: `data$observed_at`", fixed = TRUE)
+  expect_match(text, "row/position 2 (id: \"b\")", fixed = TRUE)
+  direct <- tryCatch(extract_to_point(
+    nc = path, lon = c(0, 1), lat = c(40, 41), date = "06/01/2020",
+    var = "temp", method = "2d"
+  ), error = identity)
+  expect_match(conditionMessage(direct), "Input: `date`", fixed = TRUE)
+  expect_match(conditionMessage(direct), "Affected observations: 2", fixed = TRUE)
+  expect_match(conditionMessage(direct), "row/position 2", fixed = TRUE)
+})
+
+test_that("POSIX time zones preserve instants across UTC day boundaries", {
+  local <- as.POSIXct(c("2020-01-02 00:30:00", "2020-07-02 00:30:00"),
+                      tz = "Europe/Madrid")
+  for (x in list(local, as.POSIXlt(local))) {
+    parsed <- .prepare_time_input(x)
+    expect_identical(parsed$resolution, "datetime")
+    expect_equal(format(parsed$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+                 c("2020-01-01 23:30:00", "2020-07-01 22:30:00"))
+    expect_equal(as.numeric(parsed$values), as.numeric(local))
+  }
+  transition <- as.POSIXct(c("2020-03-29 01:30:00", "2020-03-29 03:30:00"),
+                           tz = "Europe/Madrid")
+  parsed <- .prepare_time_input(as.POSIXlt(transition))
+  expect_equal(format(parsed$values, "%H:%M:%S", tz = "UTC"),
+               c("00:30:00", "01:30:00"))
+  expect_equal(as.numeric(diff(parsed$values), units = "hours"), 1)
+  text <- .prepare_time_input("2020-01-02 00:30")
+  expect_equal(format(text$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+               "2020-01-02 00:30:00")
+  for (bad in c("2020-01-02 00:30+01:00", "2020-01-02 00:30 Europe/Madrid")) {
+    expect_error(.prepare_time_input(bad), "supply a POSIXct/POSIXlt object",
+                 fixed = TRUE)
+  }
+})
+
+test_that("public timezone matching uses the UTC instant and calendar day", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, 0, 40, c(11, 22, 33),
+                          days = c(23.5 / 24, 47.5 / 24, 71.5 / 24))
+  local <- as.POSIXct("2020-01-02 00:30:00", tz = "Europe/Madrid")
+  for (resolution in c("auto", "datetime", "daily")) {
+    value <- extract_to_point(
+      nc = path, lon = 0, lat = 40, date = local, var = "temp",
+      method = "2d", time_match = "exact", time_resolution = resolution
+    )
+    expect_equal(value, 11)
+  }
+  x <- data.frame(lon = 0, lat = 40, date = local)
+  out <- extract2d(x, path, var = "temp", time_match = "exact")
+  expect_named(out, c("lon", "lat", "date", "temp"))
+  expect_equal(out$temp, 11)
+  expect_identical(out$date, x$date)
+  expect_equal(extract_to_point(
+    nc = path, lon = 0, lat = 40, date = as.POSIXlt(local),
+    var = "temp", method = "2d", time_match = "exact"
+  ), 11)
+})
+
+test_that("all missing dates bypass unused intraday label comparisons", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, 0, 40, c(11, 22), days = c(0, 0.5))
+  x <- data.frame(lon = c(0, 0), lat = c(40, 40), date = c(NA, NA))
+  out <- without_selection_reports(extract2d(x, path, var = "temp"))
+  expect_named(out, c("lon", "lat", "date", "temp"))
+  expect_equal(out[names(x)], x)
+  expect_equal(out$temp, c(NA_real_, NA_real_))
+  value <- without_selection_reports(extract_to_point(
+    nc = path, lon = 0, lat = 40, date = NA, var = "temp", method = "2d"
+  ))
+  expect_length(value, 1L)
+  expect_true(is.na(value))
+  x$date <- as.Date(c("2020-01-01", NA_character_))
+  expect_error(extract2d(x, path, var = "temp"), "Multiple dataset timestamps",
+               fixed = TRUE)
+})
+
+test_that("minute precision works through direct and custom-column extraction", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, 0, 40, c(11, 22, 33), days = c(0, 0.5, 1))
+  value <- extract_to_point(
+    nc = path, lon = c(0, 0), lat = c(40, 40), date = "2020-01-01 12:00Z",
+    var = "temp", method = "2d", time_match = "exact"
+  )
+  expect_equal(value, c(22, 22))
+  x <- data.frame(lon = c(0, 0), lat = c(40, 40),
+                  observed_at = c("2020-01-01T12:00Z", NA_character_))
+  out <- without_selection_reports(extract2d(
+    x, path, var = "temp", date_col = "observed_at", time_match = "exact"
+  ))
+  expect_named(out, c("lon", "lat", "observed_at", "temp"))
+  expect_equal(out$observed_at, x$observed_at)
+  expect_equal(out$temp, c(22, NA_real_))
+  expect_equal(extract_to_point(
+    nc = path, lon = 0, lat = 40, date = "2020-01-01 12:00Z",
+    var = "temp", method = "2d", time_resolution = "custom",
+    custom_time_interval = as.difftime(1, units = "hours"), time_match = "exact"
+  ), 22)
+})
+
+test_that("unmarked text times warn once across files with reports disabled", {
+  skip_if_not_installed("ncdf4")
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  for (path in paths) {
+    make_horizontal_test_nc(path, 0, 40, c(11, 22), days = c(0, 0.5))
+  }
+  warnings <- list()
+  value <- withCallingHandlers(extract_to_point(
+    nc = paths, lon = c(0, 0), lat = c(40, 40),
+    date = "2020-01-01 12:00", var = "temp", method = "2d",
+    time_match = "exact", time_report = FALSE,
+    spatial_report = FALSE, depth_report = FALSE
+  ), ocean3d_timezone_warning = function(w) {
+    warnings[[length(warnings) + 1L]] <<- w
+    invokeRestart("muffleWarning")
+  })
+  expect_equal(value, c(22, 22))
+  expect_length(warnings, 1L)
+  expect_match(conditionMessage(warnings[[1L]]),
+               "2 observations have times without a time zone", fixed = TRUE)
+  expect_match(conditionMessage(warnings[[1L]]), "Input: `date`", fixed = TRUE)
+  expect_match(conditionMessage(warnings[[1L]]),
+               "being interpreted as UTC", fixed = TRUE)
+})
+
+test_that("timezone warnings count only unmarked clocks and name the input", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, 0, 40, c(11, 22), days = c(0, 1))
+  x <- data.frame(lon = rep(0, 4), lat = rep(40, 4),
+                  observed_at = c("2020-01-01 00:00", "2020-01-01T00:00Z",
+                                  "2020-01-01", NA_character_))
+  expect_warning(out <- extract2d(
+    x, path, var = "temp", date_col = "observed_at",
+    time_resolution = "daily", time_report = FALSE,
+    spatial_report = FALSE, depth_report = FALSE
+  ), "1 observation has times without a time zone.*",
+  class = "ocean3d_timezone_warning")
+  expect_equal(out$temp, c(11, 11, 11, NA_real_))
+  expect_identical(out$observed_at, x$observed_at)
+  parsed <- .prepare_time_input(x$observed_at, "daily")
+  expect_identical(parsed$unzoned_rows, 1L)
+  expect_warning(.warn_time_zone(parsed, "`data$observed_at`"),
+                 "Input: `data$observed_at`", fixed = TRUE)
+})
+
+test_that("explicit zones and date-only inputs need no timezone warning", {
+  for (x in list("2020-01-01", as.Date("2020-01-01"),
+                  "2020-01-01T12:00Z", "2020-01-01 12:00:00Z",
+                  as.POSIXct("2020-01-01 12:00:00", tz = "Europe/Madrid"),
+                  as.POSIXlt("2020-01-01 12:00:00", tz = "Europe/Madrid"), NA)) {
+    parsed <- .prepare_time_input(x)
+    expect_length(parsed$unzoned_rows, 0L)
+    expect_no_warning(.warn_time_zone(parsed, "`date`"))
+  }
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
+  expect_no_warning(value <- extract_to_point(
+    nc = path, lon = 0, lat = 40, date = "2020-01-01 12:00",
+    var = "temp", method = "2d"
+  ))
+  expect_equal(value, 1)
 })
