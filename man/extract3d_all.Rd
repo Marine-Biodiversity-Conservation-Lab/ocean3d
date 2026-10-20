@@ -27,9 +27,12 @@ The input observations with three extracted columns: \verb{nearest_*},
 their structure; matrices and named lists are returned as data frames.
 }
 \description{
-For each observation, this function extracts the full vertical profile at
-the nearest longitude, latitude and time cell. It then returns three summary
-columns: nearest valid depth, surface and bottom.
+For each observation, this function reads the vertical profile at the cell
+and timestamp selected under spatial_match and time_match. Spatial matching
+defaults to "within"; "nearest" requires an explicit max_distance_km limit.
+It returns three summaries: the valid layer nearest the requested depth,
+the physically shallowest layer, and the deepest layer with a valid value.
+See \code{\link[=extract_to_point]{extract_to_point()}} for depth conventions and report options.
 }
 \examples{
 nc_file <- system.file(

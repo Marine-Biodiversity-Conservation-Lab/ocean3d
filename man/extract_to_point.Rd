@@ -30,7 +30,11 @@ extract_to_point(
   verbose = FALSE,
   time_resolution = c("auto", "datetime", "daily", "monthly", "yearly", "custom"),
   custom_time_interval = NULL,
-  time_report = TRUE
+  time_report = TRUE,
+  spatial_match = c("within", "nearest"),
+  max_distance_km = NULL,
+  spatial_report = NULL,
+  depth_report = NULL
 )
 }
 \arguments{
@@ -135,6 +139,27 @@ This interval does not reject candidates; use max_time_diff for that.}
 when returned values are displaced in time or outputs are missing.
 The return format is unchanged. FALSE hides the summary but does not
 suppress temporal warnings.}
+
+\item{spatial_match}{Horizontal selection rule. "within" (default) requires
+the point to lie inside a cell. "nearest" selects the geographically
+closest cell centre, including outside the grid, up to max_distance_km.
+The rule applies equally to one or multiple sources. A selected missing
+value does not trigger a search for another cell in the same source.}
+
+\item{max_distance_km}{Required finite non-negative distance in kilometres
+when spatial_match = "nearest". Distance is measured from the observation
+to the cell centre on the Earth surface using sf::st_distance(). A cell
+exactly at the limit is accepted. Must be NULL with "within".}
+
+\item{spatial_report}{NULL (default) reports missing spatial outputs and
+selections of cells that do not contain the requested point. TRUE also
+reports normal and exact selections; FALSE hides the spatial report.}
+
+\item{depth_report}{NULL (default) reports missing depth outputs, selections
+more than one local layer spacing away, and displaced singleton layers
+whose spacing cannot be assessed. TRUE also reports normal surface, bottom
+and exact depth selections; FALSE hides the depth report. Depths are in
+metres, positive down. Report modes do not change returned values.}
 }
 \value{
 If \code{data} is provided, the input observations with extracted values
@@ -171,14 +196,34 @@ Temporal resolution controls comparison of timestamp labels.
 It does not identify averaging intervals, calculate temporal means,
 or interpret climatological periods.
 }
+\section{Physical depth coordinates}{
+
+Observation depths are expressed in metres, positive downward. Dataset
+coordinates are converted from m, meter(s), metre(s), km or cm. The positive
+attribute determines direction when supplied; otherwise uniformly
+non-negative values imply positive-down and non-positive values imply
+positive-up. Mixed signs without direction metadata are rejected.
+Surface means the physically shallowest layer, even if its value is missing.
+Bottom means the deepest non-missing layer. Nearest selects the valid layer
+closest to the observation depth; ties select the shallower layer.
+Selection does not depend on the storage order of the depth coordinate.
+Duplicate physical depths, unsupported units, coordinates above the assumed
+reference surface, and sigma, formula-based or pressure coordinates require
+explicit correction or conversion before extraction.
+}
+
 \section{Multiple sources}{
 
-With multiple sources, only cells containing the observation are eligible.
+Spatial matching uses the same rules for one or multiple sources.
+With spatial_match = "within", only cells containing the point are eligible.
+With spatial_match = "nearest", the requested point may be outside grid
+coverage. The nearest cell centre must be within max_distance_km of it.
 Explicit spatial cell bounds are preferred. Otherwise, edges are inferred
 from adjacent centres; singleton axes without bounds require coincidence.
 Longitude comparisons support equivalent coordinates across the antimeridian.
 Among eligible sources the closest temporal candidate with a valid value
-wins, with input order breaking ties. Existing output columns are replaced,
+wins. Equal temporal distances are resolved by geographic distance to the
+cell centre, then by input order. Existing output columns are replaced,
 including by NA. Output names cannot overwrite extraction inputs or combine
 different variables in the same column.
 }
@@ -191,6 +236,40 @@ above three hours of displacement. Exact matching requires the same
 timestamp.
 Auto matching remains unchanged and uses the observed cadence for
 diagnostics.
+}
+
+\section{Spatial and depth reports}{
+
+The default NULL mode reports only missing outputs, selected cells that do
+not contain the requested point, and unusually distant depth selections.
+TRUE requests a full report, including normal and exact selections; FALSE
+hides the corresponding report. Returned values are identical in all modes.
+Spatial reports show the requested point, selected cell centre, distance
+and any explicit distance limit. With within matching, a point may be
+inside a cell without coinciding with its centre.
+Depth reports describe physical layers in metres, positive down from the
+reference surface. Surface means the shallowest layer; bottom means the
+deepest layer with a valid value, not an independently measured seabed.
+Values are selected without vertical interpolation. Normal nearest-depth
+approximations are silent in automatic mode. A difference strictly greater
+than the local layer spacing is reported. Spacing uses the two physical
+layers surrounding the requested depth, including layers with missing
+values. At an exact layer, its nearest neighbour defines the spacing; outside
+the range, the two nearest edge layers are used. Singleton axes have no
+spacing to assess a nonzero displacement. Messages identify the reference
+layers and only attribute a displacement to missing values when closer
+physical layers must lack valid values under nearest-valid selection.
+Missing outputs are explained once, with rejection reasons for each
+relevant source. Purely temporal rejections use time_report; spatial and
+depth rejections use their corresponding switches. Mixed rejections are
+grouped under spatial first, then depth, then time, with all reasons shown.
+Reports count distinct observations and output values separately. At most
+five cases are shown, prioritising missing values; truncation and the count
+omitted are stated. Coordinates use up to five decimals; metres/kilometres
+normally use up to two. Extra decimals distinguish values close to a limit
+when rounding would otherwise make them appear equal. Calculations retain
+full precision. Small positive distances use
+<0.01 rather than zero. Temporal report settings and warnings are unchanged.
 }
 
 \section{Temporal diagnostics}{
@@ -251,6 +330,40 @@ extract_to_point(
   time_resolution = "datetime",
   max_time_diff = 30 / 1440
 )
+
+# Horizontal matching: this point is outside the example grid's cell edges.
+# The default within rule returns NA; nearest accepts a centre within 60 km.
+extract_to_point(
+  nc = nc_file, lon = -0.6, lat = 40, date = "2020-01-03",
+  var = "temp", method = "surface", spatial_match = "within"
+)
+extract_to_point(
+  nc = nc_file, lon = -0.6, lat = 40, date = "2020-01-03",
+  var = "temp", method = "surface", spatial_match = "nearest",
+  max_distance_km = 60
+)
+
+# Report modes do not change the extracted value.
+# NULL is automatic: the normal nearest-depth approximation stays silent.
+automatic <- extract_to_point(
+  nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
+  var = "temp", method = "nearest",
+  spatial_report = NULL, depth_report = NULL
+)
+# TRUE explains the selected cell and depth, including normal selections.
+detailed <- extract_to_point(
+  nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
+  var = "temp", method = "nearest",
+  spatial_report = TRUE, depth_report = TRUE
+)
+# FALSE hides informational reports; temporal warnings remain active.
+quiet <- extract_to_point(
+  nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
+  var = "temp", method = "nearest",
+  spatial_report = FALSE, depth_report = FALSE, time_report = FALSE
+)
+identical(automatic, detailed)
+identical(automatic, quiet)
 
 # Compare monthly labels when the file has one record per month.
 # Here the timestamp labels are illustrative.
