@@ -42,5 +42,5 @@ VignetteBuilder: knitr
 Remotes: 
     GlobalFishingWatch/gfwr
 Config/roxygen2/version: 8.1.0
-Config/Needs/website: rmarkdown
+Config/Needs/website: rmarkdown, plotly
 Config/testthat/parallel: true

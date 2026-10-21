@@ -1,2 +1,4 @@
 *.html
 *.R
+!buffer-data/*.R
+!point-data/*.R

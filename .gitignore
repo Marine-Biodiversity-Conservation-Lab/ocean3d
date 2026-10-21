@@ -10,7 +10,9 @@ inst/doc
 /.quarto/
 /previous_projects/
 /data-processed/
-/data-raw/
+/data-raw/*
+!/data-raw/buffer-article.R
+!/data-raw/point-article.R
 /output/
 example_data/*
 .httr-oauth
