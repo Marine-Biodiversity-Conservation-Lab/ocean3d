@@ -159,3 +159,18 @@ make_occupancy <- function(cells = list(c(TRUE, FALSE, FALSE, FALSE),
   as.POSIXct("2020-01-01", tz = "UTC") +
     hours * 3600
 }
+
+
+.track_test_polygon <- function(xmin, xmax, ymin, ymax) {
+  sf::st_sfc(
+    sf::st_polygon(
+      list(
+        rbind(
+          c(xmin, ymin), c(xmax, ymin),
+          c(xmax, ymax), c(xmin, ymax), c(xmin, ymin)
+        )
+      )
+    ),
+    crs = 4326
+  )
+}
