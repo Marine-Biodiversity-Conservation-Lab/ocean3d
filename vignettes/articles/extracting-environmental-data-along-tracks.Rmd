@@ -855,8 +855,8 @@ terra::values(sea_raster) <- 1  # Known sea.
 sea_raster <- terra::rasterize(
   terra::vect(island), sea_raster, field = 0, background = 1, touches = TRUE
 )
-plot(sea_raster, col = c("wheat", "aliceblue"))
-lines(terra::vect(connections), col = c("firebrick", "steelblue4"), lwd = 2)
+terra::plot(sea_raster, col = c("wheat", "aliceblue"))
+terra::lines(terra::vect(connections), col = c("firebrick", "steelblue4"), lwd = 2)
 raster_result <- extract_to_track(
   marine_route, nc_file, var = "thetao", method = "bottom", spacing_km = 1,
   land_mask = sea_raster, marine_values = 1, quiet = TRUE
