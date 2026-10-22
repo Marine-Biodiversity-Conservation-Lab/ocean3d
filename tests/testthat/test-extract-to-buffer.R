@@ -1,7 +1,5 @@
 # Helpers ----------------------------------------------------------------------
 
-
-
 .buffer_test_rectangle <- function(xmin, xmax, ymin, ymax) {
   sf::st_polygon(
     list(
@@ -269,6 +267,138 @@
 }
 
 
+# Request validation -----------------------------------------------------------
+
+test_that("most_similar exports locations without diagnostics", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
+  data <- data.frame(
+    lon = 1, lat = 0, depth = 20, date = as.Date("2020-01-01"), target = 24030
+  )
+  run <- function(data, ...) {
+    extract_to_buffer(
+      data, path, var = "temp", lon_cell_radius = 1, lat_cell_radius = 0,
+      depth_radius_m = 20, time_after = 1, time_unit = "days",
+      statistic = "most_similar", target_col = "target", output_col = "picked",
+      infer_bounds = TRUE, return_match_info = FALSE, quiet = TRUE, ...
+    )
+  }
+  out <- run(data)
+  expect_equal(out$picked, 24030)
+  expect_equal(out$picked_match_lon, 1)
+  expect_equal(out$picked_match_lat, 0)
+  expect_equal(out$picked_match_depth, 20)
+  expect_equal(out$picked_match_time, .track_clock(24))
+  expect_identical(attr(out$picked_match_time, "tzone"), "UTC")
+  expect_false("picked_match_info" %in% names(out))
+  expect_equal(out[names(data)], data)
+  missing <- run(transform(data, target = NA_real_))
+  expect_true(all(is.na(missing[grep("picked", names(missing))])))
+  rejected <- run(transform(data, target = 24031), max_target_difference = 0)
+  expect_true(all(is.na(rejected[grep("picked", names(rejected))])))
+})
+
+
+test_that("identical winners expose ambiguity in only nonunique axes", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
+  handle <- ncdf4::nc_open(path, write = TRUE)
+  ncdf4::ncvar_put(handle, "temp", array(10, c(3, 2, 2, 2)))
+  ncdf4::nc_close(handle)
+  data <- data.frame(
+    lon = 1, lat = 0, depth = 20, date = as.Date("2020-01-01"), target = 10
+  )
+  expect_warning(out <- extract_to_buffer(
+    data, path, var = "temp", lon_cell_radius = 0, lat_cell_radius = 0,
+    depth_radius_m = 20, time_after = 1, statistic = "most_similar",
+    target_col = "target", infer_bounds = TRUE, quiet = TRUE
+  ), class = "ocean3d_target_location_warning")
+  expect_equal(out$temp, 10)
+  expect_equal(out$temp_match_lon, 1)
+  expect_equal(out$temp_match_lat, 0)
+  expect_true(is.na(out$temp_match_depth))
+  expect_true(is.na(out$temp_match_time))
+  expect_equal(nrow(out$temp_match_info[[1]]$target_match$matches), 4)
+  expect_identical(out$temp_match_info[[1]]$target_match$location_status,
+                   "ambiguous_location")
+})
+
+
+test_that("location warnings are bounded and independent of quiet or reports", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path)
+  handle <- ncdf4::nc_open(path, write = TRUE)
+  ncdf4::ncvar_put(handle, "temp", matrix(10, 3, 2))
+  ncdf4::nc_close(handle)
+  data <- data.frame(lon = rep(1, 12), lat = 0, target = 10)
+  captured <- list()
+  out <- withCallingHandlers(extract_to_buffer(
+    data, path, var = "temp", lon_cell_radius = 1, lat_cell_radius = 0,
+    statistic = "most_similar", target_col = "target", target_ties = "higher",
+    infer_bounds = TRUE, return_match_info = FALSE, quiet = TRUE
+  ), ocean3d_target_location_warning = function(warning) {
+    captured[[length(captured) + 1L]] <<- warning
+    invokeRestart("muffleWarning")
+  })
+  expect_length(captured, 1)
+  expect_identical(captured[[1]]$rows, 1:12)
+  expect_match(captured[[1]]$message, "Rows: 1, 2, 3, 4, 5; ...", fixed = TRUE)
+  expect_match(captured[[1]]$message, "return_match_info = TRUE", fixed = TRUE)
+  expect_match(captured[[1]]$message, "narrower buffer", fixed = TRUE)
+  expect_match(captured[[1]]$message, "target_ties does not choose",
+               fixed = TRUE)
+  expect_equal(out$temp, rep(10, 12))
+  expect_true(all(is.na(out$temp_match_lon)))
+  expect_true(all(is.na(out$temp_match_lat)))
+  expect_equal(out$lon, data$lon)
+})
+
+
+test_that("location columns protect input names and retain sf geometry", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, extra_static = TRUE)
+  data <- data.frame(lon = 1, lat = 0, target = 12, static_target = 7)
+  for (suffix in c("_match_lon", "_match_lat", "_match_depth", "_match_time")) {
+    collision <- data
+    collision[[paste0("temp", suffix)]] <- "existing"
+    expect_error(extract_to_buffer(
+      collision, path, var = "temp", horizontal_radius_km = 1,
+      statistic = "most_similar", target_col = "target", infer_bounds = TRUE
+    ), "overwrite")
+  }
+  out <- extract_to_buffer(
+    data, path, var = c("temp", "static"), horizontal_radius_km = 1,
+    statistic = "most_similar", target_col = c(
+      temp = "target", static = "static_target"
+    ), output_col = c(temp = "temperature", static = "identifier"),
+    infer_bounds = TRUE, quiet = TRUE
+  )
+  expect_equal(out$temperature_match_lon, 1)
+  expect_equal(out$identifier_match_lon, 1)
+  expect_error(extract_to_buffer(
+    data, path, var = c("temp", "static"), horizontal_radius_km = 1,
+    statistic = "most_similar", target_col = c(
+      temp = "target", static = "static_target"
+    ), output_col = c(temp = "picked", static = "picked_match_lon"),
+    infer_bounds = TRUE
+  ), "overwrite")
+  points <- sf::st_as_sf(data, coords = c("lon", "lat"), crs = 4326,
+                         remove = FALSE)
+  selected <- extract_to_buffer(
+    points, path, var = "temp", horizontal_radius_km = 1,
+    statistic = "most_similar", target_col = "target", infer_bounds = TRUE,
+    quiet = TRUE
+  )
+  expect_s3_class(selected, "sf")
+  expect_identical(sf::st_geometry(selected), sf::st_geometry(points))
+  expect_equal(selected$temp_match_lon, 1)
+})
+
+
 test_that(
   "buffers require a positive window and valid scalar sizes",
   {
@@ -400,6 +530,8 @@ test_that(
   }
 )
 
+
+# Observation windows ---------------------------------------------------------
 
 test_that(
   "depth windows preserve requested support and missing rows",
@@ -702,6 +834,8 @@ test_that(
 )
 
 
+# Interval aggregation --------------------------------------------------------
+
 test_that(
   "interval means distinguish weighted and equal averaging",
   {
@@ -839,6 +973,8 @@ test_that(
   }
 )
 
+
+# Horizontal buffer geometry ---------------------------------------------------
 
 test_that(
   "horizontal buffers use kilometres a ... e radial distances",
@@ -992,6 +1128,8 @@ test_that(
   }
 )
 
+
+# Public extraction and complementary sources ---------------------------------
 
 test_that(
   "horizontal means preserve inputs",
@@ -1587,6 +1725,8 @@ test_that(
 )
 
 
+# Axis bounds ------------------------------------------------------------------
+
 test_that(
   "explicit depth bounds feed the know ... ed and equal means",
   {
@@ -1980,6 +2120,8 @@ test_that(
   }
 )
 
+
+# Source extraction ------------------------------------------------------------
 
 test_that(
   "vertical extraction reads known cel ... erves observations",
@@ -2527,6 +2669,8 @@ test_that(
 )
 
 
+# Combined depth and time buffers ----------------------------------------------
+
 test_that(
   "combined extraction uses joint depth and time weights",
   {
@@ -2983,5 +3127,605 @@ test_that(
     expect_identical(missing$status, "all_missing")
     expect_equal(missing$coverage_fraction, 1)
     expect_equal(missing$valid_fraction, 0)
+  }
+)
+
+
+test_that(
+  "most_similar selects values and only resolves genuine ties",
+  {
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path))
+    .make_track_nc(path)
+    data <- data.frame(lon = 1, lat = 0, target = 12)
+    run <- function(data = data, ...) {
+      extract_to_buffer(
+        data,
+        path,
+        var = "temp",
+        lon_cell_radius = 1,
+        lat_cell_radius = 0,
+        infer_bounds = TRUE,
+        statistic = "most_similar",
+        target_col = "target",
+        quiet = TRUE,
+        ...
+      )
+    }
+    out <- run(data)
+    expect_equal(out$temp, 10)
+    expect_equal(
+      out$temp_match_info[[1L]]$target_match$absolute_difference,
+      2
+    )
+    expect_equal(
+      out$temp_match_info[[1L]]$target_match$matches$longitude,
+      1
+    )
+    expect_equal(
+      run(
+        transform(data, target = 15),
+        target_ties = "lower"
+      )$temp,
+      10
+    )
+    expect_equal(
+      run(
+        transform(data, target = 15),
+        target_ties = "higher"
+      )$temp,
+      20
+    )
+    expect_warning(
+      tied <- run(transform(data, target = 15)),
+      class = "ocean3d_target_location_warning"
+    )
+    expect_true(is.na(tied$temp))
+    expect_equal(tied$temp_match_info[[1L]]$status, "ambiguous_target")
+    expect_equal(
+      nrow(tied$temp_match_info[[1L]]$target_match$ties),
+      2
+    )
+    expect_true(is.na(run(data, max_target_difference = 1)$temp))
+    expect_equal(run(data, target_ties = "higher")$temp, 10)
+    expect_true(is.na(run(transform(data, target = NA_real_))$temp))
+    expect_error(run(transform(data, target = Inf)), "finite")
+    expect_error(run(transform(data, target = "12")), "numeric")
+  }
+)
+
+
+test_that(
+  "most_similar accepts partial valid  ...  retain 80 percent",
+  {
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path))
+    .make_track_nc(path, missing = TRUE)
+    data <- data.frame(lon = 1, lat = 0, target = 11)
+    args <- list(
+      data = data,
+      nc = path,
+      var = "temp",
+      lon_cell_radius = 1,
+      lat_cell_radius = 0,
+      infer_bounds = TRUE,
+      quiet = TRUE
+    )
+    out <- do.call(
+      extract_to_buffer,
+      c(
+        args,
+        list(
+          statistic = "most_similar",
+          target_col = "target"
+        )
+      )
+    )
+    expect_equal(out$temp, 10)
+    expect_equal(
+      out$temp_match_info[[1L]]$valid_fraction,
+      2 / 3,
+      tolerance = 1e-05
+    )
+    expect_true(is.na(do.call(extract_to_buffer, args)$temp))
+    expect_true(
+      is.na(
+        do.call(
+          extract_to_buffer,
+          c(
+            args,
+            list(
+              statistic = "most_similar",
+              target_col = "target",
+              min_valid_fraction = 0.8
+            )
+          )
+        )$temp
+      )
+    )
+  }
+)
+
+
+test_that(
+  "target selection across disjoint so ... nt of source order",
+  {
+    paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+    on.exit(unlink(paths))
+    .make_track_nc(paths[1L], lon = 0:2)
+    .make_track_nc(paths[2L], lon = 3:5)
+    data <- data.frame(lon = 2.5, lat = 0, target = 25)
+    for (sources in list(paths, rev(paths))) {
+      args <- list(
+        data = data,
+        nc = sources,
+        var = "temp",
+        horizontal_radius_km = 100,
+        infer_bounds = TRUE,
+        statistic = "most_similar",
+        target_col = "target",
+        quiet = TRUE
+      )
+      expect_warning(
+        out <- do.call(extract_to_buffer, args),
+        class = "ocean3d_target_location_warning"
+      )
+      expect_true(is.na(out$temp))
+      expect_equal(
+        sort(out$temp_match_info[[1L]]$target_match$ties$value),
+        c(20, 30)
+      )
+      expect_equal(
+        do.call(
+          extract_to_buffer,
+          c(
+            args,
+            list(target_ties = "lower")
+          )
+        )$temp,
+        20
+      )
+      high <- do.call(
+        extract_to_buffer,
+        c(
+          args,
+          list(target_ties = "higher")
+        )
+      )
+      expect_equal(high$temp, 30)
+      files_used <- high$temp_match_info[[1L]]$target_match$matches$source_file
+      expect_equal(
+        normalizePath(files_used),
+        normalizePath(paths[2L])
+      )
+    }
+  }
+)
+
+
+test_that(
+  "identical winners retain all locati ...  buffers remain NA",
+  {
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path))
+    .make_track_nc(path)
+    handle <- ncdf4::nc_open(path, write = TRUE)
+    ncdf4::ncvar_put(handle, "temp", matrix(10, 3, 2))
+    ncdf4::nc_close(handle)
+    data <- data.frame(lon = 1, lat = 0, target = 10)
+    args <- list(
+      data = data,
+      nc = path,
+      var = "temp",
+      lon_cell_radius = 1,
+      lat_cell_radius = 0,
+      infer_bounds = TRUE,
+      statistic = "most_similar",
+      target_col = "target",
+      quiet = TRUE
+    )
+    expect_warning(
+      out <- do.call(extract_to_buffer, args),
+      class = "ocean3d_target_location_warning"
+    )
+    expect_equal(out$temp, 10)
+    expect_equal(
+      out$temp_match_info[[1L]]$target_match$matches$longitude,
+      0:2
+    )
+    handle <- ncdf4::nc_open(path, write = TRUE)
+    ncdf4::ncvar_put(handle, "temp", matrix(NA_real_, 3, 2))
+    ncdf4::nc_close(handle)
+    expect_true(is.na(do.call(extract_to_buffer, args)$temp))
+  }
+)
+
+
+test_that(
+  "target mappings allow several varia ... uous configuration",
+  {
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path))
+    .make_track_nc(path, extra_static = TRUE)
+    data <- data.frame(
+      lon = 1,
+      lat = 0,
+      target_temp = 12,
+      target_static = 6
+    )
+    out <- extract_to_buffer(
+      data,
+      path,
+      var = c(
+        "temp",
+        "static"
+      ),
+      statistic = "most_similar",
+      target_col = c(
+        temp = "target_temp",
+        static = "target_static"
+      ),
+      horizontal_radius_km = 1,
+      infer_bounds = TRUE,
+      quiet = TRUE
+    )
+    expect_equal(out$temp, 10)
+    expect_equal(out$static, 7)
+    expect_error(
+      extract_to_buffer(data, path, target_ties = "higher"),
+      "require"
+    )
+    expect_error(
+      extract_to_buffer(
+        data,
+        path,
+        var = "temp",
+        statistic = "most_similar",
+        target_col = "absent",
+        horizontal_radius_km = 1,
+        infer_bounds = TRUE
+      ),
+      "absent"
+    )
+  }
+)
+
+test_that(
+  "a target selects an actual candidate without averaging",
+  {
+    candidates <- data.frame(
+      candidate_id = c("a", "b", "c"),
+      value = c(
+        12,
+        15,
+        20
+      ),
+      support_fraction = c(0.2, 0.3, 0.5),
+      file = c(
+        "x.nc",
+        "y.nc",
+        "z.nc"
+      )
+    )
+    out <- .select_target_value(candidates, 16)
+    expect_equal(out$value, 15)
+    expect_equal(out$absolute_difference, 1)
+    expect_identical(out$status, "matched")
+    expect_identical(candidates$file[out$selected_rows], "y.nc")
+    expect_equal(out$valid_fraction, 1)
+    expect_equal(.select_target_value(candidates, 12)$value, 12)
+  }
+)
+
+test_that(
+  "file or candidate order never resolves a tie silently",
+  {
+    candidates <- data.frame(
+      candidate_id = c("a", "b"),
+      value = c(
+        14,
+        18
+      ),
+      support_fraction = 0.5
+    )
+    for (data in list(candidates, candidates[2:1, ])) {
+      ambiguous <- .select_target_value(data, 16)
+      expect_true(is.na(ambiguous$value))
+      expect_identical(ambiguous$status, "ambiguous_target")
+      expect_equal(ambiguous$n_tied_candidates, 2)
+      expect_equal(
+        .select_target_value(data, 16, ties = "lower")$value,
+        14
+      )
+      expect_equal(
+        .select_target_value(data, 16, ties = "higher")$value,
+        18
+      )
+    }
+  }
+)
+
+test_that(
+  "the same winning value can have several honest locations",
+  {
+    candidates <- data.frame(
+      candidate_id = c("a", "b", "c"),
+      value = c(
+        15,
+        15,
+        30
+      ),
+      support_fraction = c(0.2, 0.3, 0.5)
+    )
+    out <- .select_target_value(candidates, 16)
+    expect_equal(out$value, 15)
+    expect_equal(out$selected_rows, 1:2)
+    expect_identical(out$status, "matched_multiple_locations")
+    expect_equal(out$n_tied_candidates, 2)
+    expect_true(is.na(.select_target_value(candidates, NA_real_)$value))
+    expect_identical(
+      .select_target_value(candidates, NA_real_)$status,
+      "missing_target"
+    )
+  }
+)
+
+test_that(
+  "coverage includes missing data and zero support cannot win",
+  {
+    candidates <- data.frame(
+      candidate_id = c("a", "b", "outside"),
+      value = c(20, NA, 16),
+      support_fraction = c(0.79, 0.21, 0)
+    )
+    rejected <- .select_target_value(candidates, 16)
+    expect_identical(rejected$status, "insufficient_coverage")
+    expect_true(is.na(rejected$value))
+    accepted <- .select_target_value(
+      candidates,
+      16,
+      min_valid_fraction = 0.79
+    )
+    expect_equal(accepted$value, 20)
+    expect_equal(accepted$valid_fraction, 0.79)
+    expect_equal(accepted$coverage_fraction, 1)
+    expect_equal(accepted$n_valid, 1)
+    candidates$value[1] <- Inf
+    expect_identical(
+      .select_target_value(candidates, 16)$status,
+      "all_missing"
+    )
+    candidates$support_fraction <- 0
+    expect_identical(
+      .select_target_value(candidates, 16)$status,
+      "empty"
+    )
+    expect_identical(
+      .select_target_value(
+        candidates[FALSE, ],
+        16
+      )$status,
+      "empty"
+    )
+  }
+)
+
+test_that(
+  "environmental difference limits retain diagnostics",
+  {
+    candidates <- data.frame(
+      candidate_id = "a",
+      value = 15,
+      support_fraction = 1
+    )
+    rejected <- .select_target_value(
+      candidates,
+      16,
+      max_target_difference = 0.5
+    )
+    expect_true(is.na(rejected$value))
+    expect_equal(rejected$closest_available_value, 15)
+    expect_equal(rejected$absolute_difference, 1)
+    expect_identical(rejected$status, "outside_target_limit")
+    accepted <- .select_target_value(candidates, 16, max_target_difference = 1)
+    expect_equal(accepted$value, 15)
+  }
+)
+
+test_that(
+  "weights do not override proximity once coverage is valid",
+  {
+    candidates <- data.frame(
+      candidate_id = c("a", "b"),
+      value = c(
+        15.9,
+        30
+      ),
+      support_fraction = c(0.01, 0.99)
+    )
+    expect_equal(.select_target_value(candidates, 16)$value, 15.9)
+    candidates$support_fraction <- c(0.99, 0.01)
+    expect_equal(.select_target_value(candidates, 16)$value, 15.9)
+  }
+)
+
+test_that(
+  "numerical ties are handled without  ...  exact target hits",
+  {
+    candidates <- data.frame(
+      candidate_id = c("a", "b"),
+      value = c(
+        10.1,
+        10.3
+      ),
+      support_fraction = 0.5
+    )
+    out <- .select_target_value(candidates, 10.2)
+    expect_identical(out$status, "ambiguous_target")
+    candidates$value <- c(1e+12, 1e+12 + 0.001)
+    expect_equal(
+      .select_target_value(candidates, 1e+12)$selected_rows,
+      1
+    )
+    candidates$value <- c(1e-20, 3e-20)
+    expect_equal(
+      .select_target_value(candidates, 1.1e-20)$value,
+      1e-20
+    )
+    candidates$value <- c(1, 1.2)
+    expect_equal(
+      .select_target_value(
+        candidates,
+        0,
+        tie_tolerance = 0
+      )$value,
+      1
+    )
+  }
+)
+
+test_that(
+  "invalid requests fail before any selection",
+  {
+    candidates <- data.frame(
+      candidate_id = "a",
+      value = 15,
+      support_fraction = 1
+    )
+    for (bad in list("16", Inf, c(1, 2), numeric())) {
+      expect_error(.select_target_value(candidates, bad), "Target")
+    }
+    for (bad in list(-1, 2, NA, "half")) {
+      expect_error(
+        .select_target_value(candidates, 16, min_valid_fraction = bad),
+        "min_valid_fraction"
+      )
+    }
+    for (bad in list(-1, Inf, NA, c(1, 2))) {
+      expect_error(
+        .select_target_value(
+          candidates,
+          16,
+          max_target_difference = bad
+        ),
+        "max_target_difference"
+      )
+    }
+    expect_error(.select_target_value(candidates[FALSE], 16), "Candidates")
+    doubled <- rbind(candidates, candidates)
+    expect_error(.select_target_value(doubled, 16), "IDs")
+    candidates$support_fraction <- -1
+    expect_error(.select_target_value(candidates, 16), "non-negative")
+    candidates$support_fraction <- 1.1
+    expect_error(.select_target_value(candidates, 16), "overlap")
+  }
+)
+
+test_that(
+  "tie tolerance cannot override the e ... l difference limit",
+  {
+    candidates <- data.frame(
+      candidate_id = c("a", "b"),
+      value = c(
+        1,
+        1.2
+      ),
+      support_fraction = 0.5
+    )
+    out <- .select_target_value(
+      candidates,
+      0,
+      max_target_difference = 1.1,
+      tie_tolerance = 0.3,
+      ties = "higher"
+    )
+    expect_equal(out$value, 1)
+    expect_lte(out$absolute_difference, 1.1)
+    expect_equal(out$n_tied_candidates, 1)
+    expect_error(
+      .select_target_value(
+        candidates,
+        0,
+        tie_tolerance = -1
+      ),
+      "tie_tolerance"
+    )
+  }
+)
+
+test_that(
+  "unrepresentable differences produce an explicit status",
+  {
+    candidates <- data.frame(
+      candidate_id = "a",
+      value = 1e+308,
+      support_fraction = 1
+    )
+    out <- .select_target_value(candidates, -1e+308)
+    expect_true(is.na(out$value))
+    expect_identical(out$status, "difference_overflow")
+  }
+)
+test_that(
+  "similarity respects point-selected depth and time",
+  {
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path))
+    .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
+    data <- data.frame(
+      lon = 1,
+      lat = 0,
+      depth = 0,
+      date = as.Date("2020-01-01"),
+      target = 30
+    )
+    point_axes <- extract_to_buffer(
+      data,
+      path,
+      var = "temp",
+      horizontal_radius_km = 1,
+      statistic = "most_similar",
+      target_col = "target",
+      infer_bounds = TRUE,
+      quiet = TRUE
+    )
+    expect_equal(point_axes$temp, 10)
+    vertical <- extract_to_buffer(
+      data,
+      path,
+      var = "temp",
+      horizontal_radius_km = 1,
+      depth_radius_m = 20,
+      statistic = "most_similar",
+      target_col = "target",
+      infer_bounds = TRUE,
+      quiet = TRUE
+    )
+    expect_equal(vertical$temp, 30)
+    data$target <- 24010
+    same_time <- extract_to_buffer(
+      data,
+      path,
+      var = "temp",
+      horizontal_radius_km = 1,
+      statistic = "most_similar",
+      target_col = "target",
+      infer_bounds = TRUE,
+      quiet = TRUE
+    )
+    expect_equal(same_time$temp, 10)
+    window <- extract_to_buffer(
+      data,
+      path,
+      var = "temp",
+      horizontal_radius_km = 1,
+      time_after = 1,
+      time_unit = "days",
+      statistic = "most_similar",
+      target_col = "target",
+      infer_bounds = TRUE,
+      quiet = TRUE
+    )
+    expect_equal(window$temp, 24010)
   }
 )
