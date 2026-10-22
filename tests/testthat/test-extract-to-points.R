@@ -1,7 +1,5 @@
 # Silence only known informational reports in value/selection tests.
 # Report assertions keep their own captures; other conditions remain visible.
-
-
 without_selection_reports <- function(expr) {
   quiet <- function(condition) invokeRestart("muffleMessage")
   withCallingHandlers(
@@ -12,7 +10,8 @@ without_selection_reports <- function(expr) {
   )
 }
 
-
+# Verify the expected B diagnostic while preserving the extraction value.
+# Other warning classes remain visible to testthat.
 expect_period_change_warning <- function(expr) {
   captured <- list()
   value <- withCallingHandlers(
@@ -31,6 +30,7 @@ expect_period_change_warning <- function(expr) {
   value
 }
 
+# Helpers ----------------------------------------------------------------------
 
 make_test_netcdf <- function(
   path,
@@ -93,11 +93,11 @@ make_test_netcdf <- function(
   invisible(path)
 }
 
-
 make_obs <- function(date = as.Date("2020-01-03"), depth = 60) {
   data.frame(lon = 0, lat = 40, date = date, depth = depth)
 }
 
+# Generic extraction -----------------------------------------------------------
 
 test_that(
   "extract_to_point extracts from a 2D netCDF variable",
@@ -121,7 +121,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point detects a single variable automatically",
   {
@@ -140,7 +139,6 @@ test_that(
     expect_true("surface_oxygen" %in% names(out))
   }
 )
-
 
 test_that(
   "extract_to_point() errors when var  ... ches two variables",
@@ -173,6 +171,8 @@ test_that(
   }
 )
 
+
+# Depth methods ----------------------------------------------------------------
 
 test_that(
   "3D wrappers return surface, nearest ...  and all summaries",
@@ -215,7 +215,6 @@ test_that(
   }
 )
 
-
 test_that(
   "nearest depth ignores missing layer ... valid water column",
   {
@@ -235,6 +234,7 @@ test_that(
   }
 )
 
+# Time matching ----------------------------------------------------------------
 
 test_that(
   "time_match = nearest uses the close ... ilable netCDF date",
@@ -258,7 +258,6 @@ test_that(
   }
 )
 
-
 test_that(
   "time_match = exact returns NA when the date is absent",
   {
@@ -278,7 +277,6 @@ test_that(
     expect_true(is.na(out$temp))
   }
 )
-
 
 test_that(
   "max_time_diff limits nearest temporal matching",
@@ -312,7 +310,6 @@ test_that(
   }
 )
 
-
 test_that(
   "max_time_diff rejects invalid values",
   {
@@ -334,7 +331,6 @@ test_that(
   }
 )
 
-
 test_that(
   "multiple netCDF files add one outpu ...  detected variable",
   {
@@ -355,7 +351,6 @@ test_that(
     expect_true(all(c("seabottom_temp", "seabottom_salt") %in% names(out)))
   }
 )
-
 
 test_that(
   "netCDF input can be a list, opened  ... ion, or data frame",
@@ -394,7 +389,6 @@ test_that(
   }
 )
 
-
 test_that(
   "nested netCDF lists keep every source, in order",
   {
@@ -408,7 +402,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "extract_to_point reports missing re ... bservation columns",
@@ -430,6 +423,7 @@ test_that(
   }
 )
 
+# Direct point extraction ------------------------------------------------------
 
 test_that(
   "extract_to_point extracts a single value from coordinates",
@@ -455,7 +449,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point requires a valid longitude",
   {
@@ -473,7 +466,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point requires a valid latitude",
   {
@@ -490,7 +482,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "extract_to_point requires depth for nearest extraction",
@@ -513,7 +504,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "extract_to_point rejects invalid dates",
@@ -539,7 +529,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point extracts 2d values without depth",
   {
@@ -564,6 +553,7 @@ test_that(
 )
 
 
+# Input formats ---------------------------------------------------------------
 test_that(
   "extract_to_point accepts a matrix",
   {
@@ -590,7 +580,6 @@ test_that(
     expect_identical(as.numeric(out$temp), 5)
   }
 )
-
 
 test_that(
   "extract_to_point accepts a named list",
@@ -619,7 +608,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point accepts sf point geometries",
   {
@@ -647,7 +635,6 @@ test_that(
     expect_identical(as.numeric(out$temp), 5)
   }
 )
-
 
 test_that(
   "extract_to_point transforms projected sf coordinates",
@@ -679,7 +666,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point accepts tibbles",
   {
@@ -710,7 +696,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point accepts coordinate vectors",
   {
@@ -734,7 +719,6 @@ test_that(
   }
 )
 
-
 test_that(
   "direct coordinate vectors must have compatible lengths",
   {
@@ -751,7 +735,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "extract_to_point preserves data frame input behaviour",
@@ -782,7 +765,6 @@ test_that(
   }
 )
 
-
 test_that(
   "direct inputs recycle scalar values",
   {
@@ -806,6 +788,7 @@ test_that(
   }
 )
 
+# Input validation -------------------------------------------------------------
 
 test_that(
   "extract_to_point rejects sf geometries other than POINT",
@@ -833,7 +816,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point rejects projected sf input without a CRS",
   {
@@ -857,7 +839,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point rejects matrices without column names",
   {
@@ -875,7 +856,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "extract_to_point rejects unnamed lists",
@@ -895,7 +875,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract_to_point rejects unsupported data input types",
   {
@@ -913,6 +892,8 @@ test_that(
 )
 
 
+# Public entry points and netCDF helpers ---------------------------------------
+
 test_that(
   "extract2d preserves observations and extracts known cells",
   {
@@ -925,7 +906,6 @@ test_that(
     expect_equal(out$temp, c(1, 4))
   }
 )
-
 
 test_that(
   "variable and output column names must be single strings",
@@ -959,7 +939,6 @@ test_that(
   }
 )
 
-
 test_that(
   "depth methods reject files without a depth axis",
   {
@@ -982,7 +961,6 @@ test_that(
   }
 )
 
-
 test_that(
   "a single direct observation returns named depth summaries",
   {
@@ -1001,7 +979,6 @@ test_that(
     expect_equal(out, c(nearest_temp = 5, surface_temp = 1, seabottom_temp = 9))
   }
 )
-
 
 test_that(
   "verbose extraction reports progress ... t changing results",
@@ -1034,7 +1011,6 @@ test_that(
   }
 )
 
-
 test_that(
   "source handling rejects unsupported ...  and missing paths",
   {
@@ -1046,7 +1022,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "extraction leaves caller-owned netCDF connections open",
@@ -1070,7 +1045,6 @@ test_that(
     expect_equal(ncdf4::ncvar_get(nc, "temp"), matrix(1:4, 2, 2))
   }
 )
-
 
 test_that(
   "dimension helpers read coordinates  ... port missing names",
@@ -1098,7 +1072,6 @@ test_that(
 
   }
 )
-
 
 test_that(
   "longitude conversion and missing coordinates are handled",
@@ -1156,7 +1129,6 @@ test_that(
   }
 )
 
-
 test_that(
   "output prefixes respect automatic and explicit naming",
   {
@@ -1179,7 +1151,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "multiple files fill missing values  ... irst-file priority",
@@ -1217,7 +1188,6 @@ test_that(
     expect_equal(out[names(x)], x)
   }
 )
-
 
 test_that(
   "entirely missing profiles return missing depth summaries",
@@ -1261,7 +1231,6 @@ test_that(
   }
 )
 
-
 test_that(
   "missing target depth preserves surf ... d bottom summaries",
   {
@@ -1294,7 +1263,6 @@ test_that(
   }
 )
 
-
 test_that(
   "output_col overrides output_prefix in public extraction",
   {
@@ -1317,7 +1285,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "nested sources retain paths and caller-owned connections",
@@ -1362,7 +1329,6 @@ test_that(
     expect_equal(ncdf4::ncvar_get(nc, "temp"), matrix(11:14, 2, 2))
   }
 )
-
 
 test_that(
   "direct vectors return all depth summaries",
@@ -1422,8 +1388,6 @@ test_that(
     expect_equal(out$temp, 1)
   }
 )
-
-
 test_that(
   "direct coordinates and a valid date ... correct time slice",
   {
@@ -1446,7 +1410,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "exact matching selects values and skips missing dates",
@@ -1479,7 +1442,6 @@ test_that(
   }
 )
 
-
 test_that(
   "temporal matching handles empty and ...  missing time axes",
   {
@@ -1497,7 +1459,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "depth wrappers name columns and extract values",
@@ -1520,7 +1481,6 @@ test_that(
   }
 )
 
-
 test_that(
   "extract2d automatically names detec ... le with time match",
   {
@@ -1542,7 +1502,6 @@ test_that(
     expect_equal(out$oxygen, c(1, 8))
   }
 )
-
 
 test_that(
   "nested data frames use a custom file column",
@@ -1581,7 +1540,6 @@ test_that(
     )
   }
 )
-
 
 make_time_decoder_fixture <- function(
   path,
@@ -1751,6 +1709,7 @@ test_that(
   }
 )
 
+# Timestamp-label comparison precision -----------------------------------------
 
 test_that(
   "daily comparison keeps late observations on the same day",
@@ -1795,7 +1754,6 @@ test_that(
   }
 )
 
-
 test_that(
   "auto preserves observation precision",
   {
@@ -1813,7 +1771,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "datetime matching preserves minutes and time limits",
@@ -1847,7 +1804,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "monthly and yearly selection compares calendar labels",
@@ -1884,7 +1840,6 @@ test_that(
   }
 )
 
-
 test_that(
   "coarse selection rejects multiple records in one period",
   {
@@ -1909,7 +1864,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "time validation identifies malforme ... ot inventing hours",
@@ -1940,7 +1894,6 @@ test_that(
     expect_true(is.na(parsed$values[2]))
   }
 )
-
 
 test_that(
   "public extraction preserves hours a ... ts daily selection",
@@ -2017,7 +1970,6 @@ test_that(
   }
 )
 
-
 test_that(
   "noon-stamped dates select correct s ... ith zero tolerance",
   {
@@ -2054,7 +2006,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "every depth wrapper forwards output naming arguments",
@@ -2097,6 +2048,8 @@ test_that(
   }
 )
 
+
+# Issue #72: variable-scoped netCDF dimensions -------------------------------
 
 test_that(
   "dimension detection uses only the selected variable",
@@ -2415,6 +2368,8 @@ test_that(
 )
 
 
+# additional dimension-detection regression tests ----------------
+
 test_that(
   "CF metadata identifies axes with non-standard names",
   {
@@ -2650,6 +2605,10 @@ test_that(
 )
 
 
+# -------------------------------------------------------------------------
+# Issue #73: Temporal source eligibility
+# -------------------------------------------------------------------------
+
 test_that(
   "temporal candidates are not restricted to datetime ranges",
   {
@@ -2795,7 +2754,6 @@ test_that(
   }
 )
 
-
 test_that(
   "multi-source extraction selects the correct temporal file",
   {
@@ -2890,6 +2848,8 @@ test_that(
 )
 
 
+# Issue #73 A2: compare temporal candidates across sources -----------------
+
 make_a2_temporal_nc <- function(path, days, values, with_depth = FALSE) {
   lon <- ncdf4::ncdim_def("lon", "degrees_east", 0)
   lat <- ncdf4::ncdim_def("lat", "degrees_north", 40)
@@ -2911,7 +2871,6 @@ make_a2_temporal_nc <- function(path, days, values, with_depth = FALSE) {
   shape <- vapply(dims, function(x) length(x$vals), integer(1))
   ncdf4::ncvar_put(nc, "temp", array(values, dim = shape))
 }
-
 
 test_that(
   "nearest compares singleton and mult ... es in either order",
@@ -2989,7 +2948,6 @@ test_that(
   }
 )
 
-
 test_that(
   "singleton candidates respect exact  ...  and temporal ties",
   {
@@ -3050,7 +3008,6 @@ test_that(
   }
 )
 
-
 test_that(
   "missing nearest values fall back within matching tolerance",
   {
@@ -3090,7 +3047,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "3D wrappers preserve vertical summaries across files",
@@ -3155,7 +3111,6 @@ test_that(
   }
 )
 
-
 test_that(
   "merging records provenance separate ... each output column",
   {
@@ -3204,7 +3159,6 @@ test_that(
   }
 )
 
-
 test_that(
   "temporal candidates handle partiall ... irely missing axes",
   {
@@ -3216,6 +3170,7 @@ test_that(
 )
 
 
+# Issue #73 B: diagnostics for the selected temporal values.
 capture_temporal_warning <- function(expr) {
   warnings <- list()
   value <- withCallingHandlers(
@@ -3227,7 +3182,6 @@ capture_temporal_warning <- function(expr) {
   )
   list(value = value, warnings = warnings)
 }
-
 
 make_b_diagnostic_input <- function(
   requested,
@@ -3259,7 +3213,6 @@ make_b_diagnostic_input <- function(
   )
   diagnose(provenance, utc(requested), resolution, metadata)
 }
-
 
 test_that(
   "cadence inference distinguishes fix ... calendar sequences",
@@ -3328,7 +3281,6 @@ test_that(
   }
 )
 
-
 test_that(
   "calendar period changes warn even below 24 hours",
   {
@@ -3370,7 +3322,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "datetime diagnostics use cadence and calendar limits",
@@ -3418,7 +3369,6 @@ test_that(
   }
 )
 
-
 test_that(
   "unknown and irregular cadences do not invent thresholds",
   {
@@ -3447,7 +3397,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "single source provenance supports w ... nd missing results",
@@ -3496,7 +3445,6 @@ test_that(
     expect_length(direct$warnings, 1L)
   }
 )
-
 
 test_that(
   "singleton collections infer cadence for selected values",
@@ -3550,7 +3498,6 @@ test_that(
   }
 )
 
-
 test_that(
   "all summaries share one warning wit ... plicating examples",
   {
@@ -3576,7 +3523,6 @@ test_that(
   }
 )
 
-
 test_that(
   "metadata keeps bounds separate from sampling cadence",
   {
@@ -3601,7 +3547,6 @@ test_that(
     expect_match(info$units, "days since")
   }
 )
-
 
 test_that(
   "explicit bounds describe intervals  ...  inventing cadence",
@@ -3634,7 +3579,6 @@ test_that(
   }
 )
 
-
 test_that(
   "static variables do not produce temporal diagnostics",
   {
@@ -3657,6 +3601,7 @@ test_that(
 )
 
 
+# Issue #73 C1: custom intervals and visible temporal reports.
 test_that(
   "custom intervals require explicit positive durations",
   {
@@ -3684,7 +3629,6 @@ test_that(
     expect_error(.validate_custom_time_interval("daily", interval), "requires")
   }
 )
-
 
 test_that(
   "custom warns above its interval without rejecting values",
@@ -3730,7 +3674,6 @@ test_that(
   }
 )
 
-
 test_that(
   "custom exact matching still requires the same timestamp",
   {
@@ -3753,7 +3696,6 @@ test_that(
     expect_true(is.na(result))
   }
 )
-
 
 test_that(
   "time reports are visible without changing results",
@@ -3794,7 +3736,6 @@ test_that(
   }
 )
 
-
 test_that(
   "hiding the report preserves temporal warnings",
   {
@@ -3813,7 +3754,7 @@ test_that(
   }
 )
 
-
+# C2: explicit output columns and preflight variable validation.
 test_that(
   "existing output columns are replaced across all sources",
   {
@@ -3851,7 +3792,6 @@ test_that(
   }
 )
 
-
 test_that(
   "different variables cannot share an output name",
   {
@@ -3881,7 +3821,6 @@ test_that(
   }
 )
 
-
 test_that(
   "outputs cannot overwrite extraction input columns",
   {
@@ -3903,7 +3842,7 @@ test_that(
   }
 )
 
-
+# C3: spatial coverage, cell edges and longitude conventions.
 test_that(
   "spatial indices respect edges and longitude conventions",
   {
@@ -3930,7 +3869,6 @@ test_that(
   }
 )
 
-
 test_that(
   "singleton axes do not invent spatial coverage",
   {
@@ -3945,7 +3883,6 @@ test_that(
     expect_true(is.na(.spatial_axis_index(axis, 41)))
   }
 )
-
 
 test_that(
   "spatial eligibility selects the cor ... le in either order",
@@ -3993,7 +3930,6 @@ test_that(
   }
 )
 
-
 make_spatial_axis_nc <- function(path, centres, bounds = NULL) {
   lon <- ncdf4::ncdim_def("lon", "degrees_east", centres)
   lat <- ncdf4::ncdim_def("lat", "degrees_north", 40)
@@ -4023,7 +3959,6 @@ make_spatial_axis_nc <- function(path, centres, bounds = NULL) {
   }
 }
 
-
 test_that(
   "explicit spatial bounds override inferred edges",
   {
@@ -4043,7 +3978,6 @@ test_that(
     expect_true(is.na(.spatial_axis_index(axis, 1)))
   }
 )
-
 
 test_that(
   "irregular descending axes preserve original indices",
@@ -4103,7 +4037,6 @@ test_that(
   }
 )
 
-
 test_that(
   "explanatory warnings keep full paths internally",
   {
@@ -4144,7 +4077,6 @@ test_that(
   }
 )
 
-
 test_that(
   "missing output reports explain what is unavailable",
   {
@@ -4170,7 +4102,6 @@ test_that(
   }
 )
 
-
 test_that(
   "unknown cadence warnings explain how to set an interval",
   {
@@ -4187,6 +4118,7 @@ test_that(
 )
 
 
+# Issue #74 A: geographic selection and explicit horizontal limits.
 make_horizontal_test_nc <- function(path, lon, lat, values, days = NULL) {
   dims <- list(
     ncdf4::ncdim_def("lon", "degrees_east", lon),
@@ -4217,7 +4149,6 @@ make_horizontal_test_nc <- function(path, lon, lat, values, days = NULL) {
   ncdf4::ncvar_put(nc, "temp", array(values, dim = shape))
 }
 
-
 test_that(
   "nearest spatial matching requires a ... cit valid distance",
   {
@@ -4233,7 +4164,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "within rejects distant coordinates  ... e or several files",
@@ -4266,7 +4196,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "nearest accepts nearby points outsi ... id up to its limit",
@@ -4313,7 +4242,6 @@ test_that(
   }
 )
 
-
 test_that(
   "a cell exactly at the kilometre limit is accepted",
   {
@@ -4355,7 +4283,6 @@ test_that(
   }
 )
 
-
 test_that(
   "geographic proximity is not independent degree subtraction",
   {
@@ -4377,7 +4304,6 @@ test_that(
     expect_equal(result, whole)
   }
 )
-
 
 test_that(
   "longitudes use both conventions and ... d the antimeridian",
@@ -4420,7 +4346,6 @@ test_that(
   }
 )
 
-
 test_that(
   "equal temporal candidates prefer th ... ally closer source",
   {
@@ -4447,7 +4372,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "temporal proximity remains the first selection criterion",
@@ -4478,7 +4402,6 @@ test_that(
   }
 )
 
-
 test_that(
   "input order breaks ties in both tim ... eographic distance",
   {
@@ -4492,7 +4415,6 @@ test_that(
     expect_equal(extract2d(x, rev(paths), var = "temp")$temp, 22)
   }
 )
-
 
 test_that(
   "nearest does not search past a miss ... thin the same file",
@@ -4535,7 +4457,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "horizontal selection records accept ... ejected candidates",
@@ -4601,7 +4522,6 @@ test_that(
   }
 )
 
-
 test_that(
   "nearest horizontal selection also w ... hrough 3D wrappers",
   {
@@ -4639,6 +4559,7 @@ test_that(
 )
 
 
+# Issue #74 B: physical depths independently of coordinate storage order.
 make_depth_axis_test_nc <- function(
   path,
   depths,
@@ -4674,7 +4595,6 @@ make_depth_axis_test_nc <- function(
   }
 }
 
-
 test_that(
   "physical depth conversion retains o ... ordinate positions",
   {
@@ -4696,7 +4616,6 @@ test_that(
     expect_identical(inferred$direction_basis, "inferred")
   }
 )
-
 
 test_that(
   "ambiguous or unsupported depth coordinates are rejected",
@@ -4725,7 +4644,6 @@ test_that(
     expect_error(.prepare_depth_axis(c(0, 50), "m", "up"), "reference surface")
   }
 )
-
 
 test_that(
   "depth methods select physical layer ... very storage order",
@@ -4785,7 +4703,6 @@ test_that(
   }
 )
 
-
 test_that(
   "file depth units convert to observation metres",
   {
@@ -4803,7 +4720,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "nearest depth ties choose the shall ... yer in both orders",
@@ -4827,7 +4743,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "surface preserves a missing shallow ... n descending files",
@@ -4858,7 +4773,6 @@ test_that(
   }
 )
 
-
 test_that(
   "bottom and nearest ignore missing layers by physical depth",
   {
@@ -4873,7 +4787,6 @@ test_that(
     expect_equal(out$seabottom_temp, 22)
   }
 )
-
 
 test_that(
   "missing requested depths preserve t ... physical summaries",
@@ -4904,7 +4817,6 @@ test_that(
   }
 )
 
-
 test_that(
   "depth metadata are read from the di ... oordinate variable",
   {
@@ -4932,7 +4844,6 @@ test_that(
     expect_equal(axis$depth_m, c(0, 50, 100))
   }
 )
-
 
 test_that(
   "formula-based and pressure axes req ... xplicit conversion",
@@ -4974,7 +4885,6 @@ test_that(
   }
 )
 
-
 test_that(
   "invalid file depth metadata fail be ... ertical extraction",
   {
@@ -5004,7 +4914,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "physical depth summaries also support direct point input",
@@ -5041,7 +4950,7 @@ test_that(
   }
 )
 
-
+# Issue #74 C: explanatory reports preserve values and source attribution.
 capture_selection_reports <- function(expr) {
   reports <- list()
   value <- withCallingHandlers(
@@ -5060,7 +4969,6 @@ capture_selection_reports <- function(expr) {
     )
   )
 }
-
 
 test_that(
   "spatial reports explain centres and ... it distance limits",
@@ -5122,7 +5030,6 @@ test_that(
   }
 )
 
-
 test_that(
   "depth reports describe physical lay ... hout interpolation",
   {
@@ -5160,7 +5067,6 @@ test_that(
   }
 )
 
-
 test_that(
   "missing layer reports retain reject ... s without a winner",
   {
@@ -5184,7 +5090,6 @@ test_that(
     expect_false(grepl("Selected depth:", result$text, fixed = TRUE))
   }
 )
-
 
 test_that(
   "reports follow the winning source s ... y for each summary",
@@ -5211,7 +5116,6 @@ test_that(
   }
 )
 
-
 test_that(
   "selection report switches require scalar logical values",
   {
@@ -5221,7 +5125,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "missing reports follow their cause and are never repeated",
@@ -5260,7 +5163,6 @@ test_that(
   }
 )
 
-
 test_that(
   "missing requested depths obey only the depth report switch",
   {
@@ -5293,7 +5195,6 @@ test_that(
     expect_equal(shown$value, hidden$value)
   }
 )
-
 
 test_that(
   "automatic reports stay silent for normal selections",
@@ -5341,7 +5242,6 @@ test_that(
     expect_equal(automatic$value, nearest$value)
   }
 )
-
 
 test_that(
   "automatic depth reports distinguish ... d different layers",
@@ -5397,7 +5297,6 @@ test_that(
   }
 )
 
-
 test_that(
   "automatic spatial reports explain a ... xternal selections",
   {
@@ -5427,7 +5326,6 @@ test_that(
     expect_match(result$text, "nearest cell centre: (1, 40)", fixed = TRUE)
   }
 )
-
 
 test_that(
   "cell containment is separate from overall coverage",
@@ -5474,7 +5372,6 @@ test_that(
   }
 )
 
-
 test_that(
   "report numbers are short without hiding small differences",
   {
@@ -5488,7 +5385,6 @@ test_that(
     expect_equal(.selection_number(0.01, small = TRUE), "0.01")
   }
 )
-
 
 test_that(
   "large reports count observations an ... se missing results",
@@ -5521,7 +5417,6 @@ test_that(
   }
 )
 
-
 test_that(
   "local spacing uses surrounding laye ... d of a global mean",
   {
@@ -5543,7 +5438,6 @@ test_that(
     expect_equal(.depth_selection_reference(c(0, 50, 100), 100, 0)$spacing, 50)
   }
 )
-
 
 test_that(
   "spacing outside the range uses edge ... a strict threshold",
@@ -5570,7 +5464,6 @@ test_that(
     expect_identical(.depth_selection_reference(50, 50, 50)$status, "normal")
   }
 )
-
 
 test_that(
   "normal nearest layers are silent un ... eport is requested",
@@ -5606,7 +5499,6 @@ test_that(
     expect_false(grepl("Showing", full$text, fixed = TRUE))
   }
 )
-
 
 test_that(
   "distant layers explain spacing and  ... missing neighbours",
@@ -5665,7 +5557,6 @@ test_that(
   }
 )
 
-
 test_that(
   "out of range and singleton reports  ... ent missing layers",
   {
@@ -5701,7 +5592,6 @@ test_that(
   }
 )
 
-
 test_that(
   "depth reference follows the source that supplies the value",
   {
@@ -5727,7 +5617,6 @@ test_that(
   }
 )
 
-
 test_that(
   "quiet value tests preserve unexpected conditions",
   {
@@ -5748,7 +5637,6 @@ test_that(
     )
   }
 )
-
 
 expect_batch_matches_reference <- function(engine) {
   batch_search <- getFromNamespace(".nearest_horizontal_cells", "ocean3d")
@@ -5788,14 +5676,12 @@ expect_batch_matches_reference <- function(engine) {
   testthat::expect_length(batch_search(lon, lat, numeric(), numeric()), 0L)
 }
 
-
 test_that(
   "batch nearest matches the spherical reference",
   {
     expect_batch_matches_reference(TRUE)
   }
 )
-
 
 test_that(
   "batch nearest matches the optional ellipsoidal reference",
@@ -5822,7 +5708,6 @@ test_that(
   }
 )
 
-
 test_that(
   "batch boundaries preserve first cel ... ity for exact ties",
   {
@@ -5839,7 +5724,6 @@ test_that(
     expect_equal(batch[[1L]]$distance_km, 0)
   }
 )
-
 
 test_that(
   "batch candidates preserve matching limits and containment",
@@ -5912,7 +5796,6 @@ test_that(
   }
 )
 
-
 test_that(
   "comparison precision distinguishes close values",
   {
@@ -5938,7 +5821,6 @@ test_that(
     expect_false(identical(close$value, close$limit))
   }
 )
-
 
 test_that(
   "spatial rejection text explains nearly identical distances",
@@ -5978,7 +5860,6 @@ test_that(
   }
 )
 
-
 test_that(
   "depth threshold text distinguishes a small excess",
   {
@@ -6000,7 +5881,7 @@ test_that(
   }
 )
 
-
+# Issue #75 A: dates are required by the selected variable, not date_col.
 test_that(
   "static variables use default date_c ... hout a date column",
   {
@@ -6025,7 +5906,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "temporal variables reject absent ta ... direct date inputs",
@@ -6074,7 +5954,6 @@ test_that(
   }
 )
 
-
 test_that(
   "an existing typed NA date preserves ... s & missing values",
   {
@@ -6107,7 +5986,6 @@ test_that(
   }
 )
 
-
 test_that(
   "static inputs do not parse unused date values",
   {
@@ -6133,7 +6011,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "custom date columns and scalar date ...  keep known values",
@@ -6164,7 +6041,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "mixed source time requirements hold in either source order",
@@ -6207,7 +6083,7 @@ test_that(
   }
 )
 
-
+# Issue #75 B: strict formats, explicit missing dates and UTC comparisons.
 test_that(
   "minute and second ISO text share datetime precision",
   {
@@ -6237,7 +6113,6 @@ test_that(
   }
 )
 
-
 test_that(
   "explicit missing vectors are not conversion failures",
   {
@@ -6266,7 +6141,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "time errors identify values and IDs ...  bounding examples",
@@ -6304,7 +6178,6 @@ test_that(
     expect_false(grepl("Showing", conditionMessage(single), fixed = TRUE))
   }
 )
-
 
 test_that(
   "public date errors distinguish dire ...  and named columns",
@@ -6353,7 +6226,6 @@ test_that(
   }
 )
 
-
 test_that(
   "POSIX time zones preserve instants  ... UTC day boundaries",
   {
@@ -6394,7 +6266,6 @@ test_that(
     }
   }
 )
-
 
 test_that(
   "public timezone matching uses the U ... t and calendar day",
@@ -6443,7 +6314,6 @@ test_that(
   }
 )
 
-
 test_that(
   "all missing dates bypass unused intraday label comparisons",
   {
@@ -6476,7 +6346,6 @@ test_that(
     )
   }
 )
-
 
 test_that(
   "minute precision works with direct & custom input",
@@ -6529,7 +6398,6 @@ test_that(
   }
 )
 
-
 test_that(
   "unmarked text times warn once acros ... h reports disabled",
   {
@@ -6580,7 +6448,6 @@ test_that(
   }
 )
 
-
 test_that(
   "timezone warnings count only unmark ... and name the input",
   {
@@ -6624,7 +6491,6 @@ test_that(
   }
 )
 
-
 test_that(
   "explicit zones and date-only inputs ... o timezone warning",
   {
@@ -6658,5 +6524,56 @@ test_that(
       )
     )
     expect_equal(value, 1)
+  }
+)
+
+
+test_that(
+  "point provenance describes the actual selected record",
+  {
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path))
+    .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
+    data <- data.frame(
+      lon = 1,
+      lat = 0,
+      depth = 19,
+      date = as.Date("2020-01-02")
+    )
+    out <- extract_to_point(
+      data,
+      path,
+      var = "temp",
+      method = "nearest",
+      return_match_info = TRUE,
+      time_report = FALSE,
+      depth_report = FALSE
+    )
+    expect_equal(out$temp, 24030)
+    info <- out$temp_match_info[[1L]]
+    expect_equal(info$longitude, 1)
+    expect_equal(info$latitude, 0)
+    expect_equal(info$depth_m, 20)
+    expect_equal(as.numeric(info$timestamp_utc), 1577923200)
+    expect_equal(normalizePath(info$source_file), normalizePath(path))
+    expect_error(
+      extract_to_point(
+        lon = 1,
+        lat = 0,
+        nc = path,
+        return_match_info = TRUE
+      ),
+      "table"
+    )
+    expect_error(
+      extract_to_point(
+        transform(data, temp_match_info = 1),
+        path,
+        var = "temp",
+        method = "nearest",
+        return_match_info = TRUE
+      ),
+      "overwrite"
+    )
   }
 )

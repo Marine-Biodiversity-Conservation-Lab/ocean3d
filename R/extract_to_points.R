@@ -2921,6 +2921,37 @@
 # Main extraction function
 # -----------------------------------------------------------------------------
 
+# Public provenance assembled from the existing point-selection decision. ------
+
+.point_match_records <- function(outputs, selected, column, sources) {
+  lapply(seq_len(nrow(selected)), function(i) {
+    index <- selected$source_index[i]
+    if (is.na(index)) {
+      return(list(status = "no_value", source_file = NA_character_))
+    }
+    candidate <- attr(outputs[[index]], ".source_candidate", exact = TRUE)
+    horizontal <- candidate$spatial_matches[[i]]
+    depth <- candidate$depth_selected[[column]][i]
+    list(
+      status = "selected", variable = selected$variable[i],
+      source_file = if (sources[[index]]$type == "path") {
+        sources[[index]]$source
+      } else {
+        sources[[index]]$source$filename
+      },
+      longitude = selected$selected_lon[i],
+      latitude = selected$selected_lat[i],
+      lon_index = horizontal$lon_idx, lat_index = horizontal$lat_idx,
+      depth_m = if (length(depth)) unname(depth) else NA_real_,
+      timestamp_utc = selected$timestamp[i],
+      time_index = selected$time_index[i],
+      distance_km = selected$distance_km[i],
+      time_displacement_days = selected$distance_days[i]
+    )
+  })
+}
+
+
 #' Extract values from netCDFs to one or more point observations
 #'
 #' This is the general point-extraction interface. It can extract environmental
@@ -3119,6 +3150,9 @@
 #'   whose spacing cannot be assessed. TRUE also reports normal surface, bottom
 #'   and exact depth selections; FALSE hides the depth report. Depths are in
 #'   metres, positive down. Report modes do not change returned values.
+#' @param return_match_info Logical, FALSE by default. With table inputs, add
+#'   one list column per output describing the selected source file, cell,
+#'   depth and timestamp. Missing outputs have no assigned selected source.
 #' @param time_report Logical. If TRUE, the default, display a temporal summary
 #'   when returned values are displaced in time or outputs are missing.
 #'   The return format is unchanged. FALSE hides the summary but does not
@@ -3288,7 +3322,15 @@ extract_to_point <- function(data = NULL,
                              spatial_match = c("within", "nearest"),
                              max_distance_km = NULL,
                              spatial_report = NULL,
-                             depth_report = NULL) {
+                             depth_report = NULL,
+                             return_match_info = FALSE) {
+  if (!is.logical(return_match_info) || length(return_match_info) != 1L ||
+        is.na(return_match_info)) {
+    stop("return_match_info must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (is.null(data) && return_match_info) {
+    stop("Use a data table when requesting match_info.", call. = FALSE)
+  }
   for (option in c("spatial_report", "depth_report")) {
     value <- get(option)
     if (!is.null(value) &&
@@ -3509,6 +3551,16 @@ extract_to_point <- function(data = NULL,
     }
   }
 
+  if (return_match_info) {
+    for (column in names(source_provenance)) {
+      name <- paste0(column, "_match_info")
+      if (name %in% names(out)) {
+        stop("Diagnostic column would overwrite input: ", name, call. = FALSE)
+      }
+      out[[name]] <- .point_match_records(outputs, source_provenance[[column]],
+                                          column, sources)
+    }
+  }
   if (direct_input) {
     value_cols <- unique(unlist(lapply(
       source_plan, function(x) x$columns

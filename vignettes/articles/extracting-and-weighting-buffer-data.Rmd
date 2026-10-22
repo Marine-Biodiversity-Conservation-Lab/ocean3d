@@ -700,6 +700,8 @@ infinite targets are rejected with an explanation of the affected input.
 Changing coverage or similarity limits changes the scientific question;
 it is not an automatic correction of incomplete observations.
 
+To apply these buffers along a trajectory, continue with
+[buffered tracks](extracting-buffers-along-tracks.html).
 
 
 ## Summary
