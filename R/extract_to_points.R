@@ -304,64 +304,167 @@
   )
 }
 
-.get_time_origin <- function(nc, time_dim) {
-  # netCDF time is commonly stored as numeric values with units such as
-  # "days since 1950-01-01". This helper reads that metadata and converts it
-  # into a format that R can use.
-  att <- try(ncdf4::ncatt_get(nc, time_dim, "units"), silent = TRUE)
+.read_time_attribute <- function(nc, coordinate, attribute) {
+  att <- ncdf4::ncatt_get(nc, coordinate, attribute)
 
-  if (inherits(att, "try-error") || is.null(att$value) || is.na(att$value)) {
+  if (!isTRUE(att$hasatt)) {
     return(NULL)
   }
 
-  units <- att$value
-  origin <- sub(".*since[[:space:]]+", "", units, ignore.case = TRUE)
-  origin <- sub("[[:space:]]+.*$", "", origin)
-
-  multiplier <- if (grepl("seconds since", units, ignore.case = TRUE)) {
-    1 / 86400
-  } else if (grepl("minutes since", units, ignore.case = TRUE)) {
-    1 / 1440
-  } else if (grepl("hours since", units, ignore.case = TRUE)) {
-    1 / 24
-  } else {
-    1
-  }
-
-  list(origin = origin, multiplier = multiplier, units = units)
+  att$value
 }
 
-.convert_time_values <- function(nc, time_dim) {
+
+.decode_netcdf_time <- function(nc, time_dim) {
   if (is.null(time_dim)) {
     return(NULL)
   }
 
-  vals <- .get_dim_values(nc, time_dim)
+  units <- .read_time_attribute(nc, time_dim, "units")
 
-  if (inherits(vals, "Date")) {
-    return(vals)
+  if (!is.character(units) || length(units) != 1L ||
+        is.na(units) || !nzchar(trimws(units))) {
+    stop(
+      "Time coordinate `", time_dim,
+      "` has no usable `units` attribute. ",
+      "Expected units such as 'hours since 2020-01-01 00:00:00'. ",
+      "Check the file metadata or use a corrected dataset.",
+      call. = FALSE
+    )
   }
 
-  if (inherits(vals, "POSIXt")) {
-    return(as.Date(vals))
+  calendar <- .read_time_attribute(nc, time_dim, "calendar")
+
+  if (is.null(calendar)) {
+    calendar <- "standard"
   }
 
-  if (is.character(vals)) {
-    return(as.Date(vals))
+  supported <- c("standard", "gregorian", "proleptic_gregorian")
+
+  if (!is.character(calendar) || length(calendar) != 1L ||
+        is.na(calendar) ||
+        !tolower(calendar) %in% supported) {
+    stop(
+      "Time coordinate `", time_dim,
+      "` uses an unsupported calendar: ", toString(calendar), ". ",
+      "This reader currently supports standard, gregorian and ",
+      "proleptic_gregorian calendars.",
+      call. = FALSE
+    )
   }
 
-  info <- .get_time_origin(nc, time_dim)
+  pattern <- paste0(
+    "^\\s*",
+    "(milliseconds?|seconds?|minutes?|hours?|days?)",
+    "\\s+since\\s+(.+?)\\s*$"
+  )
 
-  if (is.null(info)) {
-    # If there is no usable time metadata, the function falls back to treating
-    # the values as day offsets from 1970-01-01. This is not ideal, but it keeps
-    # the behaviour explicit and avoids silently assuming a product-specific
-    # origin.
-    return(as.Date(vals, origin = "1970-01-01"))
+  parts <- regmatches(
+    units,
+    regexec(pattern, units, ignore.case = TRUE, perl = TRUE)
+  )[[1]]
+
+  if (length(parts) != 3L) {
+    stop(
+      "Unsupported time units for `", time_dim, "`: '", units, "'. ",
+      "Expected milliseconds, seconds, minutes, hours or days ",
+      "followed by 'since' and a reference date-time. ",
+      "Months, years and climatologies require separate handling.",
+      call. = FALSE
+    )
   }
 
-  as.Date(vals * info$multiplier, origin = info$origin)
+  unit <- sub("s$", "", tolower(parts[2]))
+
+  seconds_per_unit <- switch(
+    unit,
+    millisecond = 0.001,
+    second = 1,
+    minute = 60,
+    hour = 3600,
+    day = 86400
+  )
+
+  origin_text <- trimws(parts[3])
+  origin_text <- sub("T", " ", origin_text, fixed = TRUE)
+  origin_text <- sub(
+    "\\s*(UTC|Z)$", "",
+    origin_text,
+    ignore.case = TRUE
+  )
+  origin_text <- trimws(origin_text)
+
+  # This first reader supports origins written in UTC without
+  # numeric timezone offsets. Reject other forms explicitly.
+  date_pattern <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+  datetime_pattern <- paste0(
+    "^[0-9]{4}-[0-9]{2}-[0-9]{2} ",
+    "[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?$"
+  )
+
+  if (grepl(date_pattern, origin_text)) {
+    origin_text <- paste(origin_text, "00:00:00")
+  } else if (!grepl(datetime_pattern, origin_text)) {
+    stop(
+      "Unsupported reference date-time in units '", units, "'. ",
+      "Expected YYYY-MM-DD or YYYY-MM-DD HH:MM:SS in UTC, ",
+      "optionally followed by Z or UTC. ",
+      "Numeric timezone offsets are not supported by this reader yet.",
+      call. = FALSE
+    )
+  }
+
+  origin <- as.POSIXct(
+    strptime(
+      origin_text,
+      format = "%Y-%m-%d %H:%M:%OS",
+      tz = "UTC"
+    )
+  )
+
+  # Round-trip validation catches invalid dates and times that
+  # a platform might otherwise normalise.
+  if (is.na(origin) ||
+        format(origin, "%Y-%m-%d %H:%M:%S", tz = "UTC") !=
+          substr(origin_text, 1L, 19L)) {
+    stop(
+      "Invalid reference date-time in units '", units, "'.",
+      call. = FALSE
+    )
+  }
+
+  values <- as.vector(.get_dim_values(nc, time_dim))
+
+  if (!is.numeric(values) || any(!is.finite(values))) {
+    stop(
+      "Time coordinate `", time_dim,
+      "` must contain finite numeric offsets.",
+      call. = FALSE
+    )
+  }
+
+  timestamps <- origin + values * seconds_per_unit
+
+  # R's ordinary date-time arithmetic does not implement the
+  # historical mixed Julian/Gregorian calendar.
+  if (tolower(calendar) %in% c("standard", "gregorian")) {
+    transition <- as.POSIXct(
+      "1582-10-15 00:00:00",
+      tz = "UTC"
+    )
+
+    if (origin < transition || any(timestamps < transition)) {
+      stop(
+        "Historical standard/gregorian dates before 1582-10-15 ",
+        "require a calendar-aware decoder.",
+        call. = FALSE
+      )
+    }
+  }
+
+  timestamps
 }
+
 
 .nearest_index <- function(values, target) {
   if (length(values) == 0 || all(is.na(values)) || is.na(target)) {
@@ -371,29 +474,188 @@
   which.min(abs(values - target))
 }
 
-.match_time_index <- function(values,
-                              target,
-                              time_match = c("nearest", "exact"),
-                              max_time_diff = NULL) {
-  time_match <- match.arg(time_match)
+.prepare_time_input <- function(
+  x,
+  time_resolution = c(
+    "auto", "datetime", "daily", "monthly", "yearly"
+  )) {
+  time_resolution <- match.arg(time_resolution)
 
-  if (length(values) == 0 || all(is.na(values)) || is.na(target)) {
+  if (inherits(x, "POSIXt")) {
+    values <- as.POSIXct(x, tz = "UTC")
+    has_time <- TRUE
+  } else if (inherits(x, "Date")) {
+    values <- as.POSIXct(x, tz = "UTC")
+    has_time <- FALSE
+  } else if (is.character(x)) {
+    date_pattern <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    datetime_pattern <- paste0(
+      "^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T]",
+      "[0-9]{2}:[0-9]{2}:[0-9]{2}Z?$"
+    )
+    present <- !is.na(x)
+    date_only <- present & grepl(date_pattern, x)
+    datetime <- present & grepl(datetime_pattern, x)
+    bad_format <- which(present & !date_only & !datetime)
+
+    if (length(bad_format) > 0L) {
+      shown <- head(bad_format, 10L)
+      stop(
+        "Time values could not be converted. Invalid format at ",
+        "row/position(s): ", toString(shown), ". Values: ",
+        toString(shQuote(x[shown])), ". ",
+        "Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS in UTC. ",
+        "Date and POSIXct objects are also accepted.",
+        call. = FALSE
+      )
+    }
+
+    if (time_resolution == "auto" &&
+          any(date_only) && any(datetime)) {
+      stop(
+        "Time input mixes dates with and without hours. ",
+        "Set time_resolution explicitly or use a consistent format.",
+        call. = FALSE
+      )
+    }
+
+    text <- sub("T", " ", x, fixed = TRUE)
+    text <- sub("Z$", "", text)
+    text[date_only] <- paste(text[date_only], "00:00:00")
+    values <- as.POSIXct(
+      strptime(text, "%Y-%m-%d %H:%M:%S", tz = "UTC")
+    )
+    round_trip <- format(
+      values, "%Y-%m-%d %H:%M:%S", tz = "UTC"
+    )
+    invalid <- which(
+      present & (is.na(values) | round_trip != text)
+    )
+
+    if (length(invalid) > 0L) {
+      shown <- head(invalid, 10L)
+      stop(
+        "Time values could not be converted. Invalid date/time at ",
+        "row/position(s): ", toString(shown), ". Values: ",
+        toString(shQuote(x[shown])), ".",
+        call. = FALSE
+      )
+    }
+
+    has_time <- any(datetime)
+    if (time_resolution == "datetime" && any(date_only)) {
+      stop(
+        "time_resolution = 'datetime' requires hours for every ",
+        "non-missing observation. Supply POSIXct values or ",
+        "YYYY-MM-DD HH:MM:SS text.",
+        call. = FALSE
+      )
+    }
+  } else {
+    stop(
+      "Time values could not be converted. ",
+      "Use Date, POSIXct or ISO-formatted character values.",
+      call. = FALSE
+    )
+  }
+
+  if (time_resolution == "auto") {
+    time_resolution <- if (has_time) "datetime" else "daily"
+  }
+
+  if (time_resolution == "datetime" &&
+        !has_time && any(!is.na(values))) {
+    stop(
+      "time_resolution = 'datetime' requires observation hours. ",
+      "Supply POSIXct values or YYYY-MM-DD HH:MM:SS text.",
+      call. = FALSE
+    )
+  }
+
+  list(values = values, resolution = time_resolution)
+}
+
+
+.time_comparison_values <- function(values, resolution) {
+  if (inherits(values, "Date")) {
+    values <- as.POSIXct(values, tz = "UTC")
+  }
+  if (resolution == "datetime") return(values)
+
+  pattern <- switch(
+    resolution,
+    daily = "%Y-%m-%d",
+    monthly = "%Y-%m-01",
+    yearly = "%Y-01-01"
+  )
+  as.POSIXct(
+    as.Date(format(values, pattern, tz = "UTC")),
+    tz = "UTC"
+  )
+}
+
+
+.check_time_resolution <- function(values, resolution) {
+  keys <- .time_comparison_values(values, resolution)
+  valid <- !is.na(keys)
+
+  if (anyDuplicated(keys[valid])) {
+    stop(
+      "Multiple dataset timestamps map to the same '",
+      resolution, "' comparison value. ",
+      "Selecting the first would discard information. ",
+      "Use a finer time_resolution, select the intended records, ",
+      "or aggregate the data explicitly before extraction.",
+      call. = FALSE
+    )
+  }
+  invisible(TRUE)
+}
+
+
+.match_time_index <- function(
+  values,
+  target,
+  time_match = c("nearest", "exact"),
+  max_time_diff = NULL,
+  time_resolution = c(
+    "auto", "datetime", "daily", "monthly", "yearly"
+  )) {
+  time_match <- match.arg(time_match)
+  time_resolution <- match.arg(time_resolution)
+
+  if (length(values) == 0L ||
+        all(is.na(values)) ||
+        is.na(target)) {
     return(NA_integer_)
   }
 
-  if (identical(time_match, "exact")) {
-    hit <- which(values == target)
-    return(if (length(hit) > 0) hit[1] else NA_integer_)
+  prepared <- .prepare_time_input(target, time_resolution)
+  resolution <- prepared$resolution
+  .check_time_resolution(values, resolution)
+
+  available <- .time_comparison_values(values, resolution)
+  requested <- .time_comparison_values(
+    prepared$values, resolution
+  )
+
+  if (time_match == "exact") {
+    hit <- which(available == requested)
+    return(
+      if (length(hit) > 0L) as.integer(hit[1L]) else NA_integer_
+    )
   }
 
-  idx <- which.min(abs(values - target))
+  differences <- abs(as.numeric(
+    difftime(available, requested, units = "days")
+  ))
+  idx <- which.min(differences)
 
-  if (!is.null(max_time_diff)) {
-    diff_days <- abs(as.numeric(values[idx] - target))
-    if (is.na(diff_days) || diff_days > max_time_diff) return(NA_integer_)
+  if (!is.null(max_time_diff) &&
+        differences[idx] > max_time_diff) {
+    return(NA_integer_)
   }
-
-  idx
+  as.integer(idx)
 }
 
 .prepare_lon <- function(lon_values, lon_target) {
@@ -405,8 +667,8 @@
   }
 
   if (min(lon_values, na.rm = TRUE) >= 0 &&
-      max(lon_values, na.rm = TRUE) > 180 &&
-      lon_target < 0) {
+        max(lon_values, na.rm = TRUE) > 180 &&
+        lon_target < 0) {
     lon_target <- lon_target + 360
   }
 
@@ -536,7 +798,8 @@
                               time_match,
                               max_time_diff,
                               output_prefix,
-                              verbose) {
+                              verbose,
+                              time_resolution = "auto") {
   opened <- .open_source(source)
   on.exit(.close_source(opened), add = TRUE)
   nc <- opened$nc
@@ -560,12 +823,23 @@
   lon_values <- .get_dim_values(nc, dims$lon)
   lat_values <- .get_dim_values(nc, dims$lat)
   depth_values <- .get_dim_values(nc, dims$depth)
-  time_values <- .convert_time_values(nc, dims$time)
+  time_values <- .decode_netcdf_time(nc, dims$time)
+  resolved_time_resolution <- time_resolution
 
   if (!is.null(dims$time) && !is.null(date_col)) {
-    date_values <- as.Date(data[[date_col]])
+    prepared <- .prepare_time_input(
+      data[[date_col]], time_resolution
+    )
+    date_values <- prepared$values
+    resolved_time_resolution <- prepared$resolution
+    .check_time_resolution(
+      time_values, resolved_time_resolution
+    )
   } else {
-    date_values <- rep(NA, nrow(data))
+    date_values <- rep(
+      as.POSIXct(NA_character_, tz = "UTC"),
+      nrow(data)
+    )
   }
 
   prefix <- if (is.null(output_prefix)) var else output_prefix
@@ -603,7 +877,8 @@
         values = time_values,
         target = date_values[i],
         time_match = time_match,
-        max_time_diff = max_time_diff
+        max_time_diff = max_time_diff,
+        time_resolution = resolved_time_resolution
       )
       if (is.na(time_idx)) next
     }
@@ -776,7 +1051,8 @@
 #'   `method = "all"`.
 #' @param date Optional observation date or vector of dates for direct point
 #'   extraction. Used when `data = NULL` and the netCDF variable has a time
-#'   dimension. Character dates should use `"YYYY-MM-DD"` format. Direct input
+#'   dimension. Accepts Date and POSIXt objects, or character values in
+#'   "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" format (UTC). Direct input
 #'   vectors may have length 1 or a common compatible length.
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
@@ -811,8 +1087,38 @@
 #'   `output_col` and `output_prefix` are provided, `output_col` is used. With
 #'   `method = "all"`, this name is used as the suffix in `nearest_*`,
 #'   `surface_*` and `seabottom_*` columns.
+#' @param time_resolution Precision used to compare observation times with
+#'   dataset timestamps. "auto" uses daily comparison for Date objects
+#'   and date-only text, and datetime comparison for POSIXt objects and
+#'   date-time text. Explicit alternatives are "datetime", "daily",
+#'   "monthly" and "yearly". Calendar comparisons use UTC.
+#'   These options compare timestamp labels; they do not infer averaging
+#'   intervals or calculate temporal summaries. Multiple dataset records
+#'   mapping to the same comparison value cause an error.
+#'   With nearest matching, monthly and yearly comparisons use the start
+#'   of the labelled month or year. max_time_diff remains in days and
+#'   applies to these comparison values. Use exact matching to require
+#'   the same labelled day, month or year.
 #' @param verbose Logical. If `TRUE`, progress messages are printed every 100
 #'   rows.
+#'
+#' @details
+#' Numeric netCDF time coordinates must provide units expressed as
+#' milliseconds, seconds, minutes, hours or days since a reference
+#' date-time. Singular and plural unit names are accepted.
+#'
+#' Reference date-times are interpreted in UTC. A trailing "Z" or
+#' "UTC" is accepted; numeric timezone offsets such as "+02:00"
+#' are not currently supported.
+#'
+#' Supported calendars are "standard", "gregorian" and
+#' "proleptic_gregorian". The first two are supported only for
+#' reference dates and timestamps on or after 1582-10-15.
+#' Unsupported units, calendars or missing time units produce an error.
+#'
+#' Temporal resolution controls comparison of timestamp labels.
+#' It does not identify averaging intervals, calculate temporal means,
+#' or interpret climatological periods.
 #'
 #' @return If `data` is provided, the input observations with extracted values
 #'   appended. Data frames, tibbles and `sf` objects retain their structure;
@@ -850,6 +1156,32 @@
 #'   method = "nearest"
 #' )
 #'
+#' # Match a complete observation timestamp.
+#' # The example file has a reading at midnight on 2020-01-03.
+#' extract_to_point(
+#'   nc = nc_file,
+#'   lon = 0,
+#'   lat = 40,
+#'   depth = 60,
+#'   date = as.POSIXct("2020-01-03 00:15:00", tz = "UTC"),
+#'   var = "temp",
+#'   method = "nearest",
+#'   time_resolution = "datetime",
+#'   max_time_diff = 30 / 1440
+#' )
+#'
+#' # Compare monthly labels when the file has one record per month.
+#' # Here the timestamp labels are illustrative.
+#' monthly_labels <- as.Date(c("2020-01-15", "2020-02-15"))
+#' observation_date <- as.Date("2020-02-28")
+#' format(monthly_labels, "%Y-%m") ==
+#'   format(observation_date, "%Y-%m")
+#'
+#' # For extraction from such a file, use:
+#' # time_resolution = "monthly", time_match = "exact".
+#' # Multiple records in the same month cause an error;
+#' # they are not averaged automatically.
+#'
 #' @export
 
 extract_to_point <- function(data = NULL,
@@ -876,13 +1208,18 @@ extract_to_point <- function(data = NULL,
                              max_time_diff = NULL,
                              output_prefix = NULL,
                              output_col = NULL,
-                             verbose = FALSE) {
+                             verbose = FALSE,
+                             time_resolution = c(
+                               "auto", "datetime", "daily",
+                               "monthly", "yearly"
+                             )) {
   method <- match.arg(method)
   time_match <- match.arg(time_match)
+  time_resolution <- match.arg(time_resolution)
 
   if (!is.null(max_time_diff) &&
-      (!is.numeric(max_time_diff) || length(max_time_diff) != 1L ||
-       is.na(max_time_diff) || max_time_diff < 0)) {
+        (!is.numeric(max_time_diff) || length(max_time_diff) != 1L ||
+           is.na(max_time_diff) || max_time_diff < 0)) {
     stop("`max_time_diff` must be `NULL` or one non-negative numeric value ",
          "in days.",
          call. = FALSE)
@@ -900,7 +1237,7 @@ extract_to_point <- function(data = NULL,
     }
 
     if (method %in% c("nearest", "all") &&
-        (!is.numeric(depth) || length(depth) == 0L || anyNA(depth))) {
+          (!is.numeric(depth) || length(depth) == 0L || anyNA(depth))) {
       stop(
         "`depth` must contain numeric values for `nearest` and `all` ",
         "extraction.",
@@ -929,22 +1266,9 @@ extract_to_point <- function(data = NULL,
     }
 
     if (!is.null(direct_values$date)) {
-      date_value <- suppressWarnings(
-        tryCatch(
-          as.Date(direct_values$date),
-          error = function(e) rep(as.Date(NA), length(direct_values$date))
-        )
-      )
-
-      if (anyNA(date_value)) {
-        stop(
-          "`date` could not be converted to a valid date. Use `YYYY-MM-DD` ",
-          "format, for example `2020-01-03`.",
-          call. = FALSE
-        )
-      }
-
-      data$date <- date_value
+      # Validate without replacing the original precision.
+      .prepare_time_input(direct_values$date, time_resolution)
+      data$date <- direct_values$date
       date_col <- "date"
     } else {
       date_col <- NULL
@@ -958,7 +1282,7 @@ extract_to_point <- function(data = NULL,
   }
 
   if (!is.null(var) &&
-      (!is.character(var) || length(var) != 1L || is.na(var))) {
+        (!is.character(var) || length(var) != 1L || is.na(var))) {
     stop(
       "`var` must be `NULL` or a single character value naming one netCDF ",
       "variable.",
@@ -970,8 +1294,8 @@ extract_to_point <- function(data = NULL,
   # `output_prefix` is kept for backward compatibility with previous code.
   if (!is.null(output_col)) {
     if (!is.character(output_col) ||
-        length(output_col) != 1L ||
-        is.na(output_col)) {
+          length(output_col) != 1L ||
+          is.na(output_col)) {
       stop(
         "`output_col` must be a single character value naming the output ",
         "column.",
@@ -1021,7 +1345,8 @@ extract_to_point <- function(data = NULL,
       time_match = time_match,
       max_time_diff = max_time_diff,
       output_prefix = source_output_prefix,
-      verbose = verbose
+      verbose = verbose,
+      time_resolution = time_resolution
     )
   })
 
