@@ -85,7 +85,8 @@ function.</p>
 <span>  max_time_diff <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  output_prefix <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  output_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  time_resolution <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"datetime"</span>, <span class="st">"daily"</span>, <span class="st">"monthly"</span>, <span class="st">"yearly"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -128,7 +129,8 @@ point extraction. Required when <code>data = NULL</code> and <code>method = "nea
 <dt id="arg-date">date<a class="anchor" aria-label="anchor" href="#arg-date"></a></dt>
 <dd><p>Optional observation date or vector of dates for direct point
 extraction. Used when <code>data = NULL</code> and the netCDF variable has a time
-dimension. Character dates should use <code>"YYYY-MM-DD"</code> format. Direct input
+dimension. Accepts Date and POSIXt objects, or character values in
+"YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" format (UTC). Direct input
 vectors may have length 1 or a common compatible length.</p></dd>
 
 
@@ -217,6 +219,21 @@ to define the exact name of the output column directly. If both
 <dd><p>Logical. If <code>TRUE</code>, progress messages are printed every 100
 rows.</p></dd>
 
+
+<dt id="arg-time-resolution">time_resolution<a class="anchor" aria-label="anchor" href="#arg-time-resolution"></a></dt>
+<dd><p>Precision used to compare observation times with
+dataset timestamps. "auto" uses daily comparison for Date objects
+and date-only text, and datetime comparison for POSIXt objects and
+date-time text. Explicit alternatives are "datetime", "daily",
+"monthly" and "yearly". Calendar comparisons use UTC.
+These options compare timestamp labels; they do not infer averaging
+intervals or calculate temporal summaries. Multiple dataset records
+mapping to the same comparison value cause an error.
+With nearest matching, monthly and yearly comparisons use the start
+of the labelled month or year. max_time_diff remains in days and
+applies to these comparison values. Use exact matching to require
+the same labelled day, month or year.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -227,6 +244,22 @@ direct extraction returns a numeric value for one point and one output, a
 numeric vector for multiple points and one output, a named numeric vector
 for one point and multiple outputs (for example, <code>method = "all"</code>), or a
 data frame for multiple points and multiple outputs.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>Numeric netCDF time coordinates must provide units expressed as
+milliseconds, seconds, minutes, hours or days since a reference
+date-time. Singular and plural unit names are accepted.</p>
+<p>Reference date-times are interpreted in UTC. A trailing "Z" or
+"UTC" is accepted; numeric timezone offsets such as "+02:00"
+are not currently supported.</p>
+<p>Supported calendars are "standard", "gregorian" and
+"proleptic_gregorian". The first two are supported only for
+reference dates and timestamps on or after 1582-10-15.
+Unsupported units, calendars or missing time units produce an error.</p>
+<p>Temporal resolution controls comparison of timestamp labels.
+It does not identify averaging intervals, calculate temporal means,
+or interpret climatological periods.</p>
     </div>
 
     <div class="section level2">
@@ -259,6 +292,34 @@ data frame for multiple points and multiple outputs.</p>
 <span class="r-in"><span>  method <span class="op">=</span> <span class="st">"nearest"</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 15.5 13.5</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Match a complete observation timestamp.</span></span></span>
+<span class="r-in"><span><span class="co"># The example file has a reading at midnight on 2020-01-03.</span></span></span>
+<span class="r-in"><span><span class="fu">extract_to_point</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  nc <span class="op">=</span> <span class="va">nc_file</span>,</span></span>
+<span class="r-in"><span>  lon <span class="op">=</span> <span class="fl">0</span>,</span></span>
+<span class="r-in"><span>  lat <span class="op">=</span> <span class="fl">40</span>,</span></span>
+<span class="r-in"><span>  depth <span class="op">=</span> <span class="fl">60</span>,</span></span>
+<span class="r-in"><span>  date <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/as.POSIXlt.html" class="external-link">as.POSIXct</a></span><span class="op">(</span><span class="st">"2020-01-03 00:15:00"</span>, tz <span class="op">=</span> <span class="st">"UTC"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  var <span class="op">=</span> <span class="st">"temp"</span>,</span></span>
+<span class="r-in"><span>  method <span class="op">=</span> <span class="st">"nearest"</span>,</span></span>
+<span class="r-in"><span>  time_resolution <span class="op">=</span> <span class="st">"datetime"</span>,</span></span>
+<span class="r-in"><span>  max_time_diff <span class="op">=</span> <span class="fl">30</span> <span class="op">/</span> <span class="fl">1440</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 15.5</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Compare monthly labels when the file has one record per month.</span></span></span>
+<span class="r-in"><span><span class="co"># Here the timestamp labels are illustrative.</span></span></span>
+<span class="r-in"><span><span class="va">monthly_labels</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"2020-01-15"</span>, <span class="st">"2020-02-15"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">observation_date</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.Date.html" class="external-link">as.Date</a></span><span class="op">(</span><span class="st">"2020-02-28"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">monthly_labels</span>, <span class="st">"%Y-%m"</span><span class="op">)</span> <span class="op">==</span></span></span>
+<span class="r-in"><span>  <span class="fu"><a href="https://rdrr.io/r/base/format.html" class="external-link">format</a></span><span class="op">(</span><span class="va">observation_date</span>, <span class="st">"%Y-%m"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] FALSE  TRUE</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># For extraction from such a file, use:</span></span></span>
+<span class="r-in"><span><span class="co"># time_resolution = "monthly", time_match = "exact".</span></span></span>
+<span class="r-in"><span><span class="co"># Multiple records in the same month cause an error;</span></span></span>
+<span class="r-in"><span><span class="co"># they are not averaged automatically.</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
