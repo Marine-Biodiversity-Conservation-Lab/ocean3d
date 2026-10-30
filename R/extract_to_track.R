@@ -438,7 +438,7 @@
     }
   )
   lengths <- if (model == "sphere") {
-    angle * 6371.0088
+    angle * .earth_radius_km
   } else {
     vapply(xy, function(x) sqrt(sum(x^2)) / 1000, numeric(1))
   }

@@ -1507,9 +1507,13 @@
   which(targets >= axis$lower - tol & targets <= axis$upper + tol)
 }
 
+# Mean Earth radius used by s2, shared by every spherical distance.
+.earth_radius_km <- 6371.01
+
 # Great-circle distance on a sphere with the s2 mean Earth radius, so values
 # agree with sf::st_distance() under s2, independently of sf settings.
-.great_circle_km <- function(lon1, lat1, lon2, lat2, radius_km = 6371.01) {
+.great_circle_km <- function(lon1, lat1, lon2, lat2,
+                             radius_km = .earth_radius_km) {
   p <- pi / 180
   h <- sin((lat2 - lat1) * p / 2)^2 +
     cos(lat1 * p) * cos(lat2 * p) * sin((lon2 - lon1) * p / 2)^2

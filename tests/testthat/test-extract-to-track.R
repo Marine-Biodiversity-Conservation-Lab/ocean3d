@@ -907,7 +907,7 @@ test_that(
       spacing_km = 112, distance_model = "sphere", quiet = TRUE
     )
     expect_equal(abs(out$samples$lon[2L]), 180)
-    expect_equal(out$samples$distance_km[3L], 222.390160467, tolerance = 1e-08)
+    expect_equal(out$samples$distance_km[3L], 222.390202355, tolerance = 1e-08)
     polar <- extract_to_track(
       data.frame(lon = c(-45, 45), lat = 80), path,
       spacing_km = 1000, distance_model = "sphere", quiet = TRUE
