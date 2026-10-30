@@ -1812,74 +1812,6 @@
   which.min(abs(values - target))
 }
 
-.require_observation_time <- function(data, date_col, var, source_file,
-                                      direct_input = FALSE) {
-  named_column <- is.character(date_col) &&
-    length(date_col) == 1L &&
-    !is.na(date_col) &&
-    nzchar(date_col)
-
-  if (named_column && date_col %in% names(data)) {
-    return(invisible(TRUE))
-  }
-
-  correction <- if (direct_input) {
-    "Supply the `date` argument."
-  } else if (named_column) {
-    paste0(
-      "Column `", date_col, "` is missing from `data`. ",
-      "Supply that column or set `date_col` to an existing date column."
-    )
-  } else {
-    "Set `date_col` to an existing date column in `data`."
-  }
-
-  stop(
-    "netCDF variable `", var, "` has a time dimension.\n",
-    "File: ", basename(source_file), "\n",
-    correction,
-    "\nAn explicit NA date is allowed; a missing date input is not.",
-    call. = FALSE
-  )
-}
-
-.stop_time_input <- function(x, bad, reason, input_name, ids = NULL) {
-  shown <- head(bad, 5L)
-  original <- encodeString(as.character(x[shown]), quote = "\"")
-
-  identifiers <- if (is.null(ids)) {
-    rep("", length(shown))
-  } else {
-    paste0(
-      " (id: ",
-      encodeString(as.character(ids[shown]), quote = "\""),
-      ")"
-    )
-  }
-
-  examples <- paste0(
-    "row/position ", shown, identifiers, ": ", original
-  )
-  omitted <- length(bad) - length(shown)
-
-  stop(
-    reason,
-    "\nInput: ", input_name,
-    "\nAffected observations: ", length(bad), ".",
-    "\n", paste(examples, collapse = "\n"),
-    if (omitted > 0L) {
-      paste0("\nShowing ", length(shown), " of ", length(bad), " cases.")
-    } else {
-      ""
-    },
-    "\nUse Date, POSIXct/POSIXlt, YYYY-MM-DD, ",
-    "YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS.",
-    "\nText timestamps are interpreted in UTC. ",
-    "For another time zone, supply a POSIXct/POSIXlt object.",
-    call. = FALSE
-  )
-}
-
 .prepare_time_input <- function(
   x,
   time_resolution = c(
@@ -1894,9 +1826,39 @@
   unzoned <- rep(FALSE, length(x))
 
   fail <- function(bad, reason) {
-    .stop_time_input(
-      x = x, bad = bad, reason = reason,
-      input_name = input_name, ids = ids
+    shown <- head(bad, 5L)
+    original <- encodeString(as.character(x[shown]), quote = "\"")
+
+    identifiers <- if (is.null(ids)) {
+      rep("", length(shown))
+    } else {
+      paste0(
+        " (id: ",
+        encodeString(as.character(ids[shown]), quote = "\""),
+        ")"
+      )
+    }
+
+    examples <- paste0(
+      "row/position ", shown, identifiers, ": ", original
+    )
+    omitted <- length(bad) - length(shown)
+
+    stop(
+      reason,
+      "\nInput: ", input_name,
+      "\nAffected observations: ", length(bad), ".",
+      "\n", paste(examples, collapse = "\n"),
+      if (omitted > 0L) {
+        paste0("\nShowing ", length(shown), " of ", length(bad), " cases.")
+      } else {
+        ""
+      },
+      "\nUse Date, POSIXct/POSIXlt, YYYY-MM-DD, ",
+      "YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS.",
+      "\nText timestamps are interpreted in UTC. ",
+      "For another time zone, supply a POSIXct/POSIXlt object.",
+      call. = FALSE
     )
   }
 
@@ -2532,13 +2494,31 @@
   )
 
   if (!is.null(dims$time)) {
-    .require_observation_time(
-      data = data,
-      date_col = date_col,
-      var = var,
-      source_file = nc$filename,
-      direct_input = direct_input
-    )
+    named_column <- is.character(date_col) &&
+      length(date_col) == 1L &&
+      !is.na(date_col) &&
+      nzchar(date_col)
+
+    if (!(named_column && date_col %in% names(data))) {
+      correction <- if (direct_input) {
+        "Supply the `date` argument."
+      } else if (named_column) {
+        paste0(
+          "Column `", date_col, "` is missing from `data`. ",
+          "Supply that column or set `date_col` to an existing date column."
+        )
+      } else {
+        "Set `date_col` to an existing date column in `data`."
+      }
+
+      stop(
+        "netCDF variable `", var, "` has a time dimension.\n",
+        "File: ", basename(nc$filename), "\n",
+        correction,
+        "\nAn explicit NA date is allowed; a missing date input is not.",
+        call. = FALSE
+      )
+    }
   }
 
   if (method != "2d" && is.null(dims$depth)) {
