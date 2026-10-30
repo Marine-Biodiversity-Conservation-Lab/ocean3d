@@ -917,20 +917,20 @@ test_that(
     .make_track_nc(path, lon = -180:179, lat = c(0, 80, 85))
     out <- extract_to_track(
       data.frame(lon = c(179, -179), lat = 0), path,
-      spacing_km = 112, distance_model = "sphere", quiet = TRUE
+      spacing_km = 112, quiet = TRUE
     )
     expect_equal(abs(out$samples$lon[2L]), 180)
-    expect_equal(out$samples$distance_km[3L], 222.390202355, tolerance = 1e-08)
+    # WGS84 equatorial arc: 2 degrees of the 6378.137 km equatorial radius.
+    expect_equal(out$samples$distance_km[3L], 222.638981587, tolerance = 1e-08)
     polar <- extract_to_track(
       data.frame(lon = c(-45, 45), lat = 80), path,
-      spacing_km = 1000, distance_model = "sphere", quiet = TRUE
+      spacing_km = 1000, quiet = TRUE
     )
     expect_true(all(is.finite(c(polar$samples$lon, polar$samples$lat))))
     expect_gt(polar$samples$lat[2L], 80)
     expect_error(
       extract_to_track(
-        data.frame(lon = c(0, 180), lat = 0), path,
-        distance_model = "sphere", quiet = TRUE
+        data.frame(lon = c(0, 180), lat = 0), path, quiet = TRUE
       ),
       "Antipodal"
     )

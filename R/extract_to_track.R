@@ -392,50 +392,36 @@
 }
 
 
-.track_geodesic <- function(lon, lat, model = "WGS84") {
+.track_geodesic <- function(lon, lat) {
   radians <- pi / 180
   xyz <- cbind(
-    cos(lat * radians) * cos(lon * radians), cos(lat * radians) *
-      sin(lon * radians), sin(lat * radians)
+    cos(lat * radians) * cos(lon * radians),
+    cos(lat * radians) * sin(lon * radians),
+    sin(lat * radians)
   )
-  dot <- rowSums(xyz[-nrow(xyz), , drop = FALSE] * xyz[-1L, , drop = FALSE])
-  previous <- xyz[-nrow(xyz), , drop = FALSE]
-  following <- xyz[-1L, , drop = FALSE]
+  a <- xyz[-nrow(xyz), , drop = FALSE]
+  b <- xyz[-1L, , drop = FALSE]
   cross <- cbind(
-    previous[, 2L] * following[, 3L] - previous[, 3L] *
-      following[, 2L], previous[, 3L] * following[, 1L] - previous[
-      ,
-      1L
-    ] * following[, 3L], previous[, 1L] * following[, 2L] - previous[
-      ,
-      2L
-    ] * following[, 1L]
+    a[, 2L] * b[, 3L] - a[, 3L] * b[, 2L],
+    a[, 3L] * b[, 1L] - a[, 1L] * b[, 3L],
+    a[, 1L] * b[, 2L] - a[, 2L] * b[, 1L]
   )
-  angle <- atan2(sqrt(rowSums(cross^2)), dot)
+  angle <- atan2(sqrt(rowSums(cross^2)), rowSums(a * b))
   if (any(pi - angle < 1e-08)) {
     stop("Antipodal endpoints need an intermediate waypoint.", call. = FALSE)
   }
-  crs <- vapply(
-    seq_len(length(lon) - 1L), function(i) {
-      paste0("+proj=aeqd +lat_0=", lat[i], " +lon_0=", lon[i],
-             " +datum=WGS84 +units=m +no_defs")
-    }, character(1)
+  # Each segment is a straight line from the origin of an azimuthal
+  # equidistant projection centred on its start, i.e. the WGS84 geodesic.
+  crs <- paste0(
+    "+proj=aeqd +lat_0=", lat[-length(lat)], " +lon_0=", lon[-length(lon)],
+    " +datum=WGS84 +units=m +no_defs"
   )
   xy <- lapply(
     seq_along(crs), function(i) {
-      sf::sf_project(
-        "EPSG:4326", crs[i], cbind(
-          lon[i + 1L], lat[i +
-                             1L]
-        )
-      )
+      sf::sf_project("EPSG:4326", crs[i], cbind(lon[i + 1L], lat[i + 1L]))
     }
   )
-  lengths <- if (model == "sphere") {
-    angle * .earth_radius_km
-  } else {
-    vapply(xy, function(x) sqrt(sum(x^2)) / 1000, numeric(1))
-  }
+  lengths <- vapply(xy, function(x) sqrt(sum(x^2)) / 1000, numeric(1))
   if (any(!is.finite(lengths))) {
     stop(
       "A geodesic could not be constructed; add a waypoint.",
@@ -443,39 +429,15 @@
     )
   }
   list(
-    xyz = xyz, angle = angle, length_km = lengths, crs = crs, xy = xy,
-    longitude = lon, latitude = lat, model = model
+    length_km = lengths, crs = crs, xy = xy,
+    longitude = lon, latitude = lat
   )
 }
 
 
 .track_geodesic_positions <- function(arc, segment, fractions) {
-  if (arc$model == "WGS84") {
-    xy <- outer(fractions, as.numeric(arc$xy[[segment]]))
-    result <- sf::sf_project(arc$crs[segment], "EPSG:4326", xy)
-  } else {
-    angle <- arc$angle[segment]
-    a <- arc$xyz[segment, ]
-    b <- arc$xyz[segment + 1L, ]
-    xyz <- if (angle < 1e-12) {
-      matrix(rep(a, each = length(fractions)), ncol = 3L)
-    } else {
-      outer(sin((1 - fractions) * angle) / sin(angle), a) + outer(
-        sin(
-          fractions *
-            angle
-        ) / sin(angle), b
-      )
-    }
-    result <- cbind(
-      atan2(xyz[, 2L], xyz[, 1L]) * 180 / pi, atan2(
-        xyz[
-          ,
-          3L
-        ], sqrt(xyz[, 1L]^2 + xyz[, 2L]^2)
-      ) * 180 / pi
-    )
-  }
+  xy <- outer(fractions, as.numeric(arc$xy[[segment]]))
+  result <- sf::sf_project(arc$crs[segment], "EPSG:4326", xy)
   # Retain supplied endpoint coordinates, including stationary
   # segments.
   result[fractions == 0, ] <- c(arc$longitude[segment], arc$latitude[segment])
@@ -819,10 +781,7 @@
   vertices, rows, options, lon_col, lat_col,
   depth_col, date_col, time_values, depth_used, time_used, budget
 ) {
-  arc <- .track_geodesic(
-    vertices[[lon_col]][rows], vertices[[lat_col]][rows],
-    options$distance_model
-  )
+  arc <- .track_geodesic(vertices[[lon_col]][rows], vertices[[lat_col]][rows])
   times <- if (is.null(time_values)) {
     rep(NA_real_, length(rows))
   } else {
@@ -1251,7 +1210,6 @@
 #'   Calendar steps advance from each preceding step in UTC, clamping to the
 #'   destination month's end. Balanced sampling preserves these calendar anchors
 #'   and subdivides each calendar span to satisfy distance/depth limits.
-#' @param distance_model WGS84 ellipsoidal geodesics (default), or sphere.
 #' @param land_mask Optional sf polygon or single-layer terra SpatRaster mask.
 #'   With no mask, marine connectivity is not checked.
 #'   Geographic rasters must use longitudes from -180 to 180; rotate or
@@ -1318,7 +1276,7 @@
 #'   are NA. source_row indexes the expanded vertex table for sf lines.
 #'
 #' @section Interpretation and limits:
-#' Positions follow WGS84 shortest geodesics by default. Distances are
+#' Positions follow WGS84 shortest geodesics. Distances are
 #' horizontal, not three-dimensional travel distances. Antipodal endpoints need
 #' a waypoint. Interpolated coordinates describe assumptions, not observations.
 #'
@@ -1378,9 +1336,6 @@ extract_to_track <- function(
   z_as_depth = FALSE, quiet = FALSE, time_step = NULL, time_unit = c(
     "hours",
     "minutes", "seconds", "days", "months", "years"
-  ), distance_model = c(
-    "WGS84",
-    "sphere"
   ), land_mask = NULL, marine_values = NULL, mask_type = c(
     "land",
     "marine"
@@ -1395,7 +1350,6 @@ extract_to_track <- function(
   weighting <- match.arg(weighting)
   time_resolution <- match.arg(time_resolution)
   time_unit <- match.arg(time_unit)
-  distance_model <- match.arg(distance_model)
   mask_type <- match.arg(mask_type)
   land_policy <- match.arg(land_policy)
   dots <- list(...)
@@ -1815,7 +1769,7 @@ extract_to_track <- function(
     args[c(
       "sampling", "spacing_km", "interpolate_depth", "interpolate_time",
       "depth_step_m", "time_step_seconds", "time_step", "time_unit",
-      "distance_model", "land_mask", "marine_values", "mask_type",
+      "land_mask", "marine_values", "mask_type",
       "mask_domain", "land_policy", "mask_step_km"
     )],
     list(

@@ -32,7 +32,6 @@ extract_to_track(
   quiet = FALSE,
   time_step = NULL,
   time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
-  distance_model = c("WGS84", "sphere"),
   land_mask = NULL,
   marine_values = NULL,
   mask_type = c("land", "marine"),
@@ -122,8 +121,6 @@ Calendar steps advance from each preceding step in UTC, clamping to the
 destination month's end. Balanced sampling preserves these calendar anchors
 and subdivides each calendar span to satisfy distance/depth limits.}
 
-\item{distance_model}{WGS84 ellipsoidal geodesics (default), or sphere.}
-
 \item{land_mask}{Optional sf polygon or single-layer terra SpatRaster mask.
 With no mask, marine connectivity is not checked.
 Geographic rasters must use longitudes from -180 to 180; rotate or
@@ -177,7 +174,7 @@ selection. Return sampled positions and optional summaries per track.
 }
 \section{Interpretation and limits}{
 
-Positions follow WGS84 shortest geodesics by default. Distances are
+Positions follow WGS84 shortest geodesics. Distances are
 horizontal, not three-dimensional travel distances. Antipodal endpoints need
 a waypoint. Interpolated coordinates describe assumptions, not observations.
 

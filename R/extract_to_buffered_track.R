@@ -83,7 +83,7 @@ extract_to_buffered_track <- function(
     "datetime", "daily", "monthly", "yearly"
   ), max_samples = 100000L,
   max_segment_km = NULL, max_gap_hours = NULL, z_as_depth = FALSE,
-  distance_model = c("WGS84", "sphere"), land_mask = NULL, marine_values = NULL,
+  land_mask = NULL, marine_values = NULL,
   mask_type = c("land", "marine"), mask_domain = NULL, land_policy = c(
     "skip",
     "error"
@@ -103,7 +103,6 @@ extract_to_buffered_track <- function(
   buffer_weighting <- match.arg(buffer_weighting)
   weighting <- match.arg(weighting)
   time_resolution <- match.arg(time_resolution)
-  distance_model <- match.arg(distance_model)
   mask_type <- match.arg(mask_type)
   land_policy <- match.arg(land_policy)
   target_ties <- match.arg(target_ties)
@@ -121,7 +120,7 @@ extract_to_buffered_track <- function(
     time_resolution = time_resolution,
     max_samples = max_samples, max_segment_km = max_segment_km,
     max_gap_hours = max_gap_hours,
-    z_as_depth = z_as_depth, distance_model = distance_model,
+    z_as_depth = z_as_depth,
     land_mask = land_mask,
     marine_values = marine_values, mask_type = mask_type,
     mask_domain = mask_domain,

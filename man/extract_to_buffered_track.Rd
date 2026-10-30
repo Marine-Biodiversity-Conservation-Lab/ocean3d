@@ -46,7 +46,6 @@ extract_to_buffered_track(
   max_segment_km = NULL,
   max_gap_hours = NULL,
   z_as_depth = FALSE,
-  distance_model = c("WGS84", "sphere"),
   land_mask = NULL,
   marine_values = NULL,
   mask_type = c("land", "marine"),
@@ -180,8 +179,6 @@ or known elapsed time gaps. Split disconnected trajectories explicitly.}
 \item{z_as_depth}{Interpret sf XYZ geometry as metres positive downwards.
 FALSE by default because geometric elevation may use a different
 convention.}
-
-\item{distance_model}{WGS84 ellipsoidal geodesics (default), or sphere.}
 
 \item{land_mask}{Optional sf polygon or single-layer terra SpatRaster mask.
 With no mask, marine connectivity is not checked.
