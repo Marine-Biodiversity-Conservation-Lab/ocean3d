@@ -1,0 +1,535 @@
+# Extracting and weighting environmental data around observations
+
+Environmental observations are often associated with a single location,
+depth and time. However, the conditions experienced by a marine animal
+may extend beyond that exact point. An animal may move between
+neighbouring cells, occupy several depths or encounter changing
+temperatures over time.
+
+Similarly, a fishing operation may extend across space and time rather
+than occur at one exact point. A longline may span several kilometres
+and remain deployed for hours, while a trawl moves through an area
+during a tow. In these situations, we may want to describe environmental
+conditions around the recorded location, across relevant depths and over
+the duration of the operation.
+
+Rather than selecting one environmental value, we may therefore want to
+describe the conditions within a surrounding volume and time window.
+
+**How can we summarise these conditions, and why might two averages of
+the same data give different results?**
+
+In this tutorial, we will use
+[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+to explore this question with a small example of Mediterranean Sea
+potential temperature. We will build a buffer around one observation,
+compare two ways of calculating its mean and examine how individual
+cells, layers and timestamps contribute.
+
+## Our research question
+
+Imagine we have recorded a marine animal at:
+
+- Longitude 0 degrees and latitude 38 degrees.
+- A depth of 60 metres.
+- Midnight UTC on 20 September 2026.
+
+We would like to describe the temperature conditions within 10
+kilometres of this location, between 50 and 70 metres deep, and from one
+day before to one day after the observation.
+
+Our question concerns a **surrounding volume over time**, rather than
+the single closest temperature measurement. This distinction determines
+both which values contribute and how much weight each value receives.
+
+To keep the example reproducible, this article includes a small netCDF
+subset and the geometry used for its figures. No external download or
+API credentials are required. These are real modelled temperatures, not
+artificially generated observations. Their source is described at the
+end.
+
+## Getting started: preparing our data
+
+The article files are in `vignettes/articles/` in the source repository.
+When running these examples manually, use that directory as your working
+directory. The website runs the examples using the same relative paths.
+
+``` r
+
+library(ocean3d)
+
+# Locate the small netCDF provided with this article.
+example_dir <- "buffer-data"
+nc_file <- file.path(example_dir, "temperature-subset.nc")
+
+# Load the article's display data and plotting helpers.
+example <- readRDS(file.path(example_dir, "temperature-geometry.rds"))
+source(file.path(example_dir, "figures.R"))
+```
+
+The plotting helpers belong to this article; they are not exported
+`ocean3d` functions. Extraction itself uses the netCDF directly.
+
+We begin by placing our observation in a table. Longitude and latitude
+are in decimal degrees, and depth is positive downwards, in metres. We
+specify UTC explicitly so that the observation has an unambiguous time.
+
+``` r
+
+observation <- data.frame(
+  id = "observation_1",
+  lon = 0,
+  lat = 38,
+  depth = 60,
+  date = as.POSIXct("2026-09-20 00:00:00", tz = "UTC")
+)
+
+observation
+#>              id lon lat depth       date
+#> 1 observation_1   0  38    60 2026-09-20
+```
+
+## Step 1: Defining the space and time around our observation
+
+A horizontal radius of 10 kilometres defines a circle around our
+location. A depth radius of 10 metres extends 10 metres above and below
+the requested 60 metres. Our temporal window extends one day in each
+direction.
+
+The result is a cylinder from 50 to 70 metres deep, considered over a
+48-hour period. We do not extend the cylinder to the sea surface.
+
+Let’s first examine the horizontal footprint and the temperature layers
+available in this part of the water column.
+
+``` r
+
+plot_buffer_footprint(example)
+```
+
+![](extracting-and-weighting-buffer-data_files/figure-html/buffer-footprint-1.png)
+
+*Figure 1. Our requested buffer in horizontal and vertical views. Left:
+the circle marks the 10 km radius and the red cross marks the
+observation. Grid cells are coloured by their weighted mean potential
+temperature within the requested depth and time window; only their
+intersecting parts are filled. Right: black points show the centres of
+the contributing layers, and blue segments show the thickness used from
+each layer. The shaded band is the requested 50-70 m interval. The red
+cross marks the requested depth; its horizontal position is
+illustrative.*
+
+### 1.1. Understanding what a layer represents
+
+The centre of a layer is a coordinate, not its full vertical extent. To
+determine how much of a layer lies inside our buffer, we also need its
+upper and lower boundaries. The same applies to geographical cells and
+temporal intervals.
+
+Some netCDF files provide these boundaries explicitly, using `bounds`
+variables. Our example does not. We therefore use `infer_bounds = TRUE`
+to estimate boundaries halfway between neighbouring coordinate centres.
+At the outer edges, half of the adjacent gap is extrapolated.
+
+**These are assumptions about represented support.** In particular,
+inferring temporal boundaries does not establish the physical averaging
+period of the source product. The source metadata describes these data
+as daily means; the boundaries used here are still inferred by the
+function.
+
+## Step 2: Extracting a weighted mean
+
+Now that we have defined our buffer, let’s calculate its mean
+temperature.
+
+``` r
+
+weighted <- extract_to_buffer(
+  data = observation,
+  nc = nc_file,
+  var = "thetao",
+  horizontal_radius_km = 10,
+  depth_radius_m = 10,
+  time_before = 1,
+  time_after = 1,
+  time_unit = "days",
+  statistic = "mean",
+  weighting = "weighted",
+  infer_bounds = TRUE,
+  output_col = "temperature"
+)
+
+weighted[, c("id", "temperature")]
+#>              id temperature
+#> 1 observation_1    16.05743
+```
+
+The original observation is retained and a new column contains its
+summary. Here, the weighted mean is approximately **16.05743 degrees
+C**.
+
+The function also returns a diagnostic list column. Let’s inspect the
+parts that describe coverage and the number of values used.
+
+``` r
+
+information <- weighted$temperature_match_info[[1]]
+
+information[c(
+  "coverage_fraction", "valid_fraction", "n_intersecting",
+  "n_valid", "status"
+)]
+#> $coverage_fraction
+#> [1] 1
+#> 
+#> $valid_fraction
+#> [1] 1
+#> 
+#> $n_intersecting
+#> [1] 450
+#> 
+#> $n_valid
+#> [1] 450
+#> 
+#> $status
+#> [1] "complete"
+```
+
+There are 450 valid values: **30 geographical cells, five depth layers
+and three timestamps**. Both coverage fractions are one, meaning that
+the entire requested support is covered and contains valid data.
+
+This does not mean that the 450 values must have equal weights.
+
+## Step 3: Comparing weighted and equal means
+
+Let’s repeat the same extraction, changing only the weighting rule.
+
+``` r
+
+equal <- extract_to_buffer(
+  data = observation,
+  nc = nc_file,
+  var = "thetao",
+  horizontal_radius_km = 10,
+  depth_radius_m = 10,
+  time_before = 1,
+  time_after = 1,
+  time_unit = "days",
+  statistic = "mean",
+  weighting = "equal",
+  infer_bounds = TRUE,
+  output_col = "temperature"
+)
+
+data.frame(
+  weighted = weighted$temperature,
+  equal = equal$temperature
+)
+#>   weighted    equal
+#> 1 16.05743 15.98204
+```
+
+The equal-weight mean is approximately **15.98204 degrees C**. Both
+means use exactly the same valid values, but answer slightly different
+questions:
+
+- **Equal:** what is the average of the selected values, with every
+  value counting once?
+- **Weighted:** what is the average over the represented volume and
+  time, with each value weighted by the support inside our buffer?
+
+For the weighted calculation, a sample’s contribution is proportional to
+its intersecting area, thickness and duration. These contributions are
+normalised over the valid samples when calculating the mean.
+
+### 3.1. Why complete coverage does not imply equal weights
+
+Consider a cell at the edge of the circle. Only a small part of its area
+may lie inside our requested buffer. With equal weighting, its value
+counts as much as that of a cell lying entirely inside the circle. With
+weighted extraction, its smaller intersecting area gives it less weight.
+
+The same principle applies to the vertical and temporal boundaries.
+
+``` r
+
+plot_buffer_weights(example)
+```
+
+![](extracting-and-weighting-buffer-data_files/figure-html/contribution-weights-1.png)
+
+*Figure 2. Comparing the contribution of depth layers and timestamps.
+Blue bars show their shares of the requested vertical or temporal
+support; orange bars show their shares when every selected value has
+equal weight. These are marginal shares for this fully covered example.
+A sample’s final weight also depends on its horizontal intersection and
+the other axis.*
+
+The deepest selected layer is a useful example. Its centre is at 72.62
+m, below our requested maximum depth. However, its inferred upper
+boundary is at approximately 69.79 m, so about 0.21 m of the layer lies
+inside the requested interval.
+
+Equal weighting assigns this layer the same vertical share as the other
+four layers: 20%. Weighted extraction assigns it about 1.07%, reflecting
+the thickness actually included. In these data, this layer is colder;
+reducing its weight contributes to the higher weighted mean.
+
+**We have not extended the extraction below 70 m.** The temperature at
+the layer centre represents the intersecting part of its inferred layer.
+No vertical interpolation is performed.
+
+Similarly, the three selected timestamps represent different fractions
+of our 48-hour window: 12 hours, 24 hours and 12 hours. With equal
+weights, each timestamp receives one third of the temporal contribution
+instead.
+
+## Step 4: Exploring our buffer in three dimensions
+
+We can now bring the horizontal, vertical and temporal views together.
+
+``` r
+
+buffer_explorer(example, file.path(example_dir, "explorer.js"))
+```
+
+*Figure 3. Interactive view of the potential temperatures used in the
+extraction. Rotate the volume and select a date or depth layer to
+inspect the contributing values. Switch to the horizontal footprint to
+see how the circular buffer cuts through the grid. Colour can represent
+either temperature or contribution weight. Each 3D prism represents a
+cell-layer intersection at the selected timestamp, rather than a
+`SpatVoxel` object. Depth is visually exaggerated and is not drawn at
+the horizontal scale. Displayed polygon edges are simplified by up to 5
+m; calculation weights use the unsimplified geometry. Controls change
+the display, not the requested buffer; the reported mean always refers
+to all 450 values.*
+
+When looking at the contribution weights, remember that the equal rule
+assigns each of the 450 values a weight of 1/450. With weighted
+extraction, the weight changes with the intersecting area, thickness and
+duration. Changing the date or layer helps us see these differences
+without changing the extraction itself.
+
+The figures use stored display data to keep the article lightweight. The
+preparation script reconstructs their support independently from the
+netCDF coordinates and checks its aggregate against
+[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md).
+The rounded means displayed above are also calculated directly from the
+supplied netCDF when this article is built.
+
+## Step 5: Describing variability and extreme values
+
+The mean is only one way to describe conditions around an observation.
+We can also request the standard deviation, standard error, minimum or
+maximum. Each call calculates one statistic per observation and
+variable.
+
+``` r
+
+statistics <- c("mean", "sd", "se", "min", "max")
+
+summaries <- lapply(statistics, function(statistic) {
+  result <- extract_to_buffer(
+    data = observation,
+    nc = nc_file,
+    var = "thetao",
+    horizontal_radius_km = 10,
+    depth_radius_m = 10,
+    time_before = 1,
+    time_after = 1,
+    statistic = statistic,
+    weighting = "weighted",
+    infer_bounds = TRUE,
+    output_col = "temperature"
+  )
+
+  data.frame(statistic = statistic, temperature = result$temperature)
+})
+
+do.call(rbind, summaries)
+#>   statistic temperature
+#> 1      mean 16.05742847
+#> 2        sd  0.34459073
+#> 3        se  0.02306576
+#> 4       min 15.44085979
+#> 5       max 17.17307854
+```
+
+SD describes variation among selected values, using the sample variance
+correction for the selected weights. SE divides this SD by the square
+root of the effective sample size. With equal weights, these reduce to
+ordinary sample SD and SD divided by the square root of the sample
+count. Both need at least two valid samples with usable weights.
+
+Neighbouring cells and dates can be correlated. **SE assumes
+independence; it does not correct spatial or temporal autocorrelation.**
+It should not automatically be interpreted as the uncertainty of the
+environmental mean. The effective sample size describes weight
+concentration, not the number of independent ocean measurements.
+
+Minimum and maximum use the valid values with positive intersecting
+support, regardless of the magnitude of their weights. They are still
+subject to the same valid-coverage requirement.
+
+## Step 6: Understanding partial coverage and rejected requests
+
+So far, our buffer has been fully covered. For another observation, the
+requested depth or time window might extend beyond the available data,
+or some selected values might be missing.
+
+By default, `min_valid_fraction = 0.8` requires at least 80% of the
+**entire requested support** to contain valid values. Missing values and
+uncovered portions reduce this fraction. It is not the proportion of
+selected rows that happen to be non-missing.
+
+The supplied netCDF is deliberately small. Let’s request a wider
+temporal window than it contains.
+
+``` r
+
+too_wide <- extract_to_buffer(
+  data = observation,
+  nc = nc_file,
+  var = "thetao",
+  depth_radius_m = 10,
+  time_before = 10,
+  time_after = 10,
+  infer_bounds = TRUE,
+  output_col = "temperature"
+)
+#> Buffer report: 1 observation(s) need attention.
+#> netCDF variable: thetao · output column: temperature
+#> Row 1: Valid coverage is below the requested threshold; result: NA. Coverage: 25%; valid: 25%; required: 80%. 
+#> Check coordinates, source coverage and missing values. Change the window or threshold only if appropriate for your analysis.
+
+too_wide$temperature
+#> [1] NA
+too_wide$temperature_match_info[[1]][c("status", "valid_fraction")]
+#> $status
+#> [1] "insufficient_coverage"
+#> 
+#> $valid_fraction
+#> [1] 0.25
+```
+
+The result is `NA` because valid coverage is below the requested
+threshold. Reducing that threshold can accept a partial result, but it
+does not fill missing data or make the source cover a larger period. Any
+such change should reflect the needs of the analysis.
+
+A different situation occurs when the observation’s date is explicitly
+missing. The row is retained, with an `NA` summary and a diagnostic.
+
+``` r
+
+missing_date <- observation
+missing_date$date <- as.POSIXct(NA, tz = "UTC")
+
+missing_result <- extract_to_buffer(
+  data = missing_date,
+  nc = nc_file,
+  var = "thetao",
+  depth_radius_m = 10,
+  infer_bounds = TRUE,
+  output_col = "temperature"
+)
+#> Buffer report: 1 observation(s) need attention.
+#> netCDF variable: thetao · output column: temperature
+#> Row 1: The observation date is NA; result: NA. 
+#> Check coordinates, source coverage and missing values. Change the window or threshold only if appropriate for your analysis.
+
+missing_result[, c("id", "temperature")]
+#>              id temperature
+#> 1 observation_1          NA
+```
+
+Invalid settings instead produce an error. For example, the following
+request does not permit the bounds inference required by our file:
+
+``` r
+
+extract_to_buffer(
+  data = observation,
+  nc = nc_file,
+  var = "thetao",
+  depth_radius_m = 10,
+  infer_bounds = FALSE
+)
+#> Error:
+#> ! Coordinate `depth` has no explicit bounds. Use a dataset with bounds or explicitly set `infer_bounds = TRUE` to estimate midpoint intervals.
+```
+
+This error is intentional. Using `infer_bounds = TRUE` is an explicit
+choice about support, not a repair for invalid bounds declared by a
+file. A single coordinate without bounds does not provide enough
+information to infer its width or duration.
+
+## Summary
+
+We have described the environmental conditions around an observation
+using horizontal, vertical and temporal buffers. Along the way, we have:
+
+1.  Defined a requested volume and time window.
+2.  Extracted weighted and equal means from the same real temperature
+    values.
+3.  Examined how cell intersections, layer thicknesses and temporal
+    support produce different contribution weights.
+4.  Explored these values in three dimensions and calculated other
+    statistics.
+5.  Distinguished complete coverage, missing results and invalid
+    requests.
+
+A buffer does not need to extend along all three axes. For example,
+`horizontal_radius_km = 10` alone averages over a circle while retaining
+point selection in depth and time. Alternatively,
+`depth_layer_radius = 1` requests a three-layer neighbourhood rather
+than a fixed number of metres. Index windows that extend beyond the grid
+are rejected because their full physical support is unknown.
+
+### Next steps
+
+- See
+  [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+  for the full set of window, coverage and output options.
+- Use
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+  when the question concerns a selected cell and layer rather than a
+  surrounding buffer.
+- Return to [Getting started with
+  ocean3d](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/ocean3d.md)
+  to explore species’ three-dimensional distributions with
+  `SpatEnvelope` and `SpatVoxel` objects.
+
+For temporal windows, days are 24 elapsed hours; months and years are
+whole calendar shifts in UTC. Multiple complementary files are combined
+before assessing coverage. Overlapping selected support is rejected
+rather than silently counted twice. Neither reduced calendar precision
+nor inferred bounds performs a temporal aggregation or reconstructs the
+physical averaging period of a source product.
+
+## Data sources and reproducibility
+
+The example is a subset of **Mediterranean Sea Physics Reanalysis**,
+product `MEDSEA_MULTIYEAR_PHY_006_004`, dataset
+`cmems_mod_med_phy-temp_my_4.2km_P1D-m_202511`. It contains the original
+`thetao` values and coordinate centres from a download made on 19
+October 2026. The original metadata identifies CMCC as the producer and
+describes the data as daily mean potential temperature.
+
+E.U. Copernicus Marine Service Information;
+<https://doi.org/10.48670/mds-00375>. The subset and derived figures
+retain this attribution. Source data remain subject to the [Copernicus
+Marine Service
+licence](https://marine.copernicus.eu/user-corner/service-commitments-and-licence).
+The figures do not imply endorsement by Copernicus Marine or CMCC.
+
+The article’s
+[`buffer-data/README.md`](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/vignettes/articles/buffer-data/README.md)
+records the subset and its preparation. The repository script
+[`data-raw/buffer-article.R`](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/data-raw/buffer-article.R)
+regenerates the subset and display data from the downloaded original. It
+keeps neighbouring coordinates so that the inferred bounds and the
+extracted mean match the larger file. It does not add explicit bounds or
+alter the original temperature values.
