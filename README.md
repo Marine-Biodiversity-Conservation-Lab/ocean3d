@@ -133,15 +133,17 @@ range polygon through to a vertical profile of the values inside it.
 
 - `extract_to_point()` — the general engine: match observation points
   (data frame, tibble, `sf` POINT, matrix, or named list) against one or
-  more NetCDF files, snapping to the nearest longitude, latitude, time
-  and depth cell. Returns the input with the extracted values appended,
-  structure preserved.
+  more NetCDF files. By default a point takes the value of the grid cell
+  that contains it (`NA` outside the grid); `spatial_match = "nearest"`
+  accepts the nearest cell centre within `max_distance_km`. Time is matched
+  to the nearest timestamp and depth by physical depth in metres. Returns
+  the input with the extracted values appended, structure preserved.
 - `extract2d()` — for variables with no depth dimension.
 - `extract3d_nearest()` — the valid, non-missing depth layer closest to
   each observation’s depth, so a cell below the seabed does not silently
   return `NA`.
-- `extract3d_surface()` / `extract3d_bottom()` — the first available
-  depth layer, or the deepest non-missing one at that cell.
+- `extract3d_surface()` / `extract3d_bottom()` — the physically
+  shallowest depth layer, or the deepest non-missing one at that cell.
 - `extract3d_all()` — nearest, surface and bottom in one pass, as three
   columns.
 

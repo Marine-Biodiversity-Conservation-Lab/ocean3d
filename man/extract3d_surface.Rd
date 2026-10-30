@@ -27,8 +27,8 @@ tibbles and \code{sf} objects retain their structure; matrices and named lists
 are returned as data frames.
 }
 \description{
-The surface layer is defined as the first available depth layer in the
-netCDF file. This is usually the shallowest layer.
+The surface layer is defined as the physically shallowest depth layer in the
+netCDF file, whatever the storage order of the depth coordinate.
 }
 \examples{
 nc_file <- system.file(

@@ -1,3 +1,13 @@
+# Silence only known informational reports in value/selection tests.
+# Report assertions keep their own captures; other conditions remain visible.
+without_selection_reports <- function(expr) {
+  quiet <- function(condition) invokeRestart("muffleMessage")
+  withCallingHandlers(
+    expr, ocean3d_time_report = quiet, ocean3d_spatial_report = quiet,
+    ocean3d_depth_report = quiet
+  )
+}
+
 # Verify the expected B diagnostic while preserving the extraction value.
 # Other warning classes remain visible to testthat.
 expect_period_change_warning <- function(expr) {
@@ -822,22 +832,18 @@ test_that("dimension helpers read coordinates and report missing names", {
 })
 
 test_that("longitude conversion and missing coordinates are handled", {
-  expect_equal(.prepare_lon(c(0, 359), -1), 359)
-  expect_true(is.na(.prepare_lon(c(0, 359), NA_real_)))
-  expect_identical(.nearest_index(numeric(), 0), NA_integer_)
-  expect_identical(.nearest_index(c(NA_real_, NA_real_), 0),
-                   NA_integer_)
-  expect_identical(.nearest_index(c(0, 1), NA_real_), NA_integer_)
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-  make_test_netcdf(f, with_depth = FALSE, with_time = FALSE,
-                   lon_vals = c(0, 359))
-  x <- data.frame(lon = c(-1, NA, 0), lat = c(40, 40, NA))
-  out <- extract2d(x, f, var = "temp", date_col = NULL,
-    time_report = FALSE
-  )
-  expect_equal(out$temp, c(2, NA, NA))
-  expect_equal(nrow(out), 3L)
+  without_selection_reports({
+    f <- tempfile(fileext = ".nc")
+    on.exit(unlink(f), add = TRUE)
+    make_test_netcdf(f, with_depth = FALSE, with_time = FALSE,
+                     lon_vals = c(0, 359))
+    x <- data.frame(lon = c(-1, NA, 0), lat = c(40, 40, NA))
+    out <- extract2d(x, f, var = "temp", date_col = NULL,
+      time_report = FALSE
+    )
+    expect_equal(out$temp, c(2, NA, NA))
+    expect_equal(nrow(out), 3L)
+  })
 })
 
 
@@ -900,46 +906,50 @@ test_that("multiple files fill missing values & preserve first-file priority", {
 })
 
 test_that("entirely missing profiles return missing depth summaries", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-  make_test_netcdf(f, with_time = FALSE)
-  nc <- ncdf4::nc_open(f, write = TRUE)
-  tryCatch(
-    ncdf4::ncvar_put(nc, "temp", rep(NA_real_, 3),
-                     start = c(1, 1, 1), count = c(1, 1, 3)),
-    finally = ncdf4::nc_close(nc)
-  )
-  for (method in c("nearest", "bottom", "all")) {
-    out <- extract_to_point(make_obs(), f, var = "temp", method = method,
-      date_col = NULL,
-      time_report = FALSE
+  without_selection_reports({
+    f <- tempfile(fileext = ".nc")
+    on.exit(unlink(f), add = TRUE)
+    make_test_netcdf(f, with_time = FALSE)
+    nc <- ncdf4::nc_open(f, write = TRUE)
+    tryCatch(
+      ncdf4::ncvar_put(nc, "temp", rep(NA_real_, 3),
+                       start = c(1, 1, 1), count = c(1, 1, 3)),
+      finally = ncdf4::nc_close(nc)
     )
-    result_cols <- if (method == "all") {
-      c("nearest_temp", "surface_temp", "seabottom_temp")
-    } else {
-      "temp"
+    for (method in c("nearest", "bottom", "all")) {
+      out <- extract_to_point(make_obs(), f, var = "temp", method = method,
+        date_col = NULL,
+        time_report = FALSE
+      )
+      result_cols <- if (method == "all") {
+        c("nearest_temp", "surface_temp", "seabottom_temp")
+      } else {
+        "temp"
+      }
+      expect_named(out, c(names(make_obs()), result_cols))
+      expect_true(all(is.na(out[result_cols])))
+      expect_equal(nrow(out), 1L)
     }
-    expect_named(out, c(names(make_obs()), result_cols))
-    expect_true(all(is.na(out[result_cols])))
-    expect_equal(nrow(out), 1L)
-  }
+  })
 })
 
 test_that("missing target depth preserves surface and bottom summaries", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-  make_test_netcdf(f, with_time = FALSE)
-  x <- make_obs(depth = NA_real_)
-  nearest <- extract3d_nearest(x, f, var = "temp", date_col = NULL,
-    time_report = FALSE
-  )
-  all <- extract3d_all(x, f, var = "temp", date_col = NULL,
-    time_report = FALSE
-  )
-  expect_true(is.na(nearest$temp))
-  expect_true(is.na(all$nearest_temp))
-  expect_equal(all$surface_temp, 1)
-  expect_equal(all$seabottom_temp, 9)
+  without_selection_reports({
+    f <- tempfile(fileext = ".nc")
+    on.exit(unlink(f), add = TRUE)
+    make_test_netcdf(f, with_time = FALSE)
+    x <- make_obs(depth = NA_real_)
+    nearest <- extract3d_nearest(x, f, var = "temp", date_col = NULL,
+      time_report = FALSE
+    )
+    all <- extract3d_all(x, f, var = "temp", date_col = NULL,
+      time_report = FALSE
+    )
+    expect_true(is.na(nearest$temp))
+    expect_true(is.na(all$nearest_temp))
+    expect_equal(all$surface_temp, 1)
+    expect_equal(all$seabottom_temp, 9)
+  })
 })
 
 test_that("output_col overrides output_prefix in public extraction", {
@@ -2302,26 +2312,28 @@ test_that("singleton candidates respect exact matching and temporal ties", {
 })
 
 test_that("missing nearest values fall back within matching tolerance", {
-  skip_if_not_installed("ncdf4")
-  paths <- replicate(2, tempfile(fileext = ".nc"))
-  on.exit(unlink(paths), add = TRUE)
-  make_a2_temporal_nc(paths[1], 8, NA_real_)
-  make_a2_temporal_nc(paths[2], 0, 1)
-  x <- data.frame(lon = 0, lat = 40, date = as.Date("2020-01-10"))
-  for (files in list(paths, rev(paths))) {
-    expect_equal(
-      expect_period_change_warning(
-        extract2d(x, files, var = "temp",
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    paths <- replicate(2, tempfile(fileext = ".nc"))
+    on.exit(unlink(paths), add = TRUE)
+    make_a2_temporal_nc(paths[1], 8, NA_real_)
+    make_a2_temporal_nc(paths[2], 0, 1)
+    x <- data.frame(lon = 0, lat = 40, date = as.Date("2020-01-10"))
+    for (files in list(paths, rev(paths))) {
+      expect_equal(
+        expect_period_change_warning(
+          extract2d(x, files, var = "temp",
+            time_report = FALSE
+          )
+        )$temp, 1
+      )
+      expect_true(is.na(
+        extract2d(x, files, var = "temp", max_time_diff = 2,
           time_report = FALSE
-        )
-      )$temp, 1
-    )
-    expect_true(is.na(
-      extract2d(x, files, var = "temp", max_time_diff = 2,
-        time_report = FALSE
-      )$temp
-    ))
-  }
+        )$temp
+      ))
+    }
+  })
 })
 
 test_that("3D wrappers preserve vertical summaries across files", {
@@ -2369,10 +2381,12 @@ test_that("merging records provenance separately for each output column", {
   b <- data.frame(id = 1:2, nearest_temp = c(11, 12), surface_temp = c(13, 14))
   attr(a, ".source_candidate") <- list(
     distance_days = c(9, 1), timestamp = as.numeric(stamp),
+    distance_km = c(0, 0), selected_lon = c(0, 0), selected_lat = c(40, 40),
     time_index = c(1L, 2L), variable = "temp"
   )
   attr(b, ".source_candidate") <- list(
     distance_days = c(1, 9), timestamp = as.numeric(rev(stamp)),
+    distance_km = c(0, 0), selected_lon = c(0, 0), selected_lat = c(40, 40),
     time_index = c(2L, 1L), variable = "temp"
   )
   merged <- .merge_source_outputs(list(a, b), "id", return_provenance = TRUE)
@@ -2809,16 +2823,16 @@ test_that("spatial indices respect edges and longitude conventions", {
     centres = c(0, 1), lower = c(-0.5, 0.5), upper = c(0.5, 1.5),
     longitude = FALSE, basis = "inferred_regular"
   )
-  expect_identical(.spatial_axis_index(axis, -0.5), 1L)
-  expect_identical(.spatial_axis_index(axis, 1.5), 2L)
-  expect_true(is.na(.spatial_axis_index(axis, 1.6)))
+  expect_identical(.containing_axis_indices(axis, -0.5), 1L)
+  expect_identical(.containing_axis_indices(axis, 1.5), 2L)
+  expect_length(.containing_axis_indices(axis, 1.6), 0L)
   axis <- list(
     centres = c(179, 181), lower = c(178, 180), upper = c(180, 182),
     longitude = TRUE, basis = "inferred_regular"
   )
-  expect_identical(.spatial_axis_index(axis, -179), 2L)
-  expect_identical(.spatial_axis_index(axis, 181), 2L)
-  expect_true(is.na(.spatial_axis_index(axis, 0)))
+  expect_identical(.containing_axis_indices(axis, -179), 2L)
+  expect_identical(.containing_axis_indices(axis, 181), 2L)
+  expect_length(.containing_axis_indices(axis, 0), 0L)
 })
 
 test_that("singleton axes do not invent spatial coverage", {
@@ -2826,39 +2840,41 @@ test_that("singleton axes do not invent spatial coverage", {
     centres = 40, lower = 40, upper = 40,
     longitude = FALSE, basis = "singleton_coordinate"
   )
-  expect_identical(.spatial_axis_index(axis, 40), 1L)
-  expect_true(is.na(.spatial_axis_index(axis, 41)))
+  expect_identical(.containing_axis_indices(axis, 40), 1L)
+  expect_length(.containing_axis_indices(axis, 41), 0L)
 })
 
 test_that("spatial eligibility selects the correct tile in either order", {
-  skip_if_not_installed("ncdf4")
-  paths <- replicate(2, tempfile(fileext = ".nc"))
-  on.exit(unlink(paths), add = TRUE)
-  make_test_netcdf(
-    paths[1], with_depth = FALSE, with_time = FALSE,
-    lon_vals = c(-10, -5)
-  )
-  make_test_netcdf(
-    paths[2], with_depth = FALSE, with_time = FALSE,
-    lon_vals = c(0, 5)
-  )
-  nc <- ncdf4::nc_open(paths[1], write = TRUE)
-  tryCatch(
-    ncdf4::ncvar_put(nc, "temp", matrix(18, 2, 2)),
-    finally = ncdf4::nc_close(nc)
-  )
-  nc <- ncdf4::nc_open(paths[2], write = TRUE)
-  tryCatch(
-    ncdf4::ncvar_put(nc, "temp", matrix(24, 2, 2)),
-    finally = ncdf4::nc_close(nc)
-  )
-  x <- data.frame(lon = c(2, -7, 30), lat = c(40, 40, 40))
-  for (files in list(paths, rev(paths))) {
-    out <- extract2d(
-      x, files, var = "temp", date_col = NULL, time_report = FALSE
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    paths <- replicate(2, tempfile(fileext = ".nc"))
+    on.exit(unlink(paths), add = TRUE)
+    make_test_netcdf(
+      paths[1], with_depth = FALSE, with_time = FALSE,
+      lon_vals = c(-10, -5)
     )
-    expect_equal(out$temp, c(24, 18, NA_real_))
-  }
+    make_test_netcdf(
+      paths[2], with_depth = FALSE, with_time = FALSE,
+      lon_vals = c(0, 5)
+    )
+    nc <- ncdf4::nc_open(paths[1], write = TRUE)
+    tryCatch(
+      ncdf4::ncvar_put(nc, "temp", matrix(18, 2, 2)),
+      finally = ncdf4::nc_close(nc)
+    )
+    nc <- ncdf4::nc_open(paths[2], write = TRUE)
+    tryCatch(
+      ncdf4::ncvar_put(nc, "temp", matrix(24, 2, 2)),
+      finally = ncdf4::nc_close(nc)
+    )
+    x <- data.frame(lon = c(2, -7, 30), lat = c(40, 40, 40))
+    for (files in list(paths, rev(paths))) {
+      out <- extract2d(
+        x, files, var = "temp", date_col = NULL, time_report = FALSE
+      )
+      expect_equal(out$temp, c(24, 18, NA_real_))
+    }
+  })
 })
 
 make_spatial_axis_nc <- function(path, centres, bounds = NULL) {
@@ -2894,8 +2910,8 @@ test_that("explicit spatial bounds override inferred edges", {
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   axis <- .prepare_spatial_axis(nc, "lon", c(0, 2), longitude = TRUE)
   expect_identical(axis$basis, "explicit_bounds")
-  expect_identical(.spatial_axis_index(axis, 0.1), 1L)
-  expect_true(is.na(.spatial_axis_index(axis, 1)))
+  expect_identical(.containing_axis_indices(axis, 0.1), 1L)
+  expect_length(.containing_axis_indices(axis, 1), 0L)
 })
 
 test_that("irregular descending axes preserve original indices", {
@@ -2907,9 +2923,9 @@ test_that("irregular descending axes preserve original indices", {
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   axis <- .prepare_spatial_axis(nc, "lon", c(5, 2, 0), longitude = TRUE)
   expect_identical(axis$basis, "inferred_irregular")
-  expect_identical(.spatial_axis_index(axis, 5), 1L)
-  expect_identical(.spatial_axis_index(axis, 0), 3L)
-  expect_true(is.na(.spatial_axis_index(axis, 20)))
+  expect_identical(.containing_axis_indices(axis, 5), 1L)
+  expect_identical(.containing_axis_indices(axis, 0), 3L)
+  expect_length(.containing_axis_indices(axis, 20), 0L)
 })
 
 
@@ -2980,7 +2996,7 @@ test_that("missing output reports explain what is unavailable", {
       date = as.Date("2020-01-02"), var = "temp",
       time_match = "exact", time_report = TRUE
     ),
-    "No source supplied a valid value", fixed = TRUE
+    "No timestamp satisfied the requested temporal settings", fixed = TRUE
   )
   expect_true(is.na(out))
 })
@@ -2993,4 +3009,1257 @@ test_that("unknown cadence warnings explain how to set an interval", {
     text, "do not establish a reliable sampling interval", fixed = TRUE
   )
   expect_match(text, "custom_time_interval", fixed = TRUE)
+})
+
+
+# Issue #74 A: geographic selection and explicit horizontal limits.
+make_horizontal_test_nc <- function(path, lon, lat, values, days = NULL) {
+  dims <- list(
+    ncdf4::ncdim_def("lon", "degrees_east", lon),
+    ncdf4::ncdim_def("lat", "degrees_north", lat)
+  )
+  if (!is.null(days)) {
+    dims <- c(dims, list(ncdf4::ncdim_def(
+      "time", "days since 2020-01-01", days
+    )))
+  }
+  variable <- ncdf4::ncvar_def(
+    "temp", "degree_Celsius", dims, -9999, prec = "double"
+  )
+  nc <- ncdf4::nc_create(path, variable)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  shape <- vapply(dims, function(x) length(x$vals), integer(1))
+  ncdf4::ncvar_put(nc, "temp", array(values, dim = shape))
+}
+
+test_that("nearest spatial matching requires an explicit valid distance", {
+  expect_identical(.validate_spatial_matching("within", NULL), "within")
+  expect_identical(.validate_spatial_matching("nearest", 0), "nearest")
+  expect_identical(.validate_spatial_matching("nearest", 5), "nearest")
+  expect_error(.validate_spatial_matching("within", 5), "requires")
+  for (limit in list(NULL, NA_real_, Inf, -1, c(1, 2), "5")) {
+    expect_error(
+      .validate_spatial_matching("nearest", limit),
+      "finite"
+    )
+  }
+})
+
+test_that("within rejects distant coordinates with one or several files", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    paths <- replicate(2, tempfile(fileext = ".nc"))
+    on.exit(unlink(paths), add = TRUE)
+    for (path in paths) make_horizontal_test_nc(path, c(0, 1), c(40, 41), 11)
+    x <- data.frame(lon = c(1.5, 1.6, 20), lat = 40)
+    for (files in list(paths[1], paths, rev(paths))) {
+      out <- extract2d(x, files, var = "temp", date_col = NULL)
+      expect_equal(out$temp, c(11, NA_real_, NA_real_))
+    }
+  })
+})
+
+test_that("nearest accepts nearby points outside the grid up to its limit", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path), add = TRUE)
+    make_horizontal_test_nc(path, 0, 0, 11)
+    x <- data.frame(lon = 0.01, lat = 0)
+    out <- extract2d(
+      x, path, var = "temp", date_col = NULL,
+      spatial_match = "nearest", max_distance_km = 2
+    )
+    expect_equal(out$temp, 11)
+    out <- extract2d(
+      x, path, var = "temp", date_col = NULL,
+      spatial_match = "nearest", max_distance_km = 0.5
+    )
+    expect_true(is.na(out$temp))
+    expect_equal(extract2d(
+      data = NULL, nc = path, lon = 0, lat = 0, var = "temp",
+      spatial_match = "nearest", max_distance_km = 0
+    ), 11)
+  })
+})
+
+test_that("a cell exactly at the kilometre limit is accepted", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path), add = TRUE)
+    make_horizontal_test_nc(path, 0, 0, 11)
+    boundary <- .great_circle_km(0.01, 0, 0, 0)
+    x <- data.frame(lon = 0.01, lat = 0)
+    expect_equal(extract2d(
+      x, path, var = "temp", date_col = NULL,
+      spatial_match = "nearest", max_distance_km = boundary
+    )$temp, 11)
+    expect_true(is.na(extract2d(
+      x, path, var = "temp", date_col = NULL,
+      spatial_match = "nearest", max_distance_km = boundary - 1e-6
+    )$temp))
+  })
+})
+
+test_that("geographic proximity is not independent degree subtraction", {
+  # At high latitude the geographically closest centre is not necessarily
+  # the one with the smallest latitude difference.
+  result <- .nearest_horizontal_cell(60, c(80, 85), 1L, 1:2, 0, 80)
+  expect_identical(result$lat_idx, 2L)
+  expect_identical(result$lon_idx, 1L)
+  expect_gt(result$distance_km, 0)
+  whole <- .nearest_horizontal_cells(60, c(80, 85), 0, 80)[[1L]]
+  expect_equal(result, whole)
+})
+
+test_that("longitudes use both conventions and wrap around the antimeridian", {
+  skip_if_not_installed("ncdf4")
+  paths <- replicate(2, tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_horizontal_test_nc(paths[1], c(-160, 170), 40, c(11, 22))
+  expect_equal(extract2d(
+    data.frame(lon = 200, lat = 40), paths[1],
+    var = "temp", date_col = NULL
+  )$temp, 11)
+  make_horizontal_test_nc(paths[2], c(0, 359), 40, c(11, 22))
+  for (longitude in c(-0.1, 359.9)) {
+    expect_equal(extract2d(
+      data.frame(lon = longitude, lat = 40), paths[2],
+      var = "temp", date_col = NULL
+    )$temp, 11)
+  }
+  selected <- .nearest_horizontal_cell(
+    c(179, -170), 40, 1:2, 1L, -179.9, 40
+  )
+  expect_identical(selected$lon_idx, 1L)
+  expect_equal(.normalise_longitude(c(-160, 200)), c(-160, -160))
+})
+
+test_that("equal temporal candidates prefer the spatially closer source", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    paths <- replicate(2, tempfile(fileext = ".nc"))
+    on.exit(unlink(paths), add = TRUE)
+    make_horizontal_test_nc(paths[1], 0, 0, 11, days = 0)
+    make_horizontal_test_nc(paths[2], 0.02, 0, 22, days = 0)
+    x <- data.frame(lon = 0.015, lat = 0, date = as.Date("2020-01-01"))
+    for (files in list(paths, rev(paths))) {
+      out <- extract2d(
+        x, files, var = "temp", spatial_match = "nearest",
+        max_distance_km = 5, time_report = FALSE
+      )
+      expect_equal(out$temp, 22)
+    }
+  })
+})
+
+test_that("temporal proximity remains the first selection criterion", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    paths <- replicate(2, tempfile(fileext = ".nc"))
+    on.exit(unlink(paths), add = TRUE)
+    make_horizontal_test_nc(paths[1], 0, 0, 11, days = 0)
+    make_horizontal_test_nc(paths[2], 0.02, 0, 22, days = 1)
+    x <- data.frame(lon = 0, lat = 0, date = as.Date("2020-01-02"))
+    for (files in list(paths, rev(paths))) {
+      expect_equal(extract2d(
+        x, files, var = "temp", spatial_match = "nearest",
+        max_distance_km = 5, time_report = FALSE
+      )$temp, 22)
+    }
+  })
+})
+
+test_that("input order breaks ties in both time and geographic distance", {
+  skip_if_not_installed("ncdf4")
+  paths <- replicate(2, tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_horizontal_test_nc(paths[1], 0, 0, 11, days = 0)
+  make_horizontal_test_nc(paths[2], 0, 0, 22, days = 0)
+  x <- data.frame(lon = 0, lat = 0, date = as.Date("2020-01-01"))
+  expect_equal(extract2d(x, paths, var = "temp")$temp, 11)
+  expect_equal(extract2d(x, rev(paths), var = "temp")$temp, 22)
+})
+
+test_that("nearest does not search past a missing cell within the same file", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    paths <- replicate(2, tempfile(fileext = ".nc"))
+    on.exit(unlink(paths), add = TRUE)
+    make_horizontal_test_nc(paths[1], c(0, 0.02), 0, c(NA_real_, 22))
+    x <- data.frame(lon = 0, lat = 0)
+    expect_true(is.na(extract2d(
+      x, paths[1], var = "temp", date_col = NULL,
+      spatial_match = "nearest", max_distance_km = 5
+    )$temp))
+    # Another eligible file may still supply its selected valid candidate.
+    make_horizontal_test_nc(paths[2], 0.01, 0, 33)
+    for (files in list(paths, rev(paths))) {
+      expect_equal(extract2d(
+        x, files, var = "temp", date_col = NULL,
+        spatial_match = "nearest", max_distance_km = 5
+      )$temp, 33)
+    }
+  })
+})
+
+match_one_cell <- function(lon_axis, lat_axis, lon_values, lat_values,
+                           lon_target, lat_target, spatial_match,
+                           max_distance_km) {
+  match_cells <- getFromNamespace(".match_horizontal_cells", "ocean3d")
+  match_row <- getFromNamespace(".horizontal_match_row", "ocean3d")
+  match_row(match_cells(
+    lon_axis, lat_axis, lon_values, lat_values, lon_target, lat_target,
+    spatial_match, max_distance_km
+  ), 1L)
+}
+
+test_that("horizontal selection records accepted and rejected candidates", {
+  inside <- list(
+    centres = 0, lower = 0, upper = 0, longitude = FALSE
+  )
+  longitude <- inside
+  longitude$longitude <- TRUE
+  accepted <- match_one_cell(
+    longitude, inside, 0, 0, 0.01, 0, "nearest", 2
+  )
+  expect_true(accepted$accepted)
+  expect_identical(accepted$reason, "matched")
+  expect_equal(accepted$selected_lon, 0)
+  expect_equal(accepted$selected_lat, 0)
+  expect_gt(accepted$distance_km, 1)
+  rejected <- match_one_cell(
+    longitude, inside, 0, 0, 0.01, 0, "nearest", 0.5
+  )
+  expect_false(rejected$accepted)
+  expect_identical(rejected$reason, "distance_limit_exceeded")
+  expect_gt(rejected$distance_km, 1)
+  outside <- match_one_cell(
+    longitude, inside, 0, 0, 0.01, 0, "within", NULL
+  )
+  expect_identical(outside$reason, "outside_grid")
+  invalid <- match_one_cell(
+    longitude, inside, 0, 0, NA_real_, 0, "nearest", 5
+  )
+  expect_identical(invalid$reason, "invalid_coordinates")
+})
+
+test_that("nearest horizontal selection also works through 3D wrappers", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path), add = TRUE)
+    make_test_netcdf(path, with_time = FALSE)
+    x <- data.frame(lon = -0.6, lat = 40, depth = 60)
+    out <- extract3d_all(
+      x, path, var = "temp", date_col = NULL,
+      spatial_match = "nearest", max_distance_km = 100
+    )
+    expect_equal(out$surface_temp, 1)
+    expect_equal(out$nearest_temp, 5)
+    expect_equal(out$seabottom_temp, 9)
+    expect_true(is.na(extract3d_surface(
+      x, path, var = "temp", date_col = NULL
+    )$temp))
+  })
+})
+
+
+# Issue #74 B: physical depths independently of coordinate storage order.
+make_depth_axis_test_nc <- function(path, depths, values,
+                                    units = "m", positive = NULL,
+                                    depth_name = "depth",
+                                    standard_name = NULL,
+                                    formula_terms = NULL) {
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", 0)
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", 40)
+  depth <- ncdf4::ncdim_def(depth_name, units, depths)
+  variable <- ncdf4::ncvar_def(
+    "temp", "degree_Celsius", list(lon, lat, depth),
+    -9999, prec = "double"
+  )
+  nc <- ncdf4::nc_create(path, variable)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  ncdf4::ncvar_put(nc, "temp", array(values, c(1, 1, length(depths))))
+  attributes <- list(
+    positive = positive, standard_name = standard_name,
+    formula_terms = formula_terms
+  )
+  for (name in names(attributes)) {
+    if (!is.null(attributes[[name]])) {
+      ncdf4::ncatt_put(nc, depth_name, name, attributes[[name]])
+    }
+  }
+}
+
+test_that("physical depth conversion retains original coordinate positions", {
+  descending <- .prepare_depth_axis(c(100, 50, 0), "m", "down")
+  expect_equal(descending$depth_m, c(100, 50, 0))
+  expect_identical(descending$surface_index, 3L)
+  expect_identical(descending$direction_basis, "metadata")
+  upward <- .prepare_depth_axis(c(0, -50, -100), "m", " UP ")
+  expect_equal(upward$depth_m, c(0, 50, 100))
+  expect_identical(upward$surface_index, 1L)
+  expect_identical(upward$direction_basis, "metadata")
+  for (unit in c("m", "meter", "meters", "metre", "metres")) {
+    expect_equal(.prepare_depth_axis(c(0, 50), unit)$depth_m, c(0, 50))
+  }
+  expect_equal(.prepare_depth_axis(c(0, 0.05), "km")$depth_m, c(0, 50))
+  expect_equal(.prepare_depth_axis(c(0, 5000), "cm")$depth_m, c(0, 50))
+  inferred <- .prepare_depth_axis(c(-100, -50, 0), "m")
+  expect_equal(inferred$depth_m, c(100, 50, 0))
+  expect_identical(inferred$direction_basis, "inferred")
+})
+
+test_that("ambiguous or unsupported depth coordinates are rejected", {
+  expect_error(.prepare_depth_axis(c(-50, 0, 50), "m"), "ambiguous")
+  expect_error(.prepare_depth_axis(c(0, 50), "dbar"), "converted to metres")
+  expect_error(.prepare_depth_axis(c(0, 50), NULL), "explicit supported")
+  expect_error(.prepare_depth_axis(c(0, 50), NA_character_), "units")
+  expect_error(.prepare_depth_axis(c(0, 50), "m", "sideways"), "up.*down")
+  expect_error(.prepare_depth_axis(c(0, 50), "m", NA_character_), "up.*down")
+  expect_error(.prepare_depth_axis(c(0, NA_real_), "m"), "finite")
+  expect_error(.prepare_depth_axis(numeric(), "m"), "finite")
+  expect_error(.prepare_depth_axis(c(0, Inf), "m"), "finite")
+  expect_error(.prepare_depth_axis(c(0, 50, 50), "m"), "duplicate")
+  expect_error(.prepare_depth_axis(c(0, -50), "m", "down"), "reference surface")
+  expect_error(.prepare_depth_axis(c(0, 50), "m", "up"), "reference surface")
+})
+
+test_that("depth methods select physical layers for every storage order", {
+  skip_if_not_installed("ncdf4")
+  cases <- list(
+    list(depth = c(0, 50, 100), values = c(11, 22, 33), positive = "down"),
+    list(depth = c(100, 50, 0), values = c(33, 22, 11), positive = "down"),
+    list(depth = c(50, 0, 100), values = c(22, 11, 33), positive = "down"),
+    list(depth = c(0, -50, -100), values = c(11, 22, 33), positive = "up"),
+    list(depth = c(-100, -50, 0), values = c(33, 22, 11), positive = "up")
+  )
+  paths <- replicate(length(cases), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  x <- data.frame(lon = 0, lat = 40, depth = 60)
+  for (i in seq_along(cases)) {
+    item <- cases[[i]]
+    make_depth_axis_test_nc(
+      paths[i], item$depth, item$values,
+      positive = item$positive, depth_name = "z"
+    )
+    out <- extract3d_all(x, paths[i], var = "temp", date_col = NULL)
+    expect_equal(out$surface_temp, 11)
+    expect_equal(out$nearest_temp, 22)
+    expect_equal(out$seabottom_temp, 33)
+    expect_equal(extract3d_surface(
+      x, paths[i], var = "temp", date_col = NULL
+    )$temp, out$surface_temp)
+    expect_equal(extract3d_nearest(
+      x, paths[i], var = "temp", date_col = NULL
+    )$temp, out$nearest_temp)
+    expect_equal(extract3d_bottom(
+      x, paths[i], var = "temp", date_col = NULL
+    )$temp, out$seabottom_temp)
+  }
+})
+
+test_that("file depth units convert to observation metres", {
+  skip_if_not_installed("ncdf4")
+  paths <- replicate(2, tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_depth_axis_test_nc(paths[1], c(0.1, 0.05, 0), c(33, 22, 11), "km")
+  make_depth_axis_test_nc(paths[2], c(0, -5000, -10000), c(11, 22, 33), "cm")
+  x <- data.frame(lon = 0, lat = 40, depth = 60)
+  for (path in paths) {
+    out <- extract3d_all(x, path, var = "temp", date_col = NULL)
+    expect_equal(out$surface_temp, 11)
+    expect_equal(out$nearest_temp, 22)
+    expect_equal(out$seabottom_temp, 33)
+  }
+})
+
+test_that("nearest depth ties choose the shallower layer in both orders", {
+  skip_if_not_installed("ncdf4")
+  paths <- replicate(2, tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_depth_axis_test_nc(paths[1], c(0, 50, 100), c(11, 22, 33))
+  make_depth_axis_test_nc(paths[2], c(100, 50, 0), c(33, 22, 11))
+  x <- data.frame(lon = 0, lat = 40, depth = 75)
+  for (path in paths) {
+    expect_equal(extract3d_nearest(
+      x, path, var = "temp", date_col = NULL
+    )$temp, 22)
+  }
+})
+
+test_that("surface preserves a missing shallowest layer in descending files", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path), add = TRUE)
+    make_depth_axis_test_nc(path, c(100, 50, 0), c(33, 22, NA_real_))
+    x <- data.frame(lon = 0, lat = 40, depth = 60)
+    out <- extract3d_all(x, path, var = "temp", date_col = NULL)
+    expect_true(is.na(out$surface_temp))
+    expect_equal(out$nearest_temp, 22)
+    expect_equal(out$seabottom_temp, 33)
+    expect_true(is.na(extract3d_surface(
+      x, path, var = "temp", date_col = NULL
+    )$temp))
+  })
+})
+
+test_that("bottom and nearest ignore missing layers by physical depth", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(100, 50, 0), c(NA_real_, 22, 11))
+  x <- data.frame(lon = 0, lat = 40, depth = 90)
+  out <- extract3d_all(x, path, var = "temp", date_col = NULL)
+  expect_equal(out$surface_temp, 11)
+  expect_equal(out$nearest_temp, 22)
+  expect_equal(out$seabottom_temp, 22)
+})
+
+test_that("missing requested depths preserve the other physical summaries", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path), add = TRUE)
+    make_depth_axis_test_nc(path, c(100, 50, 0), c(33, 22, 11))
+    out <- extract3d_all(
+      data.frame(lon = 0, lat = 40, depth = NA_real_),
+      path, var = "temp", date_col = NULL
+    )
+    expect_true(is.na(out$nearest_temp))
+    expect_equal(out$surface_temp, 11)
+    expect_equal(out$seabottom_temp, 33)
+    summary <- .summarise_depth_profile(
+      rep(NA_real_, 3), c(100, 50, 0), 60
+    )
+    expect_true(all(is.na(summary$value)))
+  })
+})
+
+test_that("depth metadata are read from the dimension coordinate variable", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(0, -50, -100), c(11, 22, 33), positive = "up")
+  nc <- ncdf4::nc_open(path)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  axis <- .read_depth_axis(nc, "depth", nc$dim$depth$vals)
+  expect_identical(axis$direction_basis, "metadata")
+  expect_equal(axis$depth_m, c(0, 50, 100))
+})
+
+test_that("formula-based and pressure axes require explicit conversion", {
+  skip_if_not_installed("ncdf4")
+  paths <- replicate(3, tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_depth_axis_test_nc(
+    paths[1], c(0, 0.5, 1), c(11, 22, 33), units = "1",
+    standard_name = "ocean_sigma_coordinate"
+  )
+  make_depth_axis_test_nc(
+    paths[2], c(0, 50, 100), c(11, 22, 33),
+    formula_terms = "sigma: sigma eta: eta depth: bathymetry"
+  )
+  make_depth_axis_test_nc(
+    paths[3], c(0, 50, 100), c(11, 22, 33), units = "dbar",
+    standard_name = "sea_water_pressure"
+  )
+  for (path in paths) {
+    expect_error(extract3d_surface(
+      data.frame(lon = 0, lat = 40), path, var = "temp", date_col = NULL
+    ), "physical transformation")
+  }
+})
+
+test_that("invalid file depth metadata fail before vertical extraction", {
+  skip_if_not_installed("ncdf4")
+  paths <- replicate(4, tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_depth_axis_test_nc(paths[1], c(-50, 0, 50), c(11, 22, 33))
+  make_depth_axis_test_nc(
+    paths[2], c(0, -50, -100), c(11, 22, 33), positive = "down"
+  )
+  make_depth_axis_test_nc(paths[3], c(0, 50, 100), c(11, 22, 33), units = "")
+  make_depth_axis_test_nc(paths[4], c(0, 50, 50), c(11, 22, 33))
+  patterns <- c("ambiguous", "reference surface", "units", "duplicate")
+  for (i in seq_along(paths)) {
+    expect_error(extract3d_surface(
+      data.frame(lon = 0, lat = 40), paths[i], var = "temp", date_col = NULL
+    ), patterns[i])
+  }
+})
+
+test_that("physical depth summaries also support direct point input", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(-100, -50, 0), c(33, 22, 11), positive = "up")
+  out <- extract3d_all(
+    data = NULL, nc = path, lon = 0, lat = 40, depth = 60, var = "temp"
+  )
+  expect_equal(
+    out, c(nearest_temp = 22, surface_temp = 11, seabottom_temp = 33)
+  )
+})
+
+# Issue #74 C: explanatory reports preserve values and source attribution.
+capture_selection_reports <- function(expr) {
+  reports <- list()
+  value <- withCallingHandlers(expr, message = function(condition) {
+    reports[[length(reports) + 1L]] <<- condition
+    invokeRestart("muffleMessage")
+  })
+  list(value = value, reports = reports,
+       text = paste(vapply(reports, conditionMessage, character(1)),
+                    collapse = "\n"))
+}
+
+test_that("spatial reports explain centres and explicit distance limits", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
+  x <- data.frame(lon = 0.1, lat = 40)
+  within <- capture_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL, spatial_report = TRUE
+  ))
+  expect_match(within$text, "matched the requested selection", fixed = TRUE)
+  expect_match(within$text, "containing cell centre: (0, 40)", fixed = TRUE)
+  nearby <- capture_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL, spatial_report = TRUE,
+    spatial_match = "nearest", max_distance_km = 20
+  ))
+  expect_match(nearby$text, "allowed: 20 km", fixed = TRUE)
+  rejected <- capture_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL, spatial_report = TRUE,
+    spatial_match = "nearest", max_distance_km = 1
+  ))
+  expect_true(is.na(rejected$value$temp))
+  expect_match(rejected$text, "allowed: 1 km", fixed = TRUE)
+  expect_match(rejected$text, "Result: NA", fixed = TRUE)
+  silent <- capture_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL,
+    spatial_report = FALSE, depth_report = FALSE
+  ))
+  expect_length(silent$reports, 0L)
+  expect_equal(silent$value, within$value)
+})
+
+test_that("depth reports describe physical layers without interpolation", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(100, 50, 0), c(33, 22, 11))
+  x <- data.frame(lon = 0, lat = 40, depth = 60)
+  result <- capture_selection_reports(extract3d_all(
+    x, path, var = "temp", date_col = NULL, depth_report = TRUE
+  ))
+  expect_match(result$text, "Requested: 60 m", fixed = TRUE)
+  expect_match(result$text, "10 m shallower", fixed = TRUE)
+  expect_match(result$text, "selected: 50 m", fixed = TRUE)
+  expect_match(result$text, "Shallowest layer selected", fixed = TRUE)
+  expect_match(result$text, "does not establish the seabed", fixed = TRUE)
+  expect_match(result$text, "No vertical interpolation", fixed = TRUE)
+  quiet <- capture_selection_reports(extract3d_all(
+    x, path, var = "temp", date_col = NULL, depth_report = FALSE
+  ))
+  expect_length(quiet$reports, 0L)
+  expect_equal(quiet$value, result$value)
+})
+
+test_that("missing layer reports retain rejected sources without a winner", {
+  skip_if_not_installed("ncdf4")
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  for (path in paths) {
+    make_depth_axis_test_nc(path, c(0, 50, 100), c(11, 22, 33))
+  }
+  result <- capture_selection_reports(extract3d_nearest(
+    data.frame(lon = 0, lat = 40, depth = NA_real_), paths,
+    var = "temp", date_col = NULL
+  ))
+  expect_true(is.na(result$value$temp))
+  expect_match(result$text, "Requested depth is missing", fixed = TRUE)
+  for (path in paths) expect_match(result$text, basename(path), fixed = TRUE)
+  expect_false(grepl("Selected depth:", result$text, fixed = TRUE))
+})
+
+test_that("reports follow the winning source separately for each summary", {
+  skip_if_not_installed("ncdf4")
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_depth_axis_test_nc(paths[1], c(0, 50, 100), c(NA, 22, 33))
+  make_depth_axis_test_nc(paths[2], c(5, 60, 120), c(44, 55, 66))
+  result <- capture_selection_reports(extract3d_all(
+    data.frame(lon = 0, lat = 40, depth = 60), paths,
+    var = "temp", date_col = NULL, depth_report = TRUE
+  ))
+  expect_equal(result$value$surface_temp, 44)
+  expect_equal(result$value$nearest_temp, 22)
+  expect_match(result$text, "Shallowest layer selected: 5 m", fixed = TRUE)
+  expect_match(result$text, "selected: 50 m", fixed = TRUE)
+  for (path in paths) expect_match(result$text, basename(path), fixed = TRUE)
+})
+
+test_that("selection report switches require scalar logical values", {
+  for (bad in list(NA, 1, "yes", logical(), c(TRUE, FALSE))) {
+    expect_error(extract_to_point(spatial_report = bad), "spatial_report")
+    expect_error(extract_to_point(depth_report = bad), "depth_report")
+  }
+})
+
+test_that("missing reports follow their cause and are never repeated", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_a2_temporal_nc(path, 0, 11)
+  x <- data.frame(lon = 0, lat = 40, date = as.Date("2020-01-02"))
+  temporal <- capture_selection_reports(extract2d(
+    x, path, var = "temp", time_match = "exact"
+  ))
+  expect_length(temporal$reports, 1L)
+  expect_s3_class(temporal$reports[[1L]], "ocean3d_time_report")
+  expect_match(temporal$text, "No timestamp satisfied", fixed = TRUE)
+  x$lon <- 20
+  spatial <- capture_selection_reports(extract2d(x, path, var = "temp"))
+  expect_length(spatial$reports, 1L)
+  expect_s3_class(spatial$reports[[1L]], "ocean3d_spatial_report")
+  expect_match(spatial$text, "outside cell coverage", fixed = TRUE)
+  hidden <- capture_selection_reports(extract2d(
+    x, path, var = "temp", spatial_report = FALSE
+  ))
+  expect_length(hidden$reports, 0L)
+  expect_equal(hidden$value, spatial$value)
+})
+
+test_that("missing requested depths obey only the depth report switch", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(0, 50, 100), c(11, 22, 33))
+  x <- data.frame(lon = 0, lat = 40, depth = NA_real_)
+  shown <- capture_selection_reports(extract3d_nearest(
+    x, path, var = "temp", date_col = NULL, spatial_report = FALSE
+  ))
+  expect_length(shown$reports, 1L)
+  expect_s3_class(shown$reports[[1L]], "ocean3d_depth_report")
+  hidden <- capture_selection_reports(extract3d_nearest(
+    x, path, var = "temp", date_col = NULL, depth_report = FALSE
+  ))
+  expect_length(hidden$reports, 0L)
+  expect_equal(shown$value, hidden$value)
+})
+
+test_that("automatic reports stay silent for normal selections", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
+  x <- data.frame(lon = c(0, 0.1), lat = 40)
+  automatic <- capture_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL
+  ))
+  expect_length(automatic$reports, 0L)
+  nearest <- capture_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL,
+    spatial_match = "nearest", max_distance_km = 20
+  ))
+  expect_length(nearest$reports, 0L)
+  full <- capture_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL, spatial_report = TRUE
+  ))
+  expect_length(full$reports, 1L)
+  expect_match(full$text, "2 observations", fixed = TRUE)
+  expect_match(full$text, "netCDF variable: temp", fixed = TRUE)
+  expect_match(full$text, "output column: temp", fixed = TRUE)
+  expect_match(full$text, "Distance: 0 km", fixed = TRUE)
+  expect_equal(automatic$value, full$value)
+  expect_equal(automatic$value, nearest$value)
+})
+
+test_that("automatic depth reports distinguish normal and different layers", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(100, 50, 0), c(33, 22, 11))
+  x <- data.frame(lon = 0, lat = 40, depth = 50)
+  automatic <- capture_selection_reports(extract3d_all(
+    x, path, var = "temp", date_col = NULL
+  ))
+  expect_length(automatic$reports, 0L)
+  full <- capture_selection_reports(extract3d_all(
+    x, path, var = "temp", date_col = NULL, depth_report = TRUE
+  ))
+  expect_length(full$reports, 1L)
+  expect_match(full$text, "exact match", fixed = TRUE)
+  expect_match(full$text, "3 output values reported", fixed = TRUE)
+  expect_equal(automatic$value, full$value)
+  x$depth <- 60
+  different <- capture_selection_reports(extract3d_all(
+    x, path, var = "temp", date_col = NULL
+  ))
+  expect_length(different$reports, 0L)
+  hidden <- capture_selection_reports(extract3d_all(
+    x, path, var = "temp", date_col = NULL, depth_report = FALSE
+  ))
+  expect_length(hidden$reports, 0L)
+  expect_equal(hidden$value, different$value)
+})
+
+test_that("automatic spatial reports explain accepted external selections", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
+  result <- capture_selection_reports(extract2d(
+    data.frame(lon = 1.6, lat = 40), path, var = "temp",
+    output_col = "temperature", date_col = NULL,
+    spatial_match = "nearest", max_distance_km = 100
+  ))
+  expect_length(result$reports, 1L)
+  expect_match(result$text, "outside cell coverage used the nearest cell",
+               fixed = TRUE)
+  expect_match(result$text, "netCDF variable: temp", fixed = TRUE)
+  expect_match(result$text, "output column: temperature", fixed = TRUE)
+  expect_match(result$text, "nearest cell centre: (1, 40)", fixed = TRUE)
+})
+
+test_that("cell containment is separate from overall coverage", {
+  lon <- list(centres = c(0, 1), lower = c(-0.01, -0.5),
+              upper = c(0.01, 1.5), longitude = TRUE)
+  lat <- list(centres = 0, lower = 0, upper = 0, longitude = FALSE)
+  result <- match_one_cell(lon, lat, c(0, 1), 0, 0.1, 0,
+                           "nearest", 100)
+  expect_true(result$accepted)
+  expect_true(result$inside_coverage)
+  expect_false(result$inside_selected_cell)
+  expect_equal(result$lon_idx, 1L)
+  lon <- list(centres = c(179, 181), lower = c(178, 180),
+              upper = c(180, 182), longitude = TRUE)
+  wrapped <- match_one_cell(lon, lat, c(179, -179), 0, 181, 0,
+                            "nearest", 100)
+  expect_true(wrapped$inside_selected_cell)
+  expect_true(wrapped$inside_coverage)
+})
+
+test_that("report numbers are short without hiding small differences", {
+  expect_equal(.selection_number(1.80399482019311e-7, 5L), "0")
+  expect_equal(.selection_number(-1e-7, 5L), "0")
+  expect_equal(.selection_number(38.0208320617676, 5L), "38.02083")
+  expect_equal(.selection_number(1.01823663711548), "1.02")
+  expect_equal(.selection_number(20), "20")
+  expect_equal(.selection_number(0), "0")
+  expect_equal(.selection_number(0.001, small = TRUE), "<0.01")
+  expect_equal(.selection_number(0.01, small = TRUE), "0.01")
+})
+
+test_that("large reports count observations and prioritise missing results", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(0, 50, 100), c(11, 22, 33))
+  x <- data.frame(lon = 0, lat = 40, depth = c(NA, rep(60, 6)))
+  result <- capture_selection_reports(extract3d_all(
+    x, path, var = "temp", date_col = NULL, depth_report = TRUE
+  ))
+  expect_length(result$reports, 1L)
+  expect_match(result$text, "7 observations", fixed = TRUE)
+  expect_match(
+    result$text, "21 output values reported; 1 missing", fixed = TRUE
+  )
+  expect_match(result$text, "Showing 5 of 21 cases", fixed = TRUE)
+  expect_match(result$text, "16 further examples omitted", fixed = TRUE)
+  expect_identical(result$reports[[1L]]$records[[1L]]$status, "missing")
+  expect_length(result$reports[[1L]]$records, 21L)
+})
+
+test_that("local spacing uses surrounding layers instead of a global mean", {
+  reference <- .depth_selection_reference(c(150, 67, 55, 0), 60, 150)
+  expect_equal(c(reference$lower, reference$upper, reference$spacing),
+               c(55, 67, 12))
+  expect_identical(reference$basis, "surrounding")
+  expect_identical(reference$status, "distant_depth")
+  expect_true(reference$closer_missing)
+  exact <- .depth_selection_reference(c(0, 55, 67, 150), 55, 150)
+  expect_identical(exact$basis, "adjacent")
+  expect_equal(c(exact$lower, exact$upper, exact$spacing), c(55, 67, 12))
+  tied <- .depth_selection_reference(c(0, 50, 100), 50, 0)
+  expect_equal(tied$spacing, 50)
+  expect_identical(tied$status, "normal")
+  expect_equal(.depth_selection_reference(c(0, 50, 100), 0, 100)$spacing, 50)
+  expect_equal(.depth_selection_reference(c(0, 50, 100), 100, 0)$spacing, 50)
+})
+
+test_that("spacing outside the range uses edge layers and a strict threshold", {
+  for (requested in c(-100, 200)) {
+    chosen <- if (requested < 0) 0 else 100
+    reference <- .depth_selection_reference(c(100, 0, 50), requested, chosen)
+    expect_true(reference$outside)
+    expect_equal(reference$spacing, 50)
+    expect_identical(reference$basis, "nearest_edge")
+    expect_identical(reference$status, "distant_depth")
+    expect_false(reference$closer_missing)
+    text <- .format_depth_reference(reference)
+    expect_match(text, "outside the layer range", fixed = TRUE)
+    expect_false(grepl("no valid value", text, fixed = TRUE))
+  }
+  boundary <- .depth_selection_reference(c(0, 50, 100), 150, 100)
+  expect_identical(boundary$status, "normal")
+  above <- .depth_selection_reference(c(0, 50, 100), 150.001, 100)
+  expect_identical(above$status, "distant_depth")
+  singleton <- .depth_selection_reference(50, 60, 50)
+  expect_identical(singleton$status, "spacing_unknown")
+  expect_true(is.na(singleton$spacing))
+  expect_identical(.depth_selection_reference(50, 50, 50)$status, "normal")
+})
+
+test_that("normal nearest layers are silent unless a report is requested", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(50, 61.52, 75), c(11, 22, 33))
+  x <- data.frame(lon = 0, lat = 40, depth = 60)
+  automatic <- capture_selection_reports(extract3d_nearest(
+    x, path, var = "temp", date_col = NULL
+  ))
+  expect_length(automatic$reports, 0L)
+  expect_equal(automatic$value$temp, 22)
+  full <- capture_selection_reports(extract3d_nearest(
+    x, path, var = "temp", date_col = NULL, depth_report = TRUE
+  ))
+  expect_equal(automatic$value, full$value)
+  expect_match(full$text, "1.52 m deeper", fixed = TRUE)
+  expect_match(full$text, "11.52 m apart", fixed = TRUE)
+  expect_match(full$text, "Surrounding layers:", fixed = TRUE)
+  expect_false(grepl("Showing", full$text, fixed = TRUE))
+})
+
+test_that("distant layers explain spacing and proven missing neighbours", {
+  skip_if_not_installed("ncdf4")
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_depth_axis_test_nc(paths[1], c(55, 67, 150), c(NA, NA, 33))
+  make_depth_axis_test_nc(paths[2], c(-15000, -6700, -5500), c(33, NA, NA),
+                          units = "cm", positive = "up")
+  x <- data.frame(lon = 0, lat = 40, depth = c(60, 55))
+  for (path in paths) {
+    automatic <- capture_selection_reports(extract3d_nearest(
+      x, path, var = "temp", date_col = NULL
+    ))
+    expect_equal(automatic$value$temp, c(33, 33))
+    expect_match(
+      automatic$text, "more than one local layer spacing", fixed = TRUE
+    )
+    expect_match(automatic$text, "12 m apart", fixed = TRUE)
+    expect_match(
+      automatic$text, "closer layers have no valid value", fixed = TRUE
+    )
+    expect_match(automatic$text, "Requested layer and nearest neighbour:",
+                 fixed = TRUE)
+    expect_false(grepl("Showing", automatic$text, fixed = TRUE))
+    hidden <- capture_selection_reports(extract3d_nearest(
+      x, path, var = "temp", date_col = NULL, depth_report = FALSE
+    ))
+    expect_length(hidden$reports, 0L)
+    expect_equal(hidden$value, automatic$value)
+  }
+})
+
+test_that("out of range and singleton reports do not invent missing layers", {
+  skip_if_not_installed("ncdf4")
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_depth_axis_test_nc(paths[1], c(0, 50, 100), c(11, 22, 33))
+  make_depth_axis_test_nc(paths[2], 50, 22)
+  x <- data.frame(lon = 0, lat = 40, depth = 200)
+  outside <- capture_selection_reports(extract3d_nearest(
+    x, paths[1], var = "temp", date_col = NULL
+  ))
+  expect_match(outside$text, "outside the layer range", fixed = TRUE)
+  expect_match(outside$text, "Nearest edge layers:", fixed = TRUE)
+  expect_match(outside$text, "50 m apart", fixed = TRUE)
+  expect_false(grepl("no valid value", outside$text, fixed = TRUE))
+  singleton <- capture_selection_reports(extract3d_nearest(
+    x, paths[2], var = "temp", date_col = NULL
+  ))
+  expect_match(singleton$text, "Only one depth layer", fixed = TRUE)
+  expect_match(singleton$text, "spacing cannot be assessed", fixed = TRUE)
+  expect_false(grepl("Showing", singleton$text, fixed = TRUE))
+})
+
+test_that("depth reference follows the source that supplies the value", {
+  skip_if_not_installed("ncdf4")
+  paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_depth_axis_test_nc(paths[1], c(0, 50, 100), rep(NA_real_, 3))
+  make_depth_axis_test_nc(paths[2], c(55, 67, 150), c(NA, NA, 33))
+  for (sources in list(paths, rev(paths))) {
+    result <- capture_selection_reports(extract3d_nearest(
+      data.frame(lon = 0, lat = 40, depth = 60), sources,
+      var = "temp", date_col = NULL
+    ))
+    expect_equal(result$value$temp, 33)
+    expect_match(result$text, "12 m apart", fixed = TRUE)
+    expect_match(result$text, basename(paths[2]), fixed = TRUE)
+    expect_false(grepl(basename(paths[1]), result$text, fixed = TRUE))
+  }
+})
+
+test_that("quiet value tests preserve unexpected conditions", {
+  expect_message(without_selection_reports(message("other message")),
+                 "other message", fixed = TRUE)
+  expect_warning(without_selection_reports(warning("other warning")),
+                 "other warning", fixed = TRUE)
+  expect_error(without_selection_reports(stop("other error")),
+               "other error", fixed = TRUE)
+})
+
+test_that("great-circle distances match sf under s2", {
+  original <- sf::sf_use_s2()
+  on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
+  suppressMessages(sf::sf_use_s2(TRUE))
+  a <- sf::st_sfc(sf::st_point(c(0, 0)), crs = 4326)
+  points <- rbind(c(1, 1), c(179.5, -60), c(-179.9, 89), c(0.01, 0))
+  for (k in seq_len(nrow(points))) {
+    b <- sf::st_sfc(sf::st_point(points[k, ]), crs = 4326)
+    expect_equal(
+      .great_circle_km(0, 0, points[k, 1], points[k, 2]),
+      as.numeric(sf::st_distance(a, b)) / 1000,
+      tolerance = 1e-12
+    )
+  }
+})
+
+test_that("matching does not depend on the sf s2 setting", {
+  skip_if_not_installed("ncdf4")
+  original <- sf::sf_use_s2()
+  on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
+  suppressMessages(sf::sf_use_s2(FALSE))
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
+  x <- data.frame(lon = c(0.1, 1.4), lat = 40)
+  expect_equal(without_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL
+  ))$temp, c(1, 2))
+  expect_equal(without_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL,
+    spatial_match = "nearest", max_distance_km = 100
+  ))$temp, c(1, 2))
+})
+
+test_that("whole-grid nearest search matches a search over every cell", {
+  set.seed(42)
+  lon <- c(seq(-179.5, 179.5, by = 7), 180)
+  lat <- sort(c(-90, runif(20, -89, 89), 90))
+  x <- c(runif(60, -360, 360), 180, -180, 179.99, 0, 10)
+  y <- c(runif(60, -90, 90), 0, 89.9, -89.9, 90, -90)
+  fast <- .nearest_horizontal_cells(lon, lat, x, y)
+  for (k in seq_along(x)) {
+    slow <- .nearest_horizontal_cell(lon, lat, seq_along(lon),
+                                     seq_along(lat), x[k], y[k])
+    expect_equal(fast[[k]]$distance_km, slow$distance_km, tolerance = 1e-12)
+    # Away from the poles the selected cell is the same too.
+    if (abs(y[k]) < 89) {
+      expect_identical(fast[[k]][c("lon_idx", "lat_idx")],
+                       slow[c("lon_idx", "lat_idx")])
+    }
+  }
+  invalid <- .nearest_horizontal_cells(lon, lat, c(NA, 0, Inf), c(0, 91, 0))
+  expect_true(all(vapply(invalid, is.null, logical(1))))
+  expect_length(.nearest_horizontal_cells(lon, lat, numeric(), numeric()), 0L)
+})
+
+test_that("exact distance ties keep the first cell in storage order", {
+  batch <- .nearest_horizontal_cells(c(0, 0), 0, c(0, 0), c(0, 0))
+  expect_identical(batch[[1L]]$lon_idx, 1L)
+  expect_identical(batch[[2L]]$lon_idx, 1L)
+  expect_equal(batch[[1L]]$distance_km, 0)
+  # A point on a shared edge is equally far from both centres; rounding
+  # noise must not decide, so the first (west/south) cell is kept.
+  lon <- seq(-4.5, 4.5, 1)
+  lat <- seq(35.5, 44.5, 1)
+  for (y in lat) {
+    edge <- .nearest_horizontal_cell(lon, lat, 4:5, which(lat == y), -1, y)
+    expect_identical(edge$lon_idx, 4L)
+    nearest <- .nearest_horizontal_cells(lon, lat, -1, y)[[1L]]
+    expect_identical(nearest$lon_idx, 4L)
+  }
+  # A point just off the edge still gets the truly closer cell.
+  off <- .nearest_horizontal_cell(lon, lat, 4:5, 1L, -1 + 1e-6, 35.5)
+  expect_identical(off$lon_idx, 5L)
+})
+
+test_that("nearest candidates preserve matching limits and containment", {
+  lon <- list(centres = c(0, 1), lower = c(-0.5, 0.5),
+              upper = c(0.5, 1.5), longitude = TRUE)
+  lat <- list(centres = 40, lower = 39, upper = 41, longitude = FALSE)
+  x <- c(0, 0.1, 1.6, NA)
+  y <- rep(40, 4)
+  nearest <- .nearest_horizontal_cells(c(0, 1), 40, x, y)
+  distance <- nearest[[3L]]$distance_km
+  for (limit in c(0, 1, 100, distance, distance - 1e-6)) {
+    matches <- .match_horizontal_cells(lon, lat, c(0, 1), 40, x, y,
+                                       "nearest", limit)
+    for (i in 1:3) {
+      expect_identical(matches$lon_idx[i], nearest[[i]]$lon_idx)
+      expect_identical(matches$accepted[i],
+                       nearest[[i]]$distance_km <= limit)
+    }
+    expect_identical(matches$reason[4L], "invalid_coordinates")
+  }
+  expect_false(matches$inside_coverage[3L])
+  expect_true(matches$inside_selected_cell[2L])
+})
+
+test_that("comparison precision distinguishes close values", {
+  expect_identical(.selection_comparison(1.114, 1.111),
+                   list(value = "1.114", limit = "1.111"))
+  expect_identical(.selection_comparison(1.111, 1.114),
+                   list(value = "1.111", limit = "1.114"))
+  expect_identical(.selection_comparison(1.111, 1.111),
+                   list(value = "1.11", limit = "1.11"))
+  expect_identical(.selection_comparison(12.634, 20),
+                   list(value = "12.63", limit = "20"))
+  tiny <- .selection_comparison(0.00002, 0.00001)
+  expect_identical(tiny, list(value = "0.00002", limit = "0.00001"))
+  close <- .selection_comparison(1 + .Machine$double.eps, 1)
+  expect_false(identical(close$value, close$limit))
+})
+
+test_that("spatial rejection text explains nearly identical distances", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, 0, 0, 11)
+  distance <- .nearest_horizontal_cells(0, 0, 0.01, 0)[[1L]]$distance_km
+  limit <- distance - 1e-6
+  result <- capture_selection_reports(extract2d(
+    data.frame(lon = 0.01, lat = 0), path, var = "temp", date_col = NULL,
+    spatial_match = "nearest", max_distance_km = limit
+  ))
+  expect_true(is.na(result$value$temp))
+  comparison <- .selection_comparison(distance, limit)
+  expect_false(identical(comparison$value, comparison$limit))
+  expect_match(result$text, paste0("Nearest cell: ", comparison$value),
+               fixed = TRUE)
+  expect_match(result$text, paste0("allowed: ", comparison$limit), fixed = TRUE)
+})
+
+test_that("depth threshold text distinguishes a small excess", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(0, 50, 100.001), c(NA, NA, 33))
+  result <- capture_selection_reports(extract3d_nearest(
+    data.frame(lon = 0, lat = 40, depth = 50), path,
+    var = "temp", date_col = NULL
+  ))
+  expect_match(result$text, "50.001 m deeper", fixed = TRUE)
+  expect_match(result$text, "50 m apart", fixed = TRUE)
+  expect_match(result$text, "exceeds this spacing", fixed = TRUE)
+})
+
+# PR #81 review fixes ----------------------------------------------------------
+
+test_that("observation depths must be metres, positive downward", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(0, -50, -100), c(10, 20, 30),
+                          positive = "up")
+  expect_error(
+    extract3d_nearest(data.frame(lon = 0, lat = 40, depth = -50), path,
+                      var = "temp", date_col = NULL),
+    "positive downward"
+  )
+  expect_error(
+    extract3d_all(data.frame(lon = 0, lat = 40, depth = "50"), path,
+                  var = "temp", date_col = NULL),
+    "positive downward"
+  )
+  expect_equal(without_selection_reports(extract3d_nearest(
+    data.frame(lon = 0, lat = 40, depth = c(50, NA)), path,
+    var = "temp", date_col = NULL
+  ))$temp, c(20, NA))
+})
+
+test_that("full spellings of km and cm depth units are converted", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  for (units in c("centimeters", "centimetres", "Centimeter")) {
+    expect_equal(.prepare_depth_axis(c(0, 500), units)$depth_m, c(0, 5))
+  }
+  for (units in c("kilometers", "kilometres", "kilometer")) {
+    expect_equal(.prepare_depth_axis(c(0, 0.5), units)$depth_m, c(0, 500))
+  }
+  make_depth_axis_test_nc(path, c(500, 1500, 2500), c(11, 22, 33),
+                          units = "centimeters", positive = "down")
+  expect_equal(without_selection_reports(extract3d_nearest(
+    data.frame(lon = 0, lat = 40, depth = 14), path,
+    var = "temp", date_col = NULL
+  ))$temp, 22)
+})
+
+test_that("height axes without a positive attribute are not depths", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(2, 10, 20), c(11, 22, 33),
+                          standard_name = "height")
+  expect_error(
+    extract3d_surface(data.frame(lon = 0, lat = 40), path, var = "temp",
+                      date_col = NULL, depth_dim = "depth"),
+    "reference surface"
+  )
+})
+
+test_that("a depth dimension without coordinate variable fails clearly", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", 0)
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", 40)
+  depth <- ncdf4::ncdim_def("depth", "", 1:3, create_dimvar = FALSE)
+  variable <- ncdf4::ncvar_def("temp", "degree_Celsius",
+                               list(lon, lat, depth), -9999)
+  nc <- ncdf4::nc_create(path, variable)
+  ncdf4::ncvar_put(nc, "temp", array(c(11, 22, 33), c(1, 1, 3)))
+  ncdf4::nc_close(nc)
+  printed <- capture.output(error <- tryCatch(
+    extract3d_surface(data.frame(lon = 0, lat = 40), path, var = "temp",
+                      date_col = NULL),
+    error = identity
+  ))
+  expect_match(conditionMessage(error), "has no coordinate variable")
+  expect_match(conditionMessage(error), "extract2d()", fixed = TRUE)
+  expect_length(printed, 0L)
+})
+
+test_that("single-precision station coordinates match their own station", {
+  station <- as.numeric(c(-122.40000152587891, 36.79999923706055))
+  lon <- list(centres = station[1], lower = station[1], upper = station[1],
+              longitude = TRUE, basis = "singleton_coordinate")
+  lat <- list(centres = station[2], lower = station[2], upper = station[2],
+              longitude = FALSE, basis = "singleton_coordinate")
+  expect_identical(.containing_axis_indices(lon, -122.4), 1L)
+  expect_identical(.containing_axis_indices(lat, 36.8), 1L)
+  expect_length(.containing_axis_indices(lon, -122.401), 0L)
+})
+
+test_that("unusable spatial bounds fall back to inferred edges", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
+  nc <- ncdf4::nc_open(path, write = TRUE)
+  ncdf4::ncatt_put(nc, "lon", "bounds", "lon_bnds")
+  ncdf4::nc_close(nc)
+  x <- data.frame(lon = c(0, 1, 5), lat = 40)
+  expect_warning(
+    out <- without_selection_reports(extract2d(
+      x, path, var = "temp", date_col = NULL
+    )),
+    "were not found"
+  )
+  expect_equal(out$temp, c(1, 2, NA))
+  expect_true(.same_spatial_units("degree_east", "degrees_east"))
+  expect_true(.same_spatial_units("degrees_E", "degrees"))
+  expect_false(.same_spatial_units("degrees_east", "radians"))
+})
+
+test_that("within matching keeps input order between overlapping sources", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    paths <- replicate(2, tempfile(fileext = ".nc"))
+    on.exit(unlink(paths), add = TRUE)
+    fine <- seq(0.05, 0.95, by = 0.1)
+    make_horizontal_test_nc(paths[1], fine, fine + 40, rep(100, 100))
+    make_horizontal_test_nc(paths[2], c(0, 1), c(40, 41), rep(1, 4))
+    x <- data.frame(lon = 0.01, lat = 40.01)
+    expect_equal(extract2d(x, paths, var = "temp", date_col = NULL)$temp, 100)
+    expect_equal(extract2d(x, rev(paths), var = "temp",
+                           date_col = NULL)$temp, 1)
+    # Nearest matching prefers the closer centre, whatever the order.
+    for (files in list(paths, rev(paths))) {
+      expect_equal(extract2d(
+        x, files, var = "temp", date_col = NULL,
+        spatial_match = "nearest", max_distance_km = 50
+      )$temp, 1)
+    }
+  })
+})
+
+test_that("off-site tiles do not turn a temporal miss into a spatial one", {
+  skip_if_not_installed("ncdf4")
+  paths <- replicate(2, tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_horizontal_test_nc(paths[1], c(10, 11), c(40, 41), 1:8, days = c(0, 4))
+  make_horizontal_test_nc(paths[2], 0, 40, 5, days = 0)
+  x <- data.frame(lon = 0, lat = 40, date = as.Date("2020-01-05"))
+  result <- capture_selection_reports(extract2d(
+    x, paths, var = "temp", max_time_diff = 1, spatial_report = FALSE
+  ))
+  expect_true(is.na(result$value$temp))
+  expect_length(result$reports, 1L)
+  expect_s3_class(result$reports[[1L]], "ocean3d_time_report")
+  expect_match(result$text, "Observation: 2020-01-05", fixed = TRUE)
+  expect_match(result$text, "No timestamp satisfied", fixed = TRUE)
+  expect_match(result$text, "Point outside cell coverage", fixed = TRUE)
+  expect_identical(result$reports[[1L]]$report$status, "no_value")
+})
+
+test_that("repeated missing reasons are grouped across many files", {
+  skip_if_not_installed("ncdf4")
+  paths <- vapply(1:8, function(k) tempfile(fileext = ".nc"), character(1))
+  on.exit(unlink(paths), add = TRUE)
+  for (k in seq_along(paths)) {
+    make_horizontal_test_nc(paths[k], 0, 40, k, days = k - 1L)
+  }
+  x <- data.frame(lon = 0, lat = 40, date = as.Date("2020-03-01"))
+  result <- capture_selection_reports(extract2d(
+    x, paths, var = "temp", max_time_diff = 1
+  ))
+  expect_length(result$reports, 1L)
+  expect_identical(lengths(regmatches(
+    result$text, gregexpr("No timestamp satisfied", result$text)
+  )), 1L)
+  expect_match(result$text, "and 5 more", fixed = TRUE)
+})
+
+test_that("a missing date gets its own temporal reason", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, 0, 40, 1:3, days = 0:2)
+  result <- capture_selection_reports(extract2d(
+    data.frame(lon = 0, lat = 40), path, var = "temp", date_col = NULL
+  ))
+  expect_true(is.na(result$value$temp))
+  expect_length(result$reports, 1L)
+  expect_match(result$text, "No observation date was supplied", fixed = TRUE)
+  quiet <- capture_selection_reports(extract2d(
+    data.frame(lon = 0, lat = 40), path, var = "temp", date_col = NULL,
+    time_report = FALSE
+  ))
+  expect_length(quiet$reports, 0L)
+})
+
+test_that("depth references tolerate float32 axes and blame missing layers", {
+  layers <- c(0, 50, 100)
+  far <- .depth_selection_reference(layers, 200, 50)
+  expect_identical(far$status, "distant_depth")
+  expect_false(far$closer_missing)
+  near <- .depth_selection_reference(layers, 120, 50)
+  expect_true(near$closer_missing)
+  float32 <- c(0.49402499198913574, 1.54137504100799561, 3.81949496269226074)
+  exact <- .depth_selection_reference(float32, 1.541375, float32[2])
+  expect_identical(exact$basis, "adjacent")
+  expect_identical(exact$status, "normal")
+  deepest <- .depth_selection_reference(float32, 3.819495, float32[2])
+  expect_false(deepest$outside)
 })
