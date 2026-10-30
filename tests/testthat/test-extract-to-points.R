@@ -4070,7 +4070,6 @@ test_that("depth threshold text distinguishes a small excess", {
 
 # Issue #75 A: dates are required by the selected variable, not date_col.
 test_that("static variables use default date_col without a date column", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
@@ -4085,7 +4084,6 @@ test_that("static variables use default date_col without a date column", {
 })
 
 test_that("temporal variables reject absent table and direct date inputs", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE)
@@ -4106,7 +4104,6 @@ test_that("temporal variables reject absent table and direct date inputs", {
 })
 
 test_that("an existing typed NA date preserves observations & missing values", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE)
@@ -4125,7 +4122,6 @@ test_that("an existing typed NA date preserves observations & missing values", {
 })
 
 test_that("static inputs do not parse unused date values", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
@@ -4141,7 +4137,6 @@ test_that("static inputs do not parse unused date values", {
 })
 
 test_that("custom date columns and scalar date recycling keep known values", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE)
@@ -4158,7 +4153,6 @@ test_that("custom date columns and scalar date recycling keep known values", {
 })
 
 test_that("mixed source time requirements hold in either source order", {
-  skip_if_not_installed("ncdf4")
   paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_test_netcdf(paths[1], var = "bathymetry", with_depth = FALSE,
@@ -4233,7 +4227,6 @@ test_that("time errors identify values and IDs while bounding examples", {
 })
 
 test_that("public date errors distinguish direct inputs and named columns", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE)
@@ -4281,7 +4274,6 @@ test_that("POSIX time zones preserve instants across UTC day boundaries", {
 })
 
 test_that("public timezone matching uses the UTC instant and calendar day", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, 0, 40, c(11, 22, 33),
@@ -4306,7 +4298,6 @@ test_that("public timezone matching uses the UTC instant and calendar day", {
 })
 
 test_that("all missing dates bypass unused intraday label comparisons", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, 0, 40, c(11, 22), days = c(0, 0.5))
@@ -4326,7 +4317,6 @@ test_that("all missing dates bypass unused intraday label comparisons", {
 })
 
 test_that("minute precision works through direct and custom-column extraction", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, 0, 40, c(11, 22, 33), days = c(0, 0.5, 1))
@@ -4351,7 +4341,6 @@ test_that("minute precision works through direct and custom-column extraction", 
 })
 
 test_that("unmarked text times warn once across files with reports disabled", {
-  skip_if_not_installed("ncdf4")
   paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   for (path in paths) {
@@ -4377,7 +4366,6 @@ test_that("unmarked text times warn once across files with reports disabled", {
 })
 
 test_that("timezone warnings count only unmarked clocks and name the input", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, 0, 40, c(11, 22), days = c(0, 1))
@@ -4405,7 +4393,6 @@ test_that("explicit zones and date-only inputs need no timezone warning", {
                   as.POSIXlt("2020-01-01 12:00:00", tz = "Europe/Madrid"), NA)) {
     expect_length(.prepare_time_input(x)$unzoned_rows, 0L)
   }
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
@@ -4585,7 +4572,6 @@ test_that("repeated missing reasons are grouped across many files", {
 })
 
 test_that("date_col = NULL on a temporal source is an error", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, 0, 40, 1:3, days = 0:2)
