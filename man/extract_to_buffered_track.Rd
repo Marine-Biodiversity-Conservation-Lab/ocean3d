@@ -9,7 +9,7 @@ extract_to_buffered_track(
   nc,
   var = NULL,
   track_col = NULL,
-  sampling = c("vertices", "balanced", "merged_steps", "cells"),
+  sampling = NULL,
   spacing_km = NULL,
   interpolate_depth = FALSE,
   interpolate_time = FALSE,
@@ -70,7 +70,9 @@ vertex.}
 \item{track_col}{Optional track identifier column. Without it, a table is one
 track and each sf feature is a separate track. IDs are returned as text.}
 
-\item{sampling}{'vertices' (default) uses observations only; 'balanced'
+\item{sampling}{NULL (default) uses 'balanced' when spacing_km,
+depth_step_m, time_step_seconds or time_step is supplied, and
+'vertices' otherwise. 'vertices' uses observations only; 'balanced'
 uses a shared subdivision satisfying all explicit step limits;
 'merged_steps' combines distance/depth cuts with temporal cuts;
 'cells' splits each connection at

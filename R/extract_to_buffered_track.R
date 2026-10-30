@@ -57,7 +57,7 @@
 #' @export
 extract_to_buffered_track <- function(
   data, nc, var = NULL, track_col = NULL,
-  sampling = c("vertices", "balanced", "merged_steps", "cells"),
+  sampling = NULL,
   spacing_km = NULL,
   interpolate_depth = FALSE, interpolate_time = FALSE,
   interpolate_target = FALSE,
@@ -93,6 +93,11 @@ extract_to_buffered_track <- function(
   if (identical(method, "all")) {
     stop("Use one buffer depth method; 'all' is unavailable.", call. = FALSE)
   }
+  if (!is.null(sampling)) {
+    sampling <- match.arg(
+      sampling, c("vertices", "balanced", "merged_steps", "cells")
+    )
+  }
   time_unit <- match.arg(time_unit)
   buffer_time_unit <- match.arg(buffer_time_unit)
   buffer_weighting <- match.arg(buffer_weighting)
@@ -104,9 +109,11 @@ extract_to_buffered_track <- function(
   target_ties <- match.arg(target_ties)
   preparation <- list(
     data = data, nc = nc, var = var, track_col = track_col,
-    spacing_km = spacing_km, interpolate_depth = interpolate_depth,
+    sampling = sampling, spacing_km = spacing_km,
+    interpolate_depth = interpolate_depth,
     interpolate_time = interpolate_time, depth_step_m = depth_step_m,
-    time_step = time_step, time_unit = time_unit, method = method,
+    time_step_seconds = NULL, time_step = time_step, time_unit = time_unit,
+    method = method,
     statistics = statistics, weighting = weighting,
     min_valid_fraction = track_min_valid_fraction,
     lon_col = lon_col, lat_col = lat_col, depth_col = depth_col,
@@ -120,9 +127,6 @@ extract_to_buffered_track <- function(
     mask_domain = mask_domain,
     land_policy = land_policy, mask_step_km = mask_step_km, quiet = quiet
   )
-  if (!missing(sampling)) {
-    preparation$sampling <- match.arg(sampling)
-  }
   dots <- list(...)
   prepare_names <- c(
     "file_col", "lon_dim", "lat_dim", "depth_dim",
@@ -137,7 +141,7 @@ extract_to_buffered_track <- function(
                        ))) {
     stop("Use supported named buffer selection options in ... .")
   }
-  context <- do.call(.prepare_track, c(preparation, dots))
+  context <- .prepare_track(preparation, dots)
   samples <- context$samples
   variables <- unique(
     vapply(
