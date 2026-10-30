@@ -1,16 +1,5 @@
 # Helpers ----------------------------------------------------------------------
 
-.buffer_test_rectangle <- function(xmin, xmax, ymin, ymax) {
-  sf::st_polygon(list(rbind(
-    c(xmin, ymin),
-    c(xmax, ymin),
-    c(xmax, ymax),
-    c(xmin, ymax),
-    c(xmin, ymin)
-  )))
-}
-
-
 .make_buffer_grid_nc <- function(
   path, cell_values = matrix(c(0, 10, 20, 30), 2L),
   lon = c(-0.01, 0.01), lat = c(-0.01, 0.01),
@@ -659,126 +648,147 @@ test_that("empty and all-missing intervals never produce a mean", {
 
 # Horizontal buffer geometry ---------------------------------------------------
 
-test_that("horizontal buffers use kilometres and preserve radial distances", {
-  skip_if_not_installed("sf")
-  buffer <- .buffer_horizontal_geometry(0, 0, 1)
+# Degrees of longitude per kilometre along the WGS84 equator.
+.km_to_equator_degrees <- function(km) km / (6378.137 * pi / 180)
 
-  # A 1 km circle has approximately pi square kilometres.
-  expect_equal(buffer$area_m2 / (pi * 1000^2), 1, tolerance = 1e-4)
-  expect_identical(buffer$boundary_segments, 720L)
 
-  vertices <- sf::st_coordinates(sf::st_transform(
-    buffer$geometry, buffer$distance_crs
-  ))
-  distances <- sqrt(vertices[, 1L]^2 + vertices[, 2L]^2)
-  expect_equal(
-    distances, rep(1000, length(distances)), tolerance = 1e-6
+test_that("horizontal buffers use kilometres and geodesic distances", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_buffer_grid_nc(
+    path, matrix(c(0, 10), 2L, 1L), lat = 0,
+    lat_bounds = matrix(c(-0.02, 0.02), 2L)
   )
+  # The meridian at lon 0 cuts a 1 km circle 0.5 km from its centre; the
+  # eastern cell holds the circular segment beyond that chord.
+  segment <- (acos(0.5) - 0.5 * sqrt(0.75)) / pi
+  out <- extract_to_buffer(
+    data.frame(lon = -.km_to_equator_degrees(0.5), lat = 0), path,
+    horizontal_radius_km = 1, quiet = TRUE
+  )
+  expect_equal(out$temp, 10 * segment, tolerance = 1e-4)
+  expect_equal(out$temp_match_info[[1L]]$coverage_fraction, 1)
 })
 
 
 test_that("cell support distinguishes halves and quarters of the buffer", {
-  skip_if_not_installed("sf")
-  buffer <- .buffer_horizontal_geometry(0, 0, 1)
-  cells <- sf::st_sfc(
-    .buffer_test_rectangle(-2000, 0, -2000, 2000),
-    .buffer_test_rectangle(0, 2000, 0, 2000),
-    .buffer_test_rectangle(0, 2000, -2000, 0),
-    crs = sf::st_crs(buffer$geometry)
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_buffer_grid_nc(path, matrix(c(0, 0, 0, 40), 2L))
+  quarters <- extract_to_buffer(
+    data.frame(lon = 0, lat = 0), path, horizontal_radius_km = 1, quiet = TRUE
   )
+  expect_equal(quarters$temp, 10, tolerance = 1e-6)
 
-  support <- .buffer_horizontal_support(buffer, cells)
-  expect_identical(support$cell_index, 1:3)
-  expect_equal(support$fraction, c(0.5, 0.25, 0.25), tolerance = 1e-6)
-  expect_equal(sum(support$fraction), 1, tolerance = 1e-6)
-  expect_true(all(support$area_m2 > 0))
+  .make_buffer_grid_nc(
+    path, matrix(c(0, 40), 2L, 1L), lat = 0,
+    lat_bounds = matrix(c(-0.02, 0.02), 2L)
+  )
+  halves <- extract_to_buffer(
+    data.frame(lon = 0, lat = 0), path, horizontal_radius_km = 1, quiet = TRUE
+  )
+  expect_equal(halves$temp, 20, tolerance = 1e-6)
+  expect_equal(halves$temp_match_info[[1L]]$n_valid, 2)
 })
 
 
 test_that("partial and empty horizontal support are kept separate", {
-  skip_if_not_installed("sf")
-  buffer <- .buffer_horizontal_geometry(0, 0, 1)
-  cells <- sf::st_sfc(
-    .buffer_test_rectangle(-2000, 0, -2000, 2000),
-    .buffer_test_rectangle(3000, 4000, 3000, 4000),
-    crs = sf::st_crs(buffer$geometry)
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_buffer_grid_nc(
+    path, matrix(10, 1L, 1L), lon = 0.01, lat = 0,
+    lon_bounds = matrix(c(0, 0.02), 2L), lat_bounds = matrix(c(-0.02, 0.02), 2L)
   )
-
-  partial <- .buffer_horizontal_support(buffer, cells)
-  expect_identical(partial$cell_index, 1L)
-  expect_equal(partial$fraction, 0.5, tolerance = 1e-6)
-
-  empty <- .buffer_horizontal_support(buffer, cells[2L])
-  expect_equal(nrow(empty), 0L)
-
-  edge <- as.numeric(sf::st_bbox(buffer$geometry)["xmax"])
-  touching <- sf::st_sfc(
-    .buffer_test_rectangle(edge, edge + 1000, -2000, 2000),
-    crs = sf::st_crs(buffer$geometry)
-  )
-  expect_equal(
-    nrow(.buffer_horizontal_support(buffer, touching)), 0L
-  )
+  # The second circle ends 5 m west of the only cell, close enough for the
+  # cell to be a candidate.
+  expect_no_warning(out <- extract_to_buffer(
+    data.frame(lon = c(0, -.km_to_equator_degrees(1.005)), lat = 0), path,
+    horizontal_radius_km = 1, min_valid_fraction = 0.5, quiet = TRUE
+  ))
+  info <- out$temp_match_info
+  expect_equal(out$temp, c(10, NA_real_))
+  expect_equal(info[[1L]]$coverage_fraction, 0.5, tolerance = 1e-6)
+  expect_identical(info[[1L]]$status, "partial")
+  expect_identical(info[[2L]]$status, "empty")
+  expect_equal(info[[2L]]$n_intersecting, 0)
 })
 
 
-test_that("overlapping cell interiors are rejected", {
-  skip_if_not_installed("sf")
-  buffer <- .buffer_horizontal_geometry(0, 0, 1)
-  cells <- sf::st_sfc(
-    .buffer_test_rectangle(-2000, 2000, -2000, 2000),
-    .buffer_test_rectangle(0, 2000, -2000, 2000),
-    crs = sf::st_crs(buffer$geometry)
+test_that("longitude cells that overlap modulo 360 are rejected", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  # Increasing and non-overlapping as stored, but [340, 360] is [-20, 0].
+  .make_buffer_grid_nc(
+    path, matrix(1:4, 4L, 1L), lon = c(0, 120, 240, 350), lat = 0,
+    lon_bounds = matrix(c(-15, 15, 105, 135, 225, 255, 340, 360), 2L),
+    lat_bounds = matrix(c(-1, 1), 2L)
   )
-
   expect_error(
-    .buffer_horizontal_support(buffer, cells),
-    "cell interiors overlap", fixed = TRUE
+    extract_to_buffer(data.frame(lon = 0, lat = 0), path,
+                      horizontal_radius_km = 1, quiet = TRUE),
+    "overlapping periodic support", fixed = TRUE
   )
 })
 
 
-test_that("local buffers support antimeridian and high-latitude centres", {
-  skip_if_not_installed("sf")
-  for (point in list(c(179.999, 0), c(-179.999, 0), c(0, 89.9))) {
-    buffer <- .buffer_horizontal_geometry(point[1L], point[2L], 1)
-    expect_true(all(sf::st_is_valid(buffer$geometry)))
-    expect_equal(buffer$area_m2 / (pi * 1000^2), 1, tolerance = 1e-4)
+test_that("circles containing a pole cover the cells around it", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  # Four 90-degree cells meet at the north pole.
+  .make_buffer_grid_nc(
+    path, matrix(c(0, 10, 20, 30), 4L, 1L), lon = c(-135, -45, 45, 135),
+    lat = 89.95, lon_bounds = matrix(c(-180, -90, -90, 0, 0, 90, 90, 180), 2L),
+    lat_bounds = matrix(c(89.9, 90), 2L)
+  )
+  out <- extract_to_buffer(
+    data.frame(lon = c(0, 45), lat = c(90, 89.99)), path,
+    horizontal_radius_km = 5, quiet = TRUE
+  )
+  info <- out$temp_match_info
+  # A circle centred on the pole covers the four cells equally.
+  expect_equal(out$temp[1L], 15, tolerance = 1e-6)
+  for (i in 1:2) {
+    expect_equal(info[[i]]$coverage_fraction, 1, tolerance = 1e-6)
+    expect_equal(info[[i]]$n_valid, 4)
   }
+  # Off the pole, the cell under the centre (value 20) covers most of it.
+  expect_gt(out$temp[2L], 15)
 })
 
 
 test_that("horizontal geometry does not depend on or change the s2 setting", {
-  skip_if_not_installed("sf")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_buffer_grid_nc(path)
   original <- sf::sf_use_s2()
-  on.exit(suppressMessages(sf::sf_use_s2(original)))
+  on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
 
-  areas <- numeric()
+  values <- numeric()
   for (engine in c(TRUE, FALSE)) {
     suppressMessages(sf::sf_use_s2(engine))
-    buffer <- .buffer_horizontal_geometry(0, 38, 5)
+    out <- extract_to_buffer(
+      data.frame(lon = 0.004, lat = 0.003), path,
+      horizontal_radius_km = 1, quiet = TRUE
+    )
     expect_identical(sf::sf_use_s2(), engine)
-    areas <- c(areas, buffer$area_m2)
+    values <- c(values, out$temp)
   }
-  expect_equal(areas[1L], areas[2L])
+  expect_equal(values[1L], values[2L])
 })
 
 
-test_that("invalid horizontal requests and incompatible CRS are rejected", {
-  skip_if_not_installed("sf")
+test_that("invalid horizontal requests are rejected", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_buffer_grid_nc(path)
+  data <- data.frame(lon = 0, lat = 0)
   for (radius in c(-1, 0, NA_real_, Inf, 10000)) {
-    expect_error(.buffer_horizontal_geometry(0, 0, radius))
+    expect_error(extract_to_buffer(data, path, horizontal_radius_km = radius))
   }
-  expect_error(.buffer_horizontal_geometry(0, 91, 1), "latitude")
-
-  buffer <- .buffer_horizontal_geometry(0, 0, 1)
-  cells <- sf::st_sfc(
-    .buffer_test_rectangle(-1, 1, -1, 1), crs = 4326
+  out <- extract_to_buffer(
+    data.frame(lon = 0, lat = 91), path, horizontal_radius_km = 1, quiet = TRUE
   )
-  expect_error(
-    .buffer_horizontal_support(buffer, cells),
-    "same projected equal-area CRS", fixed = TRUE
-  )
+  expect_identical(out$temp_match_info[[1L]]$status, "invalid_coordinates")
 })
 
 
