@@ -716,8 +716,7 @@ test_that(
     expect_identical(out$summary$output_column, c("temperature", "index"))
     expect_error(
       extract_to_track(vertices, path, spacing_km = 112),
-      "Specify `var`",
-      fixed = TRUE
+      class = "ocean3d_error_var_detection"
     )
   }
 )

@@ -163,10 +163,9 @@ means. The calculation treats each sample as constant over its assigned
 support. No interpolation or nearest fallback expands an empty buffer.
 
 Geographic grids must have separable one-dimensional longitude and latitude
-axes. Circles use 720 segments, with WGS84 distance and equal-area
-projections;
-cell edges are subdivided at at most 0.01 degrees before projection. This is
-a polygonal approximation, independent of the caller's sf_use_s2 setting.
+axes. Circles are geodesic on WGS84 with 720 segments. Each cell is weighted
+by the area of the circle it covers, measured on the WGS84 ellipsoid with
+terra. This is a polygonal approximation, independent of sf_use_s2().
 Unsupported projections, calendars, climatologies or transformed vertical
 coordinates require explicit preprocessing.
 

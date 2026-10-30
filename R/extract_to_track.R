@@ -172,7 +172,7 @@
     opened[[i]] <- .open_source(sources[[i]])
     handle <- opened[[i]]$nc
     variables <- if (is.null(var)) {
-      .buffer_detect_variable(handle)
+      .detect_netcdf_var(handle)
     } else {
       intersect(var, names(handle$var))
     }
@@ -1335,11 +1335,11 @@
             )
             if (length(matching_sources)) {
               m <- matching_sources[[1L]]
-              horizontal <- .match_horizontal_cell(
+              horizontal <- .horizontal_match_row(.match_horizontal_cells(
                 m$lon_axis,
                 m$lat_axis, m$longitude, m$latitude, row[[lon_col]],
                 row[[lat_col]], "within", NULL
-              )
+              ), 1L)
               info$distance_km <- horizontal$distance_km
             }
             if (!is.null(context$prepared)) {
