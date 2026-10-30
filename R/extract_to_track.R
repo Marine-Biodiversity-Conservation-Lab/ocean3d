@@ -150,112 +150,6 @@
 }
 
 
-.track_sources <- function(nc, var, method, file_col, dimension_args) {
-  sources <- .as_netcdf_sources(nc, file_col)
-  if (!length(sources)) {
-    stop("Supply at least one netCDF source.", call. = FALSE)
-  }
-  opened <- list()
-  on.exit(lapply(opened, .close_source), add = TRUE)
-  metadata <- list()
-  for (i in seq_along(sources)) {
-    opened[[i]] <- .open_source(sources[[i]])
-    handle <- opened[[i]]$nc
-    variables <- if (is.null(var)) {
-      .detect_netcdf_var(handle)
-    } else {
-      intersect(var, names(handle$var))
-    }
-    if (!length(variables)) {
-      stop(
-        "No requested variable in ", basename(handle$filename),
-        ".",
-        call. = FALSE
-      )
-    }
-    for (variable in variables) {
-      dims <- do.call(
-        .detect_dims, c(
-          list(nc = handle, var = variable),
-          dimension_args
-        )
-      )
-      selected_method <- if (is.null(method)) {
-        if (is.null(dims$depth)) {
-          "2d"
-        } else {
-          "nearest"
-        }
-      } else {
-        method
-      }
-      metadata[[length(metadata) + 1L]] <- list(
-        variable = variable,
-        source = sources[[i]], file = handle$filename, method = selected_method,
-        temporal = !is.null(dims$time), longitude = .get_dim_values(
-          handle,
-          dims$lon
-        ), latitude = .get_dim_values(handle, dims$lat),
-        lon_axis = .prepare_spatial_axis(
-          handle, dims$lon, .get_dim_values(
-            handle,
-            dims$lon
-          ),
-          longitude = TRUE
-        ), lat_axis = .prepare_spatial_axis(
-          handle,
-          dims$lat, .get_dim_values(handle, dims$lat)
-        ), depth_m = if (is.null(dims$depth)) {
-          NULL
-        } else {
-          .read_depth_axis(
-            handle, dims$depth, .get_dim_values(
-              handle,
-              dims$depth
-            )
-          )$depth_m
-        }, time_values = if (is.null(dims$time)) {
-          numeric()
-        } else {
-          as.numeric(.decode_netcdf_time(handle, dims$time))
-        }, units = .read_time_attribute(handle, variable, "units")
-      )
-    }
-  }
-  found <- unique(vapply(metadata, function(x) x$variable, character(1)))
-  if (!is.null(var) && !setequal(found, var)) {
-    stop(
-      "Variables not found: ", toString(setdiff(var, found)),
-      ".",
-      call. = FALSE
-    )
-  }
-  for (variable in found) {
-    group <- Filter(
-      function(x) {
-        x$variable == variable
-      }, metadata
-    )
-    compatible <- vapply(
-      group, function(x) {
-        identical(x$method, group[[1L]]$method) && identical(
-          x$temporal,
-          group[[1L]]$temporal
-        ) && identical(x$units, group[[1L]]$units)
-      }, logical(1)
-    )
-    if (!all(compatible)) {
-      stop(
-        "Sources for `", variable,
-        "` have incompatible dimensions or value units.",
-        call. = FALSE
-      )
-    }
-  }
-  metadata
-}
-
-
 .track_interpolate <- function(x, i, fractions, enabled, name, used) {
   a <- x[i]
   b <- x[i + 1L]
@@ -1856,13 +1750,44 @@ extract_to_track <- function(
       "depth_dim", "time_dim"
     )
   )]
-  metadata <- .track_sources(
-    nc, var, method, if (is.null(dots$file_col)) {
-      "file"
-    } else {
-      dots$file_col
-    }, dimension_args
+  # Tracks keep point extraction's support for climatological time axes.
+  described <- .describe_netcdf_sources(
+    nc, var, if (is.null(dots$file_col)) "file" else dots$file_col,
+    dimension_args,
+    function(handle, variable, dims, i) {
+      lon <- .get_dim_values(handle, dims$lon)
+      lat <- .get_dim_values(handle, dims$lat)
+      list(
+        variable = variable, source_index = i, file = handle$filename,
+        method = if (!is.null(method)) {
+          method
+        } else if (is.null(dims$depth)) {
+          "2d"
+        } else {
+          "nearest"
+        },
+        temporal = !is.null(dims$time), longitude = lon, latitude = lat,
+        lon_axis = .prepare_spatial_axis(handle, dims$lon, lon,
+                                         longitude = TRUE),
+        lat_axis = .prepare_spatial_axis(handle, dims$lat, lat),
+        depth_m = if (!is.null(dims$depth)) {
+          .read_depth_axis(
+            handle, dims$depth, .get_dim_values(handle, dims$depth)
+          )$depth_m
+        },
+        time_values = if (is.null(dims$time)) {
+          numeric()
+        } else {
+          as.numeric(.decode_netcdf_time(handle, dims$time))
+        }
+      )
+    }
   )
+  lapply(described$opened, .close_source)
+  metadata <- lapply(described$metadata, function(m) {
+    m$source <- described$sources[[m$source_index]]
+    m
+  })
   if (sampling == "cells") .track_check_cell_sources(metadata)
   time_used <- any(vapply(metadata, function(x) x$temporal, logical(1)))
   depth_used <- any(

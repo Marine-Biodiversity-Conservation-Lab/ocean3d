@@ -1264,7 +1264,7 @@ test_that(
           "missing"
         )
       ),
-      "Variables not found"
+      "not found: missing"
     )
     no_depth <- tempfile(fileext = ".nc")
     on.exit(unlink(no_depth), add = TRUE)
@@ -2226,3 +2226,19 @@ test_that(
     )
   }
 )
+
+
+test_that("tracks accept climatological time axes like point extraction", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, time = c(0, 24))
+  handle <- ncdf4::nc_open(path, write = TRUE)
+  ncdf4::ncatt_put(handle, "time", "climatology", "climatology_bounds")
+  ncdf4::nc_close(handle)
+  route <- data.frame(
+    lon = c(0, 2), lat = 0,
+    date = as.POSIXct(c("2020-01-01", "2020-01-01"), tz = "UTC")
+  )
+  out <- extract_to_track(route, path, quiet = TRUE)
+  expect_equal(out$samples$temp, c(0, 20))
+})

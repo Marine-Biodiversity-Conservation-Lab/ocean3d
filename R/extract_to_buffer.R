@@ -1030,9 +1030,79 @@
 }
 
 
-.buffer_source_metadata <- function(nc, var, source_index, options,
-                                    method, dimension_args) {
-  dims <- do.call(.detect_dims, c(list(nc = nc, var = var), dimension_args))
+# Open every netCDF source, select the requested (or detected) variables and
+# describe each source/variable pair with `describe(nc, var, dims,
+# source_index)`. Checks that each variable uses one method, is temporal in
+# all of its sources or none, and has identical value units. Returns the
+# records, the sources and the open handles; the caller closes the handles
+# (they are closed here if a check fails). Used by extract_to_buffer() and
+# the track functions.
+.describe_netcdf_sources <- function(nc, var, file_col, dimension_args,
+                                     describe) {
+  sources <- .as_netcdf_sources(nc, file_col)
+  if (!length(sources)) {
+    stop("At least one netCDF source is required.", call. = FALSE)
+  }
+  opened <- list()
+  complete <- FALSE
+  on.exit(if (!complete) lapply(opened, .close_source), add = TRUE)
+  metadata <- list()
+  checks <- list()
+  for (i in seq_along(sources)) {
+    opened[[i]] <- .open_source(sources[[i]])
+    handle <- opened[[i]]$nc
+    variables <- if (is.null(var)) {
+      .detect_netcdf_var(handle)
+    } else {
+      intersect(var, names(handle$var))
+    }
+    if (!length(variables)) {
+      file <- basename(handle$filename)
+      stop(glue::glue("No requested variable is present in {file}."),
+           call. = FALSE)
+    }
+    for (variable in variables) {
+      dims <- do.call(.detect_dims, c(list(nc = handle, var = variable),
+                                      dimension_args))
+      record <- describe(handle, variable, dims, i)
+      metadata[[length(metadata) + 1L]] <- record
+      checks[[length(checks) + 1L]] <- list(
+        variable = variable, method = record$method,
+        temporal = !is.null(dims$time),
+        units = .read_time_attribute(handle, variable, "units")
+      )
+    }
+  }
+  found <- unique(vapply(checks, function(x) x$variable, character(1)))
+  if (!is.null(var) && !setequal(var, found)) {
+    missing <- toString(setdiff(var, found))
+    stop(glue::glue("Requested variables were not found: {missing}."),
+         call. = FALSE)
+  }
+  for (variable in found) {
+    group <- Filter(function(x) x$variable == variable, checks)
+    methods <- unique(vapply(group, function(x) x$method, character(1)))
+    temporal <- vapply(group, function(x) x$temporal, logical(1))
+    if (length(methods) != 1L || (any(temporal) && !all(temporal))) {
+      stop(glue::glue(
+        "Sources for `{variable}` have incompatible static/depth dimensions."
+      ), call. = FALSE)
+    }
+    units <- lapply(group, function(x) x$units)
+    if (!all(vapply(units, identical, logical(1), units[[1L]]))) {
+      stop(glue::glue(
+        "Sources for `{variable}` use different value units. ",
+        "Convert them first."
+      ), call. = FALSE)
+    }
+  }
+  complete <- TRUE
+  list(metadata = metadata, sources = sources, opened = opened)
+}
+
+
+.buffer_source_metadata <- function(nc, var, dims, source_index, options,
+                                    method) {
   spatial <- options$horizontal_radius_km > 0 || options$horizontal_index
   vertical <- options$depth_radius_m > 0 || options$depth_index
   temporal <- options$time_before > 0 || options$time_after > 0
@@ -2198,39 +2268,18 @@ extract_to_buffer <- function(
     stop("Observation longitude and latitude must be numeric.", call. = FALSE)
   }
 
-  sources <- .as_netcdf_sources(nc, file_col)
-  if (!length(sources)) stop("At least one netCDF source is required.",
-                             call. = FALSE)
-  opened <- list()
-  on.exit(lapply(opened, .close_source), add = TRUE)
-  metadata <- list()
   dimension_args <- list(lon_dim = lon_dim, lat_dim = lat_dim,
                          depth_dim = depth_dim, time_dim = time_dim)
-  for (i in seq_along(sources)) {
-    opened[[i]] <- .open_source(sources[[i]])
-    handle <- opened[[i]]$nc
-    variables <- if (is.null(var)) {
-      .detect_netcdf_var(handle)
-    } else {
-      intersect(var, names(handle$var))
+  described <- .describe_netcdf_sources(
+    nc, var, file_col, dimension_args,
+    function(handle, variable, dims, i) {
+      .buffer_source_metadata(handle, variable, dims, i, options, method)
     }
-    if (!length(variables)) {
-      stop("No requested variable is present in ",
-           basename(handle$filename), ".",
-           call. = FALSE)
-    }
-    for (variable in variables) {
-      metadata[[length(metadata) + 1L]] <- .buffer_source_metadata(
-        handle, variable, i, options, method, dimension_args
-      )
-    }
-  }
+  )
+  opened <- described$opened
+  on.exit(lapply(opened, .close_source), add = TRUE)
+  metadata <- described$metadata
   variables <- unique(vapply(metadata, function(x) x$var, character(1)))
-  if (!is.null(var) && !setequal(var, variables)) {
-    stop("Requested variables were not found: ", toString(setdiff(var,
-                                                                  variables)),
-         call. = FALSE)
-  }
   outputs <- .buffer_output_names(
     variables, output_col, names(data), return_match_info,
     locations = statistic == "most_similar"
@@ -2282,19 +2331,8 @@ extract_to_buffer <- function(
   for (variable in variables) {
     group <- Filter(function(x) x$var == variable, metadata)
     .buffer_check_index_grids(group, options)
-    methods <- unique(vapply(group, function(x) x$method, character(1)))
+    methods <- group[[1L]]$method
     dynamic <- vapply(group, function(x) !is.null(x$dims$time), logical(1))
-    if (length(methods) != 1L || (any(dynamic) && !all(dynamic))) {
-      stop("Sources for `", variable,
-           "` have incompatible static/depth dimensions.", call. = FALSE)
-    }
-    for (meta in group) {
-      if (!identical(meta$variable_units, group[[1L]]$variable_units)) {
-        stop("Sources for `", variable,
-             "` use different value units. Convert them first.",
-             call. = FALSE)
-      }
-    }
     values <- rep(NA_real_, nrow(data))
     diagnostics <- vector("list", nrow(data))
     for (row in seq_len(nrow(data))) {
