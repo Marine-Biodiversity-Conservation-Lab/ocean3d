@@ -239,54 +239,6 @@
 }
 
 
-.buffer_read_bounds <- function(nc, coordinate, n) {
-  name <- .read_time_attribute(nc, coordinate, "bounds")
-  if (is.null(name)) return(NULL)
-
-  if (!is.character(name) || length(name) != 1L ||
-        is.na(name) || !nzchar(name) || !name %in% names(nc$var)) {
-    stop("Invalid or missing bounds variable for `", coordinate, "`.",
-         call. = FALSE)
-  }
-
-  dimension <- if (coordinate %in% names(nc$dim)) {
-    coordinate
-  } else {
-    dims <- nc$var[[coordinate]]$dim
-    if (length(dims) != 1L) {
-      stop("Buffer coordinates must be one-dimensional.", call. = FALSE)
-    }
-    dims[[1L]]$name
-  }
-  bounds_var <- nc$var[[name]]
-  axes <- vapply(bounds_var$dim, function(x) x$name, character(1))
-  coordinate_axis <- which(axes == dimension)
-  raw <- ncdf4::ncvar_get(nc, name, collapse_degen = FALSE)
-
-  if (length(dim(raw)) != 2L || length(coordinate_axis) != 1L) {
-    stop("Unsupported bounds dimensions for `", coordinate, "`.",
-         call. = FALSE)
-  }
-  if (coordinate_axis == 1L) raw <- t(raw)
-  if (!identical(dim(raw), c(2L, as.integer(n))) ||
-        !is.numeric(raw) || any(!is.finite(raw))) {
-    stop("Bounds for `", coordinate,
-         "` must contain two finite endpoints per coordinate.",
-         call. = FALSE)
-  }
-
-  units <- .read_time_attribute(nc, coordinate, "units")
-  bounds_units <- .read_time_attribute(nc, name, "units")
-  if (!is.null(bounds_units) && !identical(bounds_units, units)) {
-    stop("Bounds for `", coordinate, "` use different units. ",
-         "Convert bounds and coordinate to the same units first.",
-         call. = FALSE)
-  }
-
-  list(name = name, values = raw)
-}
-
-
 .buffer_axis_intervals <- function(centres, bounds, axis, coordinate) {
   if (!length(centres) || any(!is.finite(centres))) {
     stop("Buffer coordinates must contain finite values.", call. = FALSE)
@@ -363,7 +315,7 @@
     stop("`infer_bounds` must be TRUE or FALSE.", call. = FALSE)
   }
   raw <- as.vector(.get_dim_values(nc, coordinate))
-  bounds <- .buffer_read_bounds(nc, coordinate, length(raw))
+  bounds <- .read_bounds(nc, coordinate, length(raw), strict = TRUE)
   units <- .read_time_attribute(nc, coordinate, "units")
   calendar <- NULL
   direction_basis <- NULL
@@ -545,6 +497,14 @@
 
 
 # Select one physical layer for a time-buffer sample.
+.nearest_index <- function(values, target) {
+  if (length(values) == 0 || all(is.na(values)) || is.na(target)) {
+    return(NA_integer_)
+  }
+
+  which.min(abs(values - target))
+}
+
 .buffer_point_value <- function(nc, var, dims, horizontal, time_index,
                                 depth_axis, method, target_depth) {
   if (method == "2d") {
@@ -729,12 +689,13 @@
   }
 
   results <- vector("list", nrow(data))
+  horizontal_matches <- .match_horizontal_cells(
+    lon_axis, lat_axis, lon, lat,
+    data[[lon_col]], data[[lat_col]],
+    spatial_match, max_distance_km
+  )
   for (i in seq_len(nrow(data))) {
-    horizontal <- .match_horizontal_cell(
-      lon_axis, lat_axis, lon, lat,
-      data[[lon_col]][i], data[[lat_col]][i],
-      spatial_match, max_distance_km
-    )
+    horizontal <- .horizontal_match_row(horizontal_matches, i)
     result <- .buffer_rejected_result("spatial_rejected")
     if (horizontal$accepted) {
       if (!is.null(prepared_time) && is.na(prepared_time$values[i])) {
@@ -968,125 +929,6 @@
 }
 
 
-# Build a distance-based buffer and retain an equal-area representation.
-.buffer_horizontal_geometry <- function(lon, lat, horizontal_radius_km) {
-  for (value in list(lon, lat, horizontal_radius_km)) {
-    if (!is.numeric(value) || length(value) != 1L ||
-          !is.finite(value)) {
-      stop("Buffer coordinates and radius must be finite scalar numbers.",
-           call. = FALSE)
-    }
-  }
-  if (lat < -90 || lat > 90) {
-    stop("Observation latitude must be between -90 and 90 degrees.",
-         call. = FALSE)
-  }
-  if (horizontal_radius_km <= 0 || horizontal_radius_km >= 10000) {
-    stop("This geometry reader requires a positive radius below 10000 km.",
-         call. = FALSE)
-  }
-
-  lon <- .normalise_longitude(lon)
-  distance_crs <- sprintf(
-    paste0(
-      "+proj=aeqd +lat_0=%.15g +lon_0=%.15g ",
-      "+datum=WGS84 +units=m +no_defs"
-    ),
-    lat, lon
-  )
-  area_crs <- sprintf(
-    paste0(
-      "+proj=laea +lat_0=%.15g +lon_0=%.15g ",
-      "+datum=WGS84 +units=m +no_defs"
-    ),
-    lat, lon
-  )
-
-  centre <- sf::st_sfc(
-    sf::st_point(c(0, 0)), crs = distance_crs
-  )
-  circle <- sf::st_buffer(
-    centre, dist = horizontal_radius_km * 1000, nQuadSegs = 180L
-  )
-  geometry <- sf::st_transform(circle, area_crs)
-  area_m2 <- as.numeric(sf::st_area(geometry))
-
-  if (!isTRUE(all(sf::st_is_valid(geometry))) ||
-        any(sf::st_is_empty(geometry)) ||
-        !is.finite(area_m2) || area_m2 <= 0) {
-    stop("The requested horizontal buffer could not be constructed. ",
-         "Check its coordinates and radius.", call. = FALSE)
-  }
-
-  list(
-    geometry = geometry,
-    area_m2 = area_m2,
-    lon = lon,
-    lat = lat,
-    horizontal_radius_km = horizontal_radius_km,
-    distance_crs = sf::st_crs(distance_crs),
-    geometry_method = "WGS84 distance buffer, equal-area intersections",
-    boundary_segments = 720L
-  )
-}
-
-
-# Cells must already have valid boundaries in the buffer's equal-area CRS.
-.buffer_horizontal_support <- function(buffer, cells) {
-  if (!inherits(cells, c("sf", "sfc"))) {
-    stop("Cells must be supplied as sf or sfc polygons.", call. = FALSE)
-  }
-  cells <- sf::st_geometry(cells)
-  if (is.na(sf::st_crs(cells)) ||
-        !isTRUE(sf::st_crs(cells) == sf::st_crs(buffer$geometry))) {
-    stop("Cells and buffer must use the same projected equal-area CRS.",
-         call. = FALSE)
-  }
-  if (!all(sf::st_geometry_type(cells) %in% c("POLYGON", "MULTIPOLYGON")) ||
-        !isTRUE(all(sf::st_is_valid(cells))) ||
-        any(sf::st_is_empty(cells))) {
-    stop("Cell boundaries must be valid, non-empty polygons.",
-         call. = FALSE)
-  }
-
-  empty <- data.frame(
-    cell_index = integer(), area_m2 = numeric(), fraction = numeric()
-  )
-  clipped <- sf::st_intersection(cells, buffer$geometry)
-  if (!length(clipped)) return(empty)
-
-  areas <- as.numeric(sf::st_area(clipped))
-  if (any(!is.finite(areas))) {
-    stop("Cell intersections produced non-finite areas.", call. = FALSE)
-  }
-  keep <- which(areas > 0)
-  if (!length(keep)) return(empty)
-
-  index <- attr(clipped, "idx")[keep, 1L]
-  clipped <- clipped[keep]
-
-  # Shared edges are allowed; overlapping interiors would double-count area.
-  if (length(clipped) > 1L) {
-    overlaps <- sf::st_relate(
-      clipped, pattern = "2********", sparse = TRUE
-    )
-    if (any(lengths(overlaps) > 1L)) {
-      stop("Selected cell interiors overlap within the buffer. ",
-           "Resolve overlapping support before aggregation.",
-           call. = FALSE)
-    }
-  }
-
-  totals <- rowsum(areas[keep], index, reorder = TRUE)
-  area_m2 <- as.numeric(totals[, 1L])
-  data.frame(
-    cell_index = as.integer(rownames(totals)),
-    area_m2 = area_m2,
-    fraction = area_m2 / buffer$area_m2
-  )
-}
-
-
 # Validate the public request without changing the earlier interval helpers.
 .buffer_validate_request <- function(horizontal_radius_km, depth_radius_m,
                                      lon_cell_radius, lat_cell_radius,
@@ -1161,120 +1003,18 @@
   .buffer_axis_intervals(
     axis$centres, rbind(axis$lower, axis$upper), "time", coordinate
   )
-  if (longitude &&
-        (anyDuplicated(.normalise_longitude(axis$centres)) ||
-         sum(axis$upper - axis$lower) > 360 + 1e-8)) {
-    stop("Longitude cells contain duplicate or overlapping periodic support.",
-         call. = FALSE)
+  if (longitude) {
+    # Cells must not overlap modulo 360, or a buffer would count area twice.
+    start <- axis$lower %% 360
+    end <- start + axis$upper - axis$lower
+    sorted <- order(start)
+    if (any(start[sorted][-1L] < head(cummax(end[sorted]), -1L) - 1e-8) ||
+          max(end) - 360 > min(start) + 1e-8) {
+      stop("Longitude cells contain duplicate or overlapping periodic support.",
+           call. = FALSE)
+    }
   }
   axis
-}
-
-
-# Subdivide parallel and meridian edges before projecting them.
-# Longitude strips avoid folded rings at the antimeridian and poles.
-.buffer_project_rectangle <- function(xmin, xmax, ymin, ymax, crs) {
-  breaks <- seq(xmin, xmax, length.out = max(2L, ceiling((xmax - xmin) / 90) + 1L))
-  pieces <- lapply(seq_len(length(breaks) - 1L), function(i) {
-    x <- seq(breaks[i], breaks[i + 1L],
-             length.out = max(2L, ceiling((breaks[i + 1L] - breaks[i]) / 0.01) + 1L))
-    y <- seq(ymin, ymax, length.out = max(2L, ceiling((ymax - ymin) / 0.01) + 1L))
-    ring <- rbind(cbind(x, ymin), cbind(tail(x, 1L), y),
-                  cbind(rev(x), ymax), cbind(x[1L], rev(y)))
-    ring[, 1L] <- .normalise_longitude(ring[, 1L])
-    points <- sf::st_sfc(lapply(seq_len(nrow(ring)), function(j) {
-      sf::st_point(ring[j, ])
-    }), crs = 4326)
-    projected <- sf::st_coordinates(sf::st_transform(points, crs))[, 1:2, drop = FALSE]
-    if (any(!is.finite(projected))) {
-      stop("Cell geometry cannot be projected for this buffer. ",
-           "Use a smaller window or a supported regional grid.", call. = FALSE)
-    }
-    keep <- c(TRUE, rowSums(abs(projected[-1L, , drop = FALSE] -
-                               projected[-nrow(projected), , drop = FALSE])) > 1e-8)
-    projected <- projected[keep, , drop = FALSE]
-    if (!all(projected[1L, ] == projected[nrow(projected), ])) {
-      projected <- rbind(projected, projected[1L, ])
-    }
-    sf::st_polygon(list(projected))
-  })
-  geometry <- sf::st_union(sf::st_sfc(pieces, crs = crs))
-  if (!isTRUE(all(sf::st_is_valid(geometry)))) {
-    stop("Projected cell boundaries are invalid. Check the grid bounds.",
-         call. = FALSE)
-  }
-  geometry[[1L]]
-}
-
-
-.buffer_cell_polygons <- function(meta, buffer, lon_indices = NULL,
-                                  lat_indices = NULL, clip = TRUE) {
-  x <- meta$lon_axis
-  y <- meta$lat_axis
-  if (is.null(lon_indices)) lon_indices <- seq_along(x$centres)
-  if (is.null(lat_indices)) lat_indices <- seq_along(y$centres)
-  # A conservative spherical cap bounds all WGS84 distances used here.
-  angle <- buffer$horizontal_radius_km * 1000 / 6300000
-  latitude <- if (clip) {
-    pmax(-90, pmin(90, buffer$lat + c(-1, 1) * angle * 180 / pi))
-  } else {
-    c(-90, 90)
-  }
-  longitude_width <- if (!clip || abs(buffer$lat) * pi / 180 + angle >= pi / 2) {
-    180
-  } else {
-    asin(sin(angle) / cos(buffer$lat * pi / 180)) * 180 / pi
-  }
-  longitude <- buffer$lon + c(-1, 1) * longitude_width
-  lat_indices <- lat_indices[y$upper[lat_indices] > latitude[1L] &
-                              y$lower[lat_indices] < latitude[2L]]
-  mapping <- list()
-  polygons <- list()
-  for (i in lon_indices) {
-    shift <- 360 * round((buffer$lon - x$centres[i]) / 360)
-    intervals <- lapply(c(-360, 0, 360), function(extra) {
-      c(max(x$lower[i] + shift + extra, longitude[1L]),
-        min(x$upper[i] + shift + extra, longitude[2L]))
-    })
-    intervals <- Filter(function(z) z[2L] > z[1L], intervals)
-    if (!length(intervals)) next
-    for (j in lat_indices) {
-      pieces <- lapply(intervals, function(z) {
-        .buffer_project_rectangle(
-          z[1L], z[2L], max(y$lower[j], latitude[1L]),
-          min(y$upper[j], latitude[2L]), sf::st_crs(buffer$geometry)
-        )
-      })
-      polygons[[length(polygons) + 1L]] <-
-        sf::st_union(sf::st_sfc(pieces, crs = sf::st_crs(buffer$geometry)))[[1L]]
-      mapping[[length(mapping) + 1L]] <- c(i, j)
-    }
-  }
-  indices <- if (length(mapping)) do.call(rbind, mapping) else matrix(integer(), 0, 2)
-  list(
-    cells = sf::st_sfc(polygons, crs = sf::st_crs(buffer$geometry)),
-    lon = indices[, 1L], lat = indices[, 2L]
-  )
-}
-
-
-.buffer_detect_variable <- function(nc) {
-  coordinates <- names(Filter(
-    function(x) isTRUE(x$dimvarid$id >= 0), nc$dim
-  ))
-  metadata <- unlist(lapply(unique(c(coordinates, names(nc$var))), function(name) {
-    unlist(lapply(c("bounds", "climatology", "coordinates"), function(attribute) {
-      value <- .read_time_attribute(nc, name, attribute)
-      if (is.character(value)) unlist(strsplit(value, "[[:space:]]+")) else NULL
-    }))
-  }))
-  variables <- setdiff(names(nc$var), c(names(nc$dim), metadata))
-  if (length(variables) != 1L) {
-    stop("Automatic buffer variable detection requires one data variable. ",
-         "Specify `var` explicitly; candidates: ", toString(variables), ".",
-         call. = FALSE)
-  }
-  variables
 }
 
 
@@ -1348,58 +1088,112 @@
 .buffer_space_query <- function(meta, lon, lat, options, buffer,
                                  spatial_match, max_distance_km) {
   spatial <- options$horizontal_radius_km > 0 || options$horizontal_index
-  if (!spatial) {
-    match <- .match_horizontal_cell(
+  if (!spatial || options$horizontal_index) {
+    match <- .horizontal_match_row(.match_horizontal_cells(
       meta$lon_axis, meta$lat_axis, meta$lon, meta$lat, lon, lat,
       spatial_match, max_distance_km
-    )
+    ), 1L)
+  }
+  if (!spatial) {
     if (!match$accepted) return(list(status = "spatial_rejected"))
     return(list(status = "ready", cells = data.frame(
       lon = match$lon_idx, lat = match$lat_idx, fraction = 1,
       distance_km = match$distance_km, key = "point"
-    ), geometry = NULL, buffer = NULL))
+    ), geometry = NULL))
   }
+  x <- meta$lon_axis
+  y <- meta$lat_axis
   if (options$horizontal_index) {
-    match <- .match_horizontal_cell(
-      meta$lon_axis, meta$lat_axis, meta$lon, meta$lat, lon, lat,
-      spatial_match, max_distance_km
-    )
     if (!match$accepted) return(list(status = "spatial_rejected"))
     x_radius <- if (is.null(options$lon_cell_radius)) 0 else options$lon_cell_radius
     y_radius <- if (is.null(options$lat_cell_radius)) 0 else options$lat_cell_radius
-    periodic <- abs(sum(meta$lon_axis$upper - meta$lon_axis$lower) - 360) < 1e-8
-    x <- .buffer_index_neighbours(
-      order(meta$lon_axis$centres), match$lon_idx, x_radius, periodic
+    periodic <- abs(sum(x$upper - x$lower) - 360) < 1e-8
+    lon_indices <- .buffer_index_neighbours(
+      order(x$centres), match$lon_idx, x_radius, periodic
     )
-    y <- .buffer_index_neighbours(order(meta$lat), match$lat_idx, y_radius)
-    if (is.null(x) || is.null(y)) return(list(status = "incomplete_index_window"))
-    grid <- .buffer_cell_polygons(meta, buffer, x, y, clip = FALSE)
-    buffer$geometry <- sf::st_union(grid$cells)
-    buffer$area_m2 <- as.numeric(sf::st_area(buffer$geometry))
-    buffer$geometry_method <- "Whole-cell index neighbourhood"
+    lat_indices <- .buffer_index_neighbours(
+      order(meta$lat), match$lat_idx, y_radius
+    )
+    if (is.null(lon_indices) || is.null(lat_indices)) {
+      return(list(status = "incomplete_index_window"))
+    }
   } else {
-    grid <- .buffer_cell_polygons(meta, buffer)
+    # Only cells near the point can intersect it: a conservative spherical cap
+    # bounds all WGS84 distances, giving a latitude band and longitude window.
+    angle <- options$horizontal_radius_km * 1000 / 6300000
+    band <- pmax(-90, pmin(90, lat + c(-1, 1) * angle * 180 / pi))
+    half_width <- 180
+    if (abs(lat) * pi / 180 + angle < pi / 2) {
+      half_width <- asin(sin(angle) / cos(lat * pi / 180)) * 180 / pi
+    }
+    offset <- .normalise_longitude(x$lower - lon)
+    end <- offset + x$upper - x$lower
+    lon_indices <- which((offset < half_width & end > -half_width) |
+                           end - 360 > -half_width)
+    lat_indices <- which(y$upper > band[1L] & y$lower < band[2L])
   }
-  support <- .buffer_horizontal_support(buffer, grid$cells)
-  cells <- data.frame(
-    lon = grid$lon[support$cell_index], lat = grid$lat[support$cell_index],
-    fraction = support$fraction, distance_km = rep(0, nrow(support))
+
+  # Whole cells in the [-180, 180] frame of the circle; a cell that crosses
+  # the antimeridian becomes two parts.
+  empty <- list(status = "ready", geometry = character(), cells = data.frame(
+    lon = integer(), lat = integer(), fraction = numeric(),
+    distance_km = numeric(), key = character()
+  ))
+  grid <- expand.grid(lon = lon_indices, lat = lat_indices)
+  if (!nrow(grid)) return(empty)
+  start <- .normalise_longitude(x$lower[grid$lon])
+  end <- start + x$upper[grid$lon] - x$lower[grid$lon]
+  crosses <- which(end > 180 + 1e-10)
+  parts <- data.frame(
+    geom = c(seq_len(nrow(grid)), crosses),
+    xmin = c(start, rep(-180, length(crosses))),
+    xmax = c(pmin(end, 180), end[crosses] - 360)
   )
-  cells$key <- vapply(seq_len(nrow(cells)), function(i) {
-    x <- cells$lon[i]
-    y <- cells$lat[i]
-    paste(format(c(.normalise_longitude(meta$lon_axis$lower[x]),
-                   meta$lon_axis$upper[x] - meta$lon_axis$lower[x],
-                   meta$lat_axis$lower[y], meta$lat_axis$upper[y]),
+  parts <- parts[order(parts$geom), , drop = FALSE]
+  parts$part <- 1L + duplicated(parts$geom)
+  ymin <- y$lower[grid$lat[parts$geom]]
+  ymax <- y$upper[grid$lat[parts$geom]]
+  corners <- rep(seq_len(nrow(parts)), each = 5L)
+  cells <- terra::vect(cbind(
+    geom = parts$geom[corners], part = parts$part[corners],
+    x = c(rbind(parts$xmin, parts$xmax, parts$xmax, parts$xmin, parts$xmin)),
+    y = c(rbind(ymin, ymin, ymax, ymax, ymin)), hole = 0
+  ), type = "polygons", crs = "EPSG:4326")
+  cells$cell <- seq_len(nrow(grid))
+
+  # Fractions are shares of the requested footprint: the circle, or the whole
+  # index neighbourhood. Areas are planar in a cylindrical equal-area
+  # projection, where cell edges stay straight; terra's geodesic areas would
+  # treat parallels as great circles, which is wrong for wide polar cells.
+  equal_area <- "+proj=cea +lon_0=0 +datum=WGS84 +units=m +over +no_defs"
+  pieces <- footprint <- cells
+  if (!options$horizontal_index) {
+    # Cells that only touch the circle have no area inside it.
+    pieces <- cells[terra::relate(cells, buffer, "2********")[, 1L]]
+    if (!nrow(pieces)) return(empty)
+    pieces <- terra::intersect(pieces, buffer)
+    footprint <- buffer
+  }
+  area <- terra::expanse(terra::project(pieces, equal_area), transform = FALSE)
+  total <- sum(terra::expanse(
+    terra::project(footprint, equal_area), transform = FALSE
+  ))
+  pieces <- pieces[area > 0]
+  index <- pieces$cell
+  support <- data.frame(
+    lon = grid$lon[index], lat = grid$lat[index],
+    fraction = area[area > 0] / total, distance_km = rep(0, length(index))
+  )
+  support$key <- vapply(seq_along(index), function(i) {
+    paste(format(c(.normalise_longitude(x$lower[support$lon[i]]),
+                   x$upper[support$lon[i]] - x$lower[support$lon[i]],
+                   y$lower[support$lat[i]], y$upper[support$lat[i]]),
                  digits = 17, scientific = TRUE), collapse = ":")
   }, character(1))
-  geometry <- if (nrow(cells)) {
-    clipped <- sf::st_intersection(grid$cells[support$cell_index], buffer$geometry)
-    clipped[match(seq_len(nrow(cells)), attr(clipped, "idx")[, 1L])]
-  } else {
-    sf::st_sfc(crs = sf::st_crs(buffer$geometry))
-  }
-  list(status = "ready", cells = cells, geometry = geometry, buffer = buffer)
+  # Keep the clipped cells as WKT so overlapping sources can be detected.
+  geometry <- character()
+  if (length(index)) geometry <- terra::geom(pieces, wkt = TRUE)
+  list(status = "ready", cells = support, geometry = geometry)
 }
 
 
@@ -1466,7 +1260,7 @@
     area_fraction = numeric(), depth_fraction = numeric(), time_fraction = numeric(),
     depth_m = numeric(), timestamp = numeric(), depth_lower = numeric(),
     depth_upper = numeric(), time_lower = numeric(), time_upper = numeric(),
-    distance_km = numeric(), cell_key = character(), geometry = I(list())
+    distance_km = numeric(), cell_key = character(), geometry = character()
   )
 }
 
@@ -1493,7 +1287,7 @@
       physical_depth <- if (is.null(meta$depth_axis)) {
         rep(NA_real_, length(z))
       } else meta$depth_axis$depth_m[z]
-      geometry <- if (is.null(space$geometry)) NULL else space$geometry[[i]]
+      geometry <- if (is.null(space$geometry)) NA_character_ else space$geometry[i]
       pieces[[length(pieces) + 1L]] <- data.frame(
         source_index = meta$source_index,
         lon_index = cell$lon, lat_index = cell$lat,
@@ -1504,7 +1298,7 @@
         depth_lower = depth$lower, depth_upper = depth$upper,
         time_lower = time$lower[j], time_upper = time$upper[j],
         distance_km = cell$distance_km, cell_key = cell$key,
-        geometry = I(rep(list(geometry), length(z)))
+        geometry = geometry
       )
     }
   }
@@ -1591,13 +1385,13 @@
     a_unique <- which(a_cells)
     b_unique <- which(b_cells)
     relations <- if (spatial) {
-      # sfg objects do not retain a CRS; use the shared projected query CRS.
-      crs <- attr(samples, "buffer_crs")
-      sf::st_relate(
-        sf::st_sfc(a$geometry[a_unique], crs = crs),
-        sf::st_sfc(b$geometry[b_unique], crs = crs),
-        pattern = "2********", sparse = TRUE
+      # Clipped cells overlap if their interiors share an area.
+      overlap <- terra::relate(
+        terra::vect(a$geometry[a_unique], crs = "EPSG:4326"),
+        terra::vect(b$geometry[b_unique], crs = "EPSG:4326"),
+        "2********"
       )
+      lapply(seq_len(nrow(overlap)), function(i) which(overlap[i, ]))
     } else {
       rep(list(seq_along(b_unique)), length(a_unique))
     }
@@ -1775,9 +1569,9 @@
                  origin = "1970-01-01", tz = "UTC")
     } else NULL,
     geometry_method = if (options$horizontal_index) {
-      "Whole-cell neighbourhood; cell edges at most 0.01 degrees"
+      "Whole-cell neighbourhood; WGS84 geodesic cell areas"
     } else if (options$horizontal_radius_km > 0) {
-      "WGS84; 720-segment circle; cell edges at most 0.01 degrees"
+      "WGS84 geodesic circle, 720 segments; geodesic cell areas"
     } else "Point-selected horizontal cell"
   ))
 }
@@ -1900,9 +1694,9 @@
 #' support. No interpolation or nearest fallback expands an empty buffer.
 #'
 #' Geographic grids must have separable one-dimensional longitude and latitude
-#' axes. Circles use 720 segments, with WGS84 distance and equal-area projections;
-#' cell edges are subdivided at at most 0.01 degrees before projection. This is
-#' a polygonal approximation, independent of the caller's sf_use_s2 setting.
+#' axes. Circles are geodesic on WGS84 with 720 segments. Each cell is weighted
+#' by the area of the circle it covers, measured on the WGS84 ellipsoid with
+#' terra. This is a polygonal approximation, independent of sf_use_s2().
 #' Unsupported projections, calendars, climatologies or transformed vertical
 #' coordinates require explicit preprocessing.
 #'
@@ -2002,7 +1796,9 @@ extract_to_buffer <- function(
   for (i in seq_along(sources)) {
     opened[[i]] <- .open_source(sources[[i]])
     handle <- opened[[i]]$nc
-    variables <- if (is.null(var)) .buffer_detect_variable(handle) else {
+    variables <- if (is.null(var)) {
+      .detect_netcdf_var(handle)
+    } else {
       intersect(var, names(handle$var))
     }
     if (!length(variables)) {
@@ -2090,9 +1886,16 @@ extract_to_buffer <- function(
         time_window_utc = if (temporal) c(windows$time_lower_utc[row], windows$time_upper_utc[row]) else NULL
       )
       if (is.null(status)) {
-        buffer <- if (spatial) .buffer_horizontal_geometry(
-          lon, lat, if (options$horizontal_index) 1 else horizontal_radius_km
-        ) else NULL
+        # A geodesic WGS84 circle with 720 segments; terra splits it at the
+        # antimeridian and closes it over a pole it contains.
+        buffer <- NULL
+        if (horizontal_radius_km > 0) {
+          centre <- cbind(.normalise_longitude(lon), lat)
+          buffer <- terra::buffer(
+            terra::vect(centre, crs = "EPSG:4326"),
+            horizontal_radius_km * 1000, quadsegs = 180L
+          )
+        }
         queries <- lapply(group, function(meta) {
           space <- .buffer_space_query(meta, lon, lat, options, buffer,
                                         spatial_match, max_distance_km)
@@ -2124,7 +1927,6 @@ extract_to_buffer <- function(
             })
             if (length(pieces)) samples <- do.call(rbind, pieces)
             samples <- .buffer_select_point_samples(samples, methods, depth_values[row], spatial, vertical)
-            if (spatial) attr(samples, "buffer_crs") <- sf::st_crs(buffer$geometry)
             .buffer_check_source_overlap(samples, group, spatial, vertical, temporal)
           }
         }
