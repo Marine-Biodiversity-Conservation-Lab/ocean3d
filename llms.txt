@@ -302,6 +302,8 @@ Marine Habitat.*
   : Extract the surface layer from a 3D netCDF variable
 - [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
   : Extract a 3D raster to an area and a depth band
+- [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+  : Summarise environmental values around observations
 - [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
   : Extract values from netCDFs to one or more point observations
 - [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fetch_species_assessments.md)
