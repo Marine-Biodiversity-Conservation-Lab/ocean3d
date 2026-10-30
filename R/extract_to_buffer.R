@@ -1219,26 +1219,6 @@
 }
 
 
-.buffer_detect_variable <- function(nc) {
-  coordinates <- names(Filter(
-    function(x) isTRUE(x$dimvarid$id >= 0), nc$dim
-  ))
-  metadata <- unlist(lapply(unique(c(coordinates, names(nc$var))), function(name) {
-    unlist(lapply(c("bounds", "climatology", "coordinates"), function(attribute) {
-      value <- .read_time_attribute(nc, name, attribute)
-      if (is.character(value)) unlist(strsplit(value, "[[:space:]]+")) else NULL
-    }))
-  }))
-  variables <- setdiff(names(nc$var), c(names(nc$dim), metadata))
-  if (length(variables) != 1L) {
-    stop("Automatic buffer variable detection requires one data variable. ",
-         "Specify `var` explicitly; candidates: ", toString(variables), ".",
-         call. = FALSE)
-  }
-  variables
-}
-
-
 .buffer_source_metadata <- function(nc, var, source_index, options,
                                     method, dimension_args) {
   dims <- do.call(.detect_dims, c(list(nc = nc, var = var), dimension_args))
@@ -1961,7 +1941,9 @@ extract_to_buffer <- function(
   for (i in seq_along(sources)) {
     opened[[i]] <- .open_source(sources[[i]])
     handle <- opened[[i]]$nc
-    variables <- if (is.null(var)) .buffer_detect_variable(handle) else {
+    variables <- if (is.null(var)) {
+      .detect_netcdf_var(handle)
+    } else {
       intersect(var, names(handle$var))
     }
     if (!length(variables)) {

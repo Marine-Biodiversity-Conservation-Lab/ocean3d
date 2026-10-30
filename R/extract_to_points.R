@@ -187,26 +187,41 @@
   # When `var = NULL`, the package tries to detect the variable automatically.
   # This is useful for workflows where each netCDF file contains one main
   # environmental variable, for example one file for NPPV and another file for
-  # salinity.
+  # salinity. Used by extract_to_point() and extract_to_buffer().
   #
-  # The detection is deliberately conservative. If more than one variable is
-  # present, the function stops and asks the user to provide `var` manually.
-  # This avoids extracting the wrong variable by accident.
+  # Coordinate variables and the variables that CF metadata attaches to them
+  # (`bounds`, `climatology` and `coordinates` attributes, e.g. `lat_bnds`)
+  # are not data, so they are excluded. The detection is deliberately
+  # conservative: unless exactly one data variable remains, it stops and asks
+  # the user to provide `var` manually, to avoid extracting the wrong variable.
 
-  vars <- names(nc$var)
+  coordinates <- names(Filter(
+    function(x) isTRUE(x$dimvarid$id >= 0), nc$dim
+  ))
+  metadata <- unlist(lapply(
+    unique(c(coordinates, names(nc$var))),
+    function(name) {
+      unlist(lapply(c("bounds", "climatology", "coordinates"), function(att) {
+        value <- .read_time_attribute(nc, name, att)
+        if (is.character(value)) unlist(strsplit(value, "[[:space:]]+"))
+      }))
+    }
+  ))
+  candidates <- setdiff(names(nc$var), c(names(nc$dim), metadata))
 
-  if (length(vars) == 1L) {
-    return(vars[1])
+  if (length(candidates) == 1L) {
+    return(candidates)
   }
 
-  stop(
-    "Automatic variable detection requires exactly one variable in each ",
-    "netCDF file. ",
-    "Variables found: ",
-    toString(vars),
-    ". Please specify `var` manually.",
-    call. = FALSE
-  )
+  found <- if (length(candidates)) toString(candidates) else "none"
+  file <- basename(nc$filename)
+  rlang::abort(glue::glue(
+    "Automatic variable detection requires exactly one data variable in ",
+    "each netCDF file (coordinate and bounds variables are ignored).\n",
+    "File: {file}\n",
+    "Data variables found: {found}.\n",
+    "Please specify `var` manually."
+  ), class = "ocean3d_error_var_detection", call = NULL)
 }
 
 .resolve_source_var <- function(source, var) {

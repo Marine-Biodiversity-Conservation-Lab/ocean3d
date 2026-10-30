@@ -2006,12 +2006,16 @@ test_that("automatic detection ignores dimensions without coordinate variables",
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   .make_buffer_grid_nc(path)
-  nc <- ncdf4::nc_open(path)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  data <- data.frame(lon = 0, lat = 0)
 
-  expect_equal(nc$dim$nv$dimvarid$id, -1)
-  expect_output(variable <- .buffer_detect_variable(nc), NA)
-  expect_identical(variable, "temp")
+  expect_output(
+    out <- extract_to_buffer(
+      data, path, horizontal_radius_km = 1, quiet = TRUE
+    ),
+    NA
+  )
+  expect_true("temp" %in% names(out))
+  expect_false(any(c("lon_bounds", "lat_bounds") %in% names(out)))
 })
 
 
