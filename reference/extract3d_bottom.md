@@ -1,9 +1,13 @@
 # Extract the bottom available layer from a 3D netCDF variable
 
-For each observation, this function extracts the full vertical profile
-at the nearest longitude, latitude and time cell, then returns the
-deepest non-missing value. This is useful when the bathymetry of the
-netCDF grid means that deeper layers are missing over shallow areas.
+For each observation, this function reads the vertical profile at the
+cell and timestamp selected under spatial_match and time_match. Spatial
+matching defaults to "within", requiring the point to lie inside a cell;
+"nearest" requires an explicit max_distance_km limit. The deepest layer
+with a valid value is returned. This layer does not establish the actual
+seabed depth. See
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+for matching rules and report options.
 
 ## Usage
 

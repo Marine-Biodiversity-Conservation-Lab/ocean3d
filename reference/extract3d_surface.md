@@ -1,7 +1,7 @@
 # Extract the surface layer from a 3D netCDF variable
 
-The surface layer is defined as the first available depth layer in the
-netCDF file. This is usually the shallowest layer.
+The surface layer is defined as the physically shallowest depth layer in
+the netCDF file, whatever the storage order of the depth coordinate.
 
 ## Usage
 

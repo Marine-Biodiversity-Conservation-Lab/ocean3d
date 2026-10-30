@@ -41,6 +41,22 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="ocean3d-development-version">ocean3d (development version)<a class="anchor" aria-label="anchor" href="#ocean3d-development-version"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-development-version">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-development-version"></a></h3>
+<p>Point extraction (<code><a href="../reference/extract_to_point.html">extract_to_point()</a></code>, <code><a href="../reference/extract2d.html">extract2d()</a></code>, <code>extract3d_*()</code>) now checks the grid’s coordinates instead of assuming one layout (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/74" class="external-link">#74</a>). Some calls that used to return a value now return <code>NA</code> or stop with an error:</p>
+<ul><li>By default (<code>spatial_match = "within"</code>), a point must lie inside a grid cell. Points outside the grid, which used to get the value of the nearest edge cell, now return <code>NA</code>. This includes observations near a single-station file that are not at the station itself. Use <code>spatial_match = "nearest"</code> with <code>max_distance_km</code> to accept nearby cells.</li>
+<li>Observation depths must be metres, positive downward. Negative depths (heights) now stop with an error; convert them, and km or cm depths, before extraction.</li>
+<li>Depth coordinates are converted to metres from their units, and the <code>positive</code> attribute sets their direction. Surface, bottom and nearest are chosen by physical depth, whatever the storage order. The depth coordinate must have length units, including for <code><a href="../reference/extract3d_surface.html">extract3d_surface()</a></code> and <code><a href="../reference/extract3d_bottom.html">extract3d_bottom()</a></code>; files without them stop with an error (a file with a single depth level can be read with <code><a href="../reference/extract2d.html">extract2d()</a></code>).</li>
+<li>With several files, a temporal tie between sources keeps input order under <code>"within"</code> matching, and goes to the closer cell centre under <code>"nearest"</code> matching.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-development-version">New features<a class="anchor" aria-label="anchor" href="#new-features-development-version"></a></h3>
+<ul><li>New arguments <code>spatial_match</code>, <code>max_distance_km</code>, <code>spatial_report</code> and <code>depth_report</code>. Longitudes match across the 0-360 and -180-180 conventions and across the antimeridian.</li>
+<li>Missing outputs are explained once, under the report for their cause (spatial, depth or time), with repeated reasons grouped by file. The time report now also explains outputs that are missing because no observation date was supplied for a file with a time dimension.</li>
+</ul></div>
+</div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.1.9009" id="ocean3d-0119009">ocean3d 0.1.1.9009<a class="anchor" aria-label="anchor" href="#ocean3d-0119009"></a></h2>
 <p>Housekeeping release addressing <code>goodpractice</code> checks (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/58" class="external-link">#58</a>). Apart from the changes below, behaviour is unchanged.</p>
 <div class="section level3">

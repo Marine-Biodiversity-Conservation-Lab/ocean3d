@@ -88,7 +88,11 @@ function.</p>
 <span>  verbose <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  time_resolution <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"datetime"</span>, <span class="st">"daily"</span>, <span class="st">"monthly"</span>, <span class="st">"yearly"</span>, <span class="st">"custom"</span><span class="op">)</span>,</span>
 <span>  custom_time_interval <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  time_report <span class="op">=</span> <span class="cn">TRUE</span></span>
+<span>  time_report <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  spatial_match <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"within"</span>, <span class="st">"nearest"</span><span class="op">)</span>,</span>
+<span>  max_distance_km <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  spatial_report <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  depth_report <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -245,9 +249,43 @@ This interval does not reject candidates; use max_time_diff for that.</p></dd>
 
 <dt id="arg-time-report">time_report<a class="anchor" aria-label="anchor" href="#arg-time-report"></a></dt>
 <dd><p>Logical. If TRUE, the default, display a temporal summary
-when returned values are displaced in time or outputs are missing.
-The return format is unchanged. FALSE hides the summary but does not
-suppress temporal warnings.</p></dd>
+when returned values are displaced in time, or outputs are missing for a
+temporal reason (no timestamp within the matching settings, or no
+observation date for a source with a time dimension). Outputs missing
+because of location or depth are reported by spatial_report and
+depth_report instead. The return format is unchanged. FALSE hides the
+summary but does not suppress temporal warnings.</p></dd>
+
+
+<dt id="arg-spatial-match">spatial_match<a class="anchor" aria-label="anchor" href="#arg-spatial-match"></a></dt>
+<dd><p>Horizontal selection rule. "within" (default) requires
+the point to lie inside a cell. "nearest" selects the geographically
+closest cell centre, including outside the grid, up to max_distance_km.
+The rule applies equally to one or multiple sources. A selected missing
+value does not trigger a search for another cell in the same source.</p></dd>
+
+
+<dt id="arg-max-distance-km">max_distance_km<a class="anchor" aria-label="anchor" href="#arg-max-distance-km"></a></dt>
+<dd><p>Required finite non-negative distance in kilometres
+when spatial_match = "nearest". Distance is the great-circle distance
+from the observation to the cell centre on a sphere of radius 6371.01 km
+(the radius sf::st_distance() uses with s2), and does not depend on sf
+settings. A cell exactly at the limit is accepted. Must be NULL with
+"within".</p></dd>
+
+
+<dt id="arg-spatial-report">spatial_report<a class="anchor" aria-label="anchor" href="#arg-spatial-report"></a></dt>
+<dd><p>NULL (default) reports missing spatial outputs and
+selections of cells that do not contain the requested point. TRUE also
+reports normal and exact selections; FALSE hides the spatial report.</p></dd>
+
+
+<dt id="arg-depth-report">depth_report<a class="anchor" aria-label="anchor" href="#arg-depth-report"></a></dt>
+<dd><p>NULL (default) reports missing depth outputs, selections
+more than one local layer spacing away, and displaced singleton layers
+whose spacing cannot be assessed. TRUE also reports normal surface, bottom
+and exact depth selections; FALSE hides the depth report. Depths are in
+metres, positive down. Report modes do not change returned values.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -277,17 +315,48 @@ It does not identify averaging intervals, calculate temporal means,
 or interpret climatological periods.</p>
     </div>
     <div class="section level2">
+    <h2 id="physical-depth-coordinates">Physical depth coordinates<a class="anchor" aria-label="anchor" href="#physical-depth-coordinates"></a></h2>
+
+
+<p>Observation depths must be in metres, positive downward (0 at the
+surface); negative observation depths are rejected, and depths in other
+units must be converted first. Dataset coordinates are converted from m,
+meter(s), metre(s), km, kilometer(s), kilometre(s), cm, centimeter(s) or
+centimetre(s). The positive attribute determines direction when supplied;
+height and altitude axes without it are read as positive-up. Otherwise
+uniformly non-negative values imply positive-down and non-positive values
+imply positive-up. Mixed signs without direction metadata are rejected.
+The depth coordinate must have units, including for surface and bottom
+extraction; a file with a single depth level can be read with extract2d().
+Surface means the physically shallowest layer, even if its value is missing.
+Bottom means the deepest non-missing layer. Nearest selects the valid layer
+closest to the observation depth; ties select the shallower layer.
+Selection does not depend on the storage order of the depth coordinate.
+Duplicate physical depths, unsupported units, coordinates above the assumed
+reference surface, and sigma, formula-based or pressure coordinates require
+explicit correction or conversion before extraction.</p>
+    </div>
+    <div class="section level2">
     <h2 id="multiple-sources">Multiple sources<a class="anchor" aria-label="anchor" href="#multiple-sources"></a></h2>
 
 
-<p>With multiple sources, only cells containing the observation are eligible.
-Explicit spatial cell bounds are preferred. Otherwise, edges are inferred
-from adjacent centres; singleton axes without bounds require coincidence.
+<p>Spatial matching uses the same rules for one or multiple sources.
+With spatial_match = "within", only cells containing the point are eligible.
+With spatial_match = "nearest", the requested point may be outside grid
+coverage. The nearest cell centre must be within max_distance_km of it.
+Explicit spatial cell bounds are preferred. Otherwise, or when the bounds
+variable is missing or invalid (with a warning), edges are inferred from
+adjacent centres; singleton axes without bounds require coincidence, up to
+single-precision rounding of the stored coordinate.
 Longitude comparisons support equivalent coordinates across the antimeridian.
+A point on an edge shared by two cells uses the first cell in storage order.
 Among eligible sources the closest temporal candidate with a valid value
-wins, with input order breaking ties. Existing output columns are replaced,
-including by NA. Output names cannot overwrite extraction inputs or combine
-different variables in the same column.</p>
+wins. With "within" matching, equal temporal distances are resolved by
+input order, so list the preferred source first. With "nearest" matching,
+they are resolved by geographic distance to the cell centre (differences
+under 1 m are ignored), then by input order. Existing output columns are
+replaced, including by NA. Output names cannot overwrite extraction inputs
+or combine different variables in the same column.</p>
     </div>
     <div class="section level2">
     <h2 id="custom-temporal-intervals">Custom temporal intervals<a class="anchor" aria-label="anchor" href="#custom-temporal-intervals"></a></h2>
@@ -299,6 +368,46 @@ above three hours of displacement. Exact matching requires the same
 timestamp.
 Auto matching remains unchanged and uses the observed cadence for
 diagnostics.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="spatial-and-depth-reports">Spatial and depth reports<a class="anchor" aria-label="anchor" href="#spatial-and-depth-reports"></a></h2>
+
+
+<p>The default NULL mode reports only missing outputs, selected cells that do
+not contain the requested point, and unusually distant depth selections.
+TRUE requests a full report, including normal and exact selections; FALSE
+hides the corresponding report. Returned values are identical in all modes.
+Spatial reports show the requested point, selected cell centre, distance
+and any explicit distance limit. With within matching, a point may be
+inside a cell without coinciding with its centre.
+Depth reports describe physical layers in metres, positive down from the
+reference surface. Surface means the shallowest layer; bottom means the
+deepest layer with a valid value, not an independently measured seabed.
+Values are selected without vertical interpolation. Normal nearest-depth
+approximations are silent in automatic mode. A difference strictly greater
+than the local layer spacing is reported. Spacing uses the two physical
+layers surrounding the requested depth, including layers with missing
+values. At an exact layer, its nearest neighbour defines the spacing; outside
+the range, the two nearest edge layers are used. Singleton axes have no
+spacing to assess a nonzero displacement. Messages identify the reference
+layers and only attribute a displacement to missing values when closer
+physical layers must lack valid values under nearest-valid selection.
+Missing outputs are explained once, with rejection reasons for each
+relevant source; a repeated reason is shown once with up to three of its
+files. The cause is taken from the sources whose grid covers the point,
+unless none does. Temporal causes (including a missing observation date)
+are reported by time_report; spatial and depth causes by their
+corresponding switches, so FALSE hides them. Mixed causes are grouped under
+spatial first, then depth, then time, with all reasons shown.
+Reports count distinct observations and output values separately. At most
+five cases are shown, prioritising missing values; truncation and the count
+omitted are stated. Coordinates use up to five decimals; metres/kilometres
+normally use up to two. Extra decimals distinguish values close to a limit
+when rounding would otherwise make them appear equal. Calculations retain
+full precision. Small positive distances use
+&lt;0.01 rather than zero. Depth comparisons in reports allow a relative
+tolerance of 1e-6, so single-precision depth axes match their nominal
+depths.</p>
     </div>
     <div class="section level2">
     <h2 id="temporal-diagnostics">Temporal diagnostics<a class="anchor" aria-label="anchor" href="#temporal-diagnostics"></a></h2>
@@ -375,6 +484,73 @@ same variable. Time bounds describe intervals, not sampling frequency.</p>
 <span class="r-wrn co"><span class="r-pr">#&gt;</span> The available timestamps do not establish a reliable sampling interval. The time difference cannot be assessed against a detected cadence. Use time_resolution = 'custom' with custom_time_interval if you know the appropriate warning interval.</span>
 <span class="r-wrn co"><span class="r-pr">#&gt;</span> File: example_3d.nc</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 15.5</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Horizontal matching: this point is outside the example grid's cell edges.</span></span></span>
+<span class="r-in"><span><span class="co"># The default within rule returns NA; nearest accepts a centre within 60 km.</span></span></span>
+<span class="r-in"><span><span class="fu">extract_to_point</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  nc <span class="op">=</span> <span class="va">nc_file</span>, lon <span class="op">=</span> <span class="op">-</span><span class="fl">0.6</span>, lat <span class="op">=</span> <span class="fl">40</span>, date <span class="op">=</span> <span class="st">"2020-01-03"</span>,</span></span>
+<span class="r-in"><span>  var <span class="op">=</span> <span class="st">"temp"</span>, method <span class="op">=</span> <span class="st">"surface"</span>, spatial_match <span class="op">=</span> <span class="st">"within"</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Spatial selection: 1 observation had no value extracted.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> 1 output value affected; 1 missing.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Row 1 · netCDF variable: temp · output column: temp</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Point outside cell coverage (within matching).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> File: example_3d.nc</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Result: NA.</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] NA</span>
+<span class="r-in"><span><span class="fu">extract_to_point</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  nc <span class="op">=</span> <span class="va">nc_file</span>, lon <span class="op">=</span> <span class="op">-</span><span class="fl">0.6</span>, lat <span class="op">=</span> <span class="fl">40</span>, date <span class="op">=</span> <span class="st">"2020-01-03"</span>,</span></span>
+<span class="r-in"><span>  var <span class="op">=</span> <span class="st">"temp"</span>, method <span class="op">=</span> <span class="st">"surface"</span>, spatial_match <span class="op">=</span> <span class="st">"nearest"</span>,</span></span>
+<span class="r-in"><span>  max_distance_km <span class="op">=</span> <span class="fl">60</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Spatial selection: 1 observation outside cell coverage used the nearest cell.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> 1 output value affected.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Row 1 · netCDF variable: temp · output column: temp</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Requested: (-0.6, 40) → nearest cell centre: (0, 40)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Distance: 51.11 km; allowed: 60 km.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> File: example_3d.nc</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 20.5</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Report modes do not change the extracted value.</span></span></span>
+<span class="r-in"><span><span class="co"># NULL is automatic: the normal nearest-depth approximation stays silent.</span></span></span>
+<span class="r-in"><span><span class="va">automatic</span> <span class="op">&lt;-</span> <span class="fu">extract_to_point</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  nc <span class="op">=</span> <span class="va">nc_file</span>, lon <span class="op">=</span> <span class="fl">0</span>, lat <span class="op">=</span> <span class="fl">40</span>, depth <span class="op">=</span> <span class="fl">60</span>, date <span class="op">=</span> <span class="st">"2020-01-03"</span>,</span></span>
+<span class="r-in"><span>  var <span class="op">=</span> <span class="st">"temp"</span>, method <span class="op">=</span> <span class="st">"nearest"</span>,</span></span>
+<span class="r-in"><span>  spatial_report <span class="op">=</span> <span class="cn">NULL</span>, depth_report <span class="op">=</span> <span class="cn">NULL</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># TRUE explains the selected cell and depth, including normal selections.</span></span></span>
+<span class="r-in"><span><span class="va">detailed</span> <span class="op">&lt;-</span> <span class="fu">extract_to_point</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  nc <span class="op">=</span> <span class="va">nc_file</span>, lon <span class="op">=</span> <span class="fl">0</span>, lat <span class="op">=</span> <span class="fl">40</span>, depth <span class="op">=</span> <span class="fl">60</span>, date <span class="op">=</span> <span class="st">"2020-01-03"</span>,</span></span>
+<span class="r-in"><span>  var <span class="op">=</span> <span class="st">"temp"</span>, method <span class="op">=</span> <span class="st">"nearest"</span>,</span></span>
+<span class="r-in"><span>  spatial_report <span class="op">=</span> <span class="cn">TRUE</span>, depth_report <span class="op">=</span> <span class="cn">TRUE</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Spatial selection: 1 observation matched the requested selection.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> 1 output value reported.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Row 1 · netCDF variable: temp · output column: temp</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Requested: (0, 40) → containing cell centre: (0, 40)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Distance: 0 km.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> File: example_3d.nc</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Depth selection: 1 observation matched the requested selection.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> 1 output value reported.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Row 1 · netCDF variable: temp · output column: temp</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Requested: 60 m → selected: 50 m (10 m shallower).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> No vertical interpolation.</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Surrounding layers: 50–100 m (50 m apart).</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> File: example_3d.nc</span>
+<span class="r-in"><span><span class="co"># FALSE hides informational reports; temporal warnings remain active.</span></span></span>
+<span class="r-in"><span><span class="va">quiet</span> <span class="op">&lt;-</span> <span class="fu">extract_to_point</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  nc <span class="op">=</span> <span class="va">nc_file</span>, lon <span class="op">=</span> <span class="fl">0</span>, lat <span class="op">=</span> <span class="fl">40</span>, depth <span class="op">=</span> <span class="fl">60</span>, date <span class="op">=</span> <span class="st">"2020-01-03"</span>,</span></span>
+<span class="r-in"><span>  var <span class="op">=</span> <span class="st">"temp"</span>, method <span class="op">=</span> <span class="st">"nearest"</span>,</span></span>
+<span class="r-in"><span>  spatial_report <span class="op">=</span> <span class="cn">FALSE</span>, depth_report <span class="op">=</span> <span class="cn">FALSE</span>, time_report <span class="op">=</span> <span class="cn">FALSE</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">automatic</span>, <span class="va">detailed</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] TRUE</span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/identical.html" class="external-link">identical</a></span><span class="op">(</span><span class="va">automatic</span>, <span class="va">quiet</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] TRUE</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Compare monthly labels when the file has one record per month.</span></span></span>
 <span class="r-in"><span><span class="co"># Here the timestamp labels are illustrative.</span></span></span>

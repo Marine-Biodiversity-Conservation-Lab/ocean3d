@@ -167,13 +167,13 @@
 </h3>
 <ul>
 <li>
-<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> — the general engine: match observation points (data frame, tibble, <code>sf</code> POINT, matrix, or named list) against one or more NetCDF files, snapping to the nearest longitude, latitude, time and depth cell. Returns the input with the extracted values appended, structure preserved.</li>
+<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> — the general engine: match observation points (data frame, tibble, <code>sf</code> POINT, matrix, or named list) against one or more NetCDF files. By default a point takes the value of the grid cell that contains it (<code>NA</code> outside the grid); <code>spatial_match = "nearest"</code> accepts the nearest cell centre within <code>max_distance_km</code>. Time is matched to the nearest timestamp and depth by physical depth in metres. Returns the input with the extracted values appended, structure preserved.</li>
 <li>
 <code><a href="reference/extract2d.html">extract2d()</a></code> — for variables with no depth dimension.</li>
 <li>
 <code><a href="reference/extract3d_nearest.html">extract3d_nearest()</a></code> — the valid, non-missing depth layer closest to each observation’s depth, so a cell below the seabed does not silently return <code>NA</code>.</li>
 <li>
-<code><a href="reference/extract3d_surface.html">extract3d_surface()</a></code> / <code><a href="reference/extract3d_bottom.html">extract3d_bottom()</a></code> — the first available depth layer, or the deepest non-missing one at that cell.</li>
+<code><a href="reference/extract3d_surface.html">extract3d_surface()</a></code> / <code><a href="reference/extract3d_bottom.html">extract3d_bottom()</a></code> — the physically shallowest depth layer, or the deepest non-missing one at that cell.</li>
 <li>
 <code><a href="reference/extract3d_all.html">extract3d_all()</a></code> — nearest, surface and bottom in one pass, as three columns.</li>
 </ul>

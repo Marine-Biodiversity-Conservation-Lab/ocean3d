@@ -161,10 +161,12 @@ profile of the values inside it.
 
 - [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
   — the general engine: match observation points (data frame, tibble,
-  `sf` POINT, matrix, or named list) against one or more NetCDF files,
-  snapping to the nearest longitude, latitude, time and depth cell.
-  Returns the input with the extracted values appended, structure
-  preserved.
+  `sf` POINT, matrix, or named list) against one or more NetCDF files.
+  By default a point takes the value of the grid cell that contains it
+  (`NA` outside the grid); `spatial_match = "nearest"` accepts the
+  nearest cell centre within `max_distance_km`. Time is matched to the
+  nearest timestamp and depth by physical depth in metres. Returns the
+  input with the extracted values appended, structure preserved.
 - [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md)
   — for variables with no depth dimension.
 - [`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_nearest.md)
@@ -173,8 +175,8 @@ profile of the values inside it.
 - [`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_surface.md)
   /
   [`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_bottom.md)
-  — the first available depth layer, or the deepest non-missing one at
-  that cell.
+  — the physically shallowest depth layer, or the deepest non-missing
+  one at that cell.
 - [`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_all.md)
   — nearest, surface and bottom in one pass, as three columns.
 

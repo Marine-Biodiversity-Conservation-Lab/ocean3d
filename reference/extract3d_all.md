@@ -1,8 +1,13 @@
 # Extract nearest, surface and bottom values from a 3D netCDF variable
 
-For each observation, this function extracts the full vertical profile
-at the nearest longitude, latitude and time cell. It then returns three
-summary columns: nearest valid depth, surface and bottom.
+For each observation, this function reads the vertical profile at the
+cell and timestamp selected under spatial_match and time_match. Spatial
+matching defaults to "within"; "nearest" requires an explicit
+max_distance_km limit. It returns three summaries: the valid layer
+nearest the requested depth, the physically shallowest layer, and the
+deepest layer with a valid value. See
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+for depth conventions and report options.
 
 ## Usage
 
