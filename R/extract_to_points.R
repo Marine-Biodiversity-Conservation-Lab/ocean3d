@@ -1929,101 +1929,115 @@
   x,
   time_resolution = c(
     "auto", "datetime", "daily", "monthly", "yearly"
-  )) {
+  ),
+  input_name = "time input",
+  ids = NULL
+) {
   time_resolution <- match.arg(time_resolution)
+  present <- !is.na(x)
+  date_only <- rep(FALSE, length(x))
+  unzoned <- rep(FALSE, length(x))
+
+  fail <- function(bad, reason) {
+    shown <- head(bad, 5L)
+    original <- encodeString(as.character(x[shown]), quote = "\"")
+
+    identifiers <- if (is.null(ids)) {
+      rep("", length(shown))
+    } else {
+      paste0(
+        " (id: ",
+        encodeString(as.character(ids[shown]), quote = "\""),
+        ")"
+      )
+    }
+
+    examples <- glue::glue("row/position {shown}{identifiers}: {original}")
+    if (length(bad) > length(shown)) {
+      examples <- c(
+        examples,
+        glue::glue("Showing {length(shown)} of {length(bad)} cases.")
+      )
+    }
+    examples <- paste(examples, collapse = "\n")
+
+    rlang::abort(glue::glue(
+      "{reason}\n",
+      "Input: {input_name}\n",
+      "Affected observations: {length(bad)}.\n",
+      "{examples}\n",
+      "Use Date, POSIXct/POSIXlt, YYYY-MM-DD, ",
+      "YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS.\n",
+      "Text timestamps are interpreted in UTC. ",
+      "For another time zone, supply a POSIXct/POSIXlt object."
+    ), call = NULL)
+  }
 
   if (inherits(x, "POSIXt")) {
-    values <- as.POSIXct(x, tz = "UTC")
+    # Keep the instant; all calendar comparisons below explicitly use UTC.
+    values <- as.POSIXct(x)
+    attr(values, "tzone") <- "UTC"
     has_time <- TRUE
   } else if (inherits(x, "Date")) {
     values <- as.POSIXct(x, tz = "UTC")
     has_time <- FALSE
+  } else if (is.atomic(x) && all(is.na(x))) {
+    values <- as.POSIXct(rep(NA_character_, length(x)), tz = "UTC")
+    has_time <- FALSE
   } else if (is.character(x)) {
-    date_pattern <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-    datetime_pattern <- paste0(
-      "^[0-9]{4}-[0-9]{2}-[0-9]{2}[ T]",
-      "[0-9]{2}:[0-9]{2}:[0-9]{2}Z?$"
-    )
-    present <- !is.na(x)
-    date_only <- present & grepl(date_pattern, x)
-    datetime <- present & grepl(datetime_pattern, x)
-    bad_format <- which(present & !date_only & !datetime)
+    date_pattern <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}"
+    clock_pattern <- paste0(date_pattern, "[ T][0-9]{2}:[0-9]{2}")
+    date_only <- present & grepl(paste0(date_pattern, "$"), x)
+    minutes <- present & grepl(paste0(clock_pattern, "Z?$"), x)
+    seconds <- present & grepl(paste0(clock_pattern, ":[0-9]{2}Z?$"), x)
+    datetime <- minutes | seconds
+    unzoned <- datetime & !grepl("Z$", x)
+    recognised <- date_only | datetime
 
-    if (length(bad_format) > 0L) {
-      shown <- head(bad_format, 10L)
-      stop(
-        "Time values could not be converted. Invalid format at ",
-        "row/position(s): ", toString(shown), ". Values: ",
-        toString(shQuote(x[shown])), ". ",
-        "Use YYYY-MM-DD or YYYY-MM-DD HH:MM:SS in UTC. ",
-        "Date and POSIXct objects are also accepted.",
-        call. = FALSE
-      )
+    text <- rep(NA_character_, length(x))
+    text[recognised] <- sub(
+      "T", " ", sub("Z$", "", x[recognised]), fixed = TRUE
+    )
+    text[minutes] <- paste0(text[minutes], ":00")
+    text[date_only] <- paste0(text[date_only], " 00:00:00")
+    values <- as.POSIXct(strptime(text, "%Y-%m-%d %H:%M:%S", tz = "UTC"))
+    round_trip <- format(values, "%Y-%m-%d %H:%M:%S", tz = "UTC")
+    bad <- which(present & (!recognised | is.na(values) | round_trip != text))
+    if (length(bad)) {
+      fail(bad, "Time values could not be converted. Invalid date/time.")
     }
 
-    if (time_resolution == "auto" &&
-          any(date_only) && any(datetime)) {
-      stop(
+    if (time_resolution == "auto" && any(date_only) && any(datetime)) {
+      fail(which(present), paste0(
         "Time input mixes dates with and without hours. ",
-        "Set time_resolution explicitly or use a consistent format.",
-        call. = FALSE
-      )
+        "Set time_resolution explicitly or use a consistent format."
+      ))
     }
-
-    text <- sub("T", " ", x, fixed = TRUE)
-    text <- sub("Z$", "", text)
-    text[date_only] <- paste(text[date_only], "00:00:00")
-    values <- as.POSIXct(
-      strptime(text, "%Y-%m-%d %H:%M:%S", tz = "UTC")
-    )
-    round_trip <- format(
-      values, "%Y-%m-%d %H:%M:%S", tz = "UTC"
-    )
-    invalid <- which(
-      present & (is.na(values) | round_trip != text)
-    )
-
-    if (length(invalid) > 0L) {
-      shown <- head(invalid, 10L)
-      stop(
-        "Time values could not be converted. Invalid date/time at ",
-        "row/position(s): ", toString(shown), ". Values: ",
-        toString(shQuote(x[shown])), ".",
-        call. = FALSE
-      )
-    }
-
     has_time <- any(datetime)
-    if (time_resolution == "datetime" && any(date_only)) {
-      stop(
-        "time_resolution = 'datetime' requires hours for every ",
-        "non-missing observation. Supply POSIXct values or ",
-        "YYYY-MM-DD HH:MM:SS text.",
-        call. = FALSE
-      )
-    }
   } else {
-    stop(
-      "Time values could not be converted. ",
-      "Use Date, POSIXct or ISO-formatted character values.",
-      call. = FALSE
-    )
+    fail(which(present),
+         "Time values could not be converted. Unsupported input type.")
   }
 
+  bad <- which(present & !is.finite(as.numeric(values)))
+  if (length(bad)) {
+    fail(bad, "Time values could not be converted. Invalid date/time.")
+  }
   if (time_resolution == "auto") {
     time_resolution <- if (has_time) "datetime" else "daily"
   }
-
-  if (time_resolution == "datetime" &&
-        !has_time && any(!is.na(values))) {
-    stop(
-      "time_resolution = 'datetime' requires observation hours. ",
-      "Supply POSIXct values or YYYY-MM-DD HH:MM:SS text.",
-      call. = FALSE
-    )
+  if (time_resolution == "datetime" && any(date_only)) {
+    fail(which(date_only), paste0(
+      "time_resolution = 'datetime' requires hours for every ",
+      "non-missing observation."
+    ))
   }
-
-  list(values = values, resolution = time_resolution)
+  if (time_resolution == "datetime" && !has_time && any(present)) {
+    fail(which(present),
+         "time_resolution = 'datetime' requires observation hours.")
+  }
+  list(values = values, resolution = time_resolution,
+       unzoned_rows = which(unzoned))
 }
 
 
@@ -2541,7 +2555,8 @@
                               multi_source = FALSE,
                               spatial_match = "within",
                               max_distance_km = NULL,
-                              horizontal_cache = NULL) {
+                              horizontal_cache = NULL,
+                              direct_input = FALSE) {
   opened <- .open_source(source)
   on.exit(.close_source(opened), add = TRUE)
   nc <- opened$nc
@@ -2554,6 +2569,34 @@
     depth_dim = depth_dim,
     time_dim = time_dim
   )
+
+  if (!is.null(dims$time)) {
+    named_column <- is.character(date_col) &&
+      length(date_col) == 1L &&
+      !is.na(date_col) &&
+      nzchar(date_col)
+
+    if (!(named_column && date_col %in% names(data))) {
+      correction <- if (direct_input) {
+        "Supply the `date` argument."
+      } else if (named_column) {
+        paste0(
+          "Column `", date_col, "` is missing from `data`. ",
+          "Supply that column or set `date_col` to an existing date column."
+        )
+      } else {
+        "Set `date_col` to an existing date column in `data`."
+      }
+
+      stop(
+        "netCDF variable `", var, "` has a time dimension.\n",
+        "File: ", basename(nc$filename), "\n",
+        correction,
+        "\nAn explicit NA date is allowed; a missing date input is not.",
+        call. = FALSE
+      )
+    }
+  }
 
   if (method != "2d" && is.null(dims$depth)) {
     stop(
@@ -2601,13 +2644,21 @@
 
   if (!is.null(dims$time) && !is.null(date_col)) {
     prepared <- .prepare_time_input(
-      data[[date_col]], time_resolution
+      data[[date_col]], time_resolution,
+      input_name = if (direct_input) {
+        "`date`"
+      } else {
+        paste0("`data$", date_col, "`")
+      },
+      ids = if (is.null(id_col)) NULL else data[[id_col]]
     )
     date_values <- prepared$values
     resolved_time_resolution <- prepared$resolution
-    .check_time_resolution(
-      time_values, resolved_time_resolution
-    )
+    if (any(!is.na(date_values))) {
+      .check_time_resolution(
+        time_values, resolved_time_resolution
+      )
+    }
   } else {
     date_values <- rep(
       as.POSIXct(NA_character_, tz = "UTC"),
@@ -2935,8 +2986,10 @@
 #' @param date Optional observation date or vector of dates for direct point
 #'   extraction. Used when `data = NULL` and the netCDF variable has a time
 #'   dimension. Accepts Date and POSIXt objects, or character values in
-#'   "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" format (UTC). Direct input
-#'   vectors may have length 1 or a common compatible length.
+#'   "YYYY-MM-DD", "YYYY-MM-DD HH:MM" or "YYYY-MM-DD HH:MM:SS" format.
+#'   Text timestamps are UTC; POSIXt objects preserve their actual instant.
+#'   Explicit NA values are retained. Direct input vectors may have length 1
+#'   or a common compatible length.
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -2945,8 +2998,11 @@
 #'   nearest, surface and bottom outputs together.
 #' @param lon_col Name of the longitude column in `data`.
 #' @param lat_col Name of the latitude column in `data`.
-#' @param date_col Name of the date column in `data`. Required only when the
-#'   netCDF variable has a time dimension.
+#' @param date_col Name of the date column in `data`. Required only when a
+#'   selected netCDF variable has a time dimension. A missing column is an
+#'   error for temporal variables; an explicit missing date retains the row
+#'   and returns NA for its temporal output. Static variables do not require
+#'   a date column and do not parse unused date values.
 #' @param depth_col Name of the observation-depth column in `data`. Required
 #'   only when `method = "nearest"` or `method = "all"`.
 #' @param id_col Optional observation identifier column. It is not required for
@@ -2970,6 +3026,36 @@
 #'   `output_col` and `output_prefix` are provided, `output_col` is used. With
 #'   `method = "all"`, this name is used as the suffix in `nearest_*`,
 #'   `surface_*` and `seabottom_*` columns.
+#' @section Required observation dates:
+#' Date requirements follow each selected variable's dimensions, including
+#' when a file contains both static and temporal variables. Static variables
+#' can be extracted without date or date_col input. Temporal variables require
+#' date for direct input, or an existing column named by date_col for tables;
+#' date_col = NULL does not bypass this requirement. With multiple sources,
+#' every selected temporal variable requires a date input. Explicit NA entries,
+#' including NA without a date class, retain their observations; temporal
+#' outputs are NA while independent static outputs can still be extracted.
+#' An entirely missing date vector does not trigger calendar-label ambiguity
+#' checks because no observation has a date to compare.
+#' @section Observation time zones and formats:
+#' Date inputs have daily precision. POSIXct and POSIXlt inputs preserve the
+#' instant represented, including their time-zone offset; matching and calendar
+#' labels use UTC. For example, 2020-01-02 00:30 in Europe/Madrid is
+#' 2020-01-01 23:30 UTC, so daily matching uses January 1.
+#' Character input must use the ISO formats listed for date. A space or T may
+#' separate date and time, and a trailing Z is accepted for date-times. Minutes
+#' without seconds are interpreted with zero seconds. Text has no inferred
+#' local zone. Date-times without Z generate one warning per extraction,
+#' even when time_report is FALSE, because they are interpreted as UTC.
+#' Date-only text and POSIXt inputs do not generate this warning. Numeric
+#' offsets and zone names in text are rejected; supply a
+#' POSIXt object constructed with the intended zone instead. Resolve ambiguous
+#' or nonexistent local times when constructing that object; this function
+#' cannot recover the intended local time from an already converted instant.
+#' Conversion errors identify the input, affected observations, original values
+#' and identifiers from id_col when available. At most five cases are shown.
+#' Original NA values are not conversion failures. For recycled direct inputs,
+#' positions refer to the resulting observation rows.
 #' @section Physical depth coordinates:
 #' Observation depths must be in metres, positive downward (0 at the
 #' surface); negative observation depths are rejected, and depths in other
@@ -3336,8 +3422,6 @@ extract_to_point <- function(data = NULL,
     }
 
     if (!is.null(direct_values$date)) {
-      # Validate without replacing the original precision.
-      .prepare_time_input(direct_values$date, comparison_resolution)
       data$date <- direct_values$date
       date_col <- "date"
     } else {
@@ -3376,7 +3460,7 @@ extract_to_point <- function(data = NULL,
   }
 
   required_cols <- c(lon_col, lat_col)
-  if (!is.null(date_col)) required_cols <- c(required_cols, date_col)
+
   # `all` needs depth to calculate nearest-depth output.
   if (method %in% c("nearest", "all")) {
     required_cols <- c(required_cols, depth_col)
@@ -3439,7 +3523,8 @@ extract_to_point <- function(data = NULL,
       multi_source = length(sources) > 1L,
       spatial_match = spatial_match,
       max_distance_km = max_distance_km,
-      horizontal_cache = horizontal_cache
+      horizontal_cache = horizontal_cache,
+      direct_input = direct_input
     )
   })
 
@@ -3462,16 +3547,34 @@ extract_to_point <- function(data = NULL,
   has_temporal_source <- any(vapply(
     temporal_metadata, function(x) !isTRUE(x$static), logical(1)
   ))
-  if (has_temporal_source && is.null(date_col) && isTRUE(time_report)) {
-    # Without dates, sources with a time dimension cannot supply values.
-    .show_time_report(
-      source_provenance, rep(as.POSIXct(NA, tz = "UTC"), nrow(data)),
-      temporal_metadata, data.frame(), missing
-    )
-  }
   if (has_temporal_source &&
         !is.null(date_col)) {
-    prepared <- .prepare_time_input(data[[date_col]], comparison_resolution)
+    input_name <- if (direct_input) {
+      "`date`"
+    } else {
+      paste0("`data$", date_col, "`")
+    }
+    prepared <- .prepare_time_input(
+      data[[date_col]], comparison_resolution,
+      input_name = input_name,
+      ids = if (is.null(id_col)) NULL else data[[id_col]]
+    )
+    n_unzoned <- length(prepared$unzoned_rows)
+    if (n_unzoned) {
+      observations <- if (n_unzoned == 1L) {
+        "observation has"
+      } else {
+        "observations have"
+      }
+      rlang::warn(glue::glue(
+        "Time zone warning: {n_unzoned} {observations} times without a ",
+        "time zone.\n",
+        "Input: {input_name}. These times are being interpreted as UTC.\n",
+        "If they represent local time, supply POSIXct/POSIXlt values ",
+        "constructed with the correct time zone.\n",
+        "If they are UTC, add Z: \"2020-01-02T19:54Z\"."
+      ), class = "ocean3d_timezone_warning")
+    }
     diagnostic_resolution <- if (time_resolution == "custom") {
       "custom"
     } else {

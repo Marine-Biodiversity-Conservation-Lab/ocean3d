@@ -63,8 +63,10 @@ point extraction. Required when \code{data = NULL} and \code{method = "nearest"}
 \item{date}{Optional observation date or vector of dates for direct point
 extraction. Used when \code{data = NULL} and the netCDF variable has a time
 dimension. Accepts Date and POSIXt objects, or character values in
-"YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" format (UTC). Direct input
-vectors may have length 1 or a common compatible length.}
+"YYYY-MM-DD", "YYYY-MM-DD HH:MM" or "YYYY-MM-DD HH:MM:SS" format.
+Text timestamps are UTC; POSIXt objects preserve their actual instant.
+Explicit NA values are retained. Direct input vectors may have length 1
+or a common compatible length.}
 
 \item{var}{Name of the variable to extract from the netCDF file. If \code{NULL},
 the function tries to detect the variable automatically from each file.
@@ -78,8 +80,11 @@ nearest, surface and bottom outputs together.}
 
 \item{lat_col}{Name of the latitude column in \code{data}.}
 
-\item{date_col}{Name of the date column in \code{data}. Required only when the
-netCDF variable has a time dimension.}
+\item{date_col}{Name of the date column in \code{data}. Required only when a
+selected netCDF variable has a time dimension. A missing column is an
+error for temporal variables; an explicit missing date retains the row
+and returns NA for its temporal output. Static variables do not require
+a date column and do not parse unused date values.}
 
 \item{depth_col}{Name of the observation-depth column in \code{data}. Required
 only when \code{method = "nearest"} or \code{method = "all"}.}
@@ -201,6 +206,42 @@ Temporal resolution controls comparison of timestamp labels.
 It does not identify averaging intervals, calculate temporal means,
 or interpret climatological periods.
 }
+\section{Required observation dates}{
+
+Date requirements follow each selected variable's dimensions, including
+when a file contains both static and temporal variables. Static variables
+can be extracted without date or date_col input. Temporal variables require
+date for direct input, or an existing column named by date_col for tables;
+date_col = NULL does not bypass this requirement. With multiple sources,
+every selected temporal variable requires a date input. Explicit NA entries,
+including NA without a date class, retain their observations; temporal
+outputs are NA while independent static outputs can still be extracted.
+An entirely missing date vector does not trigger calendar-label ambiguity
+checks because no observation has a date to compare.
+}
+
+\section{Observation time zones and formats}{
+
+Date inputs have daily precision. POSIXct and POSIXlt inputs preserve the
+instant represented, including their time-zone offset; matching and calendar
+labels use UTC. For example, 2020-01-02 00:30 in Europe/Madrid is
+2020-01-01 23:30 UTC, so daily matching uses January 1.
+Character input must use the ISO formats listed for date. A space or T may
+separate date and time, and a trailing Z is accepted for date-times. Minutes
+without seconds are interpreted with zero seconds. Text has no inferred
+local zone. Date-times without Z generate one warning per extraction,
+even when time_report is FALSE, because they are interpreted as UTC.
+Date-only text and POSIXt inputs do not generate this warning. Numeric
+offsets and zone names in text are rejected; supply a
+POSIXt object constructed with the intended zone instead. Resolve ambiguous
+or nonexistent local times when constructing that object; this function
+cannot recover the intended local time from an already converted instant.
+Conversion errors identify the input, affected observations, original values
+and identifiers from id_col when available. At most five cases are shown.
+Original NA values are not conversion failures. For recycled direct inputs,
+positions refer to the resulting observation rows.
+}
+
 \section{Physical depth coordinates}{
 
 Observation depths must be in metres, positive downward (0 at the

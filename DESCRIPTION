@@ -16,6 +16,7 @@ BugReports: https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issu
 License: GPL-3
 Imports:
     curl,
+    glue,
     magrittr,
     methods,
     rlang,
