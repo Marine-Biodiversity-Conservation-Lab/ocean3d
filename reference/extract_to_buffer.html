@@ -11,7 +11,7 @@ assessing coverage. Observations and input order are retained."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2.9001</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -25,7 +25,7 @@ assessing coverage. Observations and input order are retained."></head><body>
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
     <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
-    <li><a class="dropdown-item" href="../articles/extracting-and-weighting-buffer-data.html">Extracting and weighting environmental data around observations</a></li>
+    <li><a class="dropdown-item" href="../articles/extracting-and-weighting-buffer-data.html">Extracting environmental data around observation points</a></li>
     <li><a class="dropdown-item" href="../articles/extracting-environmental-data-at-points.html">Extracting environmental conditions at observation points</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
@@ -69,7 +69,7 @@ assessing coverage. Observations and input order are retained.</p>
 <span>  time_unit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"days"</span>, <span class="st">"hours"</span>, <span class="st">"minutes"</span>, <span class="st">"seconds"</span>, <span class="st">"months"</span>, <span class="st">"years"</span><span class="op">)</span>,</span>
 <span>  statistic <span class="op">=</span> <span class="st">"mean"</span>,</span>
 <span>  weighting <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"weighted"</span>, <span class="st">"equal"</span><span class="op">)</span>,</span>
-<span>  min_valid_fraction <span class="op">=</span> <span class="fl">0.8</span>,</span>
+<span>  min_valid_fraction <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  infer_bounds <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  method <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  lon_col <span class="op">=</span> <span class="st">"lon"</span>,</span>
@@ -89,7 +89,10 @@ assessing coverage. Observations and input order are retained.</p>
 <span>  max_distance_km <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  output_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  return_match_info <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  quiet <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  quiet <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  target_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  max_target_difference <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  target_ties <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"NA"</span>, <span class="st">"lower"</span>, <span class="st">"higher"</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -142,7 +145,7 @@ shift the UTC calendar, clamping to the destination month's last day.</p></dd>
 
 
 <dt id="arg-statistic">statistic<a class="anchor" aria-label="anchor" href="#arg-statistic"></a></dt>
-<dd><p>One of "mean", "sd", "se", "min" or "max".
+<dd><p>One of "mean", "sd", "se", "min", "max" or "most_similar".
 SD uses the sample variance correction. SE is SD divided by the square
 root of the effective sample size. Min and max ignore weight magnitudes.</p></dd>
 
@@ -155,7 +158,8 @@ support in both modes. A point-selected axis contributes a factor of one.</p></d
 
 <dt id="arg-min-valid-fraction">min_valid_fraction<a class="anchor" aria-label="anchor" href="#arg-min-valid-fraction"></a></dt>
 <dd><p>Minimum valid fraction of the entire requested
-support, between zero and one. Empty or entirely missing buffers return NA.</p></dd>
+support, between zero and one. NULL uses 0.8 for summaries and zero for
+most_similar (any valid support). Empty/all-missing buffers remain NA.</p></dd>
 
 
 <dt id="arg-infer-bounds">infer_bounds<a class="anchor" aria-label="anchor" href="#arg-infer-bounds"></a></dt>
@@ -185,7 +189,8 @@ text centre time buffers at midnight UTC; POSIXt preserves instants.</p></dd>
 
 
 <dt id="arg-lon-dim-lat-dim-depth-dim-time-dim">lon_dim, lat_dim, depth_dim, time_dim<a class="anchor" aria-label="anchor" href="#arg-lon-dim-lat-dim-depth-dim-time-dim"></a></dt>
-<dd><p>Optional netCDF dimension overrides.</p></dd>
+<dd><p>Optional netCDF dimension
+overrides.</p></dd>
 
 
 <dt id="arg-time-match-time-resolution-max-time-diff">time_match, time_resolution, max_time_diff<a class="anchor" aria-label="anchor" href="#arg-time-match-time-resolution-max-time-diff"></a></dt>
@@ -210,14 +215,39 @@ variable, containing coverage, source, bounds and selection diagnostics.</output
 
 
 <dt id="arg-quiet">quiet<a class="anchor" aria-label="anchor" href="#arg-quiet"></a></dt>
-<dd><p>Hide explanatory summaries. Time-zone warnings remain active.</p></dd>
+<dd><p>Hide explanatory summaries. Time-zone and ambiguous-location
+warnings remain active.</p></dd>
+
+
+<dt id="arg-target-col">target_col<a class="anchor" aria-label="anchor" href="#arg-target-col"></a></dt>
+<dd><p>Column containing the numeric target for most_similar.
+For several variables, a named variable-to-column mapping. Targets must
+use the environmental variable's units. Original NA targets return NA.</p></dd>
+
+
+<dt id="arg-max-target-difference">max_target_difference<a class="anchor" aria-label="anchor" href="#arg-max-target-difference"></a></dt>
+<dd><p>Optional non-negative maximum absolute
+difference from the target, in the environmental variable's units.</p></dd>
+
+
+<dt id="arg-target-ties">target_ties<a class="anchor" aria-label="anchor" href="#arg-target-ties"></a></dt>
+<dd><p>How to resolve equally similar different values: NA
+(default), lower or higher. Repeated identical winning values retain all
+their locations in match_info; no file is chosen by input order.
+This rule does not choose locations among repeated identical values.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>The normalised observation table with one numeric summary column
 per variable and, optionally, a diagnostic list column per output. sf
-inputs retain their geometry. Existing columns are never overwritten.</p>
+inputs retain their geometry. Existing columns are never overwritten.
+most_similar always adds <output>_match_lon, _match_lat, _match_depth and
+_match_time (UTC). They describe winning model coordinates, not corrected
+observations. Ambiguous or unavailable fields are NA. Longitude/latitude
+are returned together only for a unique horizontal location. All winning
+records remain in match_info when requested. Unresolved value or location
+ties emit one bounded warning per output with affected rows and guidance.</output></p>
     </div>
     <div class="section level2">
     <h2 id="support-and-limitations">Support and limitations<a class="anchor" aria-label="anchor" href="#support-and-limitations"></a></h2>
@@ -228,7 +258,8 @@ divided by sum(p * (1 - p)); effective sample size is 1 / sum(p^2).
 Equal weighting reproduces ordinary sample SD and SE. SD and SE require
 at least two valid samples; otherwise they return NA with a diagnostic.
 SE assumes independent samples and does not correct spatial or temporal
-autocorrelation. It is not an automatic estimate of environmental uncertainty.
+autocorrelation. It is not an automatic estimate of environmental
+uncertainty.
 All statistics, including min and max, require the requested valid coverage.</p>
 <p>At least one window must be positive. Bounds describe represented support;
 inferred intervals do not establish that instantaneous values are interval

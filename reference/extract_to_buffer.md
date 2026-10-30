@@ -21,7 +21,7 @@ extract_to_buffer(
   time_unit = c("days", "hours", "minutes", "seconds", "months", "years"),
   statistic = "mean",
   weighting = c("weighted", "equal"),
-  min_valid_fraction = 0.8,
+  min_valid_fraction = NULL,
   infer_bounds = FALSE,
   method = NULL,
   lon_col = "lon",
@@ -41,7 +41,10 @@ extract_to_buffer(
   max_distance_km = NULL,
   output_col = NULL,
   return_match_info = TRUE,
-  quiet = FALSE
+  quiet = FALSE,
+  target_col = NULL,
+  max_target_difference = NULL,
+  target_ties = c("NA", "lower", "higher")
 )
 ```
 
@@ -93,9 +96,9 @@ extract_to_buffer(
 
 - statistic:
 
-  One of "mean", "sd", "se", "min" or "max". SD uses the sample variance
-  correction. SE is SD divided by the square root of the effective
-  sample size. Min and max ignore weight magnitudes.
+  One of "mean", "sd", "se", "min", "max" or "most_similar". SD uses the
+  sample variance correction. SE is SD divided by the square root of the
+  effective sample size. Min and max ignore weight magnitudes.
 
 - weighting:
 
@@ -106,7 +109,8 @@ extract_to_buffer(
 - min_valid_fraction:
 
   Minimum valid fraction of the entire requested support, between zero
-  and one. Empty or entirely missing buffers return NA.
+  and one. NULL uses 0.8 for summaries and zero for most_similar (any
+  valid support). Empty/all-missing buffers remain NA.
 
 - infer_bounds:
 
@@ -165,13 +169,40 @@ extract_to_buffer(
 
 - quiet:
 
-  Hide explanatory summaries. Time-zone warnings remain active.
+  Hide explanatory summaries. Time-zone and ambiguous-location warnings
+  remain active.
+
+- target_col:
+
+  Column containing the numeric target for most_similar. For several
+  variables, a named variable-to-column mapping. Targets must use the
+  environmental variable's units. Original NA targets return NA.
+
+- max_target_difference:
+
+  Optional non-negative maximum absolute difference from the target, in
+  the environmental variable's units.
+
+- target_ties:
+
+  How to resolve equally similar different values: NA (default), lower
+  or higher. Repeated identical winning values retain all their
+  locations in match_info; no file is chosen by input order. This rule
+  does not choose locations among repeated identical values.
 
 ## Value
 
 The normalised observation table with one numeric summary column per
 variable and, optionally, a diagnostic list column per output. sf inputs
 retain their geometry. Existing columns are never overwritten.
+most_similar always adds
+
+\_match_lon, \_match_lat, \_match_depth and \_match_time (UTC). They
+describe winning model coordinates, not corrected observations.
+Ambiguous or unavailable fields are NA. Longitude/latitude are returned
+together only for a unique horizontal location. All winning records
+remain in match_info when requested. Unresolved value or location ties
+emit one bounded warning per output with affected rows and guidance.
 
 ## Support and limitations
 

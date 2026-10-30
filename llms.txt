@@ -353,8 +353,8 @@ Marine Habitat.*
   Fisheries](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.md):
 - [Depth levels and the slabs they stand
   for](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/depth-levels.md):
-- [Extracting and weighting environmental data around
-  observations](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-and-weighting-buffer-data.md):
+- [Extracting environmental data around observation
+  points](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-and-weighting-buffer-data.md):
 - [Extracting environmental conditions at observation
   points](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-environmental-data-at-points.md):
 - [Depth-Stratified Fishing Effort from Global Fishing

@@ -1,4 +1,4 @@
-# Extracting and weighting environmental data around observations
+# Extracting environmental data around observation points
 
 Environmental observations are often associated with a single location,
 depth and time. However, the conditions experienced by a marine animal
@@ -401,7 +401,7 @@ too_wide <- extract_to_buffer(
 )
 #> Buffer report: 1 observation(s) need attention.
 #> netCDF variable: thetao · output column: temperature
-#> Row 1: Valid coverage is below the requested threshold; result: NA. Coverage: 25%; valid: 25%; required: 80%. 
+#> Row 1: Valid coverage is below minimum; result: NA. Coverage: 25%; valid: 25%; required: 80%. 
 #> Check coordinates, source coverage and missing values. Change the window or threshold only if appropriate for your analysis.
 
 too_wide$temperature
@@ -465,6 +465,383 @@ This error is intentional. Using `infer_bounds = TRUE` is an explicit
 choice about support, not a repair for invalid bounds declared by a
 file. A single coordinate without bounds does not provide enough
 information to infer its width or duration.
+
+## Selecting values similar to a measurement
+
+A recorded temperature may help us ask a different question from a
+buffer mean: **which available environmental value is most similar to
+this measurement within a specified neighbourhood?** For example, a tag
+may record temperature while its location or depth is uncertain.
+
+This workflow selects an existing environmental value. It does not
+locate the animal, demonstrate where a measurement was taken, or
+interpolate a new temperature. Several locations can have the same
+winning value.
+
+### Getting started: preparing our data
+
+We use the same real Copernicus Marine subset as the [point
+tutorial](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-environmental-data-at-points.md).
+Run from `vignettes/articles/`. The location and measurement are
+fictional examples.
+
+``` r
+
+library(ocean3d)
+target_nc <- file.path("point-data", "temperature-points.nc")
+target_observation <- data.frame(
+  lon = 0, lat = 38, depth = 60, date = as.Date("2026-09-20"),
+  recorded_temperature = 16
+)
+```
+
+### Step 1: Selecting the most similar available value
+
+``` r
+
+selected <- extract_to_buffer(
+  target_observation, target_nc, var = "thetao", output_col = "temperature",
+  horizontal_radius_km = 10, depth_radius_m = 10,
+  statistic = "most_similar", target_col = "recorded_temperature",
+  infer_bounds = TRUE, quiet = TRUE
+)
+selected[c("recorded_temperature", "temperature")]
+#>   recorded_temperature temperature
+#> 1                   16    15.99929
+```
+
+The target column must be numeric and use the netCDF variable’s units.
+Its physical definition must also agree. This subset contains potential
+temperature (thetao); an in-situ sensor temperature is not automatically
+equivalent. Our fictional target is assumed compatible for this example.
+For temperature, convert explicitly if your measurement uses a different
+scale. For several variables, use a named mapping such as
+`target_col = c(thetao = "recorded_temperature", so = "recorded_salinity")`.
+
+Cells and layers contribute where their support intersects the buffer.
+Their coordinate centres may lie outside a window even though part of
+their support lies inside it; the same intersection rules as ordinary
+buffer summaries apply.
+
+The function considers valid values inside the requested buffer and
+minimises their absolute difference from the row’s target. Area,
+thickness and duration determine coverage; larger support does not make
+a less similar value win. `weighting` still governs ordinary buffer
+summaries.
+
+### Step 2: Inspecting the actual winning locations
+
+``` r
+
+info <- selected$temperature_match_info[[1]]
+info[c("coverage_fraction", "valid_fraction", "status")]
+#> $coverage_fraction
+#> [1] 1
+#> 
+#> $valid_fraction
+#> [1] 1
+#> 
+#> $status
+#> [1] "complete"
+info$target_match[c("target", "value", "absolute_difference")]
+#> $target
+#> [1] 16
+#> 
+#> $value
+#> [1] 15.99929
+#> 
+#> $absolute_difference
+#> [1] 0.0007123947
+info$target_match$matches
+#>       value                      source_file  longitude latitude  depth_m
+#> 42 15.99929 point-data/temperature-points.nc -0.1249998 37.97917 56.33429
+#>    timestamp_utc lon_index lat_index depth_index time_index
+#> 42    2026-09-20         2         4          17          2
+```
+
+For `most_similar`, the winning coordinates are also ordinary output
+columns:
+
+``` r
+
+selected[c(
+  "lon", "lat", "temperature", "temperature_match_lon", "temperature_match_lat",
+  "temperature_match_depth", "temperature_match_time"
+)]
+#>   lon lat temperature temperature_match_lon temperature_match_lat
+#> 1   0  38    15.99929            -0.1249998              37.97917
+#>   temperature_match_depth temperature_match_time
+#> 1                56.33429             2026-09-20
+```
+
+The original coordinates stay unchanged. The new longitude and latitude
+locate the model cell centre; depth and UTC time describe the winning
+model record. They are returned even with `return_match_info = FALSE`.
+They describe an environmental candidate, not proof that an observation
+occurred there. A cell centre can lie outside the buffer when only part
+of its support intersects it. Review that support before using a centre
+to revise a position.
+
+If several winning records share a single horizontal location, that
+longitude and latitude are still returned. Depth or time is `NA` when it
+is ambiguous. If several horizontal locations remain, both longitude and
+latitude are `NA`. All winners remain in `target_match$matches`, and the
+function warns with affected rows and instructions. `quiet = TRUE` does
+not hide that warning. Depth or time is also `NA` when the variable has
+no corresponding axis; that absence alone is not an ambiguity warning.
+Coverage status such as `complete` describes available support, while
+`target_match$location_status` describes whether a unique winning
+location could be assigned.
+
+The matches table contains all locations with the selected winning
+value, including file, cell centre, model depth and UTC timestamp. These
+are environmental records, not estimated observation coordinates.
+Identical winning values at multiple locations are retained rather than
+choosing the first file or claiming a unique location.
+
+### Step 3: Understanding ties and limits
+
+If the target is 20 and the available values are 17, 19 and 24, the
+function selects 19: their absolute differences are 3, 1 and 4. No tie
+rule is needed. If the best values are 19 and 21, both differ by one.
+Only then does `target_ties` decide between different equally good
+values:
+
+| `target_ties`    | Result for target 20 and winners 19, 21    |
+|:-----------------|:-------------------------------------------|
+| `"NA"` (default) | `NA`, with the tied records in diagnostics |
+| `"lower"`        | 19                                         |
+| `"higher"`       | 21                                         |
+
+These options never select a less similar value. They do not take the
+minimum or maximum of the entire buffer, and they never average a tie.
+
+`lower` and `higher` refer to the **environmental value**, not
+shallower/deeper layers or smaller/larger coordinates. To demonstrate
+this with the real data, use a very narrow depth window across the
+boundary between two model layers:
+
+``` r
+
+handle <- ncdf4::nc_open(target_nc)
+depth_centres <- handle$dim$depth$vals
+ncdf4::nc_close(handle)
+first_layer <- which.min(abs(depth_centres - 60))
+pair <- target_observation[rep(1, 2), ]
+pair$depth <- depth_centres[c(first_layer, first_layer + 1)]
+pair <- extract_to_point(
+  pair, target_nc, var = "thetao", method = "nearest", output_col = "temperature",
+  time_report = FALSE, spatial_report = FALSE, depth_report = FALSE
+)
+pair[c("depth", "temperature")]
+#>        depth temperature
+#> 1   61.52196    15.94670
+#> 1.1 66.94949    15.74077
+tie_observation <- target_observation
+tie_observation$depth <- mean(pair$depth)
+tie_observation$recorded_temperature <- mean(pair$temperature)
+```
+
+The two layer centres have different temperatures. The target is exactly
+their midpoint, so both are equally similar. The following call
+deliberately warns and returns `NA` for the value and location rather
+than choosing a layer:
+
+``` r
+
+tied <- extract_to_buffer(
+  tie_observation, target_nc, var = "thetao", output_col = "temperature",
+  depth_radius_m = 0.1, statistic = "most_similar",
+  target_col = "recorded_temperature", infer_bounds = TRUE, quiet = TRUE
+)
+#> Warning: most_similar could not assign a unique location for output
+#> `temperature` in 1 row(s). Rows: 1. Ambiguous location fields are NA; original
+#> coordinates are retained. Use return_match_info = TRUE and inspect
+#> `temperature_match_info[[1]]$target_match$matches` (or $ties for tied values).
+#> For equally similar different values, choose target_ties = 'lower' or 'higher'
+#> only if justified.
+tied[c("temperature", "temperature_match_lon", "temperature_match_depth")]
+#>   temperature temperature_match_lon temperature_match_depth
+#> 1          NA                    NA                      NA
+tied$temperature_match_info[[1]]$target_match$ties
+#>      value                      source_file    longitude latitude  depth_m
+#> 1 15.94670 point-data/temperature-points.nc 1.803995e-07 37.97917 61.52196
+#> 2 15.74077 point-data/temperature-points.nc 1.803995e-07 37.97917 66.94949
+#>   timestamp_utc lon_index lat_index depth_index time_index
+#> 1    2026-09-20         5         4          18          2
+#> 2    2026-09-20         5         4          19          2
+```
+
+If the study justifies choosing the cooler or warmer value, request that
+explicitly. Both calls use the same two candidates and target:
+
+``` r
+
+cooler <- extract_to_buffer(
+  tie_observation, target_nc, var = "thetao", output_col = "temperature",
+  depth_radius_m = 0.1, statistic = "most_similar",
+  target_col = "recorded_temperature", target_ties = "lower",
+  infer_bounds = TRUE, quiet = TRUE
+)
+warmer <- extract_to_buffer(
+  tie_observation, target_nc, var = "thetao", output_col = "temperature",
+  depth_radius_m = 0.1, statistic = "most_similar",
+  target_col = "recorded_temperature", target_ties = "higher",
+  infer_bounds = TRUE, quiet = TRUE
+)
+data.frame(
+  policy = c("NA", "lower", "higher"),
+  selected = c(tied$temperature, cooler$temperature, warmer$temperature),
+  depth_m = c(tied$temperature_match_depth, cooler$temperature_match_depth,
+              warmer$temperature_match_depth)
+)
+#>   policy selected  depth_m
+#> 1     NA       NA       NA
+#> 2  lower 15.74077 66.94949
+#> 3 higher 15.94670 61.52196
+```
+
+There is a different ambiguity when the **same winning value** occurs in
+several cells. For a target of 16 degrees C, two cells both containing
+16 remain equally valid under all three `target_ties` settings. The
+value stays 16, ambiguous location fields stay `NA`, and a warning
+recommends inspecting `target_match$matches`. Narrow the search or apply
+an independently justified location rule; selecting the first file or
+averaging the coordinates would invent a location. Lower/higher cannot
+resolve this kind of tie.
+
+If a difference smaller than a scientific tolerance is required, set
+`max_target_difference` explicitly, in the same units as the variable.
+
+``` r
+
+exact_only <- extract_to_buffer(
+  target_observation, target_nc, var = "thetao", output_col = "temperature",
+  horizontal_radius_km = 10, depth_radius_m = 10,
+  statistic = "most_similar", target_col = "recorded_temperature",
+  max_target_difference = 0, infer_bounds = TRUE, quiet = TRUE
+)
+exact_only$temperature
+#> [1] NA
+exact_only$temperature_match_info[[1]]$status
+#> [1] "outside_target_limit"
+```
+
+A limit of zero requires an exact numeric match. `NA` here means no
+acceptable candidate was found, not that the measurement is invalid.
+
+### Step 4: Seeing how the selected value changes with the target
+
+Hold the buffer fixed and vary only the target. Hover over the
+interactive figure to compare each requested and selected temperature.
+The dashed line shows an exact match. The available model records limit
+which values can be selected, however finely we vary the target.
+
+The horizontal axis is the target we supply; the vertical axis is the
+value actually extracted. Each blue point is a separate extraction from
+the same buffer. We are not changing its location, depth, date or
+radius, and no new environmental temperatures are created between the
+available model values. The connecting blue line only helps follow these
+eleven results.
+
+``` r
+
+targets <- target_observation[rep(1, 11), ]
+targets$recorded_temperature <- seq(15.5, 16.5, length.out = 11)
+comparison <- extract_to_buffer(
+  targets, target_nc, var = "thetao", output_col = "temperature",
+  horizontal_radius_km = 10, depth_radius_m = 10,
+  statistic = "most_similar", target_col = "recorded_temperature",
+  infer_bounds = TRUE, quiet = TRUE
+)
+figure <- plotly::plot_ly(
+  comparison, x = ~recorded_temperature, y = ~temperature,
+  type = "scatter", mode = "lines+markers", name = "Selected model value",
+  hovertemplate = "Target: %{x:.5f} C<br>Selected: %{y:.5f} C<extra></extra>"
+)
+figure <- plotly::add_trace(figure,
+  x = ~recorded_temperature, y = ~recorded_temperature,
+  type = "scatter", mode = "lines",
+  name = "Exact target", line = list(dash = "dash"), inherit = FALSE)
+figure <- plotly::layout(figure,
+  xaxis = list(title = "Target temperature (C)"),
+  yaxis = list(title = "Selected temperature (C)"),
+  legend = list(orientation = "h", y = -0.2), margin = list(b = 85))
+figure <- plotly::config(figure, displaylogo = FALSE, responsive = TRUE)
+htmlwidgets::onRender(figure, paste0(
+  "function(el,x){el.style.width='100%';",
+  "function resize(){window.Plotly.Plots.resize(el);}",
+  "window.addEventListener('resize',resize);resize();}"
+))
+```
+
+Figure 4. Blue points show existing model values selected for eleven
+different targets in the same fixed buffer. The dashed line represents
+an exact target match. Their near-overlap reflects small selection
+differences, not environmental interpolation.
+
+Here the buffer contains many distinct temperatures close to the
+targets, so the blue points almost overlap the dashed line. Above the
+dashed line, the selected value is warmer than requested; below it, it
+is cooler. Near-overlap does not establish exact equality. These
+examples reveal the small differences that are difficult to see at the
+figure’s scale:
+
+``` r
+
+examples <- comparison[c(1, 6, 11), ]
+knitr::kable(data.frame(
+  Target = examples$recorded_temperature,
+  Selected = examples$temperature,
+  Difference = examples$temperature - examples$recorded_temperature
+), digits = 5, caption = "Temperatures and selected-minus-target differences, in degrees C.")
+```
+
+| Target | Selected | Difference |
+|-------:|---------:|-----------:|
+|   15.5 | 15.50246 |    0.00246 |
+|   16.0 | 15.99929 |   -0.00071 |
+|   16.5 | 16.49405 |   -0.00595 |
+
+Temperatures and selected-minus-target differences, in degrees C.
+{.table}
+
+Five decimal places make this numerical comparison visible; they do not
+imply that the environmental product has that measurement accuracy. With
+fewer distinct candidates, several nearby targets could select the same
+value, producing flat sections instead. An equally good tie between
+different values would give `NA` under the default tie policy.
+Connecting points with a line does not imply that all intermediate
+targets were tested.
+
+### Step 5: Understanding missing values and coverage
+
+`most_similar` accepts any positive valid support by default. A value
+from only a small part of a buffer can therefore win; inspect
+`valid_fraction`. Set `min_valid_fraction = 0.8` explicitly if at least
+80% must be available. Ordinary mean, SD, SE, minimum and maximum retain
+their 80% default. An empty or entirely missing buffer always returns
+`NA`, even at threshold zero.
+
+``` r
+
+missing_target <- target_observation
+missing_target$recorded_temperature <- NA_real_
+missing_result <- extract_to_buffer(
+  missing_target, target_nc, var = "thetao", horizontal_radius_km = 10,
+  statistic = "most_similar", target_col = "recorded_temperature",
+  infer_bounds = TRUE, quiet = TRUE
+)
+missing_result$thetao
+#> [1] NA
+missing_result$thetao_match_info[[1]]$status
+#> [1] "missing_target"
+```
+
+A missing target preserves the observation and returns `NA`. Text or
+infinite targets are rejected with an explanation of the affected input.
+Changing coverage or similarity limits changes the scientific question;
+it is not an automatic correction of incomplete observations.
 
 ## Summary
 
@@ -533,3 +910,87 @@ regenerates the subset and display data from the downloaded original. It
 keeps neighbouring coordinates so that the inferred bounds and the
 extracted mean match the larger file. It does not add explicit bounds or
 alter the original temperature values.
+
+## All arguments and defaults
+
+Expand or collapse the complete extract_to_buffer() signature
+
+This signature is generated from the current function. Arguments without
+a default require input. Where a vector lists alternatives, its first
+entry is the default; supply one alternative in a call.
+
+``` r
+
+extract_to_buffer(
+  # Data and sources
+  data, nc, var = NULL,
+
+  # Horizontal buffer
+  horizontal_radius_km = 0, lon_cell_radius = NULL, lat_cell_radius = NULL,
+
+  # Depth buffer
+  depth_radius_m = 0, depth_layer_radius = NULL,
+
+  # Time buffer
+  time_before = 0, time_after = 0,
+  time_unit = c("days", "hours", "minutes", "seconds", "months", "years"),
+
+  # Statistics inside each buffer
+  statistic = "mean", weighting = c("weighted", "equal"),
+
+  # Valid coverage and bounds
+  min_valid_fraction = NULL, infer_bounds = FALSE,
+
+  # Similar-value selection
+  target_col = NULL, max_target_difference = NULL,
+  target_ties = c("NA", "lower", "higher"),
+
+  # Depth selection
+  method = NULL,
+
+  # Observation and output columns
+  lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
+  output_col = NULL, id_col = NULL,
+
+  # Source columns and dimensions
+  file_col = "file", lon_dim = NULL, lat_dim = NULL, depth_dim = NULL,
+  time_dim = NULL,
+
+  # Temporal selection
+  time_match = c("nearest", "exact"),
+  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly"),
+  max_time_diff = NULL,
+
+  # Spatial selection
+  spatial_match = c("within", "nearest"), max_distance_km = NULL,
+
+  # Diagnostics and messages
+  return_match_info = TRUE, quiet = FALSE
+)
+```
+
+Some decisions need more context than a default value alone:
+
+| Decision | Choices, meaning and effective default |
+|:---|:---|
+| Data and variables | `data` supplies observations; `nc` supplies sources. `var = NULL` detects variables, or supply names explicitly. `output_col = NULL` chooses output names automatically. |
+| Horizontal window | `horizontal_radius_km = 0` keeps point selection; a positive radius requests a circle. Alternatively, nonnegative integer `lon_cell_radius` / `lat_cell_radius` select neighbouring cells. Physical and index radii cannot be combined on that axis. |
+| Depth and time windows | `depth_radius_m = 0` and `time_before = time_after = 0` keep point selection on those axes. Positive values extend the buffer; `depth_layer_radius` selects neighbouring layers instead of metres. At least one window must be positive. |
+| `time_unit` | `"seconds"`, `"minutes"`, `"hours"`, `"days"` are elapsed units (days = 24 hours); `"months"` and `"years"` are whole UTC calendar shifts, clamped at month ends. Default: `"days"`. |
+| `statistic` | `"mean"` averages values; `"sd"` describes spread; `"se"` reports the standard error; `"min"` / `"max"` return the lowest / highest value. `"most_similar"` selects the available value nearest the target. Default: `"mean"`; choose one. |
+| `weighting` | `"weighted"` (default) weights intersecting area, layer thickness and temporal support; `"equal"` gives valid contributing records equal weight. This does not change which value is most similar. |
+| `min_valid_fraction` | NULL (default) resolves to 0.8 for ordinary statistics or 0 for most_similar (any positive valid support). Choose a fraction from 0 to 1; empty support still gives NA. |
+| `infer_bounds` | FALSE (default) requires available support bounds; TRUE permits documented inference from coordinate centres. |
+| `method` | `"2d"` has no depth selection; `"nearest"` selects the closest valid layer to the requested depth; `"surface"` selects the physically shallowest layer; `"bottom"` selects the deepest valid layer. NULL (default) chooses per variable on unbuffered axes; `"all"` is unavailable. |
+| Temporal selection | `time_match = "nearest"` (default) chooses the nearest eligible label; `"exact"` requires the requested label. `"auto"` follows observation precision; `"datetime"` preserves instants; `"daily"`, `"monthly"`, `"yearly"` compare UTC calendar labels. Default: `"auto"`; custom is unavailable. `max_time_diff = NULL` has no extra distance limit; supply nonnegative days to impose one. |
+| Spatial selection | `spatial_match = "within"` (default) selects containing cells on point-selected axes; `"nearest"` allows a nearby cell only within an explicit `max_distance_km`. That distance limit defaults to NULL. |
+| Targets and difference limit | `target_col` names a numeric target column (or a named mapping by variable); `max_target_difference = NULL` imposes no extra limit, a nonnegative number limits absolute difference (0 requires equality). |
+| `target_ties` | `"NA"` (default) returns NA with a warning for equally close different values; `"lower"` / `"higher"` choose the smaller / larger value. Repeated locations with the same winning value remain ambiguous; these choices do not pick a location. |
+| Input and source names | `lon_col`, `lat_col`, `depth_col`, `date_col` default to lon, lat, depth, date. `id_col = NULL` means no ID column; `file_col = "file"` names the source-table path column. Dimension names default to NULL (detect); set lon_dim, lat_dim, depth_dim or time_dim to override. |
+| Diagnostics | `return_match_info = TRUE` (default) keeps full diagnostics; FALSE omits them. Most-similar coordinate columns remain available in both cases. |
+| Messages | `quiet = FALSE` (default) permits reports; TRUE hides ordinary reports while timezone and unresolved-location warnings remain active. |
+
+See
+[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+for parameter units, accepted inputs, matching rules and the complete
+return description.
