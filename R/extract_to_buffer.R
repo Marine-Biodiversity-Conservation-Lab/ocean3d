@@ -119,6 +119,12 @@
 }
 
 
+# Seconds in one elapsed (non-calendar) time unit.
+.time_unit_seconds <- function(unit) {
+  switch(unit, days = 86400, hours = 3600, minutes = 60, seconds = 1)
+}
+
+
 .buffer_shift_time <- function(values, amount, unit) {
   # Months/years are UTC calendar shifts, with end-of-month clamping.
   # Reuse the scalar calendar helper already used by point diagnostics.
@@ -139,10 +145,7 @@
       )
     }
   } else {
-    seconds <- switch(
-      unit, days = 86400, hours = 3600, minutes = 60, seconds = 1
-    )
-    shifted <- values + amount * seconds
+    shifted <- values + amount * .time_unit_seconds(unit)
   }
 
   if (any(!is.na(values) & !is.finite(as.numeric(shifted)))) {

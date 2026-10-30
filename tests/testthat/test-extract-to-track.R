@@ -2242,3 +2242,14 @@ test_that("tracks accept climatological time axes like point extraction", {
   out <- extract_to_track(route, path, quiet = TRUE)
   expect_equal(out$samples$temp, c(0, 20))
 })
+
+
+test_that("a missing date column for a temporal variable matches points", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, time = c(0, 24))
+  route <- data.frame(lon = c(0, 2), lat = 0)
+  err <- expect_error(extract_to_track(route, path, quiet = TRUE))
+  expect_match(conditionMessage(err), "`temp` has a time dimension")
+  expect_match(conditionMessage(err), "Column `date` is missing")
+})

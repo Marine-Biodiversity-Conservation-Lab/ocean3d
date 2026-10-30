@@ -214,6 +214,30 @@
 }
 
 
+# Depth and UTC time of positions at `fractions` along `segment`, following
+# the interpolation permissions in `options`. `track` is one element of the
+# per-track list returned by .track_sample_one().
+.track_interpolate_row <- function(row, track, segment, fractions, options,
+                                   depth_col, date_col) {
+  if (track$depth_used || options$interpolate_depth) {
+    row[[depth_col]] <- .track_interpolate(
+      track$depths, segment, fractions, options$interpolate_depth,
+      "interpolate_depth", track$depth_used
+    )
+  }
+  if (!is.null(track$times)) {
+    row[[date_col]] <- as.POSIXct(
+      .track_interpolate(
+        track$times, segment, fractions, options$interpolate_time,
+        "interpolate_time", track$time_used
+      ),
+      origin = "1970-01-01", tz = "UTC"
+    )
+  }
+  row
+}
+
+
 .track_sampling_counts <- function(samples) {
   rows <- lapply(unique(samples$track_id), function(id) {
     selected <- samples[samples$track_id == id, , drop = FALSE]
@@ -493,12 +517,7 @@
     }
     return((values - start) / (end - start))
   }
-  seconds <- step * switch(unit,
-    seconds = 1,
-    minutes = 60,
-    hours = 3600,
-    days = 86400
-  )
+  seconds <- step * .time_unit_seconds(unit)
   n <- max(1, ceiling((end - start) / seconds))
   if (!is.finite(n) || n + 1 > budget) {
     stop("time_step exceeds max_samples.")
@@ -831,6 +850,11 @@
   } else {
     rep(NA_real_, length(rows))
   }
+  track <- list(
+    arc = arc, depths = depths,
+    times = if (is.null(time_values)) NULL else times,
+    depth_used = depth_used, time_used = time_used
+  )
   dt <- diff(times)
   if (any(dt < 0, na.rm = TRUE)) {
     stop("Dates must follow traversal order.")
@@ -983,22 +1007,9 @@
     for (name in setdiff(names(row), "track_id")) row[[name]][!original] <- NA
     row[[lon_col]] <- xy[, 1L]
     row[[lat_col]] <- xy[, 2L]
-    if (depth_used || options$interpolate_depth) {
-      row[[depth_col]] <- .track_interpolate(
-        depths, i, fractions,
-        options$interpolate_depth, "interpolate_depth", depth_used
-      )
-    }
-    if (!is.null(time_values)) {
-      row[[date_col]] <- as.POSIXct(
-        .track_interpolate(
-          times, i,
-          fractions, options$interpolate_time, "interpolate_time",
-          time_used
-        ),
-        origin = "1970-01-01", tz = "UTC"
-      )
-    }
+    row <- .track_interpolate_row(
+      row, track, i, fractions, options, depth_col, date_col
+    )
     row$source_row <- ifelse(original, rows[i], NA_integer_)
     row$segment_id <- i
     row$segment_fraction <- fractions
@@ -1082,7 +1093,7 @@
   if (options$sampling == "cells") {
     result <- result[order(result$distance_km), , drop = FALSE]
   }
-  result
+  list(samples = result, track = track)
 }
 
 
@@ -1093,13 +1104,8 @@
   pieces <- list()
   for (id in unique(samples$track_id)) {
     rows <- which(samples$track_id == id)
-    vertices <- context$vertices[context$vertices$track_id == id, ,
-      drop = FALSE
-    ]
-    arc <- .track_geodesic(
-      vertices[[lon_col]], vertices[[lat_col]],
-      context$options$distance_model
-    )
+    track <- context$tracks[[id]]
+    arc <- track$arc
     for (segment in unique(samples$segment_id[rows])) {
       selected <- rows[samples$segment_id[rows] == segment &
                          samples$sample_kind[rows] ==
@@ -1157,28 +1163,9 @@
               1L
           )
         ) + arc$length_km[segment] * fraction
-        if (
-            context$options$interpolate_depth && depth_col %in%
-              names(vertices)) {
-          row[[depth_col]] <- .track_interpolate(
-            vertices[[depth_col]],
-            segment, fraction, TRUE, "depth", TRUE
-          )
-        }
-        if (!is.null(context$prepared)) {
-          times <- as.numeric(
-            context$prepared$values[context$vertices$track_id ==
-                                      id]
-          )
-          row[[date_col]] <- as.POSIXct(
-            .track_interpolate(
-              times,
-              segment, fraction, context$options$interpolate_time,
-              "time", TRUE
-            ),
-            origin = "1970-01-01", tz = "UTC"
-          )
-        }
+        row <- .track_interpolate_row(
+          row, track, segment, fraction, context$options, depth_col, date_col
+        )
         for (column in columns) {
           name <- paste0(column, "_match_info")
           info <- row[[name]][[1L]]
@@ -1775,6 +1762,9 @@ extract_to_track <- function(
   time_values <- NULL
   parse_time <- time_used || args$interpolate_time ||
     args$weighting == "duration" || !is.null(args$max_gap_hours)
+  for (m in Filter(function(x) x$temporal, metadata)) {
+    .require_observation_time(vertices, args$date_col, m$variable, m$file)
+  }
   if (parse_time) {
     .check_required_cols(vertices, args$date_col)
     prepared <- .prepare_time_input(
@@ -1854,15 +1844,17 @@ extract_to_track <- function(
     args[c("max_segment_km", "max_gap_hours")]
   )
   pieces <- list()
+  tracks <- list()
   remaining <- args$max_samples
   for (id in unique(vertices$track_id)) {
-    piece <- .track_sample_one(
+    sampled <- .track_sample_one(
       vertices, which(vertices$track_id == id), options,
       args$lon_col, args$lat_col, args$depth_col, args$date_col, time_values,
       depth_used, time_used || args$weighting == "duration", remaining
     )
-    remaining <- remaining - nrow(piece)
-    pieces[[length(pieces) + 1L]] <- piece
+    remaining <- remaining - nrow(sampled$samples)
+    pieces[[length(pieces) + 1L]] <- sampled$samples
+    tracks[[id]] <- sampled$track
   }
   samples <- do.call(rbind, pieces)
   if (args$sampling == "vertices") {
@@ -1871,6 +1863,6 @@ extract_to_track <- function(
   rownames(samples) <- NULL
   list(
     samples = samples, metadata = metadata, prepared = prepared,
-    options = options, vertices = vertices
+    options = options, vertices = vertices, tracks = tracks
   )
 }
