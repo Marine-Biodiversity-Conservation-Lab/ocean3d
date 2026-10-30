@@ -55,59 +55,56 @@
     if (anyDuplicated(ids)) {
       stop("Each LINESTRING needs a distinct track ID.", call. = FALSE)
     }
-    rows <- lapply(
-      seq_along(lines), function(i) {
-        coordinates <- unclass(lines[[i]])
-        if (inherits(lines[[i]], "XYM") || inherits(lines[[i]], "XYZM")) {
+    coordinates <- sf::st_coordinates(lines)
+    if ("M" %in% colnames(coordinates)) {
+      stop(
+        "Measured (M) lines are unsupported; supply time explicitly.",
+        call. = FALSE
+      )
+    }
+    n <- tabulate(coordinates[, "L1"], length(lines))
+    if (any(n < 2L)) {
+      stop("Each track needs at least two vertices.", call. = FALSE)
+    }
+    result <- attributes[rep(seq_along(lines), n), , drop = FALSE]
+    for (name in names(attributes)) {
+      if (is.list(attributes[[name]])) {
+        values <- attributes[[name]]
+        bad <- which(lengths(values) != 1L & lengths(values) != n)
+        if (length(bad)) {
           stop(
-            "Measured (M) lines are unsupported; supply time explicitly.",
+            "List column `", name,
+            "` must have one value or one per vertex ",
+            "in feature ", bad[1L], ".",
             call. = FALSE
           )
         }
-        n <- nrow(coordinates)
-        if (n < 2L) {
-          stop("Each track needs at least two vertices.", call. = FALSE)
-        }
-        row <- attributes[rep(i, n), , drop = FALSE]
-        for (name in names(attributes)) {
-          if (is.list(attributes[[name]])) {
-            values <- attributes[[name]][[i]]
-            if (!length(values) %in% c(1L, n)) {
-              stop(
-                "List column `", name,
-                "` must have one value or one per vertex ",
-                "in feature ", i, ".",
-                call. = FALSE
-              )
-            }
-            row[[name]] <- rep(values, length.out = n)
-          }
-        }
-        if (ncol(coordinates) == 3L) {
-          if (!z_as_depth) {
-            stop(
-              paste0(
-                "XYZ lines require `z_as_depth = TRUE`: Z must be ",
-                "metres positive down."
-              ),
-              call. = FALSE
-            )
-          }
-          if (depth_col %in% names(attributes)) {
-            stop(
-              "Supply depth either as Z or in `depth_col`, not both.",
-              call. = FALSE
-            )
-          }
-          row[[depth_col]] <- coordinates[, 3L]
-        }
-        row[[lon_col]] <- coordinates[, 1L]
-        row[[lat_col]] <- coordinates[, 2L]
-        row$track_id <- ids[i]
-        row
+        result[[name]] <- do.call(
+          c, unname(Map(function(x, k) rep(x, length.out = k), values, n))
+        )
       }
-    )
-    result <- do.call(rbind, rows)
+    }
+    if ("Z" %in% colnames(coordinates)) {
+      if (!z_as_depth) {
+        stop(
+          paste0(
+            "XYZ lines require `z_as_depth = TRUE`: Z must be ",
+            "metres positive down."
+          ),
+          call. = FALSE
+        )
+      }
+      if (depth_col %in% names(attributes)) {
+        stop(
+          "Supply depth either as Z or in `depth_col`, not both.",
+          call. = FALSE
+        )
+      }
+      result[[depth_col]] <- unname(coordinates[, "Z"])
+    }
+    result[[lon_col]] <- unname(coordinates[, "X"])
+    result[[lat_col]] <- unname(coordinates[, "Y"])
+    result$track_id <- rep(ids, n)
   } else {
     result <- .normalize_points_input(data, lon_col, lat_col)
     .check_required_cols(result, c(lon_col, lat_col, track_col))

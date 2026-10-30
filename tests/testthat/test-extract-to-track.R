@@ -866,6 +866,19 @@ test_that(
       expect_equal(out$samples$temp, c(0, 1020, 2040))
       expect_identical(out$samples$track_id, rep("haul", 3))
     }
+    bad_list <- line
+    bad_list$depth <- I(list(c(0, 10, 20)))
+    expect_error(
+      extract_to_track(bad_list, path, interpolate_depth = TRUE, quiet = TRUE),
+      "one value or one per vertex in feature 1"
+    )
+    measured <- sf::st_sf(
+      geometry = sf::st_sfc(
+        sf::st_linestring(rbind(c(0, 0, 1), c(2, 0, 2)), dim = "XYM"),
+        crs = 4326
+      )
+    )
+    expect_error(extract_to_track(measured, path), "Measured")
     line3d <- sf::st_sf(
       date = .track_clock(0),
       geometry = sf::st_sfc(
