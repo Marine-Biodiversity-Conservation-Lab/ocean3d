@@ -738,25 +738,6 @@
 }
 
 
-.track_segment_geometry <- function(arc, segment, step_km = 0.5) {
-  # Geometry predicates inspect the complete connecting polyline,
-  # not samples.
-  n <- max(1, ceiling(arc$length_km[segment] / step_km))
-  if (n > 1e+05) {
-    stop("Mask geometry exceeds the segment safety limit.")
-  }
-  xy <- .track_geodesic_positions(
-    arc, segment, seq(
-      0, 1,
-      length.out = n +
-        1L
-    )
-  )
-  xy[, 1L] <- .normalise_longitude(xy[, 1L])
-  sf::st_sfc(sf::st_linestring(unname(xy)), crs = 4326)
-}
-
-
 .track_land_check <- function(
   arc, segment, mask, marine_values, mask_type,
   domain, step_km
@@ -765,7 +746,16 @@
   if (is.null(mask)) {
     return("not_checked")
   }
-  line <- .track_segment_geometry(arc, segment, step_km)
+  # Mask predicates inspect the whole connecting polyline, not the samples.
+  # The polyline follows the track's own distance model (terra::densify()
+  # would follow the WGS84 geodesic, km away from spherical paths).
+  n <- max(1, ceiling(arc$length_km[segment] / step_km))
+  if (n > 1e+05) {
+    stop("Mask geometry exceeds the segment safety limit.")
+  }
+  xy <- .track_geodesic_positions(arc, segment, seq(0, 1, length.out = n + 1L))
+  xy[, 1L] <- .normalise_longitude(xy[, 1L])
+  line <- sf::st_sfc(sf::st_linestring(unname(xy)), crs = 4326)
   if (inherits(mask, "SpatRaster")) {
     wrapped <- sf::st_wrap_dateline(line, quiet = TRUE)
     route <- terra::project(terra::vect(wrapped), terra::crs(mask))
