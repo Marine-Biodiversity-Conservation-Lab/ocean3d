@@ -4384,18 +4384,18 @@ test_that("timezone warnings count only unmarked clocks and name the input", {
   x <- data.frame(lon = rep(0, 4), lat = rep(40, 4),
                   observed_at = c("2020-01-01 00:00", "2020-01-01T00:00Z",
                                   "2020-01-01", NA_character_))
-  expect_warning(out <- extract2d(
+  warning <- expect_warning(out <- extract2d(
     x, path, var = "temp", date_col = "observed_at",
     time_resolution = "daily", time_report = FALSE,
     spatial_report = FALSE, depth_report = FALSE
   ), "1 observation has times without a time zone.*",
   class = "ocean3d_timezone_warning")
+  expect_match(conditionMessage(warning), "Input: `data$observed_at`",
+               fixed = TRUE)
   expect_equal(out$temp, c(11, 11, 11, NA_real_))
   expect_identical(out$observed_at, x$observed_at)
   parsed <- .prepare_time_input(x$observed_at, "daily")
   expect_identical(parsed$unzoned_rows, 1L)
-  expect_warning(.warn_time_zone(parsed, "`data$observed_at`"),
-                 "Input: `data$observed_at`", fixed = TRUE)
 })
 
 test_that("explicit zones and date-only inputs need no timezone warning", {
@@ -4403,9 +4403,7 @@ test_that("explicit zones and date-only inputs need no timezone warning", {
                   "2020-01-01T12:00Z", "2020-01-01 12:00:00Z",
                   as.POSIXct("2020-01-01 12:00:00", tz = "Europe/Madrid"),
                   as.POSIXlt("2020-01-01 12:00:00", tz = "Europe/Madrid"), NA)) {
-    parsed <- .prepare_time_input(x)
-    expect_length(parsed$unzoned_rows, 0L)
-    expect_no_warning(.warn_time_zone(parsed, "`date`"))
+    expect_length(.prepare_time_input(x)$unzoned_rows, 0L)
   }
   skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")

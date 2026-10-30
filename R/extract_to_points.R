@@ -2042,24 +2042,6 @@
        unzoned_rows = which(unzoned))
 }
 
-.warn_time_zone <- function(prepared, input_name) {
-  n <- length(prepared$unzoned_rows)
-  if (!n) return(invisible(NULL))
-  warning(structure(
-    list(message = paste0(
-      "Time zone warning: ", n,
-      if (n == 1L) " observation has" else " observations have",
-      " times without a time zone.\nInput: ", input_name,
-      ". These times are being interpreted as UTC.\n",
-      "If they represent local time, supply POSIXct/POSIXlt values ",
-      "constructed with the correct time zone.\n",
-      "If they are UTC, add Z: \"2020-01-02T19:54Z\"."
-    ), call = NULL),
-    class = c("ocean3d_timezone_warning", "warning", "condition")
-  ))
-  invisible(NULL)
-}
-
 
 .time_comparison_values <- function(values, resolution) {
   if (inherits(values, "Date")) {
@@ -3569,20 +3551,31 @@ extract_to_point <- function(data = NULL,
   ))
   if (has_temporal_source &&
         !is.null(date_col)) {
-    prepared <- .prepare_time_input(
-      data[[date_col]], comparison_resolution,
-      input_name = if (direct_input) {
-        "`date`"
-      } else {
-        paste0("`data$", date_col, "`")
-      },
-      ids = if (is.null(id_col)) NULL else data[[id_col]]
-    )
-    .warn_time_zone(prepared, if (direct_input) {
+    input_name <- if (direct_input) {
       "`date`"
     } else {
       paste0("`data$", date_col, "`")
-    })
+    }
+    prepared <- .prepare_time_input(
+      data[[date_col]], comparison_resolution,
+      input_name = input_name,
+      ids = if (is.null(id_col)) NULL else data[[id_col]]
+    )
+    n_unzoned <- length(prepared$unzoned_rows)
+    if (n_unzoned) {
+      warning(structure(
+        list(message = paste0(
+          "Time zone warning: ", n_unzoned,
+          if (n_unzoned == 1L) " observation has" else " observations have",
+          " times without a time zone.\nInput: ", input_name,
+          ". These times are being interpreted as UTC.\n",
+          "If they represent local time, supply POSIXct/POSIXlt values ",
+          "constructed with the correct time zone.\n",
+          "If they are UTC, add Z: \"2020-01-02T19:54Z\"."
+        ), call = NULL),
+        class = c("ocean3d_timezone_warning", "warning", "condition")
+      ))
+    }
     diagnostic_resolution <- if (time_resolution == "custom") {
       "custom"
     } else {
