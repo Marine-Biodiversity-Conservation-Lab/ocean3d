@@ -3563,18 +3563,19 @@ extract_to_point <- function(data = NULL,
     )
     n_unzoned <- length(prepared$unzoned_rows)
     if (n_unzoned) {
-      warning(structure(
-        list(message = paste0(
-          "Time zone warning: ", n_unzoned,
-          if (n_unzoned == 1L) " observation has" else " observations have",
-          " times without a time zone.\nInput: ", input_name,
-          ". These times are being interpreted as UTC.\n",
-          "If they represent local time, supply POSIXct/POSIXlt values ",
-          "constructed with the correct time zone.\n",
-          "If they are UTC, add Z: \"2020-01-02T19:54Z\"."
-        ), call = NULL),
-        class = c("ocean3d_timezone_warning", "warning", "condition")
-      ))
+      observations <- if (n_unzoned == 1L) {
+        "observation has"
+      } else {
+        "observations have"
+      }
+      rlang::warn(glue::glue(
+        "Time zone warning: {n_unzoned} {observations} times without a ",
+        "time zone.\n",
+        "Input: {input_name}. These times are being interpreted as UTC.\n",
+        "If they represent local time, supply POSIXct/POSIXlt values ",
+        "constructed with the correct time zone.\n",
+        "If they are UTC, add Z: \"2020-01-02T19:54Z\"."
+      ), class = "ocean3d_timezone_warning")
     }
     diagnostic_resolution <- if (time_resolution == "custom") {
       "custom"
