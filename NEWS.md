@@ -1,3 +1,39 @@
+# ocean3d (development version)
+
+## Breaking changes
+
+Point extraction (`extract_to_point()`, `extract2d()`, `extract3d_*()`) now
+checks the grid's coordinates instead of assuming one layout (#74). Some
+calls that used to return a value now return `NA` or stop with an error:
+
+* By default (`spatial_match = "within"`), a point must lie inside a grid
+  cell. Points outside the grid, which used to get the value of the nearest
+  edge cell, now return `NA`. This includes observations near a
+  single-station file that are not at the station itself. Use
+  `spatial_match = "nearest"` with `max_distance_km` to accept nearby cells.
+* Observation depths must be metres, positive downward. Negative depths
+  (heights) now stop with an error; convert them, and km or cm depths,
+  before extraction.
+* Depth coordinates are converted to metres from their units, and the
+  `positive` attribute sets their direction. Surface, bottom and nearest are
+  chosen by physical depth, whatever the storage order. The depth coordinate
+  must have length units, including for `extract3d_surface()` and
+  `extract3d_bottom()`; files without them stop with an error (a file with a
+  single depth level can be read with `extract2d()`).
+* With several files, a temporal tie between sources keeps input order under
+  `"within"` matching, and goes to the closer cell centre under `"nearest"`
+  matching.
+
+## New features
+
+* New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
+  `depth_report`. Longitudes match across the 0-360 and -180-180
+  conventions and across the antimeridian.
+* Missing outputs are explained once, under the report for their cause
+  (spatial, depth or time), with repeated reasons grouped by file. The time
+  report now also explains outputs that are missing because no observation
+  date was supplied for a file with a time dimension.
+
 # ocean3d 0.1.1.9009
 
 Housekeeping release addressing `goodpractice` checks (#58). Apart from the
