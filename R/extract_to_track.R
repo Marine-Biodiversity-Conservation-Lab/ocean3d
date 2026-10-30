@@ -820,50 +820,23 @@
   arc, segment, mask, marine_values, mask_type,
   domain, step_km
 ) {
+  # .prepare_track() validates `mask` and `domain` and unions polygons once.
   if (is.null(mask)) {
     return("not_checked")
   }
   line <- .track_segment_geometry(arc, segment, step_km)
-  crs <- arc$crs[segment]
-  local <- sf::st_transform(line, crs)
   if (inherits(mask, "SpatRaster")) {
-    if (!is.null(domain)) {
-      stop(
-        "mask_domain applies to polygon masks; use raster NA cells.",
-        call. = FALSE
-      )
-    }
-    if (terra::nlyr(mask) != 1L || !nzchar(terra::crs(mask))) {
-      stop("A marine raster needs one layer and a CRS.", call. = FALSE)
-    }
-    if (
-        is.null(marine_values) || !is.numeric(marine_values) ||
-          !length(marine_values) ||
-          any(!is.finite(marine_values))) {
-      stop(
-        "Specify marine_values explicitly for a raster mask.",
-        call. = FALSE
-      )
-    }
-    outside_longitudes <- terra::xmin(mask) < -180 - 1e-8 ||
-      terra::xmax(mask) > 180 + 1e-8
-    if (terra::is.lonlat(mask) && outside_longitudes) {
-      stop(
-        "Rotate or reproject geographic masks to -180..180 longitudes.",
-        call. = FALSE
-      )
-    }
     wrapped <- sf::st_wrap_dateline(line, quiet = TRUE)
     route <- terra::project(terra::vect(wrapped), terra::crs(mask))
-    extent <- sf::st_geometry(sf::st_as_sf(terra::as.polygons(
-      terra::ext(mask), crs = terra::crs(mask)
-    )))
-    native_route <- sf::st_geometry(sf::st_as_sf(route))
-    # Raster extents are rectangles in native coordinates, not geodesic rings.
-    inside <- sf::st_covered_by(
-      sf::st_set_crs(native_route, NA), sf::st_set_crs(extent, NA)
-    )
-    if (any(lengths(inside) == 0L)) {
+    # Raster extents are rectangles in native coordinates, not geodesic rings;
+    # a line lies inside a rectangle exactly when its bounding box does.
+    route_box <- as.vector(terra::ext(route))
+    mask_box <- as.vector(terra::ext(mask))
+    inside <- route_box[["xmin"]] >= mask_box[["xmin"]] &&
+      route_box[["xmax"]] <= mask_box[["xmax"]] &&
+      route_box[["ymin"]] >= mask_box[["ymin"]] &&
+      route_box[["ymax"]] <= mask_box[["ymax"]]
+    if (!inside) {
       return("unknown_mask_coverage")
     }
     cells <- terra::extract(
@@ -879,37 +852,16 @@
       "marine"
     }
   } else {
-    if (
-        !inherits(mask, c("sf", "sfc")) || is.na(sf::st_crs(mask)) ||
-          any(!sf::st_is_valid(mask)) || any(
-          !sf::st_geometry_type(mask) %in%
-            c("POLYGON", "MULTIPOLYGON")
-        )) {
-      stop("A polygon mask needs valid polygons with a CRS.", call. = FALSE)
-    }
-    geometry <- sf::st_union(
-      sf::st_transform(
-        sf::st_geometry(mask),
-        crs
-      )
-    )
+    # Polygon predicates run in the segment's local azimuthal projection.
+    crs <- arc$crs[segment]
+    local <- sf::st_transform(line, crs)
+    geometry <- sf::st_transform(mask, crs)
     if (mask_type == "land" && length(sf::st_intersects(local,
                                                         geometry)[[1L]])) {
       return("land_crossing")
     }
     if (!is.null(domain)) {
-      polygon_types <- c("POLYGON", "MULTIPOLYGON")
-      if (!inherits(domain, c("sf", "sfc")) || is.na(sf::st_crs(domain)) ||
-            any(!sf::st_geometry_type(domain) %in% polygon_types) ||
-            !all(sf::st_is_valid(domain) %in% TRUE)) {
-        stop("mask_domain needs polygons with a CRS.", call. = FALSE)
-      }
-      known <- sf::st_union(
-        sf::st_transform(
-          sf::st_geometry(domain),
-          crs
-        )
-      )
+      known <- sf::st_transform(domain, crs)
       if (!length(sf::st_covered_by(local, known)[[1L]])) {
         return("unknown_mask_coverage")
       }
@@ -1938,6 +1890,52 @@ extract_to_track <- function(
     time_values <- as.numeric(prepared$values)
   }
 
+  if (inherits(land_mask, "SpatRaster")) {
+    if (!is.null(mask_domain)) {
+      stop(
+        "mask_domain applies to polygon masks; use raster NA cells.",
+        call. = FALSE
+      )
+    }
+    if (terra::nlyr(land_mask) != 1L || !nzchar(terra::crs(land_mask))) {
+      stop("A marine raster needs one layer and a CRS.", call. = FALSE)
+    }
+    if (
+        is.null(marine_values) || !is.numeric(marine_values) ||
+          !length(marine_values) ||
+          any(!is.finite(marine_values))) {
+      stop(
+        "Specify marine_values explicitly for a raster mask.",
+        call. = FALSE
+      )
+    }
+    outside_longitudes <- terra::xmin(land_mask) < -180 - 1e-8 ||
+      terra::xmax(land_mask) > 180 + 1e-8
+    if (terra::is.lonlat(land_mask) && outside_longitudes) {
+      stop(
+        "Rotate or reproject geographic masks to -180..180 longitudes.",
+        call. = FALSE
+      )
+    }
+  } else if (!is.null(land_mask)) {
+    polygon_types <- c("POLYGON", "MULTIPOLYGON")
+    if (
+        !inherits(land_mask, c("sf", "sfc")) || is.na(sf::st_crs(land_mask)) ||
+          any(!sf::st_is_valid(land_mask)) ||
+          any(!sf::st_geometry_type(land_mask) %in% polygon_types)) {
+      stop("A polygon mask needs valid polygons with a CRS.", call. = FALSE)
+    }
+    land_mask <- sf::st_union(sf::st_geometry(land_mask))
+    if (!is.null(mask_domain)) {
+      if (!inherits(mask_domain, c("sf", "sfc")) ||
+            is.na(sf::st_crs(mask_domain)) ||
+            any(!sf::st_geometry_type(mask_domain) %in% polygon_types) ||
+            !all(sf::st_is_valid(mask_domain) %in% TRUE)) {
+        stop("mask_domain needs polygons with a CRS.", call. = FALSE)
+      }
+      mask_domain <- sf::st_union(sf::st_geometry(mask_domain))
+    }
+  }
   options <- list(
     sampling = sampling, spacing_km = spacing_km,
     interpolate_depth = interpolate_depth,
