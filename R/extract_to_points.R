@@ -1952,27 +1952,25 @@
       )
     }
 
-    examples <- paste0(
-      "row/position ", shown, identifiers, ": ", original
-    )
-    omitted <- length(bad) - length(shown)
+    examples <- glue::glue("row/position {shown}{identifiers}: {original}")
+    if (length(bad) > length(shown)) {
+      examples <- c(
+        examples,
+        glue::glue("Showing {length(shown)} of {length(bad)} cases.")
+      )
+    }
+    examples <- paste(examples, collapse = "\n")
 
-    stop(
-      reason,
-      "\nInput: ", input_name,
-      "\nAffected observations: ", length(bad), ".",
-      "\n", paste(examples, collapse = "\n"),
-      if (omitted > 0L) {
-        paste0("\nShowing ", length(shown), " of ", length(bad), " cases.")
-      } else {
-        ""
-      },
-      "\nUse Date, POSIXct/POSIXlt, YYYY-MM-DD, ",
-      "YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS.",
-      "\nText timestamps are interpreted in UTC. ",
-      "For another time zone, supply a POSIXct/POSIXlt object.",
-      call. = FALSE
-    )
+    rlang::abort(glue::glue(
+      "{reason}\n",
+      "Input: {input_name}\n",
+      "Affected observations: {length(bad)}.\n",
+      "{examples}\n",
+      "Use Date, POSIXct/POSIXlt, YYYY-MM-DD, ",
+      "YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS.\n",
+      "Text timestamps are interpreted in UTC. ",
+      "For another time zone, supply a POSIXct/POSIXlt object."
+    ), call = NULL)
   }
 
   if (inherits(x, "POSIXt")) {
