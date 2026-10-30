@@ -2003,10 +2003,14 @@ test_that(
     )
     i <- which(out$samples$is_interpolated)[1L]
     expect_equal(out$samples$temp_match_info[[i]]$status, "invalid_connection")
-    expect_true(is.na(out$samples$temp_match_info[[i]]$source_file))
+    expect_true(is.na(out$samples$temp[i]))
     expect_equal(
-      out$samples$temp_match_info[[i]]$environmental_candidate$status,
+      out$samples$temp_match_info[[i]]$environmental_status,
       "selected"
+    )
+    expect_equal(
+      out$samples$temp_match_info[[i]]$track_status,
+      out$samples$segment_status[i]
     )
     buffered <- extract_to_buffered_track(
       route,
@@ -2026,7 +2030,15 @@ test_that(
       buffered$samples$temp_match_info[[i]]$environmental_status,
       "complete"
     )
+    expect_equal(
+      buffered$samples$temp_match_info[[i]]$track_status,
+      buffered$samples$segment_status[i]
+    )
     expect_equal(buffered$settings$buffer$horizontal_radius_km, 10)
+    expect_identical(buffered$settings[["statistic"]], "mean")
+    expect_identical(buffered$settings[["statistics"]], "mean")
+    expect_identical(out$settings[["statistics"]], "mean")
+    expect_true(all(nzchar(names(buffered$settings))))
     expect_true(buffered$settings$mask_checked)
   }
 )

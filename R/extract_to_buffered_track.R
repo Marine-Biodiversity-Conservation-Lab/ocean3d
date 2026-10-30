@@ -201,19 +201,14 @@ extract_to_buffered_track <- function(
   ), ocean3d_target_location_warning = function(warning) {
     invokeRestart("muffleWarning")
   })
-  invalid <- samples$is_interpolated & !samples$segment_status %in%
-    c("marine", "not_checked")
-  for (column in unname(output)) {
-    samples[[column]][invalid] <- NA_real_
-    name <- paste0(column, "_match_info")
-    for (i in which(invalid)) {
-      info <- samples[[name]][[i]]
-      info$environmental_status <- info$status
-      info$status <- "invalid_connection"
-      info$track_status <- samples$segment_status[i]
-      samples[[name]][[i]] <- info
-    }
-    if (statistic == "most_similar") {
+  samples <- .track_mask_invalid(samples, unname(output))
+  if (statistic == "most_similar") {
+    for (column in unname(output)) {
+      name <- paste0(column, "_match_info")
+      invalid <- vapply(
+        samples[[name]], function(x) identical(x$status, "invalid_connection"),
+        logical(1)
+      )
       selected_locations <- .buffer_target_locations(
         samples[[name]], samples[[column]], column, eligible = !invalid
       )
@@ -225,45 +220,32 @@ extract_to_buffered_track <- function(
     samples, unname(output), statistics,
     weighting, track_min_valid_fraction
   )
-  settings <- context$options[setdiff(
-    names(context$options), c(
-      "metadata",
-      "land_mask", "mask_domain"
-    )
-  )]
-  settings$statistic <- statistic
-  settings$sampling_counts <- .track_sampling_counts(samples)
-  settings$buffer_weighting <- buffer_weighting
-  settings$track_weighting <- weighting
-  settings$track_min_valid_fraction <- track_min_valid_fraction
-  settings$buffer_min_valid_fraction <- if (is.null(min_valid_fraction)) {
-    if (statistic == "most_similar") {
-      0
+  settings <- .track_settings(
+    context, samples, statistics = statistics,
+    statistic = statistic,
+    buffer_weighting = buffer_weighting,
+    track_weighting = weighting,
+    track_min_valid_fraction = track_min_valid_fraction,
+    buffer_min_valid_fraction = if (is.null(min_valid_fraction)) {
+      if (statistic == "most_similar") 0 else 0.8
     } else {
-      0.8
-    }
-  } else {
-    min_valid_fraction
-  }
-  settings$interpolate_target <- interpolate_target
-  settings$statistics <- statistics
-  settings$mask_checked <- !is.null(land_mask)
-  settings$buffer <- list(
-    horizontal_radius_km = horizontal_radius_km,
-    depth_radius_m = depth_radius_m, lon_cell_radius = lon_cell_radius,
-    lat_cell_radius = lat_cell_radius, depth_layer_radius = depth_layer_radius,
-    time_before = time_before, time_after = time_after,
-    time_unit = buffer_time_unit, infer_bounds = infer_bounds, method = method
-  )
-  settings$target <- list(
-    columns = target_col, ties = target_ties,
-    max_difference = max_target_difference,
-    interpolate = interpolate_target
-  )
-  settings$candidate_sources <- unique(
-    vapply(
-      context$metadata, function(x) x$file,
-      character(1)
+      min_valid_fraction
+    },
+    interpolate_target = interpolate_target,
+    mask_checked = !is.null(land_mask),
+    buffer = list(
+      horizontal_radius_km = horizontal_radius_km,
+      depth_radius_m = depth_radius_m, lon_cell_radius = lon_cell_radius,
+      lat_cell_radius = lat_cell_radius,
+      depth_layer_radius = depth_layer_radius,
+      time_before = time_before, time_after = time_after,
+      time_unit = buffer_time_unit, infer_bounds = infer_bounds,
+      method = method
+    ),
+    target = list(
+      columns = target_col, ties = target_ties,
+      max_difference = max_target_difference,
+      interpolate = interpolate_target
     )
   )
   list(samples = samples, summary = summary, settings = settings)

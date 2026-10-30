@@ -280,6 +280,46 @@
 }
 
 
+# Mark inserted samples on connections that failed the marine-mask check.
+# Their values become NA; each match_info record keeps its environmental
+# selection, moves its status to `environmental_status`, and gains
+# `status = "invalid_connection"` and the connection's `track_status`.
+.track_mask_invalid <- function(samples, columns) {
+  invalid <- samples$is_interpolated & !samples$segment_status %in%
+    c("marine", "not_checked")
+  for (column in columns) {
+    samples[[column]][invalid] <- NA_real_
+    name <- paste0(column, "_match_info")
+    for (i in which(invalid)) {
+      info <- samples[[name]][[i]]
+      info$environmental_status <- info$status
+      info$status <- "invalid_connection"
+      info$track_status <- samples$segment_status[i]
+      samples[[name]][[i]] <- info
+    }
+  }
+  samples
+}
+
+
+# Settings shared by extract_to_track() and extract_to_buffered_track(),
+# followed by the caller's own entries in `...`.
+.track_settings <- function(context, samples, ..., statistics) {
+  options <- context$options
+  c(
+    options[setdiff(names(options), c("metadata", "land_mask", "mask_domain"))],
+    list(
+      sampling_counts = .track_sampling_counts(samples),
+      statistics = statistics,
+      candidate_sources = unique(
+        vapply(context$metadata, function(x) x$file, character(1))
+      )
+    ),
+    list(...)
+  )
+}
+
+
 .track_sampling_counts <- function(samples) {
   rows <- lapply(unique(samples$track_id), function(id) {
     selected <- samples[samples$track_id == id, , drop = FALSE]
@@ -1550,20 +1590,7 @@ extract_to_track <- function(
       lon_col, lat_col, depth_col, date_col
     )
   }
-  invalid <- samples$is_interpolated & !samples$segment_status %in%
-    c("marine", "not_checked")
-  for (column in output_columns) {
-    samples[[column]][invalid] <- NA_real_
-    name <- paste0(column, "_match_info")
-    for (i in which(invalid)) {
-      candidate <- samples[[name]][[i]]
-      samples[[name]][[i]] <- list(
-        status = "invalid_connection", source_file = NA_character_,
-        track_status = samples$segment_status[i],
-        environmental_candidate = candidate
-      )
-    }
-  }
+  samples <- .track_mask_invalid(samples, output_columns)
   summary <- .track_summaries(
     samples, output_columns, statistics,
     weighting, min_valid_fraction
@@ -1581,27 +1608,17 @@ extract_to_track <- function(
     )
   }
   list(
-    samples = samples, summary = summary, settings = c(
-      options[setdiff(
-        names(options),
-        c("metadata", "land_mask", "mask_domain")
-      )], list(
-        weighting = weighting,
-        sampling_counts = .track_sampling_counts(samples),
-        statistics = statistics, min_valid_fraction = min_valid_fraction,
-        time_resolution = if (time_resolution == "auto" && !is.null(prepared)) {
-          prepared$resolution
-        } else {
-          time_resolution
-        }, candidate_sources = unique(
-          vapply(
-            metadata, function(x) x$file,
-            character(1)
-          )
-        ),
-        integration = if (sampling == "cells") "Grid interval support" else
-          "Endpoint half-interval support (approximate)"
-      )
+    samples = samples, summary = summary,
+    settings = .track_settings(
+      context, samples, statistics = statistics,
+      weighting = weighting, min_valid_fraction = min_valid_fraction,
+      time_resolution = if (time_resolution == "auto" && !is.null(prepared)) {
+        prepared$resolution
+      } else {
+        time_resolution
+      },
+      integration = if (sampling == "cells") "Grid interval support" else
+        "Endpoint half-interval support (approximate)"
     )
   )
 }
