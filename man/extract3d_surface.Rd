@@ -28,7 +28,7 @@ are returned as data frames.
 }
 \description{
 The surface layer is defined as the physically shallowest depth layer in the
-netCDF file. This is usually the shallowest layer.
+netCDF file, whatever the storage order of the depth coordinate.
 }
 \examples{
 nc_file <- system.file(

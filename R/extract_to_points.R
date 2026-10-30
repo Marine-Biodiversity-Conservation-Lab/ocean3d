@@ -304,7 +304,17 @@
   )
 }
 
+.has_coordinate_variable <- function(nc, coordinate) {
+  if (coordinate %in% names(nc$dim)) {
+    return(isTRUE(nc$dim[[coordinate]]$create_dimvar))
+  }
+  coordinate %in% names(nc$var)
+}
+
 .read_time_attribute <- function(nc, coordinate, attribute) {
+  # ncdf4 prints warnings to stdout for dimensions without a coordinate
+  # variable, so return early instead of asking it for their attributes.
+  if (!.has_coordinate_variable(nc, coordinate)) return(NULL)
   att <- ncdf4::ncatt_get(nc, coordinate, attribute)
 
   if (!isTRUE(att$hasatt)) {
@@ -766,12 +776,19 @@
     format(record$requested, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
   }
   if (status == "no_value") {
+    detail <- record[["detail"]]
+    if (is.null(detail) || is.na(detail)) {
+      detail <- paste0(
+        "No source supplied a valid value under the requested settings.",
+        " The result is NA; no selected timestamp or file can be assigned.",
+        "\nCheck the observation, source coverage and matching limits."
+      )
+    } else {
+      detail <- paste0(detail, "\nResult: NA.")
+    }
     return(paste0(
       "No value was extracted.\n", location,
-      "\nObservation: ", requested,
-      "\nNo source supplied a valid value under the requested settings.",
-      " The result is NA; no selected timestamp or file can be assigned.",
-      "\nCheck the observation, source coverage and matching limits."
+      "\nObservation: ", requested, "\n", detail
     ))
   }
   if (status == "not_assessable") {
@@ -898,22 +915,30 @@
          .selection_number(lat, 5L), ")")
 }
 
+# Depth axes stored as float32 read back slightly off their nominal values,
+# so report comparisons allow a small relative tolerance.
+.depth_tolerance <- function(requested) {
+  1e-6 * max(1, abs(requested))
+}
+
 # Use the source's physical grid, including layers with missing variable values.
 .depth_selection_reference <- function(depth_m, requested, chosen) {
   layers <- sort(as.numeric(depth_m))
+  tol <- .depth_tolerance(requested)
   difference <- abs(chosen - requested)
-  outside <- requested < min(layers) || requested > max(layers)
+  closest <- min(abs(layers - requested))
+  outside <- requested < min(layers) - tol || requested > max(layers) + tol
   reference <- list(
     range = range(layers), outside = outside, difference = difference,
-    closer_missing = difference > min(abs(layers - requested)),
+    closer_missing = difference > closest + tol,
     lower = NA_real_, upper = NA_real_, spacing = NA_real_,
     basis = "single_layer", status = "normal"
   )
   if (length(layers) == 1L) {
-    if (difference > 0) reference$status <- "spacing_unknown"
+    if (difference > tol) reference$status <- "spacing_unknown"
     return(reference)
   }
-  exact <- match(requested, layers)
+  exact <- which(abs(layers - requested) <= tol)[1L]
   if (!is.na(exact)) {
     neighbours <- c(exact - 1L, exact + 1L)
     neighbours <- neighbours[neighbours >= 1L & neighbours <= length(layers)]
@@ -931,7 +956,13 @@
   reference$lower <- pair[1L]
   reference$upper <- pair[2L]
   reference$spacing <- diff(pair)
-  if (difference > reference$spacing) reference$status <- "distant_depth"
+  if (difference > reference$spacing + tol) {
+    reference$status <- "distant_depth"
+  }
+  # Missing values explain the displacement only if a closer layer would
+  # itself have been within the spacing.
+  reference$closer_missing <- reference$closer_missing &&
+    closest <= reference$spacing + tol
   reference
 }
 
@@ -967,85 +998,138 @@
   text
 }
 
+# Why one source gave no value for one observation and output column.
+.source_rejection <- function(candidate, i, column, data, method, depth_col) {
+  horizontal <- candidate$spatial_matches
+  covered <- isTRUE(horizontal$accepted[i])
+  status <- candidate$extraction_status[i]
+  if (!covered) {
+    category <- "spatial"
+    reason <- switch(horizontal$reason[i],
+      outside_grid = "Point outside cell coverage (within matching).",
+      distance_limit_exceeded = {
+        comparison <- .selection_comparison(
+          horizontal$distance_km[i], horizontal$max_distance_km
+        )
+        paste0("Nearest cell: ", comparison$value,
+               " km away; allowed: ", comparison$limit, " km.")
+      },
+      "Observation coordinates are missing or invalid."
+    )
+  } else if (status == "date_missing") {
+    category <- "temporal"
+    reason <- paste0(
+      "No observation date was supplied, but this source has a time ",
+      "dimension; supply `date` or `date_col`."
+    )
+  } else if (status == "time_rejected") {
+    category <- "temporal"
+    reason <- "No timestamp satisfied the requested temporal settings."
+  } else {
+    category <- if (method == "2d") "spatial" else "depth"
+    missing_depth <- method %in% c("nearest", "all") &&
+      (method == "nearest" || column == candidate$columns[1L]) &&
+      is.na(data[[depth_col]][i])
+    reason <- if (missing_depth) {
+      "Requested depth is missing; no nearest layer can be selected."
+    } else {
+      "No valid value in the selected cell/layer for this output."
+    }
+  }
+  list(category = category, covered = covered, reason = reason,
+       file = basename(candidate$metadata$source_file))
+}
+
+# Show each distinct reason once, with a few of the files that gave it.
+.group_source_reasons <- function(reasons, files, max_files = 3L) {
+  vapply(unique(reasons), function(reason) {
+    hit <- unique(files[reasons == reason])
+    paste0(
+      reason, "\nFile", if (length(hit) > 1L) "s", ": ",
+      paste(head(hit, max_files), collapse = ", "),
+      if (length(hit) > max_files) {
+        paste0(" and ", length(hit) - max_files, " more")
+      }
+    )
+  }, character(1), USE.NAMES = FALSE)
+}
+
+# Collect report records. Normal selections are collected only for reports
+# in full (TRUE) mode. Missing outputs are explained once: spatial and depth
+# causes here, temporal causes in the time report (returned as `temporal`).
 .selection_report_records <- function(outputs, provenance, data, method,
-                                      depth_col) {
+                                      depth_col, spatial_report = TRUE,
+                                      depth_report = TRUE) {
   records <- list()
-  explained <- character()
+  explained <- list()
+  temporal <- list()
+  candidates <- lapply(outputs, attr, which = ".source_candidate",
+                       exact = TRUE)
+  wanted <- function(mode, normal) {
+    !identical(mode, FALSE) && (isTRUE(mode) || !normal)
+  }
   for (column in names(provenance)) {
     selected <- provenance[[column]]
+    explained[[column]] <- rep(FALSE, nrow(data))
+    temporal[[column]] <- rep(NA_character_, nrow(data))
+    producers <- candidates[vapply(candidates, function(x) {
+      column %in% x$columns
+    }, logical(1))]
     for (i in seq_len(nrow(data))) {
       source <- selected$source_index[i]
       if (is.na(source)) {
-        categories <- variables <- reasons <- character()
-        for (j in seq_along(outputs)) {
-          candidate <- attr(outputs[[j]], ".source_candidate", exact = TRUE)
-          if (!column %in% candidate$columns) next
-          horizontal <- candidate$spatial_matches[[i]]
-          if (!horizontal$accepted) {
-            category <- "spatial"
-            reason <- switch(horizontal$reason,
-              outside_grid = "Point outside cell coverage (within matching).",
-              distance_limit_exceeded = {
-                comparison <- .selection_comparison(
-                  horizontal$distance_km, horizontal$max_distance_km
-                )
-                paste0("Nearest cell: ", comparison$value,
-                       " km away; allowed: ", comparison$limit, " km.")
-              },
-              "Observation coordinates are missing or invalid."
-            )
-          } else if (candidate$extraction_status[i] == "time_rejected") {
-            category <- "temporal"
-            reason <- "No timestamp satisfied the requested temporal settings."
-          } else {
-            category <- if (method == "2d") "spatial" else "depth"
-            missing_depth <- method %in% c("nearest", "all") &&
-              (method == "nearest" || column == candidate$columns[1L]) &&
-              is.na(data[[depth_col]][i])
-            reason <- if (missing_depth) {
-              "Requested depth is missing; no nearest layer can be selected."
-            } else {
-              "No valid value in the selected cell/layer for this output."
-            }
-          }
-          categories <- c(categories, category)
-          variables <- c(variables, candidate$variable)
-          reasons <- c(reasons, paste0(
-            reason, "\nFile: ", basename(candidate$metadata$source_file)
-          ))
-        }
-        category <- if ("spatial" %in% categories) {
+        rejections <- lapply(producers, .source_rejection,
+                             i = i, column = column, data = data,
+                             method = method, depth_col = depth_col)
+        categories <- vapply(rejections, `[[`, "", "category")
+        covered <- vapply(rejections, `[[`, NA, "covered")
+        # Sources whose grid never covers the point do not decide the cause.
+        relevant <- if (any(covered)) categories[covered] else categories
+        category <- if ("spatial" %in% relevant) {
           "spatial"
-        } else if ("depth" %in% categories) {
+        } else if ("depth" %in% relevant) {
           "depth"
         } else {
           "temporal"
         }
+        reasons <- .group_source_reasons(
+          vapply(rejections, `[[`, "", "reason"),
+          vapply(rejections, `[[`, "", "file")
+        )
+        if (category == "temporal") {
+          temporal[[column]][i] <- paste(reasons, collapse = "\n")
+          next
+        }
+        explained[[column]][i] <- TRUE
+        mode <- if (category == "spatial") spatial_report else depth_report
+        if (!wanted(mode, normal = FALSE)) next
         records[[length(records) + 1L]] <- list(
-          row = i, column = column, variable = paste(unique(variables),
-                                                     collapse = ", "),
+          row = i, column = column,
+          variable = paste(unique(vapply(producers, `[[`, "", "variable")),
+                           collapse = ", "),
           category = category, status = "missing", reasons = reasons
         )
-        explained <- c(explained, paste(i, column, sep = ":"))
         next
       }
-      candidate <- attr(outputs[[source]], ".source_candidate", exact = TRUE)
+      candidate <- candidates[[source]]
       base <- list(row = i, column = column, variable = candidate$variable,
                    source_index = source,
                    source_file = candidate$metadata$source_file)
-      horizontal <- candidate$spatial_matches[[i]]
-      records[[length(records) + 1L]] <- c(base, list(
-        category = "spatial",
-        status = if (isTRUE(horizontal$inside_selected_cell)) {
-          "normal"
-        } else if (isTRUE(horizontal$inside_coverage)) {
-          "outside_cell"
-        } else {
-          "outside_coverage"
-        },
-        horizontal = horizontal
-      ))
-      if (method == "2d") next
+      matches <- candidate$spatial_matches
+      status <- if (isTRUE(matches$inside_selected_cell[i])) {
+        "normal"
+      } else if (isTRUE(matches$inside_coverage[i])) {
+        "outside_cell"
+      } else {
+        "outside_coverage"
+      }
+      if (wanted(spatial_report, normal = status == "normal")) {
+        records[[length(records) + 1L]] <- c(base, list(
+          category = "spatial", status = status,
+          horizontal = .horizontal_match_row(matches, i)
+        ))
+      }
+      if (method == "2d" || identical(depth_report, FALSE)) next
       chosen <- candidate$depth_selected[[column]][i]
       if (!is.finite(chosen)) next
       kind <- if (method == "all") {
@@ -1058,18 +1142,17 @@
         .depth_selection_reference(
           candidate$depth_axis$depth_m, requested, chosen
         )
-      } else {
-        NULL
       }
+      status <- if (is.null(reference)) "normal" else reference$status
+      if (!wanted(depth_report, normal = status == "normal")) next
       records[[length(records) + 1L]] <- c(base, list(
-        category = "depth",
-        status = if (is.null(reference)) "normal" else reference$status,
+        category = "depth", status = status,
         kind = kind, requested = requested, chosen = chosen,
         depth_reference = reference
       ))
     }
   }
-  list(records = records, explained = explained)
+  list(records = records, explained = explained, temporal = temporal)
 }
 
 .format_selection_example <- function(record) {
@@ -1115,10 +1198,12 @@
     paste0(
       "Requested: ", .selection_number(record$requested, small = TRUE),
       " m \u2192 selected: ", chosen, " m",
-      if (delta == 0) " (exact match)." else paste0(
-        " (", comparison$value, " m ",
-        if (delta < 0) "shallower)." else "deeper)."
-      ), "\nNo vertical interpolation."
+      if (abs(delta) <= .depth_tolerance(record$requested)) {
+        " (exact match)."
+      } else {
+        paste0(" (", comparison$value, " m ",
+               if (delta < 0) "shallower)." else "deeper).")
+      }, "\nNo vertical interpolation."
     )
   } else if (record$kind == "surface") {
     paste0("Shallowest layer selected: ", chosen, " m.")
@@ -1126,7 +1211,9 @@
     paste0("Deepest layer with a valid value: ", chosen,
            " m. This does not establish the seabed depth.")
   }
-  if (record$kind == "nearest" && record$chosen != record$requested) {
+  if (record$kind == "nearest" &&
+        abs(record$chosen - record$requested) >
+          .depth_tolerance(record$requested)) {
     detail <- paste(detail, .format_depth_reference(record$depth_reference),
                     sep = "\n")
   }
@@ -1138,29 +1225,25 @@
 }
 
 .show_selection_reports <- function(outputs, provenance, data, method,
-                                    depth_col, spatial_report, depth_report,
-                                    time_report) {
+                                    depth_col, spatial_report, depth_report) {
   collected <- .selection_report_records(outputs, provenance, data, method,
-                                         depth_col)
-  modes <- list(spatial = spatial_report, depth = depth_report,
-                temporal = time_report)
+                                         depth_col, spatial_report,
+                                         depth_report)
+  modes <- list(spatial = spatial_report, depth = depth_report)
+  categories <- vapply(collected$records, `[[`, "", "category")
   for (category in names(modes)) {
     mode <- modes[[category]]
-    if (identical(mode, FALSE)) next
-    records <- Filter(function(record) {
-      record$category == category &&
-        (isTRUE(mode) || record$status != "normal")
-    }, collected$records)
+    records <- collected$records[categories == category]
     if (!length(records)) next
     statuses <- vapply(records, function(x) x$status, character(1))
     # Stable ordering puts missing results first, then deviations, then normal.
     priority <- ifelse(statuses == "missing", 0L,
                        ifelse(statuses == "normal", 2L, 1L))
     records <- records[order(priority)]
+    statuses <- statuses[order(priority)]
     count <- length(unique(vapply(records, function(x) x$row, integer(1))))
     heading <- switch(
-      category, spatial = "Spatial selection: ",
-      depth = "Depth selection: ", temporal = "Temporal report: "
+      category, spatial = "Spatial selection: ", depth = "Depth selection: "
     )
     action <- if (all(statuses == "outside_coverage")) {
       " outside cell coverage used the nearest cell"
@@ -1199,12 +1282,10 @@
         if (omitted > 0L) paste0("\n", omitted, " further examples omitted.")
         else "", "\n"
       ), call = NULL, records = records
-    ), class = c(
-      paste0("ocean3d_", if (category == "temporal") "time" else category,
-             "_report"), "message", "condition"
-    )))
+    ), class = c(paste0("ocean3d_", category, "_report"), "message",
+                 "condition")))
   }
-  collected$explained
+  collected[c("explained", "temporal")]
 }
 
 
@@ -1227,24 +1308,31 @@
   invisible(NULL)
 }
 
+# `missing` comes from .show_selection_reports(): `explained` marks missing
+# outputs already reported as spatial or depth misses, and `temporal` holds
+# the per-source reasons for missing outputs with a temporal cause.
 .show_time_report <- function(provenance, requested, metadata,
-                              diagnostics, sources,
-                              missing_explained = character()) {
+                              diagnostics, missing = NULL) {
   rows <- list()
+  diagnostic_keys <- if (nrow(diagnostics)) {
+    paste(diagnostics$row, diagnostics$column, sep = ":")
+  } else {
+    character()
+  }
   for (column in names(provenance)) {
     selected <- provenance[[column]]
+    explained <- missing$explained[[column]]
+    if (is.null(explained)) explained <- rep(FALSE, nrow(selected))
+    temporal <- missing$temporal[[column]]
+    if (is.null(temporal)) temporal <- rep(NA_character_, nrow(selected))
     for (i in seq_len(nrow(selected))) {
       source_index <- selected$source_index[i]
-      timestamp <- selected$timestamp[i]
-      if (is.na(source_index) &&
-            paste(i, column, sep = ":") %in% missing_explained) next
-      hit <- if (nrow(diagnostics)) {
-        which(diagnostics$row == i & diagnostics$column == column)
-      } else {
-        integer()
-      }
-      if (length(hit)) {
-        rows[[length(rows) + 1L]] <- diagnostics[hit[1L], , drop = FALSE]
+      if (is.na(source_index) && explained[i]) next
+      hit <- match(paste(i, column, sep = ":"), diagnostic_keys)
+      if (!is.na(hit)) {
+        row <- diagnostics[hit, , drop = FALSE]
+        row$detail <- NA_character_
+        rows[[length(rows) + 1L]] <- row
         next
       }
       if (!is.na(source_index) && isTRUE(metadata[[source_index]]$static)) {
@@ -1257,32 +1345,36 @@
         } else {
           selected$variable[i]
         },
-        requested = requested[i], selected = timestamp,
+        requested = requested[i], selected = selected$timestamp[i],
         difference_seconds = NA_real_, resolution = NA_character_,
         cadence = "unknown", cadence_basis = NA_character_,
         cadence_seconds = NA_real_, cadence_months = NA_integer_,
         custom_seconds = NA_real_, cadence_exceeded = FALSE,
         source_file = NA_character_,
         status = if (is.na(source_index)) "no_value" else "not_assessable",
-        reason = NA_character_, stringsAsFactors = FALSE
+        reason = NA_character_,
+        detail = if (is.na(source_index)) temporal[i] else NA_character_,
+        stringsAsFactors = FALSE
       )
     }
   }
   if (!length(rows)) return(invisible(NULL))
   report <- do.call(rbind, rows)
-  interesting <- report[report$status != "matched", , drop = FALSE]
-  if (!nrow(interesting)) return(invisible(report))
+  details <- report$detail
+  report$detail <- NULL
   # Warning examples already explain flagged selections.
   # Do not print them twice.
-  information <- interesting[is.na(interesting$reason), , drop = FALSE]
-  if (!nrow(information)) return(invisible(report))
-  examples <- .temporal_example_rows(information)
+  information <- report$status != "matched" & is.na(report$reason)
+  if (!any(information)) return(invisible(report))
+  shown <- report[information, , drop = FALSE]
+  shown$detail <- details[information]
+  examples <- .temporal_example_rows(shown)
   detail <- vapply(seq_len(nrow(examples)), function(i) {
     .format_temporal_example(examples[i, , drop = FALSE])
   }, character(1))
   message(structure(list(
     message = paste0(
-      "Temporal report: ", length(unique(information$row)),
+      "Temporal report: ", length(unique(shown$row)),
       " observation(s) have additional information.\n\n",
       paste(detail, collapse = "\n\n"), "\n"
     ),
@@ -1390,97 +1482,67 @@
     if (target < -90 || target > 90) return(integer())
     targets <- rep(target, length(axis$centres))
   }
-  which(targets >= axis$lower - 1e-8 & targets <= axis$upper + 1e-8)
+  # A singleton axis without bounds has zero width. Allow single-precision
+  # rounding of the stored coordinate, but no real offset.
+  tol <- if (identical(axis$basis, "singleton_coordinate")) {
+    pmax(1e-8, abs(axis$centres) * 2^-23)
+  } else {
+    1e-8
+  }
+  which(targets >= axis$lower - tol & targets <= axis$upper + tol)
 }
 
-# Compare physical distances in bounded chunks, without reading variable data.
+# Great-circle distance on a sphere with the s2 mean Earth radius, so values
+# agree with sf::st_distance() under s2, independently of sf settings.
+.great_circle_km <- function(lon1, lat1, lon2, lat2, radius_km = 6371.01) {
+  p <- pi / 180
+  h <- sin((lat2 - lat1) * p / 2)^2 +
+    cos(lat1 * p) * cos(lat2 * p) * sin((lon2 - lon1) * p / 2)^2
+  2 * radius_km * asin(pmin(1, sqrt(h)))
+}
+
+# Distances that differ by less than this are treated as ties, so rounding
+# noise cannot choose between cells that are equally close (for example a
+# point on a shared cell edge). Ties keep the first cell in storage order.
+.distance_tie_km <- 1e-9
+
+# Closest cell centre among the given longitude and latitude indices.
 .nearest_horizontal_cell <- function(lon_values, lat_values,
                                      lon_indices, lat_indices,
-                                     lon_target, lat_target,
-                                     chunk_size = 50000L) {
+                                     lon_target, lat_target) {
   if (!length(lon_indices) || !length(lat_indices)) return(NULL)
-  target <- sf::st_sfc(
-    sf::st_point(c(.normalise_longitude(lon_target), lat_target)),
-    crs = 4326
+  lon_idx <- rep(lon_indices, times = length(lat_indices))
+  lat_idx <- rep(lat_indices, each = length(lon_indices))
+  distances <- .great_circle_km(lon_target, lat_target,
+                                lon_values[lon_idx], lat_values[lat_idx])
+  tied <- which(distances <= min(distances) + .distance_tie_km)
+  position <- (lat_idx[tied] - 1) * length(lon_values) + lon_idx[tied]
+  winner <- tied[which.min(position)]
+  list(
+    lon_idx = as.integer(lon_idx[winner]),
+    lat_idx = as.integer(lat_idx[winner]),
+    selected_lon = lon_values[lon_idx[winner]],
+    selected_lat = lat_values[lat_idx[winner]],
+    distance_km = distances[winner]
   )
-  n_lon <- length(lon_indices)
-  n_cells <- as.double(n_lon) * length(lat_indices)
-  best <- NULL
-  best_distance <- Inf
-  for (first in seq(1, n_cells, by = chunk_size)) {
-    positions <- seq(first, min(first + chunk_size - 1, n_cells))
-    lon_idx <- lon_indices[(positions - 1) %% n_lon + 1]
-    lat_idx <- lat_indices[(positions - 1) %/% n_lon + 1]
-    cells <- sf::st_as_sf(
-      data.frame(
-        lon = .normalise_longitude(lon_values[lon_idx]),
-        lat = lat_values[lat_idx]
-      ),
-      coords = c("lon", "lat"), crs = 4326
-    )
-    distances <- as.numeric(sf::st_distance(target, cells)) / 1000
-    winner <- which.min(distances)
-    if (distances[winner] < best_distance) {
-      best_distance <- distances[winner]
-      best <- list(
-        lon_idx = as.integer(lon_idx[winner]),
-        lat_idx = as.integer(lat_idx[winner]),
-        selected_lon = lon_values[lon_idx[winner]],
-        selected_lat = lat_values[lat_idx[winner]],
-        distance_km = best_distance
-      )
-    }
-  }
-  best
 }
 
-# Reuse each grid chunk across bounded groups of points. Distances, cell order
-# and strict tie-breaking are identical to the single-point reference search.
+# Closest cell centre over the whole rectilinear grid. On every latitude row
+# the distance grows with the wrapped longitude difference, so only the
+# longitude column(s) closest to the target can hold the nearest centre.
+# This is exact and avoids computing a distance to every grid cell.
 .nearest_horizontal_cells <- function(lon_values, lat_values,
-                                      lon_targets, lat_targets,
-                                      cell_chunk_size = 50000L,
-                                      point_chunk_size = 32L) {
+                                      lon_targets, lat_targets) {
   result <- vector("list", length(lon_targets))
+  if (!length(lon_values) || !length(lat_values)) return(result)
   valid <- which(is.finite(lon_targets) & is.finite(lat_targets) &
                    lat_targets >= -90 & lat_targets <= 90)
-  if (!length(valid) || !length(lon_values) || !length(lat_values)) {
-    return(result)
-  }
-  targets <- sf::st_as_sf(data.frame(
-    lon = .normalise_longitude(lon_targets[valid]), lat = lat_targets[valid]
-  ), coords = c("lon", "lat"), crs = 4326)
-  best_distance <- rep(Inf, length(valid))
-  best_position <- rep(NA_real_, length(valid))
-  n_lon <- length(lon_values)
-  n_cells <- as.double(n_lon) * length(lat_values)
-  for (first in seq(1, n_cells, by = cell_chunk_size)) {
-    positions <- seq(first, min(first + cell_chunk_size - 1, n_cells))
-    lon_idx <- (positions - 1) %% n_lon + 1
-    lat_idx <- (positions - 1) %/% n_lon + 1
-    cells <- sf::st_as_sf(data.frame(
-      lon = .normalise_longitude(lon_values[lon_idx]), lat = lat_values[lat_idx]
-    ), coords = c("lon", "lat"), crs = 4326)
-    for (point_first in seq(1L, length(valid), by = point_chunk_size)) {
-      rows <- seq(point_first, min(point_first + point_chunk_size - 1,
-                                   length(valid)))
-      distances <- matrix(as.numeric(sf::st_distance(targets[rows, ], cells)),
-                          nrow = length(rows)) / 1000
-      winners <- vapply(seq_along(rows), function(k) {
-        which.min(distances[k, ])
-      }, integer(1))
-      closest <- distances[cbind(seq_along(rows), winners)]
-      better <- closest < best_distance[rows]
-      best_distance[rows[better]] <- closest[better]
-      best_position[rows[better]] <- positions[winners[better]]
-    }
-  }
-  for (k in seq_along(valid)) {
-    lon_idx <- as.integer((best_position[k] - 1) %% n_lon + 1)
-    lat_idx <- as.integer((best_position[k] - 1) %/% n_lon + 1)
-    result[[valid[k]]] <- list(
-      lon_idx = lon_idx, lat_idx = lat_idx,
-      selected_lon = lon_values[lon_idx], selected_lat = lat_values[lat_idx],
-      distance_km = best_distance[k]
+  for (k in valid) {
+    lon_gap <- abs(.normalise_longitude(lon_values - lon_targets[k]))
+    columns <- which(lon_gap <= min(lon_gap) + 1e-9)
+    result[[k]] <- .nearest_horizontal_cell(
+      lon_values, lat_values, columns, seq_along(lat_values),
+      lon_targets[k], lat_targets[k]
     )
   }
   result
@@ -1504,50 +1566,70 @@
   list(value = shown[1L], limit = shown[2L])
 }
 
-.match_horizontal_cell <- function(lon_axis, lat_axis,
-                                   lon_values, lat_values,
-                                   lon_target, lat_target,
-                                   spatial_match, max_distance_km,
-                                   nearest_candidate = NULL) {
-  rejected <- list(
-    accepted = FALSE, reason = "invalid_coordinates",
-    lon_idx = NA_integer_, lat_idx = NA_integer_,
-    selected_lon = NA_real_, selected_lat = NA_real_,
-    distance_km = NA_real_
+# Match every observation to a horizontal cell. Results are stored as one
+# vector per field (not one list per row) to keep memory proportional to the
+# number of observations.
+.match_horizontal_cells <- function(lon_axis, lat_axis,
+                                    lon_values, lat_values,
+                                    lon_targets, lat_targets,
+                                    spatial_match, max_distance_km) {
+  n <- length(lon_targets)
+  matches <- list(
+    accepted = rep(FALSE, n), reason = rep("invalid_coordinates", n),
+    lon_idx = rep(NA_integer_, n), lat_idx = rep(NA_integer_, n),
+    selected_lon = rep(NA_real_, n), selected_lat = rep(NA_real_, n),
+    distance_km = rep(NA_real_, n), inside_coverage = rep(FALSE, n),
+    inside_selected_cell = rep(FALSE, n),
+    requested_lon = lon_targets, requested_lat = lat_targets,
+    spatial_match = spatial_match, max_distance_km = max_distance_km
   )
-  if (!is.finite(lon_target) || !is.finite(lat_target) ||
-        lat_target < -90 || lat_target > 90) {
-    return(rejected)
+  nearest <- if (spatial_match == "nearest") {
+    .nearest_horizontal_cells(lon_values, lat_values, lon_targets, lat_targets)
   }
-  containing_lon <- .containing_axis_indices(lon_axis, lon_target)
-  containing_lat <- .containing_axis_indices(lat_axis, lat_target)
-  if (spatial_match == "within") {
-    lon_indices <- containing_lon
-    lat_indices <- containing_lat
-  } else {
-    lon_indices <- seq_along(lon_values)
-    lat_indices <- seq_along(lat_values)
+  for (i in seq_len(n)) {
+    lon_target <- lon_targets[i]
+    lat_target <- lat_targets[i]
+    if (!is.finite(lon_target) || !is.finite(lat_target) ||
+          lat_target < -90 || lat_target > 90) {
+      next
+    }
+    containing_lon <- .containing_axis_indices(lon_axis, lon_target)
+    containing_lat <- .containing_axis_indices(lat_axis, lat_target)
+    candidate <- if (spatial_match == "nearest") {
+      nearest[[i]]
+    } else {
+      .nearest_horizontal_cell(lon_values, lat_values, containing_lon,
+                               containing_lat, lon_target, lat_target)
+    }
+    if (is.null(candidate)) {
+      matches$reason[i] <- "outside_grid"
+      next
+    }
+    accepted <- spatial_match == "within" ||
+      candidate$distance_km <= max_distance_km
+    matches$accepted[i] <- accepted
+    matches$reason[i] <- if (accepted) "matched" else "distance_limit_exceeded"
+    matches$lon_idx[i] <- candidate$lon_idx
+    matches$lat_idx[i] <- candidate$lat_idx
+    matches$selected_lon[i] <- candidate$selected_lon
+    matches$selected_lat[i] <- candidate$selected_lat
+    matches$distance_km[i] <- candidate$distance_km
+    matches$inside_coverage[i] <- length(containing_lon) > 0L &&
+      length(containing_lat) > 0L
+    matches$inside_selected_cell[i] <-
+      candidate$lon_idx %in% containing_lon &&
+      candidate$lat_idx %in% containing_lat
   }
-  candidate <- if (spatial_match == "nearest" && !is.null(nearest_candidate)) {
-    nearest_candidate
-  } else {
-    .nearest_horizontal_cell(
-      lon_values, lat_values, lon_indices, lat_indices, lon_target, lat_target
-    )
-  }
-  if (is.null(candidate)) {
-    rejected$reason <- "outside_grid"
-    return(rejected)
-  }
-  accepted <- spatial_match == "within" ||
-    candidate$distance_km <= max_distance_km
-  candidate$inside_coverage <- length(containing_lon) > 0L &&
-    length(containing_lat) > 0L
-  candidate$inside_selected_cell <- candidate$lon_idx %in% containing_lon &&
-    candidate$lat_idx %in% containing_lat
-  candidate$accepted <- accepted
-  candidate$reason <- if (accepted) "matched" else "distance_limit_exceeded"
-  candidate
+  matches
+}
+
+# One observation's horizontal match, for reports.
+.horizontal_match_row <- function(matches, i) {
+  settings <- c("spatial_match", "max_distance_km")
+  row <- lapply(matches[setdiff(names(matches), settings)], `[[`, i)
+  row$spatial_match <- matches$spatial_match
+  row["max_distance_km"] <- list(matches$max_distance_km)
+  row
 }
 
 
@@ -1560,7 +1642,9 @@
   if (!is.character(units) || length(units) != 1L || is.na(units)) {
     stop(
       "Depth units cannot be converted to metres. ",
-      "Supply a coordinate with explicit supported length units.",
+      "Supply a coordinate with explicit supported length units. ",
+      "For a file with a single depth level, extract2d() reads it ",
+      "without depth metadata.",
       call. = FALSE
     )
   }
@@ -1573,14 +1657,24 @@
     "metre" = 1,
     "metres" = 1,
     "km" = 1000,
+    "kilometer" = 1000,
+    "kilometers" = 1000,
+    "kilometre" = 1000,
+    "kilometres" = 1000,
     "cm" = 0.01,
+    "centimeter" = 0.01,
+    "centimeters" = 0.01,
+    "centimetre" = 0.01,
+    "centimetres" = 0.01,
     NA_real_
   )
   if (!is.finite(factor)) {
     stop(
       "Depth units cannot be converted to metres. ",
-      "Check the vertical coordinate metadata; ",
-      "supported units are m, meter(s), metre(s), km and cm.",
+      "Check the vertical coordinate metadata; supported units are ",
+      "m, meter(s), metre(s), km, kilometer(s), kilometre(s), cm, ",
+      "centimeter(s) and centimetre(s). For a file with a single depth ",
+      "level, extract2d() reads it without depth metadata.",
       call. = FALSE
     )
   }
@@ -1635,6 +1729,16 @@
 }
 
 .read_depth_axis <- function(nc, coordinate, values) {
+  if (!.has_coordinate_variable(nc, coordinate)) {
+    stop(
+      "The depth dimension `", coordinate, "` has no coordinate variable, ",
+      "so its physical depths and units are unknown. Add a coordinate ",
+      "variable with depth values and units to the file before extraction. ",
+      "For a file with a single depth level, extract2d() reads it without ",
+      "depth metadata.",
+      call. = FALSE
+    )
+  }
   standard_name <- .normalise_axis_attribute(
     .read_time_attribute(nc, coordinate, "standard_name")
   )
@@ -1650,29 +1754,37 @@
       call. = FALSE
     )
   }
+  positive <- .read_time_attribute(nc, coordinate, "positive")
+  # Heights and altitudes increase upward; CF requires `positive` on them,
+  # but do not read a non-compliant height axis as depths below the surface.
+  if (is.null(positive) && standard_name %in% c("height", "altitude")) {
+    positive <- "up"
+  }
   .prepare_depth_axis(
     values,
     units = .read_time_attribute(nc, coordinate, "units"),
-    positive = .read_time_attribute(nc, coordinate, "positive")
+    positive = positive
   )
 }
 
+# Select layers by physical depth, independently of storage order. Returns
+# the selected values and the physical depth (m) of each selected layer.
 .summarise_depth_profile <- function(profile, depth_m, target_depth) {
-  surface_index <- which.min(depth_m)
-  result <- c(
-    nearest = NA_real_, surface = profile[surface_index], seabottom = NA_real_
-  )
+  index <- c(nearest = NA_integer_, surface = which.min(depth_m),
+             seabottom = NA_integer_)
   valid <- which(!is.na(profile))
-  if (!length(valid)) return(result)
-  bottom_index <- valid[which.max(depth_m[valid])]
-  result["seabottom"] <- profile[bottom_index]
-  if (!is.na(target_depth)) {
-    # A tie chooses the shallower valid layer, independently of storage order.
-    valid <- valid[order(depth_m[valid])]
-    nearest_index <- valid[which.min(abs(depth_m[valid] - target_depth))]
-    result["nearest"] <- profile[nearest_index]
+  if (length(valid)) {
+    index["seabottom"] <- valid[which.max(depth_m[valid])]
+    if (!is.na(target_depth)) {
+      # A tie chooses the shallower valid layer.
+      valid <- valid[order(depth_m[valid])]
+      index["nearest"] <- valid[which.min(abs(depth_m[valid] - target_depth))]
+    }
   }
-  result
+  list(
+    value = stats::setNames(profile[index], names(index)),
+    depth_m = stats::setNames(depth_m[index], names(index))
+  )
 }
 
 
@@ -1685,36 +1797,54 @@
   values[1L] + c(0, cumsum(steps))
 }
 
+# Angle units differ in spelling (degrees_east, degree_east, degrees_E, ...).
+.same_spatial_units <- function(a, b) {
+  a <- tolower(trimws(a))
+  b <- tolower(trimws(b))
+  if (identical(a, b)) return(TRUE)
+  angle <- "^degrees?(_?(east|north|e|n))?$"
+  grepl(angle, a) && grepl(angle, b)
+}
+
+# Returns a 2 x n matrix of cell edges, or NULL when the file has no usable
+# bounds. Unusable bounds are reported and edges are then inferred from the
+# coordinate centres, as when no bounds are declared.
 .read_spatial_bounds <- function(nc, coordinate, values) {
   name <- .read_time_attribute(nc, coordinate, "bounds")
   if (is.null(name)) return(NULL)
+  ignore <- function(problem) {
+    warning(
+      "Spatial bounds for `", coordinate, "` ", problem,
+      "; inferring cell edges from the coordinate centres instead.",
+      call. = FALSE
+    )
+    NULL
+  }
   if (!is.character(name) || length(name) != 1L || is.na(name)) {
-    stop("Invalid spatial bounds reference.", call. = FALSE)
+    return(ignore("have an invalid bounds reference"))
   }
-  index <- which(vapply(
-    nc$var, function(x) identical(x$name, name), logical(1)
-  ))
-  if (length(index) != 1L) {
-    stop("Spatial bounds variable was not found: ", name, call. = FALSE)
+  if (!name %in% names(nc$var)) {
+    return(ignore(paste0("were not found (variable `", name, "`)")))
   }
-  variable <- nc$var[[index]]
+  variable <- nc$var[[name]]
   axes <- vapply(variable$dim, function(x) x$name, character(1))
   coordinate_axis <- which(axes == coordinate)
   raw <- ncdf4::ncvar_get(nc, name, collapse_degen = FALSE)
   if (length(dim(raw)) != 2L || length(coordinate_axis) != 1L) {
-    stop("Unsupported spatial bounds dimensions.", call. = FALSE)
+    return(ignore("have unsupported dimensions"))
   }
   if (coordinate_axis == 1L) raw <- t(raw)
   if (!identical(dim(raw), c(2L, length(values))) ||
         any(!is.finite(raw))) {
-    stop("Invalid spatial bounds values.", call. = FALSE)
+    return(ignore("contain missing or invalid values"))
   }
   coordinate_units <- .read_time_attribute(nc, coordinate, "units")
   bounds_units <- .read_time_attribute(nc, name, "units")
-  if (!is.null(bounds_units) &&
-        !identical(bounds_units, coordinate_units)) {
+  if (!is.null(bounds_units) && !is.null(coordinate_units) &&
+        !.same_spatial_units(bounds_units, coordinate_units)) {
     stop(
-      "Spatial bounds and coordinates use different units.",
+      "Spatial bounds and coordinates use different units (`",
+      bounds_units, "` and `", coordinate_units, "`).",
       call. = FALSE
     )
   }
@@ -1732,7 +1862,11 @@
   centres <- if (longitude) .unwrap_longitude(values) else values
   steps <- diff(centres)
   if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
-    stop("Spatial coordinates must form a monotonic axis.", call. = FALSE)
+    stop(
+      "Spatial coordinates must form a monotonic axis (as CF requires). ",
+      "Sort the file along this dimension before extraction.",
+      call. = FALSE
+    )
   }
   explicit <- .read_spatial_bounds(nc, coordinate, values)
   if (!is.null(explicit)) {
@@ -1751,11 +1885,15 @@
     lower <- apply(intervals, 2L, min)
     upper <- apply(intervals, 2L, max)
     if (any(centres < lower - 1e-8 | centres > upper + 1e-8)) {
-      stop(
-        "Spatial bounds do not contain their cell centres.",
+      warning(
+        "Spatial bounds for `", coordinate, "` do not contain their cell ",
+        "centres; inferring cell edges from the coordinate centres instead.",
         call. = FALSE
       )
+      explicit <- NULL
     }
+  }
+  if (!is.null(explicit)) {
     basis <- "explicit_bounds"
   } else if (length(centres) == 1L) {
     lower <- upper <- centres
@@ -1785,31 +1923,6 @@
     centres = centres, lower = lower, upper = upper,
     longitude = longitude, basis = basis
   )
-}
-
-.spatial_axis_index <- function(axis, target) {
-  if (length(target) != 1L || !is.finite(target)) return(NA_integer_)
-  if (axis$longitude) {
-    targets <- target + 360 * round((axis$centres - target) / 360)
-  } else {
-    if (target < -90 || target > 90) return(NA_integer_)
-    targets <- rep(target, length(axis$centres))
-  }
-  contained <- which(
-    targets >= axis$lower - 1e-8 & targets <= axis$upper + 1e-8
-  )
-  if (!length(contained)) return(NA_integer_)
-  distances <- abs(axis$centres[contained] - targets[contained])
-  as.integer(contained[which.min(distances)])
-}
-
-
-.nearest_index <- function(values, target) {
-  if (length(values) == 0 || all(is.na(values)) || is.na(target)) {
-    return(NA_integer_)
-  }
-
-  which.min(abs(values - target))
 }
 
 .prepare_time_input <- function(
@@ -2040,23 +2153,6 @@
   available <- .time_comparison_values(time_values, resolution)
   requested <- .time_comparison_values(target, resolution)
   !is.na(requested) && any(!is.na(available))
-}
-
-.prepare_lon <- function(lon_values, lon_target) {
-  # Many global netCDF files store longitude from 0 to 360, whereas observation
-  # tables often use -180 to 180. This conversion is applied only when the file
-  # clearly uses 0 to 360 and the observation longitude is negative.
-  if (is.na(lon_target)) {
-    return(lon_target)
-  }
-
-  if (min(lon_values, na.rm = TRUE) >= 0 &&
-        max(lon_values, na.rm = TRUE) > 180 &&
-        lon_target < 0) {
-    lon_target <- lon_target + 360
-  }
-
-  lon_target
 }
 
 # Read a coordinate attribute, including dimension metadata.
@@ -2479,6 +2575,7 @@
                               multi_source = FALSE,
                               spatial_match = "within",
                               max_distance_km = NULL,
+                              horizontal_cache = NULL,
                               direct_input = FALSE) {
   opened <- .open_source(source)
   on.exit(.close_source(opened), add = TRUE)
@@ -2605,18 +2702,23 @@
     out[[prefix]] <- NA_real_
   }
 
-  candidate_distance_km <- rep(Inf, nrow(data))
-  selected_lon <- rep(NA_real_, nrow(data))
-  selected_lat <- rep(NA_real_, nrow(data))
-  horizontal_matches <- vector("list", nrow(data))
-  nearest_candidates <- if (spatial_match == "nearest") {
-    .nearest_horizontal_cells(
-      lon_values, lat_values, data[[lon_col]], data[[lat_col]]
-    )
-  } else {
-    vector("list", nrow(data))
+  horizontal_matches <- .cached_horizontal_matches(
+    horizontal_cache,
+    key = list(lon_values, lat_values, spatial_axes),
+    compute = function() {
+      .match_horizontal_cells(
+        lon_axis = spatial_axes$lon, lat_axis = spatial_axes$lat,
+        lon_values = lon_values, lat_values = lat_values,
+        lon_targets = data[[lon_col]], lat_targets = data[[lat_col]],
+        spatial_match = spatial_match, max_distance_km = max_distance_km
+      )
+    }
+  )
+  accepted <- horizontal_matches$accepted
+  extraction_status <- ifelse(accepted, "time_rejected", "spatial_rejected")
+  if (!is.null(time_values)) {
+    extraction_status[accepted & is.na(date_values)] <- "date_missing"
   }
-  extraction_status <- rep("spatial_rejected", nrow(data))
   depth_selected <- lapply(.output_column_names(method, var, output_prefix),
                            function(x) rep(NA_real_, nrow(data)))
   names(depth_selected) <- .output_column_names(method, var, output_prefix)
@@ -2628,27 +2730,9 @@
     if (isTRUE(verbose) && i %% 100 == 0) {
       message("Extracting row ", i, " of ", nrow(data))
     }
-
-    horizontal <- .match_horizontal_cell(
-      lon_axis = spatial_axes$lon, lat_axis = spatial_axes$lat,
-      lon_values = lon_values, lat_values = lat_values,
-      lon_target = data[[lon_col]][i], lat_target = data[[lat_col]][i],
-      spatial_match = spatial_match, max_distance_km = max_distance_km,
-      nearest_candidate = nearest_candidates[[i]]
-    )
-    horizontal$requested_lon <- data[[lon_col]][i]
-    horizontal$requested_lat <- data[[lat_col]][i]
-    horizontal$spatial_match <- spatial_match
-    horizontal$max_distance_km <- max_distance_km
-    horizontal_matches[[i]] <- horizontal
-    if (!horizontal$accepted) next
-    extraction_status[i] <- "time_rejected"
-    lon_idx <- horizontal$lon_idx
-    lat_idx <- horizontal$lat_idx
-    candidate_distance_km[i] <- horizontal$distance_km
-    selected_lon[i] <- horizontal$selected_lon
-    selected_lat[i] <- horizontal$selected_lat
-
+    if (!accepted[i]) next
+    lon_idx <- horizontal_matches$lon_idx[i]
+    lat_idx <- horizontal_matches$lat_idx[i]
 
     time_idx <- NULL
     if (!is.null(time_values)) {
@@ -2688,7 +2772,8 @@
     }
 
     if (is.null(time_values)) {
-      # Static sources retain first-valid-source priority.
+      # Static sources tie on time. The merge then keeps input order, or the
+      # geographically closer cell under spatial_match = "nearest".
       candidate_distance[i] <- 0
     }
 
@@ -2737,40 +2822,20 @@
       summary <- .summarise_depth_profile(
         profile, depth_axis$depth_m, depth_target
       )
-      valid <- which(!is.na(profile))
-      physical <- c(nearest = NA_real_, surface = min(depth_axis$depth_m),
-                    seabottom = NA_real_)
-      if (length(valid)) {
-        physical["seabottom"] <- max(depth_axis$depth_m[valid])
-        if (!is.na(depth_target)) {
-          ordered <- valid[order(depth_axis$depth_m[valid])]
-          difference <- abs(depth_axis$depth_m[ordered] - depth_target)
-          index <- ordered[which.min(difference)]
-          physical["nearest"] <- depth_axis$depth_m[index]
-        }
-      }
-      if (method == "all") {
-        for (kind in names(physical)) {
-          depth_selected[[paste0(kind, "_", prefix)]][i] <- physical[kind]
-        }
-      } else {
-        kind <- if (method == "bottom") "seabottom" else "nearest"
-        depth_selected[[prefix]][i] <- physical[kind]
-      }
-      if (method == "nearest") out[[prefix]][i] <- summary["nearest"]
-      if (method == "bottom") out[[prefix]][i] <- summary["seabottom"]
-      if (method == "all") {
-        out[[paste0("nearest_", prefix)]][i] <- summary["nearest"]
-        out[[paste0("surface_", prefix)]][i] <- summary["surface"]
-        out[[paste0("seabottom_", prefix)]][i] <- summary["seabottom"]
+      kinds <- switch(method, all = c("nearest", "surface", "seabottom"),
+                      bottom = "seabottom", nearest = "nearest")
+      columns <- if (method == "all") paste0(kinds, "_", prefix) else prefix
+      for (k in seq_along(kinds)) {
+        out[[columns[k]]][i] <- summary$value[[kinds[k]]]
+        depth_selected[[columns[k]]][i] <- summary$depth_m[[kinds[k]]]
       }
     }
   }
   attr(out, ".source_candidate") <- list(
     distance_days = candidate_distance,
-    distance_km = candidate_distance_km,
-    selected_lon = selected_lon,
-    selected_lat = selected_lat,
+    distance_km = ifelse(accepted, horizontal_matches$distance_km, Inf),
+    selected_lon = ifelse(accepted, horizontal_matches$selected_lon, NA_real_),
+    selected_lat = ifelse(accepted, horizontal_matches$selected_lat, NA_real_),
     spatial_matches = horizontal_matches,
     depth_axis = depth_axis,
     depth_selected = depth_selected,
@@ -2784,10 +2849,25 @@
   out
 }
 
+# Sources that share one grid (for example a stack of daily files) give the
+# same horizontal matches, so compute them once per distinct grid.
+.cached_horizontal_matches <- function(cache, key, compute) {
+  if (is.null(cache)) return(compute())
+  for (entry in cache$entries) {
+    if (identical(entry$key, key)) return(entry$matches)
+  }
+  matches <- compute()
+  cache$entries[[length(cache$entries) + 1L]] <- list(
+    key = key, matches = matches
+  )
+  matches
+}
+
 .merge_source_outputs <- function(
   outputs,
   original_names,
-  return_provenance = FALSE
+  return_provenance = FALSE,
+  spatial_match = "within"
 ) {
   if (length(outputs) == 1L) {
     out <- outputs[[1L]]
@@ -2813,10 +2893,7 @@
           stringsAsFactors = FALSE
         )
       }
-      return(list(
-        data = out, provenance = provenance,
-        spatial_candidates = list(candidate$spatial_matches)
-      ))
+      return(list(data = out, provenance = provenance))
     }
     return(out)
   }
@@ -2851,8 +2928,12 @@
       spatial_distance <- candidate$distance_km
       better_time <- distance < best_distance
       same_time <- distance == best_distance
-      better_space <- spatial_distance < best_spatial_distance
-      # Input order breaks ties only when both time and space tie.
+      # With "within" matching every eligible cell contains the point, so
+      # input order breaks temporal ties. With "nearest" matching the closer
+      # cell centre wins first; the tolerance keeps float rounding of
+      # otherwise identical grids from overriding input order.
+      better_space <- spatial_match == "nearest" &
+        spatial_distance < best_spatial_distance - 1e-3
       replace <- !is.na(x[[col]]) & is.finite(distance) &
         is.finite(spatial_distance) &
         (is.na(values) | better_time | (same_time & better_space))
@@ -2888,12 +2969,7 @@
   }
 
   if (isTRUE(return_provenance)) {
-    return(list(
-      data = out, provenance = provenance,
-      spatial_candidates = lapply(outputs, function(x) {
-        attr(x, ".source_candidate", exact = TRUE)$spatial_matches
-      })
-    ))
+    return(list(data = out, provenance = provenance))
   }
   out
 }
@@ -3001,11 +3077,16 @@
 #' Original NA values are not conversion failures. For recycled direct inputs,
 #' positions refer to the resulting observation rows.
 #' @section Physical depth coordinates:
-#' Observation depths are expressed in metres, positive downward. Dataset
-#' coordinates are converted from m, meter(s), metre(s), km or cm. The positive
-#' attribute determines direction when supplied; otherwise uniformly
-#' non-negative values imply positive-down and non-positive values imply
-#' positive-up. Mixed signs without direction metadata are rejected.
+#' Observation depths must be in metres, positive downward (0 at the
+#' surface); negative observation depths are rejected, and depths in other
+#' units must be converted first. Dataset coordinates are converted from m,
+#' meter(s), metre(s), km, kilometer(s), kilometre(s), cm, centimeter(s) or
+#' centimetre(s). The positive attribute determines direction when supplied;
+#' height and altitude axes without it are read as positive-up. Otherwise
+#' uniformly non-negative values imply positive-down and non-positive values
+#' imply positive-up. Mixed signs without direction metadata are rejected.
+#' The depth coordinate must have units, including for surface and bottom
+#' extraction; a file with a single depth level can be read with extract2d().
 #' Surface means the physically shallowest layer, even if its value is missing.
 #' Bottom means the deepest non-missing layer. Nearest selects the valid layer
 #' closest to the observation depth; ties select the shallower layer.
@@ -3018,14 +3099,19 @@
 #' With spatial_match = "within", only cells containing the point are eligible.
 #' With spatial_match = "nearest", the requested point may be outside grid
 #' coverage. The nearest cell centre must be within max_distance_km of it.
-#' Explicit spatial cell bounds are preferred. Otherwise, edges are inferred
-#' from adjacent centres; singleton axes without bounds require coincidence.
+#' Explicit spatial cell bounds are preferred. Otherwise, or when the bounds
+#' variable is missing or invalid (with a warning), edges are inferred from
+#' adjacent centres; singleton axes without bounds require coincidence, up to
+#' single-precision rounding of the stored coordinate.
 #' Longitude comparisons support equivalent coordinates across the antimeridian.
+#' A point on an edge shared by two cells uses the first cell in storage order.
 #' Among eligible sources the closest temporal candidate with a valid value
-#' wins. Equal temporal distances are resolved by geographic distance to the
-#' cell centre, then by input order. Existing output columns are replaced,
-#' including by NA. Output names cannot overwrite extraction inputs or combine
-#' different variables in the same column.
+#' wins. With "within" matching, equal temporal distances are resolved by
+#' input order, so list the preferred source first. With "nearest" matching,
+#' they are resolved by geographic distance to the cell centre (differences
+#' under 1 m are ignored), then by input order. Existing output columns are
+#' replaced, including by NA. Output names cannot overwrite extraction inputs
+#' or combine different variables in the same column.
 #' @section Custom temporal intervals:
 #' With time_resolution = "custom", observations require hours as for datetime.
 #' For example, custom_time_interval = as.difftime(3, units = "hours") warns
@@ -3054,16 +3140,21 @@
 #' layers and only attribute a displacement to missing values when closer
 #' physical layers must lack valid values under nearest-valid selection.
 #' Missing outputs are explained once, with rejection reasons for each
-#' relevant source. Purely temporal rejections use time_report; spatial and
-#' depth rejections use their corresponding switches. Mixed rejections are
-#' grouped under spatial first, then depth, then time, with all reasons shown.
+#' relevant source; a repeated reason is shown once with up to three of its
+#' files. The cause is taken from the sources whose grid covers the point,
+#' unless none does. Temporal causes (including a missing observation date)
+#' are reported by time_report; spatial and depth causes by their
+#' corresponding switches, so FALSE hides them. Mixed causes are grouped under
+#' spatial first, then depth, then time, with all reasons shown.
 #' Reports count distinct observations and output values separately. At most
 #' five cases are shown, prioritising missing values; truncation and the count
 #' omitted are stated. Coordinates use up to five decimals; metres/kilometres
 #' normally use up to two. Extra decimals distinguish values close to a limit
 #' when rounding would otherwise make them appear equal. Calculations retain
 #' full precision. Small positive distances use
-#' <0.01 rather than zero. Temporal report settings and warnings are unchanged.
+#' <0.01 rather than zero. Depth comparisons in reports allow a relative
+#' tolerance of 1e-6, so single-precision depth axes match their nominal
+#' depths.
 #'
 #' @section Temporal diagnostics:
 #' Diagnostics are emitted after source selection, for values actually returned.
@@ -3085,9 +3176,11 @@
 #'   The rule applies equally to one or multiple sources. A selected missing
 #'   value does not trigger a search for another cell in the same source.
 #' @param max_distance_km Required finite non-negative distance in kilometres
-#'   when spatial_match = "nearest". Distance is measured from the observation
-#'   to the cell centre on the Earth surface using sf::st_distance(). A cell
-#'   exactly at the limit is accepted. Must be NULL with "within".
+#'   when spatial_match = "nearest". Distance is the great-circle distance
+#'   from the observation to the cell centre on a sphere of radius 6371.01 km
+#'   (the radius sf::st_distance() uses with s2), and does not depend on sf
+#'   settings. A cell exactly at the limit is accepted. Must be NULL with
+#'   "within".
 #' @param custom_time_interval Positive difftime value used as the warning
 #'   interval when time_resolution = "custom". Matching uses full timestamps.
 #'   This interval does not reject candidates; use max_time_diff for that.
@@ -3100,9 +3193,12 @@
 #'   and exact depth selections; FALSE hides the depth report. Depths are in
 #'   metres, positive down. Report modes do not change returned values.
 #' @param time_report Logical. If TRUE, the default, display a temporal summary
-#'   when returned values are displaced in time or outputs are missing.
-#'   The return format is unchanged. FALSE hides the summary but does not
-#'   suppress temporal warnings.
+#'   when returned values are displaced in time, or outputs are missing for a
+#'   temporal reason (no timestamp within the matching settings, or no
+#'   observation date for a source with a time dimension). Outputs missing
+#'   because of location or depth are reported by spatial_report and
+#'   depth_report instead. The return format is unchanged. FALSE hides the
+#'   summary but does not suppress temporal warnings.
 #' @param time_resolution Precision used to compare observation times with
 #'   dataset timestamps. "auto" uses daily comparison for Date objects
 #'   and date-only text, and datetime comparison for POSIXt objects and
@@ -3391,6 +3487,18 @@ extract_to_point <- function(data = NULL,
   }
   if (!is.null(id_col)) required_cols <- c(required_cols, id_col)
   .check_required_cols(data, required_cols, "data")
+  if (method %in% c("nearest", "all")) {
+    requested_depth <- data[[depth_col]]
+    if (!is.numeric(requested_depth) ||
+          any(requested_depth < 0, na.rm = TRUE)) {
+      stop(
+        "Observation depths must be numeric metres, positive downward ",
+        "(0 at the surface). Convert heights (negative values) or km/cm ",
+        "depths before extraction.",
+        call. = FALSE
+      )
+    }
+  }
 
   sources <- .as_netcdf_sources(nc, file_col = file_col)
 
@@ -3406,6 +3514,8 @@ extract_to_point <- function(data = NULL,
     sources = sources, var = var, method = method,
     output_prefix = output_prefix, protected_names = protected_names
   )
+  horizontal_cache <- new.env(parent = emptyenv())
+  horizontal_cache$entries <- list()
   outputs <- lapply(seq_along(sources), function(j) {
     src <- sources[[j]]
     source_var <- source_plan[[j]]$variable
@@ -3433,6 +3543,7 @@ extract_to_point <- function(data = NULL,
       multi_source = length(sources) > 1L,
       spatial_match = spatial_match,
       max_distance_km = max_distance_km,
+      horizontal_cache = horizontal_cache,
       direct_input = direct_input
     )
   })
@@ -3440,13 +3551,14 @@ extract_to_point <- function(data = NULL,
   merged <- .merge_source_outputs(
     outputs,
     original_names = names(data),
-    return_provenance = TRUE
+    return_provenance = TRUE,
+    spatial_match = spatial_match
   )
   out <- merged$data
   source_provenance <- merged$provenance
-  missing_explained <- .show_selection_reports(
+  missing <- .show_selection_reports(
     outputs, source_provenance, data, method, depth_col,
-    spatial_report, depth_report, time_report
+    spatial_report, depth_report
   )
   temporal_metadata <- lapply(outputs, function(x) {
     attr(x, ".source_candidate", exact = TRUE)$metadata
@@ -3484,7 +3596,7 @@ extract_to_point <- function(data = NULL,
     if (isTRUE(time_report)) {
       .show_time_report(
         source_provenance, prepared$values, temporal_metadata,
-        temporal_diagnostics, sources, missing_explained
+        temporal_diagnostics, missing
       )
     }
   }
@@ -3562,7 +3674,7 @@ extract2d <- function(data, nc, var = NULL, ...) {
 #' Extract the surface layer from a 3D netCDF variable
 #'
 #' The surface layer is defined as the physically shallowest depth layer in the
-#' netCDF file. This is usually the shallowest layer.
+#' netCDF file, whatever the storage order of the depth coordinate.
 #'
 #' @param data Object containing observation points. Can be a data frame,
 #'   tibble, `sf` object with POINT geometries, matrix with column names, or
