@@ -162,9 +162,11 @@ available once per track in settings$sampling_counts, even when
 statistics = NULL. Cell-interval midpoints count as assumed positions.
 variation_status is not_requested when neither SD nor SE is requested,
 available when the requested variation statistics are finite, or
-insufficient_samples when accepted support has fewer than two valid
-samples. not_available covers rejected support or non-finite statistics;
-consult status for coverage and support problems.
+insufficient_variation_samples when accepted support has fewer than two
+valid samples. not_available covers rejected support or non-finite
+statistics; consult status for coverage and support problems. status
+follows extract_to_buffer(): empty (no known support), all_missing,
+insufficient_coverage, partial or complete.
 Samples follow traversal order. For vertices-only sampling the global
 input row order is retained. Non-coordinate attributes of inserted samples
 are NA. source_row indexes the expanded vertex table for sf lines.

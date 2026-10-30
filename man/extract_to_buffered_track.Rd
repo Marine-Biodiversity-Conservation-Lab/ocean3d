@@ -222,9 +222,9 @@ from inserted positions; n_samples is their total, including missing
 buffer results. settings$sampling_counts contains these counts once per
 track, also when statistics = NULL.
 Track summary variation_status follows extract_to_track(): not_requested,
-available, insufficient_samples, or not_available. It describes SD/SE
-requested through statistics along the track, not the local buffer
-statistic. Consult status for coverage and support problems.
+available, insufficient_variation_samples, or not_available. It
+describes SD/SE requested through statistics along the track, not the
+local buffer statistic. Consult status for coverage and support problems.
 most_similar adds the buffer engine's _match_lon, _match_lat, _match_depth
 and _match_time columns to samples. Ambiguous fields and fields on invalid
 connections are NA; original route coordinates are retained.

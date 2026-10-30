@@ -139,7 +139,7 @@ Choose the two levels of statistics according to the question being asked.
 The track summary's `variation_status` concerns `statistics`, not the local
 `statistic`. Here it is `not_requested`: we requested mean, minimum and maximum
 along the track, even though each local buffer returns an SD. Requesting track
-SD/SE can give `available`, `insufficient_samples` or `not_available`;
+SD/SE can give `available`, `insufficient_variation_samples` or `not_available`;
 see the [track summary explanation](extracting-environmental-data-along-tracks.html#step-3-understanding-the-summary-weights).
 
 Overlapping buffers can use the same netCDF records repeatedly. The track

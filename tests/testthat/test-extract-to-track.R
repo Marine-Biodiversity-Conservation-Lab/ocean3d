@@ -437,7 +437,7 @@ test_that(
       quiet = TRUE
     )
     expect_true(is.na(out$summary$mean))
-    expect_identical(out$summary$status, "unknown_or_zero_support")
+    expect_identical(out$summary$status, "empty")
     timed <- extract_to_track(
       stationary,
       path,
@@ -620,7 +620,7 @@ test_that(
       quiet = TRUE
     )
     expect_true(is.na(timed$summary$valid_fraction))
-    expect_identical(timed$summary$status, "unknown_or_zero_support")
+    expect_identical(timed$summary$status, "empty")
   }
 )
 
@@ -1380,7 +1380,9 @@ test_that(
     expect_equal(out$summary$mean, 10)
     expect_true(is.na(out$summary$sd))
     expect_true(is.na(out$summary$se))
-    expect_identical(out$summary$variation_status, "insufficient_samples")
+    expect_identical(
+      out$summary$variation_status, "insufficient_variation_samples"
+    )
   }
 )
 
@@ -1428,7 +1430,9 @@ test_that("variation states distinguish requests, coverage and sample counts", {
       list(data = data.frame(lon = c(1, 3), lat = 0)), requested, settings
     ))
     expect_identical(singleton$summary$status, "partial")
-    expect_identical(singleton$summary$variation_status, "insufficient_samples")
+    expect_identical(
+      singleton$summary$variation_status, "insufficient_variation_samples"
+    )
     expect_equal(singleton$summary$mean, 10)
     expect_true(is.na(singleton$summary$sd))
     expect_true(is.na(singleton$summary$se))
@@ -1442,7 +1446,7 @@ test_that("variation states distinguish requests, coverage and sample counts", {
     stationary_time <- do.call(extract, c(
       list(data = vertices), requested, settings
     ))
-    expect_identical(stationary_time$summary$status, "unknown_or_zero_support")
+    expect_identical(stationary_time$summary$status, "empty")
     expect_identical(stationary_time$summary$variation_status, "not_available")
   }
 })

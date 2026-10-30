@@ -405,7 +405,7 @@ as an automatic measure of environmental uncertainty. The reported
 |:--|:--|
 | `not_requested` | Neither SD nor SE was requested; this is normal for mean-only summaries. |
 | `available` | The requested SD/SE values are finite and available. |
-| `insufficient_samples` | Coverage was accepted, but fewer than two valid samples remain for SD/SE. |
+| `insufficient_variation_samples` | Coverage was accepted, but fewer than two valid samples remain for SD/SE. |
 | `not_available` | Coverage/support was rejected, or SD/SE is not finite. Check `status` and the requested statistics. |
 
 For example, `statistics = "mean"` gives `not_requested`, while requesting

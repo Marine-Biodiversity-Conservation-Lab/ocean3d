@@ -257,94 +257,91 @@
   if (!length(statistics)) {
     return(NULL)
   }
+  counts <- .track_sampling_counts(samples)
   rows <- list()
   for (id in unique(samples$track_id)) {
-    for (column in columns) {
-      selected <- samples[samples$track_id == id, , drop = FALSE]
-      cell_intervals <- "sample_kind" %in% names(selected) &&
-        any(selected$sample_kind == "cell_interval")
-      weights <- switch(weighting,
-        distance = selected$support_km,
-        duration = selected$support_seconds,
-        equal = if (cell_intervals) {
-          as.numeric(selected$sample_kind == "cell_interval")
-        } else {
-          rep(1, nrow(selected))
-        }
-      )
-      usable <- is.finite(weights) & weights > 0
-      available <- switch(weighting,
-        distance = selected$available_km,
-        duration = selected$available_seconds,
-        equal = weights *
-          ifelse(
-            selected$support_km > 0,
-            selected$available_km / selected$support_km,
-            as.numeric(
-              !selected$is_interpolated | selected$segment_status %in%
-                c("marine", "not_checked")
-            )
+    selected <- samples[samples$track_id == id, , drop = FALSE]
+    cell_intervals <- "sample_kind" %in% names(selected) &&
+      any(selected$sample_kind == "cell_interval")
+    weights <- switch(weighting,
+      distance = selected$support_km,
+      duration = selected$support_seconds,
+      equal = if (cell_intervals) {
+        as.numeric(selected$sample_kind == "cell_interval")
+      } else {
+        rep(1, nrow(selected))
+      }
+    )
+    available <- switch(weighting,
+      distance = selected$available_km,
+      duration = selected$available_seconds,
+      equal = weights *
+        ifelse(
+          selected$support_km > 0,
+          selected$available_km / selected$support_km,
+          as.numeric(
+            !selected$is_interpolated | selected$segment_status %in%
+              c("marine", "not_checked")
           )
+        )
+    )
+    usable <- is.finite(weights) & weights > 0
+    total <- sum(weights[usable])
+    # Missing duration support makes the full denominator unknowable.
+    known <- !any(!is.finite(weights)) && total > 0
+    support <- ifelse(is.finite(available) & available > 0, available, 0)
+    support <- support / if (known) total else max(1, sum(support))
+    track_counts <- counts[counts$track_id == id, , drop = FALSE]
+    for (column in columns) {
+      # Each sample's share of the track's support, in the buffer engine's
+      # terms: available support stands in for the area fraction.
+      frame <- data.frame(
+        area_fraction = support, depth_fraction = 1, time_fraction = 1,
+        value = selected[[column]]
       )
-      if (is.null(available)) {
-        available <- weights
+      summarise <- function(statistic) {
+        result <- .buffer_summarise_samples(
+          frame, "weighted", threshold, statistic
+        )
+        if (!known) {
+          result$status <- "empty"
+          result$valid_fraction <- NA_real_
+          result$value <- NA_real_
+        }
+        result
       }
-      valid <- usable & is.finite(selected[[column]]) & is.finite(available) &
-        available > 0
-      total <- sum(weights[usable])
-      # Missing duration support makes the full denominator
-      # unknowable.
-      unknown <- any(!is.finite(weights))
-      fraction <- if (unknown || total <= 0) {
-        NA_real_
-      } else {
-        sum(available[valid]) / total
-      }
-      accepted <- is.finite(fraction) && any(valid) && fraction +
-        1e-10 >= threshold
-      status <- if (!is.finite(fraction)) {
-        "unknown_or_zero_support"
-      } else if (!any(valid)) {
-        "all_missing"
-      } else if (!accepted) {
-        "insufficient_coverage"
-      } else if (fraction < 1 - 1e-10) {
-        "partial"
-      } else {
-        "complete"
-      }
+      overall <- summarise("mean")
       row <- data.frame(
-        track_id = id, output_column = column,
-        weighting = weighting, n_samples = nrow(selected),
-        n_observed = sum(!selected$is_interpolated),
-        n_assumed = sum(selected$is_interpolated), n_valid = sum(valid),
-        valid_fraction = fraction, total_distance_km = sum(selected$support_km),
+        track_id = id, output_column = column, weighting = weighting,
+        n_samples = track_counts$n_samples,
+        n_observed = track_counts$n_observed,
+        n_assumed = track_counts$n_assumed, n_valid = overall$n_valid,
+        valid_fraction = overall$valid_fraction,
+        total_distance_km = sum(selected$support_km),
         total_duration_seconds = if (anyNA(selected$support_seconds)) {
           NA_real_
         } else {
           sum(selected$support_seconds)
-        }, effective_n = if (any(valid)) {
-          1 / sum((available[valid] / sum(available[valid]))^2)
-        } else {
-          NA_real_
-        }, status = status, stringsAsFactors = FALSE
+        },
+        effective_n = overall$effective_n, status = overall$status,
+        stringsAsFactors = FALSE
       )
+      variation <- list()
       for (statistic in statistics) {
-        row[[statistic]] <- if (accepted) {
-          .buffer_statistic(
-            selected[[column]][valid], available[valid],
-            statistic
-          )
-        } else {
-          NA_real_
+        result <- if (statistic == "mean") overall else summarise(statistic)
+        row[[statistic]] <- result$value
+        if (statistic %in% c("sd", "se")) {
+          variation[[statistic]] <- result
         }
       }
-      variation <- intersect(statistics, c("sd", "se"))
+      accepted <- overall$status %in% c("partial", "complete")
       row$variation_status <- if (!length(variation)) {
         "not_requested"
-      } else if (accepted && sum(valid) < 2L) {
-        "insufficient_samples"
-      } else if (accepted && all(is.finite(unlist(row[variation])))) {
+      } else if (any(vapply(variation, function(x) {
+        x$status == "insufficient_variation_samples"
+      }, logical(1)))) {
+        "insufficient_variation_samples"
+      } else if (accepted && all(is.finite(unlist(row[names(variation)])))) {
         "available"
       } else {
         "not_available"
@@ -1324,9 +1321,11 @@
 #'   statistics = NULL. Cell-interval midpoints count as assumed positions.
 #'   variation_status is not_requested when neither SD nor SE is requested,
 #'   available when the requested variation statistics are finite, or
-#'   insufficient_samples when accepted support has fewer than two valid
-#'   samples. not_available covers rejected support or non-finite statistics;
-#'   consult status for coverage and support problems.
+#'   insufficient_variation_samples when accepted support has fewer than two
+#'   valid samples. not_available covers rejected support or non-finite
+#'   statistics; consult status for coverage and support problems. status
+#'   follows extract_to_buffer(): empty (no known support), all_missing,
+#'   insufficient_coverage, partial or complete.
 #'   Samples follow traversal order. For vertices-only sampling the global
 #'   input row order is retained. Non-coordinate attributes of inserted samples
 #'   are NA. source_row indexes the expanded vertex table for sf lines.
