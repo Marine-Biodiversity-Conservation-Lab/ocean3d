@@ -70,3 +70,69 @@ buffer_explorer <- function(example, script) {
   p <- plotly::config(p, displaylogo = FALSE, responsive = TRUE)
   htmlwidgets::onRender(p, paste(readLines(script, warn = FALSE), collapse = "\n"), data = data)
 }
+
+# Display complete function arguments in related groups for the tutorials.
+article_signature <- function(fun, name) {
+  groups <- list(
+    "Data and sources" = c("data", "nc", "var", "track_col"),
+    "Direct observation coordinates" = c("lon", "lat", "depth", "date"),
+    "Route sampling" = c("sampling", "spacing_km"),
+    "Depth along the route" = c("interpolate_depth", "depth_step_m", "z_as_depth"),
+    "Time along the route" = c("interpolate_time", "time_step", "time_unit",
+                              "time_step_seconds"),
+    "Horizontal buffer" = c("horizontal_radius_km", "lon_cell_radius", "lat_cell_radius"),
+    "Depth buffer" = c("depth_radius_m", "depth_layer_radius"),
+    "Time buffer" = c("time_before", "time_after", "buffer_time_unit"),
+    "Statistics inside each buffer" = c("statistic", "buffer_weighting"),
+    "Track summary" = c("statistics", "weighting", "track_min_valid_fraction"),
+    "Valid coverage and bounds" = c("min_valid_fraction", "infer_bounds"),
+    "Similar-value selection" = c("target_col", "interpolate_target",
+                                 "max_target_difference", "target_ties"),
+    "Depth selection" = "method",
+    "Observation and output columns" = c("lon_col", "lat_col", "depth_col",
+                                        "date_col", "output_col", "output_prefix", "id_col"),
+    "Source columns and dimensions" = c("file_col", "lon_dim", "lat_dim",
+                                       "depth_dim", "time_dim"),
+    "Temporal selection" = c("time_match", "time_resolution",
+                             "custom_time_interval", "max_time_diff"),
+    "Spatial selection" = c("spatial_match", "max_distance_km"),
+    "Distances and route limits" = c("distance_model", "max_samples",
+                                     "max_segment_km", "max_gap_hours"),
+    "Marine mask" = c("land_mask", "mask_type", "marine_values", "mask_domain"),
+    "Mask checks" = c("land_policy", "mask_step_km"),
+    "Diagnostics and messages" = c("return_match_info", "time_report",
+                                   "spatial_report", "depth_report", "verbose", "quiet"),
+    "Additional selection options" = "..."
+  )
+  if (name == "extract_to_buffer") {
+    groups[["Time buffer"]] <- c("time_before", "time_after", "time_unit")
+    groups[["Time along the route"]] <- character()
+    groups[["Statistics inside each buffer"]] <- c("statistic", "weighting")
+    groups[["Track summary"]] <- character()
+  }
+  defaults <- formals(fun)
+  groups <- lapply(groups, intersect, y = names(defaults))
+  groups <- groups[lengths(groups) > 0L]
+  displayed <- unlist(groups, use.names = FALSE)
+  stopifnot(!anyDuplicated(displayed), setequal(displayed, names(defaults)))
+  lines <- paste0(name, "(")
+  for (title in names(groups)) {
+    lines <- c(lines, paste0("  # ", title))
+    line <- " "
+    for (argument in groups[[title]]) {
+      value <- paste(deparse(defaults[[argument]], width.cutoff = 500L), collapse = " ")
+      entry <- if (value == "" || argument == "...") argument else
+        paste(argument, "=", value)
+      if (nchar(line) > 1L && nchar(line) + nchar(entry) + 2L > 80L) {
+        lines <- c(lines, line)
+        line <- " "
+      }
+      line <- paste0(line, " ", entry, ",")
+    }
+    lines <- c(lines, line, "")
+  }
+  lines[length(lines) - 1L] <- sub(",$", "", lines[length(lines) - 1L])
+  lines <- c(lines[-length(lines)], ")")
+  cat("```r\n", paste(lines, collapse = "\n"), "\n```\n", sep = "")
+  invisible(lines)
+}

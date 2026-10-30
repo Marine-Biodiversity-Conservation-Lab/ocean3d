@@ -18,7 +18,7 @@ extract_to_buffer(
   time_unit = c("days", "hours", "minutes", "seconds", "months", "years"),
   statistic = "mean",
   weighting = c("weighted", "equal"),
-  min_valid_fraction = 0.8,
+  min_valid_fraction = NULL,
   infer_bounds = FALSE,
   method = NULL,
   lon_col = "lon",
@@ -38,7 +38,10 @@ extract_to_buffer(
   max_distance_km = NULL,
   output_col = NULL,
   return_match_info = TRUE,
-  quiet = FALSE
+  quiet = FALSE,
+  target_col = NULL,
+  max_target_difference = NULL,
+  target_ties = c("NA", "lower", "higher")
 )
 }
 \arguments{
@@ -68,7 +71,7 @@ after the observation. Both use time_unit.}
 Days are 24 elapsed hours. Months and years require whole numbers and
 shift the UTC calendar, clamping to the destination month's last day.}
 
-\item{statistic}{One of "mean", "sd", "se", "min" or "max".
+\item{statistic}{One of "mean", "sd", "se", "min", "max" or "most_similar".
 SD uses the sample variance correction. SE is SD divided by the square
 root of the effective sample size. Min and max ignore weight magnitudes.}
 
@@ -77,7 +80,8 @@ root of the effective sample size. Min and max ignore weight magnitudes.}
 support in both modes. A point-selected axis contributes a factor of one.}
 
 \item{min_valid_fraction}{Minimum valid fraction of the entire requested
-support, between zero and one. Empty or entirely missing buffers return NA.}
+support, between zero and one. NULL uses 0.8 for summaries and zero for
+most_similar (any valid support). Empty/all-missing buffers remain NA.}
 
 \item{infer_bounds}{Allow missing bounds to be estimated using neighbouring
 coordinate midpoints, with half-gap extrapolation at outer edges. Inferred
@@ -95,7 +99,8 @@ text centre time buffers at midnight UTC; POSIXt preserves instants.}
 
 \item{file_col}{File-path column when nc is a table.}
 
-\item{lon_dim, lat_dim, depth_dim, time_dim}{Optional netCDF dimension overrides.}
+\item{lon_dim, lat_dim, depth_dim, time_dim}{Optional netCDF dimension
+overrides.}
 
 \item{time_match, time_resolution, max_time_diff}{Point-time selection options
 on an unbuffered time axis; see \code{\link[=extract_to_point]{extract_to_point()}}. max_time_diff is in
@@ -110,12 +115,31 @@ mapping multiple variable names to distinct output columns.}
 \item{return_match_info}{Add a list column named \if{html}{\out{<output>}}_match_info per
 variable, containing coverage, source, bounds and selection diagnostics.}
 
-\item{quiet}{Hide explanatory summaries. Time-zone warnings remain active.}
+\item{quiet}{Hide explanatory summaries. Time-zone and ambiguous-location
+warnings remain active.}
+
+\item{target_col}{Column containing the numeric target for most_similar.
+For several variables, a named variable-to-column mapping. Targets must
+use the environmental variable's units. Original NA targets return NA.}
+
+\item{max_target_difference}{Optional non-negative maximum absolute
+difference from the target, in the environmental variable's units.}
+
+\item{target_ties}{How to resolve equally similar different values: NA
+(default), lower or higher. Repeated identical winning values retain all
+their locations in match_info; no file is chosen by input order.
+This rule does not choose locations among repeated identical values.}
 }
 \value{
 The normalised observation table with one numeric summary column
 per variable and, optionally, a diagnostic list column per output. sf
 inputs retain their geometry. Existing columns are never overwritten.
+most_similar always adds \if{html}{\out{<output>}}_match_lon, _match_lat, _match_depth and
+_match_time (UTC). They describe winning model coordinates, not corrected
+observations. Ambiguous or unavailable fields are NA. Longitude/latitude
+are returned together only for a unique horizontal location. All winning
+records remain in match_info when requested. Unresolved value or location
+ties emit one bounded warning per output with affected rows and guidance.
 }
 \description{
 Calculate one summary per observation and variable within horizontal, depth
@@ -129,7 +153,8 @@ divided by sum(p * (1 - p)); effective sample size is 1 / sum(p^2).
 Equal weighting reproduces ordinary sample SD and SE. SD and SE require
 at least two valid samples; otherwise they return NA with a diagnostic.
 SE assumes independent samples and does not correct spatial or temporal
-autocorrelation. It is not an automatic estimate of environmental uncertainty.
+autocorrelation. It is not an automatic estimate of environmental
+uncertainty.
 All statistics, including min and max, require the requested valid coverage.
 
 At least one window must be positive. Bounds describe represented support;

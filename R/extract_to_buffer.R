@@ -56,7 +56,7 @@
     }
   }
 
-  allowed_statistics <- c("mean", "sd", "se", "min", "max")
+  allowed_statistics <- c("mean", "sd", "se", "min", "max", "most_similar")
   if (!is.character(statistic) || length(statistic) != 1L ||
         is.na(statistic) || !statistic %in% allowed_statistics) {
     stop("`statistic` must be one of: ",
@@ -130,7 +130,8 @@
         .shift_temporal_months(values[i], months),
         error = function(e) {
           stop(
-            "The requested time buffer exceeds the supported calendar range. ",
+            paste0("The requested time buffer exceeds the supported ",
+                   "calendar range. "),
             "Check `time_before`, `time_after` and `time_unit`.",
             call. = FALSE
           )
@@ -146,7 +147,8 @@
 
   if (any(!is.na(values) & !is.finite(as.numeric(shifted)))) {
     stop(
-      "The requested time buffer exceeds the supported calendar range. ",
+      paste0("The requested time buffer exceeds the supported ",
+             "calendar range. "),
       "Check `time_before`, `time_after` and `time_unit`.",
       call. = FALSE
     )
@@ -178,7 +180,8 @@
   if (options$depth_radius_m > 0) {
     if (is.null(depth_col)) {
       stop(
-        "A depth buffer requires `depth_col` naming an observation column.",
+        paste0("A depth buffer requires `depth_col` naming an ",
+               "observation column."),
         call. = FALSE
       )
     }
@@ -246,7 +249,8 @@
   steps <- diff(centres)
   if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
     stop("Coordinate `", coordinate,
-         "` must be strictly increasing or decreasing, without duplicates.",
+         paste0("` must be strictly increasing or decreasing, without ",
+                "duplicates."),
          call. = FALSE)
   }
 
@@ -283,7 +287,8 @@
         any(upper <= lower) || any(!is.finite(upper - lower)) ||
         any(centres < lower | centres > upper)) {
     stop("Invalid bounds for `", coordinate,
-         "`: intervals need positive widths and must contain their centres.",
+         paste0("`: intervals need positive widths and must contain ",
+                "their centres."),
          call. = FALSE)
   }
   index <- order(lower)
@@ -370,7 +375,8 @@
 
   if (is.null(bounds) && !infer_bounds) {
     stop("Coordinate `", coordinate, "` has no explicit bounds. ",
-         "Use a dataset with bounds or explicitly set `infer_bounds = TRUE` ",
+         paste0("Use a dataset with bounds or explicitly set ",
+                "`infer_bounds = TRUE` "),
          "to estimate midpoint intervals.", call. = FALSE)
   }
 
@@ -407,7 +413,8 @@
         requested[2L] <= requested[1L] ||
         !is.finite(diff(requested))) {
     stop(
-      "`requested` must contain two finite, increasing interval limits.",
+      paste0("`requested` must contain two finite, increasing ",
+             "interval limits."),
       call. = FALSE
     )
   }
@@ -597,9 +604,10 @@
   }
   if (!is.null(max_time_diff) &&
         (!is.numeric(max_time_diff) || length(max_time_diff) != 1L ||
-         is.na(max_time_diff) || !is.finite(max_time_diff) ||
-         max_time_diff < 0)) {
-    stop("`max_time_diff` must be NULL or one finite, non-negative number.",
+           is.na(max_time_diff) || !is.finite(max_time_diff) ||
+           max_time_diff < 0)) {
+    stop(paste0("`max_time_diff` must be NULL or one finite, ",
+                "non-negative number."),
          call. = FALSE)
   }
   .check_required_cols(data, c(lon_col, lat_col, id_col))
@@ -629,7 +637,8 @@
   }
   if (time_buffer && options$method == "2d" && !is.null(dims$depth) &&
         length(.get_dim_values(nc, dims$depth)) > 1L) {
-    stop("This variable has multiple depth layers. Select surface, bottom ",
+    stop(paste0("This variable has multiple depth layers. Select ",
+                "surface, bottom "),
          "or nearest instead of `method = '2d'`.", call. = FALSE)
   }
   if (!is.null(dims$time)) {
@@ -940,7 +949,7 @@
     value <- counts[[name]]
     if (!is.null(value) &&
           (!is.numeric(value) || length(value) != 1L || !is.finite(value) ||
-           value < 0 || value != floor(value))) {
+             value < 0 || value != floor(value))) {
       stop("`", name, "` must be NULL or one non-negative whole number.",
            call. = FALSE)
     }
@@ -948,8 +957,10 @@
   horizontal_index <- !is.null(lon_cell_radius) || !is.null(lat_cell_radius)
   depth_index <- !is.null(depth_layer_radius)
   for (value in list(horizontal_radius_km, depth_radius_m)) {
-    if (!is.numeric(value) || length(value) != 1L || !is.finite(value) || value < 0) {
-      stop("Metric radii must be finite, non-negative scalar numbers.", call. = FALSE)
+    if (!is.numeric(value) || length(value) != 1L || !is.finite(value) ||
+          value < 0) {
+      stop("Metric radii must be finite, non-negative scalar numbers.",
+           call. = FALSE)
     }
   }
   if (horizontal_index && horizontal_radius_km != 0) {
@@ -964,13 +975,14 @@
   )
   if (!any(c(horizontal_radius_km, depth_radius_m, options$time_before,
              options$time_after, unlist(counts)) > 0)) {
-    stop("At least one buffer window must be positive. Use extract_to_point().",
+    stop(paste0("At least one buffer window must be positive. Use ",
+                "extract_to_point()."),
          call. = FALSE)
   }
   options$horizontal_radius_km <- horizontal_radius_km
   options$depth_radius_m <- depth_radius_m
   c(options, counts, list(horizontal_index = horizontal_index,
-                         depth_index = depth_index))
+                          depth_index = depth_index))
 }
 
 
@@ -1073,20 +1085,26 @@
     method = selected_method,
     depth_axis = if (!is.null(dims$depth) && selected_method != "2d") {
       .read_depth_axis(nc, dims$depth, raw_depth)
-    } else NULL,
+    } else {
+      NULL
+    },
     depth_support = if (vertical) {
       .buffer_read_axis(nc, dims$depth, "depth", options$infer_bounds)
-    } else NULL,
+    } else {
+      NULL
+    },
     time_values = as.numeric(.decode_netcdf_time(nc, dims$time)),
     time_support = if (temporal) {
       .buffer_read_axis(nc, dims$time, "time", options$infer_bounds)
-    } else NULL
+    } else {
+      NULL
+    }
   )
 }
 
 
 .buffer_space_query <- function(meta, lon, lat, options, buffer,
-                                 spatial_match, max_distance_km) {
+                                spatial_match, max_distance_km) {
   spatial <- options$horizontal_radius_km > 0 || options$horizontal_index
   if (!spatial || options$horizontal_index) {
     match <- .horizontal_match_row(.match_horizontal_cells(
@@ -1200,10 +1218,13 @@
 .buffer_depth_query <- function(meta, target, options) {
   active <- options$depth_radius_m > 0 || options$depth_index
   if (!active) {
-    index <- if (is.null(meta$dims$depth)) NA_integer_ else {
+    index <- if (is.null(meta$dims$depth)) {
+      NA_integer_
+    } else {
       if (meta$method == "2d") 1L else seq_along(meta$depth_axis$depth_m)
     }
-    return(list(status = "ready", index = index, fraction = rep(1, length(index)),
+    return(list(status = "ready", index = index, fraction = rep(1,
+                                                                length(index)),
                 lower = rep(NA_real_, length(index)),
                 upper = rep(NA_real_, length(index))))
   }
@@ -1224,7 +1245,8 @@
     span <- diff(request)
   }
   if (!is.finite(span) || span <= 0) {
-    stop("The requested depth buffer has no finite positive width.", call. = FALSE)
+    stop("The requested depth buffer has no finite positive width.",
+         call. = FALSE)
   }
   list(status = "ready", index = index, lower = lower, upper = upper,
        fraction = (upper - lower) / span)
@@ -1236,7 +1258,8 @@
     support <- meta$time_support
     span <- diff(window)
     if (!is.finite(span) || span <= 0) {
-      stop("The requested time buffer has no finite positive width.", call. = FALSE)
+      stop("The requested time buffer has no finite positive width.",
+           call. = FALSE)
     }
     index <- which(support$upper > window[1L] & support$lower < window[2L])
     lower <- pmax(support$lower[index], window[1L])
@@ -1245,7 +1268,8 @@
                 fraction = (upper - lower) / span))
   }
   if (is.null(meta$dims$time)) {
-    return(list(index = NA_integer_, lower = NA_real_, upper = NA_real_, fraction = 1))
+    return(list(index = NA_integer_, lower = NA_real_, upper = NA_real_,
+                fraction = 1))
   }
   index <- which(meta$time_values == selected)
   list(index = index, lower = rep(selected, length(index)),
@@ -1257,7 +1281,8 @@
   data.frame(
     source_index = integer(), lon_index = integer(), lat_index = integer(),
     depth_index = integer(), time_index = integer(), value = numeric(),
-    area_fraction = numeric(), depth_fraction = numeric(), time_fraction = numeric(),
+    area_fraction = numeric(), depth_fraction = numeric(),
+    time_fraction = numeric(),
     depth_m = numeric(), timestamp = numeric(), depth_lower = numeric(),
     depth_upper = numeric(), time_lower = numeric(), time_upper = numeric(),
     distance_km = numeric(), cell_key = character(), geometry = character()
@@ -1316,10 +1341,11 @@
 
 
 .buffer_select_point_samples <- function(samples, method, target_depth,
-                                        spatial, vertical) {
+                                         spatial, vertical) {
   if (!nrow(samples)) return(samples)
   if (!spatial) {
-    groups <- split(seq_len(nrow(samples)), .buffer_sample_keys(samples, vertical))
+    groups <- split(seq_len(nrow(samples)), .buffer_sample_keys(samples,
+                                                                vertical))
     keep <- unlist(lapply(groups, function(rows) {
       rows[samples$distance_km[rows] == min(samples$distance_km[rows])]
     }), use.names = FALSE)
@@ -1338,7 +1364,8 @@
         max(samples$depth_m[eligible])
       } else {
         ordered <- eligible[order(samples$depth_m[eligible])]
-        samples$depth_m[ordered[.nearest_index(samples$depth_m[ordered], target_depth)]]
+        samples$depth_m[ordered[.nearest_index(samples$depth_m[ordered],
+                                               target_depth)]]
       }
       # Keep duplicate support even if one copy is NA: overlap remains an error.
       rows[samples$depth_m[rows] == selected]
@@ -1401,12 +1428,13 @@
         y <- b[b_ids == b_ids[b_unique[j]], , drop = FALSE]
         if (.buffer_record_overlap(x, y, vertical, temporal)) {
           files <- vapply(pairs[, k], function(index) {
-            metadata[[which(vapply(metadata, function(m) m$source_index == index,
-                                  logical(1)))[1L]]]$source_file
+            metadata[[which(vapply(metadata,
+                                   function(m) m$source_index == index,
+                                   logical(1)))[1L]]]$source_file
           }, character(1))
           stop("Source files overlap within the requested buffer: ",
                paste(basename(files), collapse = ", "), ". ",
-               "Choose complementary sources; overlapping support is not averaged.",
+               "Use other sources; overlapping support is not averaged.",
                call. = FALSE)
         }
       }
@@ -1447,15 +1475,20 @@
   if (abs(fraction - 1) < 1e-10) fraction <- 1
   meets_threshold <- fraction >= min_valid_fraction ||
     abs(fraction - min_valid_fraction) < 1e-10
-  status <- if (!any(selected)) "empty" else if (!any(valid)) {
+  status <- if (!any(selected)) {
+    "empty"
+  } else if (!any(valid)) {
     "all_missing"
-  } else if (!meets_threshold) "insufficient_coverage" else {
+  } else if (!meets_threshold) {
+    "insufficient_coverage"
+  } else {
     if (fraction < 1) "partial" else "complete"
   }
   value <- NA_real_
   effective_n <- NA_real_
   if (any(valid)) {
-    weights <- if (weighting == "weighted") support[valid] else rep(1, sum(valid))
+    weights <- if (weighting == "weighted") support[valid] else rep(1,
+                                                                    sum(valid))
     effective_n <- 1 / sum((weights / sum(weights))^2)
   }
   if (any(valid) && meets_threshold) {
@@ -1487,12 +1520,15 @@
     if (options$depth_index) result$depth <- axis(meta$depth_support)
     result
   }
-  if (length(metadata) > 1L && (options$horizontal_index || options$depth_index)) {
+  if (length(metadata) > 1L && (options$horizontal_index ||
+                                  options$depth_index)) {
     reference <- signature(metadata[[1L]])
     for (meta in metadata[-1L]) {
       if (!isTRUE(all.equal(reference, signature(meta), tolerance = 1e-12))) {
-        stop("Index buffers require matching grid/layer coordinates and bounds ",
-             "across sources for the same variable. Use metric buffers instead.",
+        stop(paste0("Index buffers require matching grid/layer ",
+                    "coordinates and bounds "),
+             paste0("across sources for the same variable. Use metric ",
+                    "buffers instead."),
              call. = FALSE)
       }
     }
@@ -1501,7 +1537,8 @@
 }
 
 
-.buffer_output_names <- function(variables, output_col, input_names, match_info) {
+.buffer_output_names <- function(variables, output_col, input_names,
+                                 match_info, locations = FALSE) {
   outputs <- if (is.null(output_col)) {
     variables
   } else if (length(variables) == 1L && length(output_col) == 1L) {
@@ -1509,16 +1546,23 @@
   } else {
     if (is.null(names(output_col)) || anyDuplicated(names(output_col)) ||
           !setequal(names(output_col), variables)) {
-      stop("For multiple variables, `output_col` must name each variable once.",
+      stop(paste0("For multiple variables, `output_col` must name each ",
+                  "variable once."),
            call. = FALSE)
     }
     unname(output_col[variables])
   }
   if (!is.character(outputs) || anyNA(outputs) || any(!nzchar(outputs)) ||
         anyDuplicated(outputs)) {
-    stop("Output column names must be distinct, non-empty strings.", call. = FALSE)
+    stop("Output column names must be distinct, non-empty strings.",
+         call. = FALSE)
   }
   generated <- c(outputs, if (match_info) paste0(outputs, "_match_info"))
+  if (locations) {
+    generated <- c(generated, outer(outputs, c(
+      "_match_lon", "_match_lat", "_match_depth", "_match_time"
+    ), paste0))
+  }
   if (anyDuplicated(generated) || any(generated %in% input_names)) {
     stop("Output or diagnostic names would overwrite existing columns. ",
          "Choose different `output_col` names.", call. = FALSE)
@@ -1538,14 +1582,26 @@
   indices <- unique(samples$source_index)
   files <- vapply(indices, function(index) {
     metadata[[which(vapply(metadata, function(m) m$source_index == index,
-                          logical(1)))[1L]]]$source_file
+                           logical(1)))[1L]]]$source_file
   }, character(1))
-  bounds <- lapply(metadata, function(m) list(
-    file = m$source_file,
-    longitude = m$lon_axis$basis, latitude = m$lat_axis$basis,
-    depth = if (is.null(m$depth_support)) NULL else m$depth_support$basis,
-    time = if (is.null(m$time_support)) NULL else m$time_support$basis
-  ))
+  bounds <- lapply(metadata, function(m) {
+    list(
+      file = m$source_file,
+      longitude = m$lon_axis$basis, latitude = m$lat_axis$basis,
+      depth = if (is.null(m$depth_support)) NULL else m$depth_support$basis,
+      time = if (is.null(m$time_support)) NULL else m$time_support$basis
+    )
+  })
+  if (!is.null(result$target_match)) {
+    result$target_match$matches <- .buffer_target_records(
+      samples, result$target_match$selected_rows, metadata
+    )
+    result$target_match$ties <- .buffer_target_records(
+      samples, result$target_match$tied_rows, metadata
+    )
+    result$target_match$selected_rows <- NULL
+    result$target_match$tied_rows <- NULL
+  }
   result$value <- NULL
   result$contributing_rows <- NULL
   c(result, list(
@@ -1556,18 +1612,24 @@
     sources_intersecting = files,
     sources_used = vapply(unique(used$source_index), function(index) {
       metadata[[which(vapply(metadata, function(m) m$source_index == index,
-                            logical(1)))[1L]]]$source_file
+                             logical(1)))[1L]]]$source_file
     }, character(1)),
     bounds = bounds,
     depth_range_m = range_or_null(used$depth_m),
-    depth_support_range_m = range_or_null(c(used$depth_lower, used$depth_upper)),
+    depth_support_range_m = range_or_null(c(used$depth_lower,
+                                            used$depth_upper)),
     time_range_utc = if (any(is.finite(used$timestamp))) {
-      as.POSIXct(range_or_null(used$timestamp), origin = "1970-01-01", tz = "UTC")
-    } else NULL,
+      as.POSIXct(range_or_null(used$timestamp), origin = "1970-01-01",
+                 tz = "UTC")
+    } else {
+      NULL
+    },
     time_support_range_utc = if (any(is.finite(used$time_lower))) {
       as.POSIXct(range_or_null(c(used$time_lower, used$time_upper)),
                  origin = "1970-01-01", tz = "UTC")
-    } else NULL,
+    } else {
+      NULL
+    },
     geometry_method = if (options$horizontal_index) {
       "Whole-cell neighbourhood; WGS84 geodesic cell areas"
     } else if (options$horizontal_radius_km > 0) {
@@ -1578,33 +1640,45 @@
 
 
 .show_buffer_report <- function(diagnostics, data, variable, output, id_col) {
-  affected <- which(vapply(diagnostics, function(x) x$status != "complete", logical(1)))
+  affected <- which(vapply(diagnostics,
+                           function(x) x$status != "complete", logical(1)))
   if (!length(affected)) return(invisible(NULL))
   reasons <- c(
     empty = "No source covers the requested buffer.",
+    missing_target = "The target value is NA; result: NA.",
+    ambiguous_target = "Equally similar different values; result: NA.",
+    outside_target_limit = "No value meets max_target_difference; result: NA.",
+    difference_overflow = "Target difference is out of range; result: NA.",
     all_missing = "The buffer is covered, but all selected values are missing.",
-    insufficient_coverage = "Valid coverage is below the requested threshold; result: NA.",
+    insufficient_coverage = "Valid coverage is below minimum; result: NA.",
     insufficient_variation_samples = paste(
-      "SD or SE requires at least two valid samples with usable weights; result: NA."
+      paste0("SD or SE requires at least two valid samples with ",
+             "usable weights; result: NA.")
     ),
-    partial = "The result uses partial coverage and meets the requested threshold.",
+    partial = paste0("The result uses partial coverage and meets the ",
+                     "requested threshold."),
     missing_time = "The observation date is NA; result: NA.",
     missing_depth = "The observation depth is NA; result: NA.",
-    invalid_coordinates = "Observation coordinates are missing or invalid; result: NA.",
+    invalid_coordinates = "Missing or invalid coordinates; result: NA.",
     incomplete_index_window = paste(
-      "The index window extends beyond the grid; its full support is unknown.",
+      paste0("The index window extends beyond the grid; its full ",
+             "support is unknown."),
       "Result: NA. Reduce the window or use wider grid coverage."
     ),
-    time_rejected = "No timestamp satisfies the point-time selection; result: NA."
+    time_rejected = "No timestamp meets the requested settings; result: NA."
   )
   examples <- vapply(head(affected, 5L), function(i) {
     info <- diagnostics[[i]]
-    identifier <- if (is.null(id_col)) "" else paste0(" (id: ", data[[id_col]][i], ")")
+    identifier <- if (is.null(id_col)) "" else paste0(" (id: ",
+                                                      data[[id_col]][i], ")")
     coverage <- if (is.finite(info$coverage_fraction)) {
       paste0(" Coverage: ", .selection_number(100 * info$coverage_fraction),
              "%; valid: ", .selection_number(100 * info$valid_fraction),
-             "%; required: ", .selection_number(100 * info$min_valid_fraction), "%. ")
-    } else " "
+             "%; required: ",
+             .selection_number(100 * info$min_valid_fraction), "%. ")
+    } else {
+      " "
+    }
     paste0("Row ", i, identifier, ": ", reasons[[info$status]], coverage)
   }, character(1))
   message(structure(list(
@@ -1612,13 +1686,304 @@
       "Buffer report: ", length(affected), " observation(s) need attention.\n",
       "netCDF variable: ", variable, " \u00b7 output column: ", output, "\n",
       paste(examples, collapse = "\n"),
-      if (length(affected) > 5L) paste0("\nShowing 5 of ", length(affected), " cases.") else "",
+      if (length(affected) > 5L) paste0("\nShowing 5 of ",
+                                        length(affected), " cases.") else "",
       "\nCheck coordinates, source coverage and missing values. ",
-      "Change the window or threshold only if appropriate for your analysis.\n"
+      paste0("Change the window or threshold only if appropriate ",
+             "for your analysis.\n")
     ), call = NULL
   ), class = c("ocean3d_buffer_report", "message", "condition")))
   invisible(NULL)
 }
+
+
+.select_target_value <- function(
+  candidates, target, min_valid_fraction = 0.8,
+  max_target_difference = NULL, ties = c("NA", "lower", "higher"),
+  tie_tolerance = NULL
+) {
+  ties <- match.arg(ties)
+  required <- c("candidate_id", "value", "support_fraction")
+  if (!is.data.frame(candidates) || !all(required %in% names(candidates))) {
+    stop(paste0("Candidates need candidate_id, value and ",
+                "support_fraction columns."))
+  }
+  if (
+      anyNA(candidates$candidate_id) ||
+        anyDuplicated(candidates$candidate_id)) {
+    stop("Candidate IDs must be non-missing and unique.")
+  }
+  if (
+      !is.numeric(candidates$value) ||
+        !is.numeric(candidates$support_fraction) ||
+        any(!is.finite(candidates$support_fraction)) ||
+        any(candidates$support_fraction < 0)) {
+    stop(paste0("Values must be numeric; support must be finite and ",
+                "non-negative."))
+  }
+  if (
+      !is.numeric(target) || length(target) != 1L ||
+        (!is.na(target) && !is.finite(target))) {
+    stop("Target must be one finite numeric value or NA.")
+  }
+  if (
+      !is.numeric(min_valid_fraction) || length(min_valid_fraction) != 1L ||
+        !is.finite(min_valid_fraction) || min_valid_fraction < 0 ||
+        min_valid_fraction > 1) {
+    stop("min_valid_fraction must be between zero and one.")
+  }
+  for (option in c("max_target_difference", "tie_tolerance")) {
+    value <- get(option)
+    if (
+        !is.null(value) && (
+                            !is.numeric(value) || length(value) != 1L ||
+                              !is.finite(value) || value < 0)) {
+      stop(option, " must be NULL or one finite non-negative number.")
+    }
+  }
+  intersecting <- candidates$support_fraction > 0
+  valid <- intersecting & is.finite(candidates$value)
+  coverage <- sum(candidates$support_fraction[intersecting])
+  valid_fraction <- sum(candidates$support_fraction[valid])
+  if (coverage > 1 + 1e-10) {
+    stop(paste0("Support exceeds the request: reject overlap before ",
+                "target selection."))
+  }
+  result <- list(
+    value = NA_real_, target = target, absolute_difference = NA_real_,
+    closest_available_value = NA_real_, coverage_fraction = min(1, coverage),
+    valid_fraction = min(1, valid_fraction), n_intersecting = sum(intersecting),
+    n_valid = sum(valid), status = "empty", n_tied_candidates = 0L,
+    selected_rows = integer(), tied_rows = integer()
+  )
+  if (is.na(target)) {
+    result$status <- "missing_target"
+    return(result)
+  }
+  if (!any(intersecting)) {
+    return(result)
+  }
+  if (!any(valid)) {
+    result$status <- "all_missing"
+    return(result)
+  }
+  if (valid_fraction + 1e-10 < min_valid_fraction) {
+    result$status <- "insufficient_coverage"
+    return(result)
+  }
+  rows <- which(valid)
+  differences <- abs(candidates$value[rows] - target)
+  best <- min(differences)
+  if (!is.finite(best)) {
+    result$status <- "difference_overflow"
+    return(result)
+  }
+  if (is.null(tie_tolerance)) {
+    scale <- max(
+      abs(target), abs(candidates$value[rows[differences == best]]),
+      .Machine$double.xmin
+    )
+    tie_tolerance <- 8 * .Machine$double.eps * scale
+  }
+  # An exact target hit always wins over nearby but non-exact values.
+  tied <- if (best == 0) {
+    rows[differences == 0]
+  } else {
+    rows[abs(differences - best) <= tie_tolerance]
+  }
+  result$absolute_difference <- best
+  values <- sort(unique(candidates$value[tied]))
+  result$closest_available_value <- if (length(values) == 1L) {
+    values
+  } else {
+    NA_real_
+  }
+  if (!is.null(max_target_difference) && best > max_target_difference) {
+    result$status <- "outside_target_limit"
+    return(result)
+  }
+  if (!is.null(max_target_difference)) {
+    tied <- tied[abs(candidates$value[tied] - target) <= max_target_difference]
+  }
+  result$tied_rows <- tied
+  result$n_tied_candidates <- length(tied)
+  values <- sort(unique(candidates$value[tied]))
+  if (length(values) > 1L && ties == "NA") {
+    result$status <- "ambiguous_target"
+    return(result)
+  }
+  value <- if (ties == "higher") max(values) else min(values)
+  selected <- tied[candidates$value[tied] == value]
+  result$value <- value
+  result$absolute_difference <- abs(value - target)
+  result$selected_rows <- selected
+  result$status <- if (length(selected) > 1L) {
+    "matched_multiple_locations"
+  } else {
+    "matched"
+  }
+  result
+}
+
+
+.target_columns <- function(data, variables, target_col) {
+  if (
+      !is.character(target_col) || !length(target_col) || anyNA(target_col) ||
+        any(!nzchar(target_col))) {
+    stop("most_similar requires a numeric target_col.", call. = FALSE)
+  }
+  columns <- if (length(variables) == 1L && length(target_col) == 1L) {
+    stats::setNames(unname(target_col), variables)
+  } else {
+    if (anyDuplicated(names(target_col)) || !setequal(names(target_col),
+                                                      variables)) {
+      stop("Map target_col to every variable by name.", call. = FALSE)
+    }
+    target_col[variables]
+  }
+  .check_required_cols(data, unname(columns))
+  for (column in columns) {
+    values <- data[[column]]
+    bad <- if (!is.numeric(values)) {
+      seq_along(values)
+    } else {
+      which(!is.na(values) & !is.finite(values))
+    }
+    if (!is.numeric(values) || length(bad)) {
+      examples <- head(bad, 5L)
+      stop(
+        "Target column `", column, "` needs finite numeric values or NA. ",
+        length(bad), " invalid row(s). Examples: ",
+        paste0(examples, "=", values[examples], collapse = "; "),
+        ". Convert targets explicitly to the netCDF variable's units.",
+        call. = FALSE
+      )
+    }
+  }
+  columns
+}
+
+
+.buffer_target_summary <- function(samples, target, threshold, limit, ties) {
+  candidates <- data.frame(
+    candidate_id = seq_len(nrow(samples)), value = samples$value,
+    support_fraction = with(samples,
+                            area_fraction * depth_fraction * time_fraction)
+  )
+  selected <- .select_target_value(candidates, target, threshold, limit, ties)
+  status <- selected$status
+  if (status %in% c("matched", "matched_multiple_locations")) {
+    status <- if (selected$valid_fraction < 1 - 1e-10) "partial" else "complete"
+  }
+  list(
+    value = selected$value, coverage_fraction = selected$coverage_fraction,
+    valid_fraction = selected$valid_fraction,
+    n_intersecting = selected$n_intersecting,
+    n_valid = selected$n_valid, status = status,
+    contributing_rows = selected$selected_rows,
+    effective_n = NA_real_, target_match = selected
+  )
+}
+
+
+.buffer_target_records <- function(samples, rows, metadata) {
+  records <- samples[rows, , drop = FALSE]
+  if (!length(rows)) {
+    return(data.frame())
+  }
+  lookup <- function(i) {
+    index <- samples$source_index[i]
+    Filter(function(m) m$source_index == index, metadata)[[1L]]
+  }
+  records$source_file <- vapply(rows, function(i) {
+    lookup(i)$source_file
+  }, character(1))
+  records$longitude <- vapply(rows, function(i) {
+    lookup(i)$lon[samples$lon_index[i]]
+  }, numeric(1))
+  records$latitude <- vapply(rows, function(i) {
+    lookup(i)$lat[samples$lat_index[i]]
+  }, numeric(1))
+  records$timestamp_utc <- as.POSIXct(records$timestamp,
+                                      origin = "1970-01-01", tz = "UTC")
+  records[c(
+    "value", "source_file", "longitude", "latitude", "depth_m",
+    "timestamp_utc", "lon_index", "lat_index", "depth_index", "time_index"
+  )]
+}
+
+
+.buffer_target_locations <- function(diagnostics, values, output,
+                                     eligible = rep(TRUE, length(values))) {
+  locations <- data.frame(
+    lon = rep(NA_real_, length(values)), lat = rep(NA_real_, length(values)),
+    depth = rep(NA_real_, length(values)),
+    time = as.POSIXct(
+      rep(NA_real_, length(values)), origin = "1970-01-01", tz = "UTC"
+    )
+  )
+  ambiguous <- logical(length(values))
+  value_ties <- logical(length(values))
+  for (i in seq_along(values)) {
+    target <- diagnostics[[i]]$target_match
+    if (is.null(target)) next
+    value_ties[i] <- identical(target$status, "ambiguous_target")
+    records <- target$matches
+    status <- if (value_ties[i]) "ambiguous_value" else "no_value"
+    if (is.finite(values[i]) && nrow(records)) {
+      horizontal <- unique(records[c("longitude", "latitude")])
+      depth <- unique(records$depth_m)
+      time <- unique(as.numeric(records$timestamp_utc))
+      if (nrow(horizontal) == 1L) {
+        locations$lon[i] <- horizontal$longitude
+        locations$lat[i] <- horizontal$latitude
+      }
+      if (length(depth) == 1L) locations$depth[i] <- depth
+      if (length(time) == 1L) {
+        locations$time[i] <- as.POSIXct(time, origin = "1970-01-01", tz = "UTC")
+      }
+      ambiguous[i] <- nrow(horizontal) > 1L || length(depth) > 1L ||
+        length(time) > 1L
+      status <- if (ambiguous[i]) "ambiguous_location" else "unique"
+    }
+    diagnostics[[i]]$target_match$location_status <- status
+  }
+  affected <- which((ambiguous | value_ties) & eligible)
+  if (length(affected)) {
+    message <- paste0(
+      "most_similar could not assign a unique location for output `", output,
+      "` in ", length(affected), " row(s). Rows: ",
+      toString(head(affected, 5L)), if (length(affected) > 5L) "; ..." else "",
+      ". Ambiguous location fields are NA; original coordinates are retained. ",
+      "Use return_match_info = TRUE and inspect `", output,
+      "_match_info[[", affected[1L],
+      "]]$target_match$matches` (or $ties for tied values). "
+    )
+    if (any(value_ties & eligible)) {
+      message <- paste0(
+        message, "For equally similar different values, choose ",
+        "target_ties = 'lower' or 'higher' only if justified. "
+      )
+    }
+    if (any(ambiguous & eligible)) {
+      message <- paste0(
+        message, "Repeated identical winning values need a narrower buffer ",
+        "or an independently justified location rule; ",
+        "target_ties does not choose between them."
+      )
+    }
+    condition <- structure(
+      list(message = message, call = NULL, rows = affected, output = output),
+      class = c("ocean3d_target_location_warning", "warning", "condition")
+    )
+    warning(condition)
+  }
+  names(locations) <- paste0(output, c(
+    "_match_lon", "_match_lat", "_match_depth", "_match_time"
+  ))
+  list(columns = locations, diagnostics = diagnostics)
+}
+
 
 
 #' Summarise environmental values around observations
@@ -1644,14 +2009,15 @@
 #' @param time_unit One of days, hours, minutes, seconds, months or years.
 #'   Days are 24 elapsed hours. Months and years require whole numbers and
 #'   shift the UTC calendar, clamping to the destination month's last day.
-#' @param statistic One of "mean", "sd", "se", "min" or "max".
+#' @param statistic One of "mean", "sd", "se", "min", "max" or "most_similar".
 #'   SD uses the sample variance correction. SE is SD divided by the square
 #'   root of the effective sample size. Min and max ignore weight magnitudes.
 #' @param weighting "weighted" uses intersecting area, thickness and duration;
 #'   "equal" gives equal weight to valid samples. Coverage uses physical
 #'   support in both modes. A point-selected axis contributes a factor of one.
 #' @param min_valid_fraction Minimum valid fraction of the entire requested
-#'   support, between zero and one. Empty or entirely missing buffers return NA.
+#'   support, between zero and one. NULL uses 0.8 for summaries and zero for
+#'   most_similar (any valid support). Empty/all-missing buffers remain NA.
 #' @param infer_bounds Allow missing bounds to be estimated using neighbouring
 #'   coordinate midpoints, with half-gap extrapolation at outer edges. Inferred
 #'   depth support is clipped at zero metres. A singleton needs explicit bounds.
@@ -1663,7 +2029,8 @@
 #'   text centre time buffers at midnight UTC; POSIXt preserves instants.
 #' @param id_col Optional observation identifier column used in diagnostics.
 #' @param file_col File-path column when nc is a table.
-#' @param lon_dim,lat_dim,depth_dim,time_dim Optional netCDF dimension overrides.
+#' @param lon_dim,lat_dim,depth_dim,time_dim Optional netCDF dimension
+#'   overrides.
 #' @param time_match,time_resolution,max_time_diff Point-time selection options
 #'   on an unbuffered time axis; see [extract_to_point()]. max_time_diff is in
 #'   days and cannot be combined with a temporal window.
@@ -1673,11 +2040,28 @@
 #'   mapping multiple variable names to distinct output columns.
 #' @param return_match_info Add a list column named <output>_match_info per
 #'   variable, containing coverage, source, bounds and selection diagnostics.
-#' @param quiet Hide explanatory summaries. Time-zone warnings remain active.
+#' @param quiet Hide explanatory summaries. Time-zone and ambiguous-location
+#'   warnings remain active.
+#'
+#' @param target_col Column containing the numeric target for most_similar.
+#'   For several variables, a named variable-to-column mapping. Targets must
+#'   use the environmental variable's units. Original NA targets return NA.
+#' @param max_target_difference Optional non-negative maximum absolute
+#'   difference from the target, in the environmental variable's units.
+#' @param target_ties How to resolve equally similar different values: NA
+#'   (default), lower or higher. Repeated identical winning values retain all
+#'   their locations in match_info; no file is chosen by input order.
+#'   This rule does not choose locations among repeated identical values.
 #'
 #' @returns The normalised observation table with one numeric summary column
 #'   per variable and, optionally, a diagnostic list column per output. sf
 #'   inputs retain their geometry. Existing columns are never overwritten.
+#'   most_similar always adds <output>_match_lon, _match_lat, _match_depth and
+#'   _match_time (UTC). They describe winning model coordinates, not corrected
+#'   observations. Ambiguous or unavailable fields are NA. Longitude/latitude
+#'   are returned together only for a unique horizontal location. All winning
+#'   records remain in match_info when requested. Unresolved value or location
+#'   ties emit one bounded warning per output with affected rows and guidance.
 #'
 #' @section Support and limitations:
 #' For normalised weights p, corrected variance is sum(p * (x - mean)^2)
@@ -1685,7 +2069,8 @@
 #' Equal weighting reproduces ordinary sample SD and SE. SD and SE require
 #' at least two valid samples; otherwise they return NA with a diagnostic.
 #' SE assumes independent samples and does not correct spatial or temporal
-#' autocorrelation. It is not an automatic estimate of environmental uncertainty.
+#' autocorrelation. It is not an automatic estimate of environmental
+#'   uncertainty.
 #' All statistics, including min and max, require the requested valid coverage.
 #'
 #' At least one window must be positive. Bounds describe represented support;
@@ -1727,7 +2112,7 @@ extract_to_buffer <- function(
   time_before = 0, time_after = 0,
   time_unit = c("days", "hours", "minutes", "seconds", "months", "years"),
   statistic = "mean", weighting = c("weighted", "equal"),
-  min_valid_fraction = 0.8, infer_bounds = FALSE, method = NULL,
+  min_valid_fraction = NULL, infer_bounds = FALSE, method = NULL,
   lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
   id_col = NULL, file_col = "file",
   lon_dim = NULL, lat_dim = NULL, depth_dim = NULL, time_dim = NULL,
@@ -1735,8 +2120,26 @@ extract_to_buffer <- function(
   time_resolution = c("auto", "datetime", "daily", "monthly", "yearly"),
   max_time_diff = NULL,
   spatial_match = c("within", "nearest"), max_distance_km = NULL,
-  output_col = NULL, return_match_info = TRUE, quiet = FALSE
+  output_col = NULL, return_match_info = TRUE, quiet = FALSE,
+  target_col = NULL, max_target_difference = NULL,
+  target_ties = c("NA", "lower", "higher")
 ) {
+  target_ties <- match.arg(target_ties)
+  if (is.null(min_valid_fraction)) {
+    min_valid_fraction <- if (identical(statistic, "most_similar")) 0 else 0.8
+  }
+  if (!identical(statistic, "most_similar") &&
+        (!is.null(target_col) || !is.null(max_target_difference) ||
+           target_ties != "NA")) {
+    stop("Target options require statistic = 'most_similar'.", call. = FALSE)
+  }
+  if (!is.null(max_target_difference) &&
+        (!is.numeric(max_target_difference) ||
+           length(max_target_difference) != 1L ||
+           !is.finite(max_target_difference) || max_target_difference < 0)) {
+    stop("max_target_difference must be finite and non-negative.",
+         call. = FALSE)
+  }
   options <- .buffer_validate_request(
     horizontal_radius_km, depth_radius_m,
     lon_cell_radius, lat_cell_radius, depth_layer_radius,
@@ -1755,44 +2158,54 @@ extract_to_buffer <- function(
     stop("Horizontal radii must be below 10000 km.", call. = FALSE)
   }
   if (horizontal_radius_km > 0 && spatial_match != "within") {
-    stop("Kilometre buffers use their requested footprint; remove nearest matching.",
+    stop(paste0("Kilometre buffers use their requested footprint; ",
+                "remove nearest matching."),
          call. = FALSE)
   }
   if (!is.null(max_time_diff) &&
-        (temporal || !is.numeric(max_time_diff) || length(max_time_diff) != 1L ||
-         !is.finite(max_time_diff) || max_time_diff < 0)) {
-    stop("`max_time_diff` needs a finite non-negative value and an unbuffered time axis.",
+        (temporal || !is.numeric(max_time_diff) ||
+           length(max_time_diff) != 1L ||
+           !is.finite(max_time_diff) || max_time_diff < 0)) {
+    stop(paste0("`max_time_diff` needs a finite non-negative value ",
+                "and an unbuffered time axis."),
          call. = FALSE)
   }
-  column_names <- list(lon_col = lon_col, lat_col = lat_col, file_col = file_col)
-  optional_names <- list(depth_col = depth_col, date_col = date_col, id_col = id_col,
+  column_names <- list(lon_col = lon_col, lat_col = lat_col,
+                       file_col = file_col)
+  optional_names <- list(depth_col = depth_col, date_col = date_col,
+                         id_col = id_col,
                          lon_dim = lon_dim, lat_dim = lat_dim,
                          depth_dim = depth_dim, time_dim = time_dim)
   column_names <- c(column_names, Filter(Negate(is.null), optional_names))
   for (name in names(column_names)) {
     value <- column_names[[name]]
-    if (!is.character(value) || length(value) != 1L || is.na(value) || !nzchar(value)) {
+    if (!is.character(value) || length(value) != 1L || is.na(value) ||
+          !nzchar(value)) {
       stop("`", name, "` must name one column or dimension.", call. = FALSE)
     }
   }
   if (!is.null(var) && (!is.character(var) || !length(var) || anyNA(var) ||
-                       any(!nzchar(var)) || anyDuplicated(var))) {
-    stop("`var` must be NULL or distinct, non-empty variable names.", call. = FALSE)
+                          any(!nzchar(var)) || anyDuplicated(var))) {
+    stop("`var` must be NULL or distinct, non-empty variable names.",
+         call. = FALSE)
   }
   data <- .normalize_points_input(data, lon_col, lat_col)
-  if (anyDuplicated(names(data))) stop("Observation column names must be unique.", call. = FALSE)
+  if (anyDuplicated(names(data))) {
+    stop("Observation column names must be unique.", call. = FALSE)
+  }
   .check_required_cols(data, c(lon_col, lat_col, id_col))
   if (!is.numeric(data[[lon_col]]) || !is.numeric(data[[lat_col]])) {
     stop("Observation longitude and latitude must be numeric.", call. = FALSE)
   }
 
   sources <- .as_netcdf_sources(nc, file_col)
-  if (!length(sources)) stop("At least one netCDF source is required.", call. = FALSE)
+  if (!length(sources)) stop("At least one netCDF source is required.",
+                             call. = FALSE)
   opened <- list()
   on.exit(lapply(opened, .close_source), add = TRUE)
   metadata <- list()
   dimension_args <- list(lon_dim = lon_dim, lat_dim = lat_dim,
-                          depth_dim = depth_dim, time_dim = time_dim)
+                         depth_dim = depth_dim, time_dim = time_dim)
   for (i in seq_along(sources)) {
     opened[[i]] <- .open_source(sources[[i]])
     handle <- opened[[i]]$nc
@@ -1802,7 +2215,8 @@ extract_to_buffer <- function(
       intersect(var, names(handle$var))
     }
     if (!length(variables)) {
-      stop("No requested variable is present in ", basename(handle$filename), ".",
+      stop("No requested variable is present in ",
+           basename(handle$filename), ".",
            call. = FALSE)
     }
     for (variable in variables) {
@@ -1813,22 +2227,38 @@ extract_to_buffer <- function(
   }
   variables <- unique(vapply(metadata, function(x) x$var, character(1)))
   if (!is.null(var) && !setequal(var, variables)) {
-    stop("Requested variables were not found: ", toString(setdiff(var, variables)),
+    stop("Requested variables were not found: ", toString(setdiff(var,
+                                                                  variables)),
          call. = FALSE)
   }
-  outputs <- .buffer_output_names(variables, output_col, names(data), return_match_info)
-  has_time <- any(vapply(metadata, function(x) !is.null(x$dims$time), logical(1)))
-  needs_depth <- vertical || any(vapply(metadata, function(x) x$method == "nearest", logical(1)))
+  outputs <- .buffer_output_names(
+    variables, output_col, names(data), return_match_info,
+    locations = statistic == "most_similar"
+  )
+  targets <- if (statistic == "most_similar") {
+    .target_columns(data, variables, target_col)
+  } else {
+    NULL
+  }
+  has_time <- any(vapply(metadata, function(x) !is.null(x$dims$time),
+                         logical(1)))
+  needs_depth <- vertical || any(vapply(metadata,
+                                        function(x) x$method == "nearest",
+                                        logical(1)))
   depth_values <- rep(NA_real_, nrow(data))
   window_data <- data
   if (needs_depth) {
-    if (is.null(depth_col)) stop("The requested selection requires `depth_col`.", call. = FALSE)
+    if (is.null(depth_col)) {
+      stop("The requested selection requires `depth_col`.", call. = FALSE)
+    }
     .check_required_cols(data, depth_col)
     depth_values <- data[[depth_col]]
     if (all(is.na(depth_values))) depth_values <- rep(NA_real_, nrow(data))
     if (!is.numeric(depth_values) ||
-          any(!is.na(depth_values) & (!is.finite(depth_values) | depth_values < 0))) {
-      stop("Observation depths must be finite, non-negative metres or NA.", call. = FALSE)
+          any(!is.na(depth_values) & (!is.finite(depth_values) |
+                                        depth_values < 0))) {
+      stop("Depths must be finite, non-negative metres or NA.",
+           call. = FALSE)
     }
     window_data[[depth_col]] <- depth_values
   }
@@ -1845,7 +2275,8 @@ extract_to_buffer <- function(
       ids = if (is.null(id_col)) NULL else data[[id_col]]
     )
   }
-  windows <- .buffer_observation_windows(window_data, options, depth_col, date_col, id_col)$windows
+  windows <- .buffer_observation_windows(window_data, options, depth_col,
+                                         date_col, id_col)$windows
   out <- data
   reports <- list()
   for (variable in variables) {
@@ -1854,11 +2285,13 @@ extract_to_buffer <- function(
     methods <- unique(vapply(group, function(x) x$method, character(1)))
     dynamic <- vapply(group, function(x) !is.null(x$dims$time), logical(1))
     if (length(methods) != 1L || (any(dynamic) && !all(dynamic))) {
-      stop("Sources for `", variable, "` have incompatible static/depth dimensions.", call. = FALSE)
+      stop("Sources for `", variable,
+           "` have incompatible static/depth dimensions.", call. = FALSE)
     }
     for (meta in group) {
       if (!identical(meta$variable_units, group[[1L]]$variable_units)) {
-        stop("Sources for `", variable, "` use different value units. Convert them first.",
+        stop("Sources for `", variable,
+             "` use different value units. Convert them first.",
              call. = FALSE)
       }
     }
@@ -1867,23 +2300,33 @@ extract_to_buffer <- function(
     for (row in seq_len(nrow(data))) {
       lon <- data[[lon_col]][row]
       lat <- data[[lat_col]][row]
-      status <- if (!is.finite(lon) || !is.finite(lat) || lat < -90 || lat > 90) {
+      status <- if (!is.finite(lon) || !is.finite(lat) || lat < -90 ||
+                      lat > 90) {
         "invalid_coordinates"
       } else if (any(dynamic) && is.na(prepared$values[row])) {
         "missing_time"
-      } else if ((vertical || methods == "nearest") && is.na(depth_values[row])) {
+      } else if ((vertical || methods == "nearest") &&
+                   is.na(depth_values[row])) {
         "missing_depth"
-      } else NULL
+      } else if (statistic == "most_similar" &&
+                   is.na(data[[targets[[variable]]]][row])) {
+        "missing_target"
+      } else {
+        NULL
+      }
       samples <- .buffer_empty_samples()
       request <- list(
         longitude = lon, latitude = lat,
         horizontal_radius_km = horizontal_radius_km,
         lon_cell_radius = lon_cell_radius, lat_cell_radius = lat_cell_radius,
-        depth_radius_m = depth_radius_m, depth_layer_radius = depth_layer_radius,
-        depth = depth_values[row], time_before = time_before, time_after = time_after,
+        depth_radius_m = depth_radius_m,
+        depth_layer_radius = depth_layer_radius,
+        depth = depth_values[row], time_before = time_before,
+        time_after = time_after,
         date_utc = if (any(dynamic)) prepared$values[row] else NULL,
         time_unit = options$time_unit,
-        time_window_utc = if (temporal) c(windows$time_lower_utc[row], windows$time_upper_utc[row]) else NULL
+        time_window_utc = if (temporal) c(windows$time_lower_utc[row],
+                                          windows$time_upper_utc[row]) else NULL
       )
       if (is.null(status)) {
         # A geodesic WGS84 circle with 720 segments; terra splits it at the
@@ -1898,32 +2341,43 @@ extract_to_buffer <- function(
         }
         queries <- lapply(group, function(meta) {
           space <- .buffer_space_query(meta, lon, lat, options, buffer,
-                                        spatial_match, max_distance_km)
+                                       spatial_match, max_distance_km)
           depth <- .buffer_depth_query(meta, depth_values[row], options)
           list(meta = meta, space = space, depth = depth)
         })
         if (any(vapply(queries, function(x) {
-          x$space$status == "incomplete_index_window" || x$depth$status == "incomplete_index_window"
+          x$space$status == "incomplete_index_window" ||
+            x$depth$status == "incomplete_index_window"
         }, logical(1)))) {
           status <- "incomplete_index_window"
         } else {
           eligible <- Filter(function(x) {
-            x$space$status == "ready" && nrow(x$space$cells) > 0 && length(x$depth$index) > 0
+            x$space$status == "ready" && nrow(x$space$cells) > 0 &&
+              length(x$depth$index) > 0
           }, queries)
           selected <- NULL
           if (any(dynamic) && !temporal && length(eligible)) {
-            available <- sort(unique(unlist(lapply(eligible, function(x) x$meta$time_values))))
+            source_times <- lapply(eligible, function(x) x$meta$time_values)
+            available <- sort(unique(unlist(source_times)))
             times <- as.POSIXct(available, origin = "1970-01-01", tz = "UTC")
             index <- .match_time_index(times, prepared$values[row], time_match,
                                        max_time_diff, prepared$resolution)
-            if (is.na(index)) status <- "time_rejected" else selected <- available[index]
+            if (is.na(index)) {
+              status <- "time_rejected"
+            } else {
+              selected <- available[index]
+            }
           }
           if (is.null(status)) {
             pieces <- lapply(eligible, function(query) {
               time <- .buffer_time_query(query$meta, if (temporal) {
-                as.numeric(c(windows$time_lower_utc[row], windows$time_upper_utc[row]))
-              } else NULL, selected, temporal)
-              .buffer_collect_source_samples(query$meta, query$space, query$depth, time)
+                as.numeric(c(windows$time_lower_utc[row],
+                             windows$time_upper_utc[row]))
+              } else {
+                NULL
+              }, selected, temporal)
+              .buffer_collect_source_samples(query$meta, query$space,
+                                             query$depth, time)
             })
             if (length(pieces)) samples <- do.call(rbind, pieces)
             samples <- .buffer_select_point_samples(samples, methods, depth_values[row], spatial, vertical)
@@ -1931,22 +2385,39 @@ extract_to_buffer <- function(
           }
         }
       }
-      result <- if (is.null(status)) {
-        .buffer_summarise_samples(samples, options$weighting, min_valid_fraction,
+      result <- if (is.null(status) && statistic == "most_similar") {
+        .buffer_target_summary(samples, data[[targets[[variable]]]][row],
+                               min_valid_fraction, max_target_difference,
+                               target_ties)
+      } else if (is.null(status)) {
+        .buffer_summarise_samples(samples, options$weighting,
+                                  min_valid_fraction,
                                   options$statistic)
-      } else .buffer_rejected_result(status)
+      } else {
+        .buffer_rejected_result(status)
+      }
       values[row] <- result$value
-      diagnostics[[row]] <- .buffer_diagnostic(result, samples, group, options, request)
+      diagnostics[[row]] <- .buffer_diagnostic(result, samples, group,
+                                               options, request)
     }
     output <- outputs[[variable]]
     out[[output]] <- values
+    if (statistic == "most_similar") {
+      selected_locations <- .buffer_target_locations(
+        diagnostics, values, output
+      )
+      diagnostics <- selected_locations$diagnostics
+      out[names(selected_locations$columns)] <- selected_locations$columns
+    }
     if (return_match_info) out[[paste0(output, "_match_info")]] <- diagnostics
     reports[[variable]] <- diagnostics
   }
-  if (!is.null(prepared)) .warn_time_zone(prepared, paste0("`data$", date_col, "`"))
+  if (!is.null(prepared)) .warn_time_zone(prepared, paste0("`data$",
+                                                           date_col, "`"))
   if (!quiet) {
     for (variable in variables) {
-      .show_buffer_report(reports[[variable]], data, variable, outputs[[variable]], id_col)
+      .show_buffer_report(reports[[variable]], data, variable,
+                          outputs[[variable]], id_col)
     }
   }
   out
