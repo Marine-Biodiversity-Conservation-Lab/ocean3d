@@ -545,6 +545,14 @@
 
 
 # Select one physical layer for a time-buffer sample.
+.nearest_index <- function(values, target) {
+  if (length(values) == 0 || all(is.na(values)) || is.na(target)) {
+    return(NA_integer_)
+  }
+
+  which.min(abs(values - target))
+}
+
 .buffer_point_value <- function(nc, var, dims, horizontal, time_index,
                                 depth_axis, method, target_depth) {
   if (method == "2d") {
@@ -729,12 +737,13 @@
   }
 
   results <- vector("list", nrow(data))
+  horizontal_matches <- .match_horizontal_cells(
+    lon_axis, lat_axis, lon, lat,
+    data[[lon_col]], data[[lat_col]],
+    spatial_match, max_distance_km
+  )
   for (i in seq_len(nrow(data))) {
-    horizontal <- .match_horizontal_cell(
-      lon_axis, lat_axis, lon, lat,
-      data[[lon_col]][i], data[[lat_col]][i],
-      spatial_match, max_distance_km
-    )
+    horizontal <- .horizontal_match_row(horizontal_matches, i)
     result <- .buffer_rejected_result("spatial_rejected")
     if (horizontal$accepted) {
       if (!is.null(prepared_time) && is.na(prepared_time$values[i])) {
@@ -1348,11 +1357,13 @@
 .buffer_space_query <- function(meta, lon, lat, options, buffer,
                                  spatial_match, max_distance_km) {
   spatial <- options$horizontal_radius_km > 0 || options$horizontal_index
-  if (!spatial) {
-    match <- .match_horizontal_cell(
+  if (!spatial || options$horizontal_index) {
+    match <- .horizontal_match_row(.match_horizontal_cells(
       meta$lon_axis, meta$lat_axis, meta$lon, meta$lat, lon, lat,
       spatial_match, max_distance_km
-    )
+    ), 1L)
+  }
+  if (!spatial) {
     if (!match$accepted) return(list(status = "spatial_rejected"))
     return(list(status = "ready", cells = data.frame(
       lon = match$lon_idx, lat = match$lat_idx, fraction = 1,
@@ -1360,10 +1371,6 @@
     ), geometry = NULL, buffer = NULL))
   }
   if (options$horizontal_index) {
-    match <- .match_horizontal_cell(
-      meta$lon_axis, meta$lat_axis, meta$lon, meta$lat, lon, lat,
-      spatial_match, max_distance_km
-    )
     if (!match$accepted) return(list(status = "spatial_rejected"))
     x_radius <- if (is.null(options$lon_cell_radius)) 0 else options$lon_cell_radius
     y_radius <- if (is.null(options$lat_cell_radius)) 0 else options$lat_cell_radius

@@ -2571,31 +2571,7 @@
   )
 
   if (!is.null(dims$time)) {
-    named_column <- is.character(date_col) &&
-      length(date_col) == 1L &&
-      !is.na(date_col) &&
-      nzchar(date_col)
-
-    if (!(named_column && date_col %in% names(data))) {
-      correction <- if (direct_input) {
-        "Supply the `date` argument."
-      } else if (named_column) {
-        paste0(
-          "Column `", date_col, "` is missing from `data`. ",
-          "Supply that column or set `date_col` to an existing date column."
-        )
-      } else {
-        "Set `date_col` to an existing date column in `data`."
-      }
-
-      stop(
-        "netCDF variable `", var, "` has a time dimension.\n",
-        "File: ", basename(nc$filename), "\n",
-        correction,
-        "\nAn explicit NA date is allowed; a missing date input is not.",
-        call. = FALSE
-      )
-    }
+    .require_observation_time(data, date_col, var, nc$filename, direct_input)
   }
 
   if (method != "2d" && is.null(dims$depth)) {
@@ -3559,22 +3535,7 @@ extract_to_point <- function(data = NULL,
       input_name = input_name,
       ids = if (is.null(id_col)) NULL else data[[id_col]]
     )
-    n_unzoned <- length(prepared$unzoned_rows)
-    if (n_unzoned) {
-      observations <- if (n_unzoned == 1L) {
-        "observation has"
-      } else {
-        "observations have"
-      }
-      rlang::warn(glue::glue(
-        "Time zone warning: {n_unzoned} {observations} times without a ",
-        "time zone.\n",
-        "Input: {input_name}. These times are being interpreted as UTC.\n",
-        "If they represent local time, supply POSIXct/POSIXlt values ",
-        "constructed with the correct time zone.\n",
-        "If they are UTC, add Z: \"2020-01-02T19:54Z\"."
-      ), class = "ocean3d_timezone_warning")
-    }
+    .warn_time_zone(prepared, input_name)
     diagnostic_resolution <- if (time_resolution == "custom") {
       "custom"
     } else {
