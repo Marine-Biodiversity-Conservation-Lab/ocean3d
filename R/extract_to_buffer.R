@@ -239,54 +239,6 @@
 }
 
 
-.buffer_read_bounds <- function(nc, coordinate, n) {
-  name <- .read_time_attribute(nc, coordinate, "bounds")
-  if (is.null(name)) return(NULL)
-
-  if (!is.character(name) || length(name) != 1L ||
-        is.na(name) || !nzchar(name) || !name %in% names(nc$var)) {
-    stop("Invalid or missing bounds variable for `", coordinate, "`.",
-         call. = FALSE)
-  }
-
-  dimension <- if (coordinate %in% names(nc$dim)) {
-    coordinate
-  } else {
-    dims <- nc$var[[coordinate]]$dim
-    if (length(dims) != 1L) {
-      stop("Buffer coordinates must be one-dimensional.", call. = FALSE)
-    }
-    dims[[1L]]$name
-  }
-  bounds_var <- nc$var[[name]]
-  axes <- vapply(bounds_var$dim, function(x) x$name, character(1))
-  coordinate_axis <- which(axes == dimension)
-  raw <- ncdf4::ncvar_get(nc, name, collapse_degen = FALSE)
-
-  if (length(dim(raw)) != 2L || length(coordinate_axis) != 1L) {
-    stop("Unsupported bounds dimensions for `", coordinate, "`.",
-         call. = FALSE)
-  }
-  if (coordinate_axis == 1L) raw <- t(raw)
-  if (!identical(dim(raw), c(2L, as.integer(n))) ||
-        !is.numeric(raw) || any(!is.finite(raw))) {
-    stop("Bounds for `", coordinate,
-         "` must contain two finite endpoints per coordinate.",
-         call. = FALSE)
-  }
-
-  units <- .read_time_attribute(nc, coordinate, "units")
-  bounds_units <- .read_time_attribute(nc, name, "units")
-  if (!is.null(bounds_units) && !identical(bounds_units, units)) {
-    stop("Bounds for `", coordinate, "` use different units. ",
-         "Convert bounds and coordinate to the same units first.",
-         call. = FALSE)
-  }
-
-  list(name = name, values = raw)
-}
-
-
 .buffer_axis_intervals <- function(centres, bounds, axis, coordinate) {
   if (!length(centres) || any(!is.finite(centres))) {
     stop("Buffer coordinates must contain finite values.", call. = FALSE)
@@ -363,7 +315,7 @@
     stop("`infer_bounds` must be TRUE or FALSE.", call. = FALSE)
   }
   raw <- as.vector(.get_dim_values(nc, coordinate))
-  bounds <- .buffer_read_bounds(nc, coordinate, length(raw))
+  bounds <- .read_bounds(nc, coordinate, length(raw), strict = TRUE)
   units <- .read_time_attribute(nc, coordinate, "units")
   calendar <- NULL
   direction_basis <- NULL

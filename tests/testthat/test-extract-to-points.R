@@ -4507,9 +4507,12 @@ test_that("unusable spatial bounds fall back to inferred edges", {
     "were not found"
   )
   expect_equal(out$temp, c(1, 2, NA))
-  expect_true(.same_spatial_units("degree_east", "degrees_east"))
-  expect_true(.same_spatial_units("degrees_E", "degrees"))
-  expect_false(.same_spatial_units("degrees_east", "radians"))
+  expect_true(.same_units("degree_east", "degrees_east"))
+  expect_true(.same_units("degrees_E", "degrees"))
+  expect_false(.same_units("degrees_east", "radians"))
+  expect_true(.same_units("m", "metres"))
+  expect_false(.same_units("m", "cm"))
+  expect_false(.same_units("days since 2020-01-01", "hours since 2020-01-01"))
 })
 
 test_that("within matching keeps input order between overlapping sources", {
