@@ -150,16 +150,6 @@
 }
 
 
-.track_arc <- function(lon, lat) {
-  .track_geodesic(lon, lat, model = "sphere")
-}
-
-
-.track_positions <- function(arc, segment, fractions) {
-  .track_geodesic_positions(arc, segment, fractions)
-}
-
-
 .track_sources <- function(nc, var, method, file_col, dimension_args) {
   sources <- .as_netcdf_sources(nc, file_col)
   if (!length(sources)) {

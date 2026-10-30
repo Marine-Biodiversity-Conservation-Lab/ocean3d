@@ -899,18 +899,28 @@ test_that(
 test_that(
   "antimeridian routes take the short  ... r arcs stay finite",
   {
-    arc <- .track_arc(c(179, -179), c(0, 0))
-    middle <- .track_positions(arc, 1L, c(0, 0.5, 1))
-    expect_equal(unname(abs(middle[2L, 1L])), 180)
-    expect_equal(arc$length_km, 222.390160467, tolerance = 1e-08)
-    polar <- .track_positions(
-      .track_arc(c(-45, 45), c(80, 80)),
-      1L,
-      c(0, 0.5, 1)
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path))
+    .make_track_nc(path, lon = -180:179, lat = c(0, 80, 85))
+    out <- extract_to_track(
+      data.frame(lon = c(179, -179), lat = 0), path,
+      spacing_km = 112, distance_model = "sphere", quiet = TRUE
     )
-    expect_true(all(is.finite(polar)))
-    expect_gt(polar[2L, 2L], 80)
-    expect_error(.track_arc(c(0, 180), c(0, 0)), "Antipodal")
+    expect_equal(abs(out$samples$lon[2L]), 180)
+    expect_equal(out$samples$distance_km[3L], 222.390160467, tolerance = 1e-08)
+    polar <- extract_to_track(
+      data.frame(lon = c(-45, 45), lat = 80), path,
+      spacing_km = 1000, distance_model = "sphere", quiet = TRUE
+    )
+    expect_true(all(is.finite(c(polar$samples$lon, polar$samples$lat))))
+    expect_gt(polar$samples$lat[2L], 80)
+    expect_error(
+      extract_to_track(
+        data.frame(lon = c(0, 180), lat = 0), path,
+        distance_model = "sphere", quiet = TRUE
+      ),
+      "Antipodal"
+    )
   }
 )
 
