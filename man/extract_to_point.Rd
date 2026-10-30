@@ -136,9 +136,12 @@ interval when time_resolution = "custom". Matching uses full timestamps.
 This interval does not reject candidates; use max_time_diff for that.}
 
 \item{time_report}{Logical. If TRUE, the default, display a temporal summary
-when returned values are displaced in time or outputs are missing.
-The return format is unchanged. FALSE hides the summary but does not
-suppress temporal warnings.}
+when returned values are displaced in time, or outputs are missing for a
+temporal reason (no timestamp within the matching settings, or no
+observation date for a source with a time dimension). Outputs missing
+because of location or depth are reported by spatial_report and
+depth_report instead. The return format is unchanged. FALSE hides the
+summary but does not suppress temporal warnings.}
 
 \item{spatial_match}{Horizontal selection rule. "within" (default) requires
 the point to lie inside a cell. "nearest" selects the geographically
@@ -147,9 +150,11 @@ The rule applies equally to one or multiple sources. A selected missing
 value does not trigger a search for another cell in the same source.}
 
 \item{max_distance_km}{Required finite non-negative distance in kilometres
-when spatial_match = "nearest". Distance is measured from the observation
-to the cell centre on the Earth surface using sf::st_distance(). A cell
-exactly at the limit is accepted. Must be NULL with "within".}
+when spatial_match = "nearest". Distance is the great-circle distance
+from the observation to the cell centre on a sphere of radius 6371.01 km
+(the radius sf::st_distance() uses with s2), and does not depend on sf
+settings. A cell exactly at the limit is accepted. Must be NULL with
+"within".}
 
 \item{spatial_report}{NULL (default) reports missing spatial outputs and
 selections of cells that do not contain the requested point. TRUE also
@@ -198,11 +203,16 @@ or interpret climatological periods.
 }
 \section{Physical depth coordinates}{
 
-Observation depths are expressed in metres, positive downward. Dataset
-coordinates are converted from m, meter(s), metre(s), km or cm. The positive
-attribute determines direction when supplied; otherwise uniformly
-non-negative values imply positive-down and non-positive values imply
-positive-up. Mixed signs without direction metadata are rejected.
+Observation depths must be in metres, positive downward (0 at the
+surface); negative observation depths are rejected, and depths in other
+units must be converted first. Dataset coordinates are converted from m,
+meter(s), metre(s), km, kilometer(s), kilometre(s), cm, centimeter(s) or
+centimetre(s). The positive attribute determines direction when supplied;
+height and altitude axes without it are read as positive-up. Otherwise
+uniformly non-negative values imply positive-down and non-positive values
+imply positive-up. Mixed signs without direction metadata are rejected.
+The depth coordinate must have units, including for surface and bottom
+extraction; a file with a single depth level can be read with extract2d().
 Surface means the physically shallowest layer, even if its value is missing.
 Bottom means the deepest non-missing layer. Nearest selects the valid layer
 closest to the observation depth; ties select the shallower layer.
@@ -218,14 +228,19 @@ Spatial matching uses the same rules for one or multiple sources.
 With spatial_match = "within", only cells containing the point are eligible.
 With spatial_match = "nearest", the requested point may be outside grid
 coverage. The nearest cell centre must be within max_distance_km of it.
-Explicit spatial cell bounds are preferred. Otherwise, edges are inferred
-from adjacent centres; singleton axes without bounds require coincidence.
+Explicit spatial cell bounds are preferred. Otherwise, or when the bounds
+variable is missing or invalid (with a warning), edges are inferred from
+adjacent centres; singleton axes without bounds require coincidence, up to
+single-precision rounding of the stored coordinate.
 Longitude comparisons support equivalent coordinates across the antimeridian.
+A point on an edge shared by two cells uses the first cell in storage order.
 Among eligible sources the closest temporal candidate with a valid value
-wins. Equal temporal distances are resolved by geographic distance to the
-cell centre, then by input order. Existing output columns are replaced,
-including by NA. Output names cannot overwrite extraction inputs or combine
-different variables in the same column.
+wins. With "within" matching, equal temporal distances are resolved by
+input order, so list the preferred source first. With "nearest" matching,
+they are resolved by geographic distance to the cell centre (differences
+under 1 m are ignored), then by input order. Existing output columns are
+replaced, including by NA. Output names cannot overwrite extraction inputs
+or combine different variables in the same column.
 }
 
 \section{Custom temporal intervals}{
@@ -260,16 +275,21 @@ spacing to assess a nonzero displacement. Messages identify the reference
 layers and only attribute a displacement to missing values when closer
 physical layers must lack valid values under nearest-valid selection.
 Missing outputs are explained once, with rejection reasons for each
-relevant source. Purely temporal rejections use time_report; spatial and
-depth rejections use their corresponding switches. Mixed rejections are
-grouped under spatial first, then depth, then time, with all reasons shown.
+relevant source; a repeated reason is shown once with up to three of its
+files. The cause is taken from the sources whose grid covers the point,
+unless none does. Temporal causes (including a missing observation date)
+are reported by time_report; spatial and depth causes by their
+corresponding switches, so FALSE hides them. Mixed causes are grouped under
+spatial first, then depth, then time, with all reasons shown.
 Reports count distinct observations and output values separately. At most
 five cases are shown, prioritising missing values; truncation and the count
 omitted are stated. Coordinates use up to five decimals; metres/kilometres
 normally use up to two. Extra decimals distinguish values close to a limit
 when rounding would otherwise make them appear equal. Calculations retain
 full precision. Small positive distances use
-<0.01 rather than zero. Temporal report settings and warnings are unchanged.
+<0.01 rather than zero. Depth comparisons in reports allow a relative
+tolerance of 1e-6, so single-precision depth axes match their nominal
+depths.
 }
 
 \section{Temporal diagnostics}{

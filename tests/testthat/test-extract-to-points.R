@@ -833,12 +833,6 @@ test_that("dimension helpers read coordinates and report missing names", {
 
 test_that("longitude conversion and missing coordinates are handled", {
   without_selection_reports({
-    expect_equal(.prepare_lon(c(0, 359), -1), 359)
-    expect_true(is.na(.prepare_lon(c(0, 359), NA_real_)))
-    expect_identical(.nearest_index(numeric(), 0), NA_integer_)
-    expect_identical(.nearest_index(c(NA_real_, NA_real_), 0),
-                     NA_integer_)
-    expect_identical(.nearest_index(c(0, 1), NA_real_), NA_integer_)
     f <- tempfile(fileext = ".nc")
     on.exit(unlink(f), add = TRUE)
     make_test_netcdf(f, with_depth = FALSE, with_time = FALSE,
@@ -2829,16 +2823,16 @@ test_that("spatial indices respect edges and longitude conventions", {
     centres = c(0, 1), lower = c(-0.5, 0.5), upper = c(0.5, 1.5),
     longitude = FALSE, basis = "inferred_regular"
   )
-  expect_identical(.spatial_axis_index(axis, -0.5), 1L)
-  expect_identical(.spatial_axis_index(axis, 1.5), 2L)
-  expect_true(is.na(.spatial_axis_index(axis, 1.6)))
+  expect_identical(.containing_axis_indices(axis, -0.5), 1L)
+  expect_identical(.containing_axis_indices(axis, 1.5), 2L)
+  expect_length(.containing_axis_indices(axis, 1.6), 0L)
   axis <- list(
     centres = c(179, 181), lower = c(178, 180), upper = c(180, 182),
     longitude = TRUE, basis = "inferred_regular"
   )
-  expect_identical(.spatial_axis_index(axis, -179), 2L)
-  expect_identical(.spatial_axis_index(axis, 181), 2L)
-  expect_true(is.na(.spatial_axis_index(axis, 0)))
+  expect_identical(.containing_axis_indices(axis, -179), 2L)
+  expect_identical(.containing_axis_indices(axis, 181), 2L)
+  expect_length(.containing_axis_indices(axis, 0), 0L)
 })
 
 test_that("singleton axes do not invent spatial coverage", {
@@ -2846,8 +2840,8 @@ test_that("singleton axes do not invent spatial coverage", {
     centres = 40, lower = 40, upper = 40,
     longitude = FALSE, basis = "singleton_coordinate"
   )
-  expect_identical(.spatial_axis_index(axis, 40), 1L)
-  expect_true(is.na(.spatial_axis_index(axis, 41)))
+  expect_identical(.containing_axis_indices(axis, 40), 1L)
+  expect_length(.containing_axis_indices(axis, 41), 0L)
 })
 
 test_that("spatial eligibility selects the correct tile in either order", {
@@ -2916,8 +2910,8 @@ test_that("explicit spatial bounds override inferred edges", {
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   axis <- .prepare_spatial_axis(nc, "lon", c(0, 2), longitude = TRUE)
   expect_identical(axis$basis, "explicit_bounds")
-  expect_identical(.spatial_axis_index(axis, 0.1), 1L)
-  expect_true(is.na(.spatial_axis_index(axis, 1)))
+  expect_identical(.containing_axis_indices(axis, 0.1), 1L)
+  expect_length(.containing_axis_indices(axis, 1), 0L)
 })
 
 test_that("irregular descending axes preserve original indices", {
@@ -2929,9 +2923,9 @@ test_that("irregular descending axes preserve original indices", {
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   axis <- .prepare_spatial_axis(nc, "lon", c(5, 2, 0), longitude = TRUE)
   expect_identical(axis$basis, "inferred_irregular")
-  expect_identical(.spatial_axis_index(axis, 5), 1L)
-  expect_identical(.spatial_axis_index(axis, 0), 3L)
-  expect_true(is.na(.spatial_axis_index(axis, 20)))
+  expect_identical(.containing_axis_indices(axis, 5), 1L)
+  expect_identical(.containing_axis_indices(axis, 0), 3L)
+  expect_length(.containing_axis_indices(axis, 20), 0L)
 })
 
 
@@ -3095,9 +3089,7 @@ test_that("a cell exactly at the kilometre limit is accepted", {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path), add = TRUE)
     make_horizontal_test_nc(path, 0, 0, 11)
-    a <- sf::st_sfc(sf::st_point(c(0.01, 0)), crs = 4326)
-    b <- sf::st_sfc(sf::st_point(c(0, 0)), crs = 4326)
-    boundary <- as.numeric(sf::st_distance(a, b)) / 1000
+    boundary <- .great_circle_km(0.01, 0, 0, 0)
     x <- data.frame(lon = 0.01, lat = 0)
     expect_equal(extract2d(
       x, path, var = "temp", date_col = NULL,
@@ -3113,13 +3105,11 @@ test_that("a cell exactly at the kilometre limit is accepted", {
 test_that("geographic proximity is not independent degree subtraction", {
   # At high latitude the geographically closest centre is not necessarily
   # the one with the smallest latitude difference.
-  result <- .nearest_horizontal_cell(
-    60, c(80, 85), 1L, 1:2, 0, 80, chunk_size = 1L
-  )
+  result <- .nearest_horizontal_cell(60, c(80, 85), 1L, 1:2, 0, 80)
   expect_identical(result$lat_idx, 2L)
   expect_identical(result$lon_idx, 1L)
   expect_gt(result$distance_km, 0)
-  whole <- .nearest_horizontal_cell(60, c(80, 85), 1L, 1:2, 0, 80)
+  whole <- .nearest_horizontal_cells(60, c(80, 85), 0, 80)[[1L]]
   expect_equal(result, whole)
 })
 
@@ -3214,13 +3204,24 @@ test_that("nearest does not search past a missing cell within the same file", {
   })
 })
 
+match_one_cell <- function(lon_axis, lat_axis, lon_values, lat_values,
+                           lon_target, lat_target, spatial_match,
+                           max_distance_km) {
+  match_cells <- getFromNamespace(".match_horizontal_cells", "ocean3d")
+  match_row <- getFromNamespace(".horizontal_match_row", "ocean3d")
+  match_row(match_cells(
+    lon_axis, lat_axis, lon_values, lat_values, lon_target, lat_target,
+    spatial_match, max_distance_km
+  ), 1L)
+}
+
 test_that("horizontal selection records accepted and rejected candidates", {
   inside <- list(
     centres = 0, lower = 0, upper = 0, longitude = FALSE
   )
   longitude <- inside
   longitude$longitude <- TRUE
-  accepted <- .match_horizontal_cell(
+  accepted <- match_one_cell(
     longitude, inside, 0, 0, 0.01, 0, "nearest", 2
   )
   expect_true(accepted$accepted)
@@ -3228,17 +3229,17 @@ test_that("horizontal selection records accepted and rejected candidates", {
   expect_equal(accepted$selected_lon, 0)
   expect_equal(accepted$selected_lat, 0)
   expect_gt(accepted$distance_km, 1)
-  rejected <- .match_horizontal_cell(
+  rejected <- match_one_cell(
     longitude, inside, 0, 0, 0.01, 0, "nearest", 0.5
   )
   expect_false(rejected$accepted)
   expect_identical(rejected$reason, "distance_limit_exceeded")
   expect_gt(rejected$distance_km, 1)
-  outside <- .match_horizontal_cell(
+  outside <- match_one_cell(
     longitude, inside, 0, 0, 0.01, 0, "within", NULL
   )
   expect_identical(outside$reason, "outside_grid")
-  invalid <- .match_horizontal_cell(
+  invalid <- match_one_cell(
     longitude, inside, 0, 0, NA_real_, 0, "nearest", 5
   )
   expect_identical(invalid$reason, "invalid_coordinates")
@@ -3434,7 +3435,7 @@ test_that("missing requested depths preserve the other physical summaries", {
     summary <- .summarise_depth_profile(
       rep(NA_real_, 3), c(100, 50, 0), 60
     )
-    expect_true(all(is.na(summary)))
+    expect_true(all(is.na(summary$value)))
   })
 })
 
@@ -3730,16 +3731,16 @@ test_that("cell containment is separate from overall coverage", {
   lon <- list(centres = c(0, 1), lower = c(-0.01, -0.5),
               upper = c(0.01, 1.5), longitude = TRUE)
   lat <- list(centres = 0, lower = 0, upper = 0, longitude = FALSE)
-  result <- .match_horizontal_cell(lon, lat, c(0, 1), 0, 0.1, 0,
-                                   "nearest", 100)
+  result <- match_one_cell(lon, lat, c(0, 1), 0, 0.1, 0,
+                           "nearest", 100)
   expect_true(result$accepted)
   expect_true(result$inside_coverage)
   expect_false(result$inside_selected_cell)
   expect_equal(result$lon_idx, 1L)
   lon <- list(centres = c(179, 181), lower = c(178, 180),
               upper = c(180, 182), longitude = TRUE)
-  wrapped <- .match_horizontal_cell(lon, lat, c(179, -179), 0, 181, 0,
-                                    "nearest", 100)
+  wrapped <- match_one_cell(lon, lat, c(179, -179), 0, 181, 0,
+                            "nearest", 100)
   expect_true(wrapped$inside_selected_cell)
   expect_true(wrapped$inside_coverage)
 })
@@ -3916,87 +3917,102 @@ test_that("quiet value tests preserve unexpected conditions", {
                "other error", fixed = TRUE)
 })
 
-expect_batch_matches_reference <- function(engine) {
-  batch_search <- getFromNamespace(".nearest_horizontal_cells", "ocean3d")
-  reference_search <- getFromNamespace(".nearest_horizontal_cell", "ocean3d")
+test_that("great-circle distances match sf under s2", {
   original <- sf::sf_use_s2()
   on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
-  suppressMessages(sf::sf_use_s2(engine))
-  lon <- c(179, -179, -160)
-  lat <- c(40, 80)
-  x <- c(180, -179.9, 200, 179, NA, 0, Inf)
-  y <- c(40, 80, 40, 40, 40, 91, 0)
-  for (points in c(1L, 2L, 32L)) {
-    batch <- batch_search(lon, lat, x, y,
-                          cell_chunk_size = 2L,
-                          point_chunk_size = points)
-    for (i in 1:4) {
-      reference <- reference_search(lon, lat, seq_along(lon),
-                                    seq_along(lat), x[i], y[i],
-                                    chunk_size = 2L)
-      testthat::expect_equal(batch[[i]], reference, tolerance = 1e-12)
-    }
-    testthat::expect_null(batch[[5L]])
-    testthat::expect_null(batch[[6L]])
-    testthat::expect_null(batch[[7L]])
+  suppressMessages(sf::sf_use_s2(TRUE))
+  a <- sf::st_sfc(sf::st_point(c(0, 0)), crs = 4326)
+  points <- rbind(c(1, 1), c(179.5, -60), c(-179.9, 89), c(0.01, 0))
+  for (k in seq_len(nrow(points))) {
+    b <- sf::st_sfc(sf::st_point(points[k, ]), crs = 4326)
+    expect_equal(
+      .great_circle_km(0, 0, points[k, 1], points[k, 2]),
+      as.numeric(sf::st_distance(a, b)) / 1000,
+      tolerance = 1e-12
+    )
   }
-  testthat::expect_length(batch_search(lon, lat, numeric(), numeric()), 0L)
-}
-
-test_that("batch nearest matches the spherical reference", {
-  expect_batch_matches_reference(TRUE)
 })
 
-test_that("batch nearest matches the optional ellipsoidal reference", {
+test_that("matching does not depend on the sf s2 setting", {
+  skip_if_not_installed("ncdf4")
   original <- sf::sf_use_s2()
   on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
   suppressMessages(sf::sf_use_s2(FALSE))
-  a <- sf::st_sfc(sf::st_point(c(0, 0)), crs = 4326)
-  b <- sf::st_sfc(sf::st_point(c(1, 1)), crs = 4326)
-  # sf chooses its optional backend. Only a missing package skips this test;
-  # calculation errors and mismatched results remain failures.
-  tryCatch(sf::st_distance(a, b), packageNotFoundError = function(condition) {
-    skip(paste("Optional sf distance backend unavailable:",
-               conditionMessage(condition)))
-  })
-  expect_batch_matches_reference(FALSE)
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
+  x <- data.frame(lon = c(0.1, 1.4), lat = 40)
+  expect_equal(without_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL
+  ))$temp, c(1, 2))
+  expect_equal(without_selection_reports(extract2d(
+    x, path, var = "temp", date_col = NULL,
+    spatial_match = "nearest", max_distance_km = 100
+  ))$temp, c(1, 2))
 })
 
-test_that("batch boundaries preserve first cell priority for exact ties", {
-  batch <- .nearest_horizontal_cells(c(0, 0), 0, c(0, 0), c(0, 0),
-                                     cell_chunk_size = 1L,
-                                     point_chunk_size = 1L)
+test_that("whole-grid nearest search matches a search over every cell", {
+  set.seed(42)
+  lon <- c(seq(-179.5, 179.5, by = 7), 180)
+  lat <- sort(c(-90, runif(20, -89, 89), 90))
+  x <- c(runif(60, -360, 360), 180, -180, 179.99, 0, 10)
+  y <- c(runif(60, -90, 90), 0, 89.9, -89.9, 90, -90)
+  fast <- .nearest_horizontal_cells(lon, lat, x, y)
+  for (k in seq_along(x)) {
+    slow <- .nearest_horizontal_cell(lon, lat, seq_along(lon),
+                                     seq_along(lat), x[k], y[k])
+    expect_equal(fast[[k]]$distance_km, slow$distance_km, tolerance = 1e-12)
+    # Away from the poles the selected cell is the same too.
+    if (abs(y[k]) < 89) {
+      expect_identical(fast[[k]][c("lon_idx", "lat_idx")],
+                       slow[c("lon_idx", "lat_idx")])
+    }
+  }
+  invalid <- .nearest_horizontal_cells(lon, lat, c(NA, 0, Inf), c(0, 91, 0))
+  expect_true(all(vapply(invalid, is.null, logical(1))))
+  expect_length(.nearest_horizontal_cells(lon, lat, numeric(), numeric()), 0L)
+})
+
+test_that("exact distance ties keep the first cell in storage order", {
+  batch <- .nearest_horizontal_cells(c(0, 0), 0, c(0, 0), c(0, 0))
   expect_identical(batch[[1L]]$lon_idx, 1L)
   expect_identical(batch[[2L]]$lon_idx, 1L)
   expect_equal(batch[[1L]]$distance_km, 0)
+  # A point on a shared edge is equally far from both centres; rounding
+  # noise must not decide, so the first (west/south) cell is kept.
+  lon <- seq(-4.5, 4.5, 1)
+  lat <- seq(35.5, 44.5, 1)
+  for (y in lat) {
+    edge <- .nearest_horizontal_cell(lon, lat, 4:5, which(lat == y), -1, y)
+    expect_identical(edge$lon_idx, 4L)
+    nearest <- .nearest_horizontal_cells(lon, lat, -1, y)[[1L]]
+    expect_identical(nearest$lon_idx, 4L)
+  }
+  # A point just off the edge still gets the truly closer cell.
+  off <- .nearest_horizontal_cell(lon, lat, 4:5, 1L, -1 + 1e-6, 35.5)
+  expect_identical(off$lon_idx, 5L)
 })
 
-test_that("batch candidates preserve matching limits and containment", {
+test_that("nearest candidates preserve matching limits and containment", {
   lon <- list(centres = c(0, 1), lower = c(-0.5, 0.5),
               upper = c(0.5, 1.5), longitude = TRUE)
   lat <- list(centres = 40, lower = 39, upper = 41, longitude = FALSE)
   x <- c(0, 0.1, 1.6, NA)
   y <- rep(40, 4)
-  batch <- .nearest_horizontal_cells(c(0, 1), 40, x, y)
-  for (limit in c(0, 1, 100)) {
-    for (i in seq_along(x)) {
-      reference <- .match_horizontal_cell(lon, lat, c(0, 1), 40,
-                                          x[i], y[i], "nearest", limit)
-      actual <- .match_horizontal_cell(lon, lat, c(0, 1), 40,
-                                       x[i], y[i], "nearest", limit,
-                                       nearest_candidate = batch[[i]])
-      expect_equal(actual, reference, tolerance = 1e-12)
+  nearest <- .nearest_horizontal_cells(c(0, 1), 40, x, y)
+  distance <- nearest[[3L]]$distance_km
+  for (limit in c(0, 1, 100, distance, distance - 1e-6)) {
+    matches <- .match_horizontal_cells(lon, lat, c(0, 1), 40, x, y,
+                                       "nearest", limit)
+    for (i in 1:3) {
+      expect_identical(matches$lon_idx[i], nearest[[i]]$lon_idx)
+      expect_identical(matches$accepted[i],
+                       nearest[[i]]$distance_km <= limit)
     }
+    expect_identical(matches$reason[4L], "invalid_coordinates")
   }
-  for (limit in c(batch[[3L]]$distance_km,
-                  batch[[3L]]$distance_km - 1e-6)) {
-    reference <- .match_horizontal_cell(lon, lat, c(0, 1), 40,
-                                        x[3], y[3], "nearest", limit)
-    actual <- .match_horizontal_cell(lon, lat, c(0, 1), 40,
-                                     x[3], y[3], "nearest", limit,
-                                     nearest_candidate = batch[[3L]])
-    expect_identical(actual$accepted, reference$accepted)
-  }
+  expect_false(matches$inside_coverage[3L])
+  expect_true(matches$inside_selected_cell[2L])
 })
 
 test_that("comparison precision distinguishes close values", {
@@ -4045,4 +4061,205 @@ test_that("depth threshold text distinguishes a small excess", {
   expect_match(result$text, "50.001 m deeper", fixed = TRUE)
   expect_match(result$text, "50 m apart", fixed = TRUE)
   expect_match(result$text, "exceeds this spacing", fixed = TRUE)
+})
+
+# PR #81 review fixes ----------------------------------------------------------
+
+test_that("observation depths must be metres, positive downward", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(0, -50, -100), c(10, 20, 30),
+                          positive = "up")
+  expect_error(
+    extract3d_nearest(data.frame(lon = 0, lat = 40, depth = -50), path,
+                      var = "temp", date_col = NULL),
+    "positive downward"
+  )
+  expect_error(
+    extract3d_all(data.frame(lon = 0, lat = 40, depth = "50"), path,
+                  var = "temp", date_col = NULL),
+    "positive downward"
+  )
+  expect_equal(without_selection_reports(extract3d_nearest(
+    data.frame(lon = 0, lat = 40, depth = c(50, NA)), path,
+    var = "temp", date_col = NULL
+  ))$temp, c(20, NA))
+})
+
+test_that("full spellings of km and cm depth units are converted", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  for (units in c("centimeters", "centimetres", "Centimeter")) {
+    expect_equal(.prepare_depth_axis(c(0, 500), units)$depth_m, c(0, 5))
+  }
+  for (units in c("kilometers", "kilometres", "kilometer")) {
+    expect_equal(.prepare_depth_axis(c(0, 0.5), units)$depth_m, c(0, 500))
+  }
+  make_depth_axis_test_nc(path, c(500, 1500, 2500), c(11, 22, 33),
+                          units = "centimeters", positive = "down")
+  expect_equal(without_selection_reports(extract3d_nearest(
+    data.frame(lon = 0, lat = 40, depth = 14), path,
+    var = "temp", date_col = NULL
+  ))$temp, 22)
+})
+
+test_that("height axes without a positive attribute are not depths", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_depth_axis_test_nc(path, c(2, 10, 20), c(11, 22, 33),
+                          standard_name = "height")
+  expect_error(
+    extract3d_surface(data.frame(lon = 0, lat = 40), path, var = "temp",
+                      date_col = NULL, depth_dim = "depth"),
+    "reference surface"
+  )
+})
+
+test_that("a depth dimension without coordinate variable fails clearly", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", 0)
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", 40)
+  depth <- ncdf4::ncdim_def("depth", "", 1:3, create_dimvar = FALSE)
+  variable <- ncdf4::ncvar_def("temp", "degree_Celsius",
+                               list(lon, lat, depth), -9999)
+  nc <- ncdf4::nc_create(path, variable)
+  ncdf4::ncvar_put(nc, "temp", array(c(11, 22, 33), c(1, 1, 3)))
+  ncdf4::nc_close(nc)
+  printed <- capture.output(error <- tryCatch(
+    extract3d_surface(data.frame(lon = 0, lat = 40), path, var = "temp",
+                      date_col = NULL),
+    error = identity
+  ))
+  expect_match(conditionMessage(error), "has no coordinate variable")
+  expect_match(conditionMessage(error), "extract2d()", fixed = TRUE)
+  expect_length(printed, 0L)
+})
+
+test_that("single-precision station coordinates match their own station", {
+  station <- as.numeric(c(-122.40000152587891, 36.79999923706055))
+  lon <- list(centres = station[1], lower = station[1], upper = station[1],
+              longitude = TRUE, basis = "singleton_coordinate")
+  lat <- list(centres = station[2], lower = station[2], upper = station[2],
+              longitude = FALSE, basis = "singleton_coordinate")
+  expect_identical(.containing_axis_indices(lon, -122.4), 1L)
+  expect_identical(.containing_axis_indices(lat, 36.8), 1L)
+  expect_length(.containing_axis_indices(lon, -122.401), 0L)
+})
+
+test_that("unusable spatial bounds fall back to inferred edges", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
+  nc <- ncdf4::nc_open(path, write = TRUE)
+  ncdf4::ncatt_put(nc, "lon", "bounds", "lon_bnds")
+  ncdf4::nc_close(nc)
+  x <- data.frame(lon = c(0, 1, 5), lat = 40)
+  expect_warning(
+    out <- without_selection_reports(extract2d(
+      x, path, var = "temp", date_col = NULL
+    )),
+    "were not found"
+  )
+  expect_equal(out$temp, c(1, 2, NA))
+  expect_true(.same_spatial_units("degree_east", "degrees_east"))
+  expect_true(.same_spatial_units("degrees_E", "degrees"))
+  expect_false(.same_spatial_units("degrees_east", "radians"))
+})
+
+test_that("within matching keeps input order between overlapping sources", {
+  without_selection_reports({
+    skip_if_not_installed("ncdf4")
+    paths <- replicate(2, tempfile(fileext = ".nc"))
+    on.exit(unlink(paths), add = TRUE)
+    fine <- seq(0.05, 0.95, by = 0.1)
+    make_horizontal_test_nc(paths[1], fine, fine + 40, rep(100, 100))
+    make_horizontal_test_nc(paths[2], c(0, 1), c(40, 41), rep(1, 4))
+    x <- data.frame(lon = 0.01, lat = 40.01)
+    expect_equal(extract2d(x, paths, var = "temp", date_col = NULL)$temp, 100)
+    expect_equal(extract2d(x, rev(paths), var = "temp",
+                           date_col = NULL)$temp, 1)
+    # Nearest matching prefers the closer centre, whatever the order.
+    for (files in list(paths, rev(paths))) {
+      expect_equal(extract2d(
+        x, files, var = "temp", date_col = NULL,
+        spatial_match = "nearest", max_distance_km = 50
+      )$temp, 1)
+    }
+  })
+})
+
+test_that("off-site tiles do not turn a temporal miss into a spatial one", {
+  skip_if_not_installed("ncdf4")
+  paths <- replicate(2, tempfile(fileext = ".nc"))
+  on.exit(unlink(paths), add = TRUE)
+  make_horizontal_test_nc(paths[1], c(10, 11), c(40, 41), 1:8, days = c(0, 4))
+  make_horizontal_test_nc(paths[2], 0, 40, 5, days = 0)
+  x <- data.frame(lon = 0, lat = 40, date = as.Date("2020-01-05"))
+  result <- capture_selection_reports(extract2d(
+    x, paths, var = "temp", max_time_diff = 1, spatial_report = FALSE
+  ))
+  expect_true(is.na(result$value$temp))
+  expect_length(result$reports, 1L)
+  expect_s3_class(result$reports[[1L]], "ocean3d_time_report")
+  expect_match(result$text, "Observation: 2020-01-05", fixed = TRUE)
+  expect_match(result$text, "No timestamp satisfied", fixed = TRUE)
+  expect_match(result$text, "Point outside cell coverage", fixed = TRUE)
+  expect_identical(result$reports[[1L]]$report$status, "no_value")
+})
+
+test_that("repeated missing reasons are grouped across many files", {
+  skip_if_not_installed("ncdf4")
+  paths <- vapply(1:8, function(k) tempfile(fileext = ".nc"), character(1))
+  on.exit(unlink(paths), add = TRUE)
+  for (k in seq_along(paths)) {
+    make_horizontal_test_nc(paths[k], 0, 40, k, days = k - 1L)
+  }
+  x <- data.frame(lon = 0, lat = 40, date = as.Date("2020-03-01"))
+  result <- capture_selection_reports(extract2d(
+    x, paths, var = "temp", max_time_diff = 1
+  ))
+  expect_length(result$reports, 1L)
+  expect_identical(lengths(regmatches(
+    result$text, gregexpr("No timestamp satisfied", result$text)
+  )), 1L)
+  expect_match(result$text, "and 5 more", fixed = TRUE)
+})
+
+test_that("a missing date gets its own temporal reason", {
+  skip_if_not_installed("ncdf4")
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_horizontal_test_nc(path, 0, 40, 1:3, days = 0:2)
+  result <- capture_selection_reports(extract2d(
+    data.frame(lon = 0, lat = 40), path, var = "temp", date_col = NULL
+  ))
+  expect_true(is.na(result$value$temp))
+  expect_length(result$reports, 1L)
+  expect_match(result$text, "No observation date was supplied", fixed = TRUE)
+  quiet <- capture_selection_reports(extract2d(
+    data.frame(lon = 0, lat = 40), path, var = "temp", date_col = NULL,
+    time_report = FALSE
+  ))
+  expect_length(quiet$reports, 0L)
+})
+
+test_that("depth references tolerate float32 axes and blame missing layers", {
+  layers <- c(0, 50, 100)
+  far <- .depth_selection_reference(layers, 200, 50)
+  expect_identical(far$status, "distant_depth")
+  expect_false(far$closer_missing)
+  near <- .depth_selection_reference(layers, 120, 50)
+  expect_true(near$closer_missing)
+  float32 <- c(0.49402499198913574, 1.54137504100799561, 3.81949496269226074)
+  exact <- .depth_selection_reference(float32, 1.541375, float32[2])
+  expect_identical(exact$basis, "adjacent")
+  expect_identical(exact$status, "normal")
+  deepest <- .depth_selection_reference(float32, 3.819495, float32[2])
+  expect_false(deepest$outside)
 })
