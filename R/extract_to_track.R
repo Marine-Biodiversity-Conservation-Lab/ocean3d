@@ -727,21 +727,9 @@
         monthly = "month",
         yearly = "year"
       )
-      fmt <- switch(resolution,
-        daily = "%Y-%m-%d",
-        monthly = "%Y-%m-01",
-        yearly = "%Y-01-01"
-      )
-      first <- as.POSIXct(
-        format(
-          as.POSIXct(
-            times[1L],
-            origin = "1970-01-01",
-            tz = "UTC"
-          ), fmt,
-          tz = "UTC"
-        ),
-        tz = "UTC"
+      first <- .time_comparison_values(
+        as.POSIXct(times[1L], origin = "1970-01-01", tz = "UTC"),
+        resolution
       )
       seconds_min <- switch(resolution,
         daily = 86400,
