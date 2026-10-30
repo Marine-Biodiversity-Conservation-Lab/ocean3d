@@ -709,8 +709,7 @@
     return("not_checked")
   }
   # Mask predicates inspect the whole connecting polyline, not the samples.
-  # The polyline follows the track's own distance model (terra::densify()
-  # would follow the WGS84 geodesic, km away from spherical paths).
+  # It is built with the same geodesic positions as the samples.
   n <- max(1, ceiling(arc$length_km[segment] / step_km))
   if (n > 1e+05) {
     stop("Mask geometry exceeds the segment safety limit.")
