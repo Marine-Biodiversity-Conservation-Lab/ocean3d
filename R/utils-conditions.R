@@ -1,3 +1,5 @@
+# R/utils-conditions.R
+#
 # Custom conditions shared by the exported extraction functions.
 #
 # Each helper signals the error or warning for one state of the input to
