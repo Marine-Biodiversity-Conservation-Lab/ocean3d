@@ -123,14 +123,49 @@ test_that("extract_to_point() errors when var = NULL matches two variables", {
   ncdf4::ncvar_put(nc, "salt", matrix(5:8, 2, 2))
   ncdf4::nc_close(nc)
 
-  expect_error(
+  err <- expect_error(
     extract_to_point(
       data.frame(lon = 0, lat = 40),
       f, var = NULL, method = "2d", date_col = NULL,
       time_report = FALSE
     ),
-    "exactly one variable"
+    class = "ocean3d_error_var_detection"
   )
+  expect_match(err$message, "exactly one data variable")
+  expect_match(err$message, "salt, temp|temp, salt")
+})
+
+test_that("extract_to_point() ignores bounds variables when var = NULL", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
+  nv <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
+  vars <- list(
+    ncdf4::ncvar_def("lon_bnds", "degrees_east", list(nv, lon),
+                     prec = "double"),
+    ncdf4::ncvar_def("lat_bnds", "degrees_north", list(nv, lat),
+                     prec = "double"),
+    ncdf4::ncvar_def("temp", "1", list(lon, lat), -9999, prec = "double")
+  )
+  nc <- ncdf4::nc_create(f, vars)
+  ncdf4::ncvar_put(nc, "lon_bnds", matrix(c(-0.5, 0.5, 0.5, 1.5), 2))
+  ncdf4::ncvar_put(nc, "lat_bnds", matrix(c(39.5, 40.5, 40.5, 41.5), 2))
+  ncdf4::ncvar_put(nc, "temp", matrix(1:4, 2, 2))
+  ncdf4::ncatt_put(nc, "lon", "bounds", "lon_bnds")
+  ncdf4::ncatt_put(nc, "lat", "bounds", "lat_bnds")
+  ncdf4::nc_close(nc)
+
+  out <- extract_to_point(
+    data.frame(lon = 1, lat = 41),
+    f, var = NULL, method = "2d", date_col = NULL,
+    time_report = FALSE
+  )
+
+  expect_true("temp" %in% names(out))
+  expect_false(any(c("lon_bnds", "lat_bnds") %in% names(out)))
+  expect_equal(out$temp, 4)
 })
 
 
@@ -4507,9 +4542,12 @@ test_that("unusable spatial bounds fall back to inferred edges", {
     "were not found"
   )
   expect_equal(out$temp, c(1, 2, NA))
-  expect_true(.same_spatial_units("degree_east", "degrees_east"))
-  expect_true(.same_spatial_units("degrees_E", "degrees"))
-  expect_false(.same_spatial_units("degrees_east", "radians"))
+  expect_true(.same_units("degree_east", "degrees_east"))
+  expect_true(.same_units("degrees_E", "degrees"))
+  expect_false(.same_units("degrees_east", "radians"))
+  expect_true(.same_units("m", "metres"))
+  expect_false(.same_units("m", "cm"))
+  expect_false(.same_units("days since 2020-01-01", "hours since 2020-01-01"))
 })
 
 test_that("within matching keeps input order between overlapping sources", {

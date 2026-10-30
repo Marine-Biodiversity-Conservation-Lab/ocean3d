@@ -187,26 +187,41 @@
   # When `var = NULL`, the package tries to detect the variable automatically.
   # This is useful for workflows where each netCDF file contains one main
   # environmental variable, for example one file for NPPV and another file for
-  # salinity.
+  # salinity. Used by extract_to_point() and extract_to_buffer().
   #
-  # The detection is deliberately conservative. If more than one variable is
-  # present, the function stops and asks the user to provide `var` manually.
-  # This avoids extracting the wrong variable by accident.
+  # Coordinate variables and the variables that CF metadata attaches to them
+  # (`bounds`, `climatology` and `coordinates` attributes, e.g. `lat_bnds`)
+  # are not data, so they are excluded. The detection is deliberately
+  # conservative: unless exactly one data variable remains, it stops and asks
+  # the user to provide `var` manually, to avoid extracting the wrong variable.
 
-  vars <- names(nc$var)
+  coordinates <- names(Filter(
+    function(x) isTRUE(x$dimvarid$id >= 0), nc$dim
+  ))
+  metadata <- unlist(lapply(
+    unique(c(coordinates, names(nc$var))),
+    function(name) {
+      unlist(lapply(c("bounds", "climatology", "coordinates"), function(att) {
+        value <- .read_time_attribute(nc, name, att)
+        if (is.character(value)) unlist(strsplit(value, "[[:space:]]+"))
+      }))
+    }
+  ))
+  candidates <- setdiff(names(nc$var), c(names(nc$dim), metadata))
 
-  if (length(vars) == 1L) {
-    return(vars[1])
+  if (length(candidates) == 1L) {
+    return(candidates)
   }
 
-  stop(
-    "Automatic variable detection requires exactly one variable in each ",
-    "netCDF file. ",
-    "Variables found: ",
-    toString(vars),
-    ". Please specify `var` manually.",
-    call. = FALSE
-  )
+  found <- if (length(candidates)) toString(candidates) else "none"
+  file <- basename(nc$filename)
+  rlang::abort(glue::glue(
+    "Automatic variable detection requires exactly one data variable in ",
+    "each netCDF file (coordinate and bounds variables are ignored).\n",
+    "File: {file}\n",
+    "Data variables found: {found}.\n",
+    "Please specify `var` manually."
+  ), class = "ocean3d_error_var_detection", call = NULL)
 }
 
 .resolve_source_var <- function(source, var) {
@@ -1633,24 +1648,10 @@
 }
 
 
-# Interpret physical depths without changing their positions in the source.
-.prepare_depth_axis <- function(values, units, positive = NULL) {
-  if (!is.numeric(values) || !length(values) ||
-        any(!is.finite(values))) {
-    stop("Depth coordinates must contain finite numeric values.", call. = FALSE)
-  }
-  if (!is.character(units) || length(units) != 1L || is.na(units)) {
-    stop(
-      "Depth units cannot be converted to metres. ",
-      "Supply a coordinate with explicit supported length units. ",
-      "For a file with a single depth level, extract2d() reads it ",
-      "without depth metadata.",
-      call. = FALSE
-    )
-  }
-  units <- tolower(trimws(units))
-  factor <- switch(
-    units,
+# Metres per unit for the supported length units, or NA.
+.length_unit_factor <- function(units) {
+  switch(
+    tolower(trimws(units)),
     "m" = 1,
     "meter" = 1,
     "meters" = 1,
@@ -1668,6 +1669,24 @@
     "centimetres" = 0.01,
     NA_real_
   )
+}
+
+# Interpret physical depths without changing their positions in the source.
+.prepare_depth_axis <- function(values, units, positive = NULL) {
+  if (!is.numeric(values) || !length(values) ||
+        any(!is.finite(values))) {
+    stop("Depth coordinates must contain finite numeric values.", call. = FALSE)
+  }
+  if (!is.character(units) || length(units) != 1L || is.na(units)) {
+    stop(
+      "Depth units cannot be converted to metres. ",
+      "Supply a coordinate with explicit supported length units. ",
+      "For a file with a single depth level, extract2d() reads it ",
+      "without depth metadata.",
+      call. = FALSE
+    )
+  }
+  factor <- .length_unit_factor(units)
   if (!is.finite(factor)) {
     stop(
       "Depth units cannot be converted to metres. ",
@@ -1797,58 +1816,86 @@
   values[1L] + c(0, cumsum(steps))
 }
 
-# Angle units differ in spelling (degrees_east, degree_east, degrees_E, ...).
-.same_spatial_units <- function(a, b) {
+# Units can be spelled differently and still mean the same thing: angles
+# (degrees_east, degree_east, degrees_E, ...) and lengths (m, metres, ...).
+.same_units <- function(a, b) {
   a <- tolower(trimws(a))
   b <- tolower(trimws(b))
   if (identical(a, b)) return(TRUE)
   angle <- "^degrees?(_?(east|north|e|n))?$"
-  grepl(angle, a) && grepl(angle, b)
+  if (grepl(angle, a) && grepl(angle, b)) return(TRUE)
+  isTRUE(.length_unit_factor(a) == .length_unit_factor(b))
 }
 
-# Returns a 2 x n matrix of cell edges, or NULL when the file has no usable
-# bounds. Unusable bounds are reported and edges are then inferred from the
-# coordinate centres, as when no bounds are declared.
-.read_spatial_bounds <- function(nc, coordinate, values) {
+# Reads the CF bounds variable of a coordinate, for point and buffer
+# extraction. Returns list(name, values), where values is a 2 x n matrix of
+# cell edges, or NULL when the coordinate declares no bounds.
+#
+# Unusable bounds (missing variable, wrong shape, non-finite values) are an
+# error when `strict = TRUE`. Buffer extraction uses that, because its weights
+# depend on the declared edges. Otherwise they give a warning and NULL, and
+# point extraction infers cell edges from the centres. Bounds in different
+# units from their coordinate are always an error.
+.read_bounds <- function(nc, coordinate, n, strict = FALSE) {
   name <- .read_time_attribute(nc, coordinate, "bounds")
   if (is.null(name)) return(NULL)
-  ignore <- function(problem) {
+  unusable <- function(problem) {
+    if (strict) {
+      stop("Bounds for `", coordinate, "` ", problem, ".", call. = FALSE)
+    }
     warning(
-      "Spatial bounds for `", coordinate, "` ", problem,
+      "Bounds for `", coordinate, "` ", problem,
       "; inferring cell edges from the coordinate centres instead.",
       call. = FALSE
     )
     NULL
   }
-  if (!is.character(name) || length(name) != 1L || is.na(name)) {
-    return(ignore("have an invalid bounds reference"))
+  if (!is.character(name) || length(name) != 1L || is.na(name) ||
+        !nzchar(name)) {
+    return(unusable("have an invalid bounds reference"))
   }
   if (!name %in% names(nc$var)) {
-    return(ignore(paste0("were not found (variable `", name, "`)")))
+    return(unusable(paste0(
+      "were not found (missing bounds variable `", name, "`)"
+    )))
   }
-  variable <- nc$var[[name]]
-  axes <- vapply(variable$dim, function(x) x$name, character(1))
-  coordinate_axis <- which(axes == coordinate)
+
+  # A coordinate variable that isn't itself a dimension must be 1D; its
+  # bounds then follow that dimension.
+  dimension <- if (coordinate %in% names(nc$dim)) {
+    coordinate
+  } else {
+    dims <- nc$var[[coordinate]]$dim
+    if (length(dims) != 1L) {
+      stop("Coordinate `", coordinate, "` must be one-dimensional.",
+           call. = FALSE)
+    }
+    dims[[1L]]$name
+  }
+  axes <- vapply(nc$var[[name]]$dim, function(x) x$name, character(1))
+  coordinate_axis <- which(axes == dimension)
   raw <- ncdf4::ncvar_get(nc, name, collapse_degen = FALSE)
   if (length(dim(raw)) != 2L || length(coordinate_axis) != 1L) {
-    return(ignore("have unsupported dimensions"))
+    return(unusable("have unsupported dimensions"))
   }
   if (coordinate_axis == 1L) raw <- t(raw)
-  if (!identical(dim(raw), c(2L, length(values))) ||
+  if (!identical(dim(raw), c(2L, as.integer(n))) || !is.numeric(raw) ||
         any(!is.finite(raw))) {
-    return(ignore("contain missing or invalid values"))
+    return(unusable("must contain two finite endpoints per coordinate"))
   }
+
   coordinate_units <- .read_time_attribute(nc, coordinate, "units")
   bounds_units <- .read_time_attribute(nc, name, "units")
   if (!is.null(bounds_units) && !is.null(coordinate_units) &&
-        !.same_spatial_units(bounds_units, coordinate_units)) {
+        !.same_units(bounds_units, coordinate_units)) {
     stop(
-      "Spatial bounds and coordinates use different units (`",
-      bounds_units, "` and `", coordinate_units, "`).",
+      "Bounds for `", coordinate, "` and the coordinate use different ",
+      "units (`", bounds_units, "` and `", coordinate_units, "`). ",
+      "Convert bounds and coordinate to the same units first.",
       call. = FALSE
     )
   }
-  raw
+  list(name = name, values = raw)
 }
 
 .prepare_spatial_axis <- function(nc, coordinate, values, longitude = FALSE) {
@@ -1868,7 +1915,7 @@
       call. = FALSE
     )
   }
-  explicit <- .read_spatial_bounds(nc, coordinate, values)
+  explicit <- .read_bounds(nc, coordinate, length(values))$values
   if (!is.null(explicit)) {
     intervals <- explicit
     if (longitude) {
@@ -2571,31 +2618,7 @@
   )
 
   if (!is.null(dims$time)) {
-    named_column <- is.character(date_col) &&
-      length(date_col) == 1L &&
-      !is.na(date_col) &&
-      nzchar(date_col)
-
-    if (!(named_column && date_col %in% names(data))) {
-      correction <- if (direct_input) {
-        "Supply the `date` argument."
-      } else if (named_column) {
-        paste0(
-          "Column `", date_col, "` is missing from `data`. ",
-          "Supply that column or set `date_col` to an existing date column."
-        )
-      } else {
-        "Set `date_col` to an existing date column in `data`."
-      }
-
-      stop(
-        "netCDF variable `", var, "` has a time dimension.\n",
-        "File: ", basename(nc$filename), "\n",
-        correction,
-        "\nAn explicit NA date is allowed; a missing date input is not.",
-        call. = FALSE
-      )
-    }
+    .require_observation_time(data, date_col, var, nc$filename, direct_input)
   }
 
   if (method != "2d" && is.null(dims$depth)) {
@@ -3559,22 +3582,7 @@ extract_to_point <- function(data = NULL,
       input_name = input_name,
       ids = if (is.null(id_col)) NULL else data[[id_col]]
     )
-    n_unzoned <- length(prepared$unzoned_rows)
-    if (n_unzoned) {
-      observations <- if (n_unzoned == 1L) {
-        "observation has"
-      } else {
-        "observations have"
-      }
-      rlang::warn(glue::glue(
-        "Time zone warning: {n_unzoned} {observations} times without a ",
-        "time zone.\n",
-        "Input: {input_name}. These times are being interpreted as UTC.\n",
-        "If they represent local time, supply POSIXct/POSIXlt values ",
-        "constructed with the correct time zone.\n",
-        "If they are UTC, add Z: \"2020-01-02T19:54Z\"."
-      ), class = "ocean3d_timezone_warning")
-    }
+    .warn_time_zone(prepared, input_name)
     diagnostic_resolution <- if (time_resolution == "custom") {
       "custom"
     } else {
