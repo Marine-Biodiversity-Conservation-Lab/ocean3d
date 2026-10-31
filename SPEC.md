@@ -144,7 +144,7 @@ This section is the plan from #99. None of it is implemented yet, and the first 
 2. **Lazy reads for data larger than memory.** Opening a dataset doesn't read its values, every operation reads only the slices it needs, and heavy processing runs per time step or per chunk, so peak memory follows the size of one slice rather than the whole dataset.
 3. **CF-correct metadata.** Keep the current handling of time units and calendars, sub-daily steps, depth units and direction, bounds and longitude conventions (#71–#75, #88–#96).
 
-None of the packages compared (terra, stars, ncdf4, ncdfCF) meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy `stars_proxy` objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package. ncdfCF reads netCDF following CF (time, depth axes, bounds) and exports to terra, but it is marked experimental and has a single maintainer, and the docs don't say whether its subsets are read lazily.
+None of the packages compared (terra, stars, ncdf4, ncdfCF) meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy `stars_proxy` objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package. ncdfCF reads netCDF following CF (time, depth axes, bounds) and exports to terra, but it is marked experimental, and its docs don't say whether its subsets are read lazily.
 
 #### Direction: a hybrid
 
@@ -163,7 +163,7 @@ Before any code moves, compare stars and ncdfCF with the current ncdf4 code:
 2. On a large real file (for example a multi-year daily global Copernicus Marine product), measure peak memory and run time for opening as a proxy, point extraction across time, volume and overlap for one time step, and a polygon or buffer summary over a time window.
 3. Optionally, the same dataset as a remote Zarr store.
 
-The result decides whether stars proxies become the core object, whether ncdfCF can take over CF reading (if it reads lazily and its maintenance looks dependable), or whether the package keeps its own lazy reads.
+The result decides whether stars proxies become the core object, whether ncdfCF can take over CF reading (if it reads lazily and is stable enough to depend on), or whether the package keeps its own lazy reads.
 
 #### Vector class: `SpatVector3D`
 
@@ -302,8 +302,8 @@ The `extract_to_*()` functions below exist now and combine all three steps; each
 - **Calculate the volume of `SpatVector3D` polygons** *(planned)*. Measured from the geometry, not a grid: polygon area × (`bottom` - `top`) for constant surfaces, exact formulas for named shapes (sphere, ellipsoid), and sampling across the polygon for raster or function surfaces. The time interval doesn't change the volume. Points and lines have no volume, so `volume()` on them is an error suggesting `buffer_3d()`. `volume()` and `calc_volume_overlap()` gain `SpatVector3D` methods, with overlap measured on `intersect_3d()`'s result as for envelopes.
 
 ### Utilities 
-- **Download and prepare data.** Utilities for public APIs and open data incorporated into `ocean3d`. Includes WOA, Copernicus, IUCN Red List, Global Fishing Watch data. 
-- **Downloads are cached, not manual.** Downloads are cached in one place that all projects read from, and the package records which versions were used. Code can then be shared without the data. 
+- **Download and prepare data.** Utilities for public data: WOA, GEBCO bathymetry, IUCN Red List and Global Fishing Watch. Copernicus Marine utilities were removed in #53 and are planned to return with a shared cache (#55). 
+- **Cached downloads.** WOA files are cached in one place (`woa_cache_dir()`) that all projects read from, so code can be shared without the data. File names give the WOA edition and decade, but the package doesn't yet record which files an analysis used. Recording data versions, and caching for other sources, are planned (#55). 
 
 ## Conventions
 - **Depth sign convention.** Depths are positive metres increasing downward, but GEBCO bathymetry is negative below sea level. The voxel constructor flips it and clamps land to 0. Document which convention any new argument uses.
