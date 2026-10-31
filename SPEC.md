@@ -242,18 +242,18 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 
 #### Order of work
 
-Each step is its own issue and PR off `main`:
+Each step has its own issue, and each PR branches off `main`:
 
-1. Document the current split: which functions take netCDF and which take `SpatVoxel` (README function overview and each function's `@param`).
-2. Move the shared CF/netCDF helpers (time decoding, depth axis, bounds, dimension detection) out of `R/extract_to_points.R` into their own files.
-3. Replace the internal CF time decoding with CFtime, with the time tests from #71–#75 and #88–#91 as reference behaviour.
-4. Run the stars and ncdfCF trial and write up the results with a recommendation for the core object.
-5. Agree on the core data model and update this section.
-6. Build the core object and lazy reader, then time-aware volume, overlap and profiles, then `SpatVoxel` as a time-step view.
-7. Add `SpatVector3D` with `geomtype()`, `as_vector3d()` and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()`.
-8. Add the coverage function and `intersect_3d()` / `intersects_3d()` / `mask()` / `volume()` methods for `SpatVector3D`.
-9. Add `summarise_3d()`, then reimplement the extraction functions as build → intersect → summarise wrappers, one function per PR.
-10. Add track sampling as a build step, buffered tracks (#105), and block-wise reads for many features; then named shapes, raster and function surfaces for polygons.
+1. Document the current split: which functions take netCDF and which take `SpatVoxel` (README function overview and each function's `@param`) (#109).
+2. Move the shared CF/netCDF helpers (time decoding, depth axis, bounds, dimension detection) out of `R/extract_to_points.R` into their own files (#110).
+3. Replace the internal CF time decoding with CFtime, with the time tests from #71–#75 and #88–#91 as reference behaviour (#111).
+4. Run the stars and ncdfCF trial and write up the results with a recommendation for the core object (#112).
+5. Agree on the core data model and update this section (#112).
+6. Build the core object and lazy reader, then time-aware volume, overlap and profiles, then `SpatVoxel` as a time-step view (#113).
+7. Add `SpatVector3D` with `geomtype()`, `as_vector3d()` and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()` (#114).
+8. Add the coverage function and `intersect_3d()` / `intersects_3d()` / `mask()` / `volume()` methods for `SpatVector3D` (#115).
+9. Add `summarise_3d()`, then reimplement the extraction functions as build → intersect → summarise wrappers, one function per PR (#116).
+10. Add track sampling as a build step and buffered tracks (#105); then named shapes, raster and function surfaces for polygons (#117). Block-wise reads for many features are part of #115.
 
 The existing tests for both models, including the buffer and track tests, define the expected behaviour and must keep passing. New tests check that the same synthetic data gives the same values from a netCDF file, the core object and the matching `SpatVoxel`. API changes (what `woa_load_nc()` and the voxel constructors return, time in volume and overlap) need NEWS entries and should settle before the rOpenSci and CRAN submissions (#12).
 

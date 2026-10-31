@@ -123,8 +123,10 @@ exported function rather than deleting them.
   to a lower PR has to be merged into and re-reviewed in each PR above it,
   which multiplies review work. Branch from `main`, and wait for the PR your
   work depends on to merge.
-- Commit locally. Don't push, merge, open issues or PRs, or post comments on
-  GitHub unless the developer asks; the developer reviews and squash-merges.
+- Agents can push their branch and open a PR for their issue. A person
+  reviews every PR, and only the developer approves and squash-merges: don't
+  merge or approve. Don't open issues or post comments elsewhere on GitHub
+  unless the developer asks.
 - Each PR gets an agent code review and a prose review of its docs and text.
   Reply to each review comment with what changed and in which commit
   (e.g. "Fixed in e860cb3: ...").

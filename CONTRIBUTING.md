@@ -129,8 +129,9 @@ Cursor and others) are welcome. The person who submits the work is
 responsible for it: read and understand the changes before asking for review.
 
 Agents follow the same loop as everyone else. Each agent works on one issue,
-on its own branch and git worktree from an up-to-date `main`. Agents commit
-locally; the developer pushes, reviews and squash-merges. Commits and PR
+on its own branch and git worktree from an up-to-date `main`. Agents can push
+their branch and open a PR; a person reviews every PR, and the developer
+approves and squash-merges. Commits and PR
 descriptions written with an agent say so, for example with a
 `Co-Authored-By:` trailer naming the model.
 
