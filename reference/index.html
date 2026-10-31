@@ -43,9 +43,9 @@
     </div>
 
     <div class="section level2">
-      <h2 id="all-functions">All functions<a class="anchor" aria-label="anchor" href="#all-functions"></a></h2>
+      <h2 id="-d-classes">3D classes<a class="anchor" aria-label="anchor" href="#-d-classes"></a></h2>
 
-
+      <div class="section-desc"><p>Raster-based 3D objects. A <code>SpatVoxel</code> holds values by depth level; a <code>SpatEnvelope</code> holds a depth range per cell.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -53,6 +53,13 @@
 
 
       <dl><dt>
+
+          <code><a href="SpatVoxel-class.html">SpatVoxel-class</a></code>
+
+        </dt>
+        <dd>3D voxel model: one layer per standard depth level</dd>
+
+        <dt>
 
           <code><a href="SpatEnvelope-class.html">SpatEnvelope-class</a></code>
 
@@ -68,10 +75,26 @@
 
         <dt>
 
-          <code><a href="SpatVoxel-class.html">SpatVoxel-class</a></code>
+          <code><a href="depths.html">depths()</a></code>
 
         </dt>
-        <dd>3D voxel model: one layer per standard depth level</dd>
+        <dd>Depths of a voxel's layers</dd>
+      </dl></div><div class="section level2">
+      <h2 id="build">Build<a class="anchor" aria-label="anchor" href="#build"></a></h2>
+
+      <div class="section-desc"><p>Turn inputs into 3D objects, and convert between them.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="as_voxel.html">as_voxel()</a></code>
+
+        </dt>
+        <dd>Create a voxel object</dd>
 
         <dt>
 
@@ -82,31 +105,10 @@
 
         <dt>
 
-          <code><a href="as_voxel.html">as_voxel()</a></code>
+          <code><a href="vect_to_envelope.html">vect_to_envelope()</a></code>
 
         </dt>
-        <dd>Create a voxel object</dd>
-
-        <dt>
-
-          <code><a href="calc_volume_overlap.html">calc_volume_overlap()</a></code>
-
-        </dt>
-        <dd>Per-cell 3D volume overlap between two rasterized domains</dd>
-
-        <dt>
-
-          <code><a href="create_study_raster.html">create_study_raster()</a></code>
-
-        </dt>
-        <dd>Create a study area raster grid</dd>
-
-        <dt>
-
-          <code><a href="depths.html">depths()</a></code>
-
-        </dt>
-        <dd>Depths of a voxel's layers</dd>
+        <dd>Convert SpatVector or sf to SpatEnvelope</dd>
 
         <dt>
 
@@ -114,6 +116,103 @@
 
         </dt>
         <dd>Convert Envelope 2.5D -&gt; Voxel 3D</dd>
+
+        <dt>
+
+          <code><a href="voxel_to_envelope.html">voxel_to_envelope()</a></code>
+
+        </dt>
+        <dd>Collapse Voxel 3D -&gt; Envelope 2.5D</dd>
+
+        <dt>
+
+          <code><a href="voxel_profiles.html">profile_flat()</a></code> <code><a href="voxel_profiles.html">profile_equal()</a></code>
+
+        </dt>
+        <dd>Vertical profiles for voxel building</dd>
+
+        <dt>
+
+          <code><a href="occupied.html">occupied()</a></code>
+
+        </dt>
+        <dd>Reduce a variable voxel to a presence voxel</dd>
+
+        <dt>
+
+          <code><a href="create_study_raster.html">create_study_raster()</a></code>
+
+        </dt>
+        <dd>Create a study area raster grid</dd>
+      </dl></div><div class="section level2">
+      <h2 id="intersect">Intersect<a class="anchor" aria-label="anchor" href="#intersect"></a></h2>
+
+      <div class="section-desc"><p>Find where 3D objects meet.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="intersect_3d.html">intersect_3d()</a></code>
+
+        </dt>
+        <dd>The 3D space two objects share</dd>
+
+        <dt>
+
+          <code><a href="intersects_3d.html">intersects_3d()</a></code>
+
+        </dt>
+        <dd>Do two objects share any 3D space?</dd>
+
+        <dt>
+
+          <code><a href="mask-3d.html">mask(<i>&lt;SpatVoxel&gt;</i>,<i>&lt;SpatEnvelope&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatVoxel&gt;</i>,<i>&lt;SpatVoxel&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatEnvelope&gt;</i>,<i>&lt;SpatEnvelope&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatEnvelope&gt;</i>,<i>&lt;SpatVoxel&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatRaster&gt;</i>,<i>&lt;SpatEnvelope&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatRaster&gt;</i>,<i>&lt;SpatVoxel&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Keep a raster's values inside a 3D domain</dd>
+      </dl></div><div class="section level2">
+      <h2 id="summarise">Summarise<a class="anchor" aria-label="anchor" href="#summarise"></a></h2>
+
+      <div class="section-desc"><p>Measure 3D objects and their overlap.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="volume.html">volume()</a></code>
+
+        </dt>
+        <dd>Total 3D volume of a rasterized domain</dd>
+
+        <dt>
+
+          <code><a href="calc_volume_overlap.html">calc_volume_overlap()</a></code>
+
+        </dt>
+        <dd>Per-cell 3D volume overlap between two rasterized domains</dd>
+      </dl></div><div class="section level2">
+      <h2 id="extraction">Extraction<a class="anchor" aria-label="anchor" href="#extraction"></a></h2>
+
+      <div class="section-desc"><p>Extract environmental values from netCDF files at points, in buffers, along tracks, or from a <code>SpatVoxel</code> within an area. These run build, intersect and summarise in one call.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="extract_to_point.html">extract_to_point()</a></code>
+
+        </dt>
+        <dd>Extract values from netCDFs to one or more point observations</dd>
 
         <dt>
 
@@ -152,24 +251,10 @@
 
         <dt>
 
-          <code><a href="extract_to_area.html">extract_to_area()</a></code>
-
-        </dt>
-        <dd>Extract a 3D raster to an area and a depth band</dd>
-
-        <dt>
-
           <code><a href="extract_to_buffer.html">extract_to_buffer()</a></code>
 
         </dt>
         <dd>Summarise environmental values around observations</dd>
-
-        <dt>
-
-          <code><a href="extract_to_point.html">extract_to_point()</a></code>
-
-        </dt>
-        <dd>Extract values from netCDFs to one or more point observations</dd>
 
         <dt>
 
@@ -180,101 +265,26 @@
 
         <dt>
 
-          <code><a href="fetch_species_assessments.html">fetch_species_assessments()</a></code>
+          <code><a href="extract_to_area.html">extract_to_area()</a></code>
 
         </dt>
-        <dd>Fetch species assessment data from IUCN Red List API</dd>
+        <dd>Extract a 3D raster to an area and a depth band</dd>
+      </dl></div><div class="section level2">
+      <h2 id="data-sources">Data sources<a class="anchor" aria-label="anchor" href="#data-sources"></a></h2>
 
-        <dt>
+      <div class="section-desc"><p>Download, cache and load public datasets.</p></div>
 
-          <code><a href="fill_missing_depths.html">fill_missing_depths()</a></code>
+      <dl></dl></div><div class="section level2">
 
-        </dt>
-        <dd>Fill missing depth values</dd>
 
-        <dt>
 
-          <code><a href="gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code>
 
-        </dt>
-        <dd>Rasterise a GFW effort tibble onto a target grid</dd>
-
-        <dt>
-
-          <code><a href="intersect_3d.html">intersect_3d()</a></code>
-
-        </dt>
-        <dd>The 3D space two objects share</dd>
-
-        <dt>
-
-          <code><a href="intersects_3d.html">intersects_3d()</a></code>
-
-        </dt>
-        <dd>Do two objects share any 3D space?</dd>
-
-        <dt>
+      <dl><dt>
 
           <code><a href="load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code>
 
         </dt>
         <dd>Load GEBCO bathymetry raster</dd>
-
-        <dt>
-
-          <code><a href="mask-3d.html">mask(<i>&lt;SpatVoxel&gt;</i>,<i>&lt;SpatEnvelope&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatVoxel&gt;</i>,<i>&lt;SpatVoxel&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatEnvelope&gt;</i>,<i>&lt;SpatEnvelope&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatEnvelope&gt;</i>,<i>&lt;SpatVoxel&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatRaster&gt;</i>,<i>&lt;SpatEnvelope&gt;</i>)</a></code> <code><a href="mask-3d.html">mask(<i>&lt;SpatRaster&gt;</i>,<i>&lt;SpatVoxel&gt;</i>)</a></code>
-
-        </dt>
-        <dd>Keep a raster's values inside a 3D domain</dd>
-
-        <dt>
-
-          <code><a href="occupied.html">occupied()</a></code>
-
-        </dt>
-        <dd>Reduce a variable voxel to a presence voxel</dd>
-
-        <dt>
-
-          <code><a href="vect_to_envelope.html">vect_to_envelope()</a></code>
-
-        </dt>
-        <dd>Convert SpatVector or sf to SpatEnvelope</dd>
-
-        <dt>
-
-          <code><a href="volume.html">volume()</a></code>
-
-        </dt>
-        <dd>Total 3D volume of a rasterized domain</dd>
-
-        <dt>
-
-          <code><a href="voxel_profiles.html">profile_flat()</a></code> <code><a href="voxel_profiles.html">profile_equal()</a></code>
-
-        </dt>
-        <dd>Vertical profiles for voxel building</dd>
-
-        <dt>
-
-          <code><a href="voxel_to_envelope.html">voxel_to_envelope()</a></code>
-
-        </dt>
-        <dd>Collapse Voxel 3D -&gt; Envelope 2.5D</dd>
-
-        <dt>
-
-          <code><a href="woa_cache_clear.html">woa_cache_clear()</a></code>
-
-        </dt>
-        <dd>Clear the WOA cache</dd>
-
-        <dt>
-
-          <code><a href="woa_cache_dir.html">woa_cache_dir()</a></code>
-
-        </dt>
-        <dd>WOA cache directory</dd>
 
         <dt>
 
@@ -289,8 +299,44 @@
 
         </dt>
         <dd>Load a WOA NetCDF file</dd>
+
+        <dt>
+
+          <code><a href="woa_cache_dir.html">woa_cache_dir()</a></code>
+
+        </dt>
+        <dd>WOA cache directory</dd>
+
+        <dt>
+
+          <code><a href="woa_cache_clear.html">woa_cache_clear()</a></code>
+
+        </dt>
+        <dd>Clear the WOA cache</dd>
+
+        <dt>
+
+          <code><a href="gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code>
+
+        </dt>
+        <dd>Rasterise a GFW effort tibble onto a target grid</dd>
+
+        <dt>
+
+          <code><a href="fetch_species_assessments.html">fetch_species_assessments()</a></code>
+
+        </dt>
+        <dd>Fetch species assessment data from IUCN Red List API</dd>
+
+        <dt>
+
+          <code><a href="fill_missing_depths.html">fill_missing_depths()</a></code>
+
+        </dt>
+        <dd>Fill missing depth values</dd>
       </dl></div>
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

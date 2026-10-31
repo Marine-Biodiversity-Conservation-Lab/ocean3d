@@ -45,98 +45,386 @@
 
 <div id="project-spec" class="section level1">
 
-<p>This document describes the overall design decisions for the <code>ocean3d</code> project. <code>ocean3d</code> is an R package that is designed to facilitate the analysis of marine habitats in 3D, enabling descriptions of interaction between different marine entities, including species, anthropogenic activities, and environmental variables. <code>ocean3d</code> is intended to empower users to conduct analyses in the 3D marine environment within the R ecosystem.</p>
+<p>This document describes the design of <code>ocean3d</code>, an R package for analysing marine habitats in 3D: how species, human activities and environmental conditions overlap in space and depth.</p>
 <p>The primary operation that <code>ocean3d</code> is focused on is the spatial querying of large 3D marine datasets. <code>ocean3d</code> enables asking questions like 1. What range of environmental conditions is a species found in? 2. How much does a given anthropogenic activity affect a species? 3. What impact could protective measures have on a species?</p>
 <p>while considering three-dimensional space.</p>
-<p>Technically, this means that <code>ocean3d</code> needs to be able to take 1D (points), 2D (polygons), and 3D (raster stack) and query how these intersect with one another.</p>
+<div class="float">
+<img src="articles/figures/Figure1_conceptual3Ddistribution.png" alt="Conceptual overview: a species’ 2D range, depth range and bathymetry combine into a 3D distribution, which is then queried against environmental data"><div class="figcaption">Conceptual overview: a species’ 2D range, depth range and bathymetry combine into a 3D distribution, which is then queried against environmental data</div>
+</div>
+<p><em>Figure 1. A species’ geographical range (A) and depth range, bounded by bathymetry, give its potential 3D distribution (B). Environmental data are then summarised within that space (C). From the Getting Started vignette.</em></p>
+<p>Technically, this means that <code>ocean3d</code> needs to be able to take points (0D), lines (1D), polygons (2D) and 3D raster stacks and query how these intersect with one another.</p>
+<p><strong>Key design decisions</strong></p>
+<ul><li>
+<strong>Three steps:</strong> an analysis is build → intersect → summarise, and each analysis function belongs to one step (<a href="#package-design-build-intersect-summarise">Package design</a>). The extraction functions don’t follow this yet; they are planned to become wrappers over the three steps.</li>
+<li>
+<strong>Now:</strong> two data models. netCDF files are used for point, buffer and track extraction; <code>SpatVoxel</code> / <code>SpatEnvelope</code> for everything else (<a href="#data-model">Data model</a>).</li>
+<li>
+<strong>Planned (#99):</strong> one model with time as a dimension, reading only the data each step needs. A trial of the stars and ncdfCF packages decides how the data are read and held.</li>
+<li>
+<strong>Planned:</strong> one vector class, <code>SpatVector3D</code>, holding points, lines and polygons with depth.</li>
+<li>
+<strong>Planned:</strong> CFtime for time decoding.</li>
+</ul><div class="section level2">
+<h2 id="package-design-build-intersect-summarise">Package design: build, intersect, summarise<a class="anchor" aria-label="anchor" href="#package-design-build-intersect-summarise"></a></h2>
+<p>An analysis in <code>ocean3d</code> has three steps, and each analysis function belongs to one of them (downloads and cache utilities sit outside). The output of one step is the input to the next, and each step can be used on its own.</p>
+<ol style="list-style-type: decimal"><li>
+<strong>Build:</strong> turn inputs (observations, tracks, polygons with depth ranges, rasters, netCDF data) into 3D objects.</li>
+<li>
+<strong>Intersect:</strong> find where 3D objects meet each other or the data: the space they share, whether they share any, or the data values inside a shape.</li>
+<li>
+<strong>Summarise:</strong> turn what intersect returns into results: volumes, overlap, and statistics per shape or group.</li>
+</ol><table class="table"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><thead><tr><th>Step</th>
+<th>Question</th>
+<th>Exists now</th>
+<th>Planned</th>
+</tr></thead><tbody><tr><td>Build</td>
+<td>What is the 3D shape or grid?</td>
+<td>
+<code><a href="reference/as_voxel.html">as_voxel()</a></code>, <code><a href="reference/as_envelope.html">as_envelope()</a></code>, <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code>, <code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code>, <code><a href="reference/voxel_to_envelope.html">voxel_to_envelope()</a></code>, <code><a href="reference/occupied.html">occupied()</a></code>, <code><a href="reference/create_study_raster.html">create_study_raster()</a></code>, data loaders (<code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code>, <code><a href="reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code>, <code><a href="reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code>)</td>
+<td>
+<code>as_vector3d()</code>, <code>buffer_3d()</code>, <code>vector3d_to_envelope()</code>, track sampling</td>
+</tr><tr><td>Intersect</td>
+<td>Where do they meet?</td>
+<td>
+<code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code><a href="reference/intersects_3d.html">intersects_3d()</a></code>, <code>mask()</code>
+</td>
+<td>the same functions for <code>SpatVector3D</code>; a coverage function that returns the data cells inside each shape with weights (working name <code>coverage_3d()</code>)</td>
+</tr><tr><td>Summarise</td>
+<td>How much, and what values?</td>
+<td>
+<code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code>
+</td>
+<td>
+<code>summarise_3d()</code> for statistics on intersect results</td>
+</tr></tbody></table><p>The Getting Started vignette follows the three steps: it builds a species’ 3D range with <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code>, keeps the temperatures inside it with <code>mask()</code>, and summarises them per depth with <code><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">terra::global()</a></code>.</p>
+<p>Rules:</p>
+<ul><li>The functions for each step are exported, so users can stop after any step, inspect the result, or use their own shapes or statistics.</li>
+<li>Arguments with the same meaning have the same name and default in every step (#101). Input checks are shared (#104).</li>
+<li>New features go into one step, not into a function that combines steps. A new shape (e.g. an ellipsoid buffer) is a builder; a new statistic is an option of the summary function.</li>
+</ul><p><strong>Combined functions.</strong> The extraction functions run the steps together in one call: they turn the input into a shape, find the data cells inside it and compute a statistic. The same work is written separately for points, buffers, tracks and areas, with different arguments for the same idea (#101, #104, #105); <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code> alone has about 2100 lines and 36 arguments. They are planned to become wrappers over the three steps, keeping their current arguments and results:</p>
+<table class="table"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><thead><tr><th>Function</th>
+<th>Build</th>
+<th>Intersect</th>
+<th>Summarise</th>
+</tr></thead><tbody><tr><td><code><a href="reference/extract_to_point.html">extract_to_point()</a></code></td>
+<td>points, one per row</td>
+<td>one cell per point</td>
+<td>none (the value)</td>
+</tr><tr><td><code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code></td>
+<td>points, buffered into polygons (radius × depth window × time window)</td>
+<td>cells and weights per polygon</td>
+<td>per row</td>
+</tr><tr><td><code><a href="reference/extract_to_area.html">extract_to_area()</a></code></td>
+<td>one polygon × depth band</td>
+<td>
+<code>mask()</code> or coverage</td>
+<td>optional</td>
+</tr><tr><td><code><a href="reference/extract_to_track.html">extract_to_track()</a></code></td>
+<td>lines, sampled into points (optionally buffered)</td>
+<td>as for points or polygons</td>
+<td>per sample, then per track</td>
+</tr></tbody></table><p>How the planned functions work is described in <a href="#extraction-on-the-three-steps">Extraction on the three steps</a>.</p>
+</div>
 <div class="section level2">
 <h2 id="vector-representations-in-3d-space">Vector Representations in 3D space<a class="anchor" aria-label="anchor" href="#vector-representations-in-3d-space"></a></h2>
-<p>For more background: <a href="https://en.wikipedia.org/wiki/Geometric_primitive" class="external-link uri">https://en.wikipedia.org/wiki/Geometric_primitive</a> ### 0D (Points / Vertices) These are 0-dimensional, without length, width, or height dimensions. Points can be located in 3-dimensional space though, with 3 coordinate values. They are called vertices in the 3D graphics / modelling field.</p>
-<p>For <code>ocean3d</code>, these will be lon (longitude), lat (latitude), and depth (metres).</p>
+<p>For more background: <a href="https://en.wikipedia.org/wiki/Geometric_primitive" class="external-link uri">https://en.wikipedia.org/wiki/Geometric_primitive</a></p>
+<p><code>ocean3d</code> plans one vector class for these, <code>SpatVector3D</code>, holding points, lines or polygons. See <a href="#vector-class-spatvector3d">Vector class: <code>SpatVector3D</code></a>.</p>
+<div class="section level3">
+<h3 id="id_0d-points--vertices">0D (Points / Vertices)<a class="anchor" aria-label="anchor" href="#id_0d-points--vertices"></a></h3>
+<p>A point has no length, width or height, but has a position in 3D: three coordinates. In 3D graphics these are called vertices.</p>
+<p>In <code>ocean3d</code>, a point has a lon (longitude), lat (latitude), depth (metres) and optional time, e.g. a tag detection at 35 m. These will be the points type of <code>SpatVector3D</code>.</p>
+</div>
 <div class="section level3">
 <h3 id="id_1d-lines--edges">1D (Lines / Edges)<a class="anchor" aria-label="anchor" href="#id_1d-lines--edges"></a></h3>
-<p>Lines are two points connected, having a length but no width, therefore considered to be 1-dimensional. These are called edges in the 3D graphics / modelling field.</p>
-<p>Currently, <code>ocean3d</code> doesn’t handle lines / edges, but it would be useful for working with things like fishing boat routes or tagging data. See <a href="#future-directions">Future Directions</a>.</p>
+<p>A line connects two or more points; it has length but no width. In 3D graphics these are called edges.</p>
+<p>In <code>ocean3d</code>, each vertex of a line has its own depth and time, so a line can follow a dive profile or a vessel route. These will be the lines type of <code>SpatVector3D</code>.</p>
+<p><code><a href="reference/extract_to_track.html">extract_to_track()</a></code> already extracts environmental values along lines, such as tagging tracks or fishing vessel routes, by sampling points along each ordered track and extracting at them with <code><a href="reference/extract_to_point.html">extract_to_point()</a></code> (#31). It takes an ordered table of vertices rather than a class.</p>
 </div>
 <div class="section level3">
 <h3 id="id_2d-polygons--faces">2D (Polygons / Faces)<a class="anchor" aria-label="anchor" href="#id_2d-polygons--faces"></a></h3>
-<p>Polygons are constructed from points that exist on the same 2D plane, that are connected in order that creates a closed shape. With length and width, these are 2-dimensional shapes. In 3D graphics / modelling field, they are called faces.</p>
-<p>Currently, <code>ocean3d</code> doesn’t handle faces that are natively 3D. These are cases where each point that is part of the polygon has a meaningful depth coordinate. Instead, we work with polygons that have depth values associated with the entire polygon. I.e. the polygon is represented on planes that aligned with depth levels. For example, IUCN Red List species ranges that have a species range represented as a 2D polygon with no depths, with separate depth range values provided. This is often called 2.5D representation.</p>
+<p>A polygon is a closed shape made of points connected in order on one plane; it has length and width. In 3D graphics these are called faces.</p>
+<p><code>ocean3d</code> doesn’t handle polygons whose vertices each have their own depth. Instead, a polygon has one depth range for the whole shape. For example, an IUCN Red List range is a 2D polygon with a separate depth range. This is often called 2.5D.</p>
+<p>These will be the polygons type of <code>SpatVector3D</code>: a polygon with a top and bottom depth and optional time interval, e.g. a marine protected area (MPA) × 0–200 m. Buffering a point or line gives polygons.</p>
 </div>
 <div class="section level3">
 <h3 id="id_3d-volumes">3D (Volumes)<a class="anchor" aria-label="anchor" href="#id_3d-volumes"></a></h3>
 <p>Volumes are closed geometries that are formed by multiple polygons.</p>
-<p>Currently, <code>ocean3d</code> does not handle volumes. This might become useful to work with if we input 3D models, derived from techniques like photogrammetry.</p>
+<p>Polygons in <code>SpatVector3D</code> enclose a volume: everything between their top and bottom. Tops and bottoms that vary across the polygon cover spheres, ellipsoids and layers that follow the seafloor. Full 3D volumes, with overhangs or several depth bands in one column, are out of scope. They may be needed later for 3D models from photogrammetry.</p>
 </div>
 </div>
 <div class="section level2">
 <h2 id="raster-representations-in-3d-space">Raster Representations in 3D space<a class="anchor" aria-label="anchor" href="#raster-representations-in-3d-space"></a></h2>
 <div class="section level3">
 <h3 id="id_2d-raster">2D (Raster)<a class="anchor" aria-label="anchor" href="#id_2d-raster"></a></h3>
-<p>2D rasters are cellular representations with x, y dimensions. I.e. the whole study space is represented as a grid that has values in every cell.</p>
+<p>A 2D raster is a grid over the study area with a value in each cell.</p>
 </div>
 <div class="section level3">
 <h3 id="id_3d-voxel">3D (Voxel)<a class="anchor" aria-label="anchor" href="#id_3d-voxel"></a></h3>
 <div class="float">
-<img src="figures/fig-voxel-model.png" alt="alt text"><div class="figcaption">alt text</div>
+<img src="articles/figures/Comparison_SpatEnvelope_SpatVoxel.png" alt="The same species distribution as a SpatEnvelope (depth_min and depth_max rasters) and as a SpatVoxel (presence at standard depth levels), converted with envelope_to_voxel()"><div class="figcaption">The same species distribution as a SpatEnvelope (depth_min and depth_max rasters) and as a SpatVoxel (presence at standard depth levels), converted with envelope_to_voxel()</div>
 </div>
-<div class="float">
-<img src="figures/fig-species-voxel.png" alt="Figure 2"><div class="figcaption">Figure 2</div>
-</div>
-<p>To extend rasters into 3D, we simply create multiple rasters for a set of standard depths. This is the convention from oceanography datasets, like Copernicus Marine and World Ocean Atlas (WOA). This raster stack is supported with netCDF file type and with the <code>terra</code> and <code>ncdf4</code> packages. This raster stack is called a <strong>voxel model</strong> in 3D graphics / modelling field.</p>
-<p>Multi-depth rasters used by <code>ocean3d</code> must encode depth in layer names using the format <code>{variable}_{field}_depth={value}</code> (e.g., <code>t_an_depth=0</code>, <code>t_an_depth=100</code> for temperature with annual means at 0 and 100 m depths).</p>
-<p>The convention for the depth bounds that a given raster layer represents depends on source netCDF. For example, WOA provides standard depth levels and explicit depth_bnds. For example, the 0 m layer has bounds from 0 to 2.5 m, the 5 m layer 2.5–7.5 m, the 10 m layer 7.5–12.5 m, etc.</p>
-<p>In these rasters, there is a continuous representation of values across x, y, and depth dimensions. For environmental variables, this could be temperature in degrees C at each coordinate and depth. For a species range, this could be probability of occurrence at each coordinate an depth.</p>
-<p>Data source utilities are responsible for converting other formats into this convention. Layer names are parsed by <code><a href="reference/depths.html">depths()</a></code>, which utilities such as <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> use to determine which depth layers to select for a given depth range.</p>
+<p><em>Figure 2. The two raster representations of the same distribution. (A) A <code>SpatEnvelope</code> (<a href="#id_3d-min-max-25d">min-max 2.5D</a>) stores <code>depth_min</code> and <code>depth_max</code> per cell, bounded by the seafloor. (B) <code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> converts it to a <code>SpatVoxel</code>, one layer per standard depth. From the Getting Started vignette.</em></p>
+<p>A 3D raster is a stack of 2D rasters, one per standard depth, as in Copernicus Marine and World Ocean Atlas (WOA) data. netCDF files store these stacks. In 3D graphics this is called a <strong>voxel model</strong>.</p>
+<p>Multi-depth rasters used by <code>ocean3d</code> must encode depth in layer names using the format <code>{variable}_depth={value}</code> (e.g. <code>t_an_depth=0</code>, <code>t_an_depth=100</code> for WOA annual mean temperature, <code>t_an</code>, at 0 and 100 m).</p>
+<p>The depth range each layer covers depends on the source file. WOA, for instance, gives explicit depth bounds: the 0 m layer covers 0–2.5 m, the 5 m layer 2.5–7.5 m, the 10 m layer 7.5–12.5 m, and so on.</p>
+<p>These rasters hold values across x, y and depth: e.g. temperature in °C, or a species’ probability of occurrence, at each coordinate and depth.</p>
+<p>Data loaders convert other formats to this naming. <code><a href="reference/depths.html">depths()</a></code> reads the depths from layer names, e.g. so <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> can select layers in a depth range.</p>
 </div>
 <div class="section level3">
 <h3 id="id_3d-min-max-25d">3D (Min-max 2.5D)<a class="anchor" aria-label="anchor" href="#id_3d-min-max-25d"></a></h3>
-<p>Colloquially referred to as the 2.5D model, this is often used for terrain models in GIS. Think like Digital Elevation Models, where the raster values correspond with the height of the landscape.</p>
-<p>We can represent spaces, like species ranges, by describing the space that they occupy with a minimum depth and maximum depth raster. Maximum depth could be bound by the bathymetry raster, or by the maximum depth the species is found at.</p>
-<p>This representation is more efficient than the 3D Voxel representation, since it only needs two rasters for min and max respectively, compared to needing a raster for every standard depth. The downside is that the 2.5 representation doesn’t model situations where there may not be presences between the min and max depths.</p>
+<p>Called 2.5D in GIS, as in digital elevation models, where each cell holds the land height.</p>
+<p>A species range can be stored as a minimum-depth and a maximum-depth raster (Figure 2A). Maximum depth could be bound by the bathymetry raster, or by the maximum depth the species is found at.</p>
+<p>This needs only two rasters (min and max) rather than one per standard depth. The downside is that a 2.5D envelope can’t represent gaps between its min and max depth.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="data-model">Data model<a class="anchor" aria-label="anchor" href="#data-model"></a></h2>
+<div class="section level3">
+<h3 id="now-two-models">Now: two models<a class="anchor" aria-label="anchor" href="#now-two-models"></a></h3>
+<p><code>ocean3d</code> currently has two separate data models for the same kind of data (gridded marine variables by longitude, latitude and depth). Functions take one or the other, and no exported function converts one to the other.</p>
+<p>“CF” below means the <a href="https://cfconventions.org/" class="external-link">Climate and Forecast (CF) Conventions</a>, the standard for metadata in netCDF files used by Copernicus Marine, WOA and many ocean models. CF attributes say how to read the stored numbers: time units and calendar (<code>hours since 1950-01-01</code>, <code>noleap</code>), depth units and direction (<code>positive = "down"</code>), cell edges (<code>bounds</code>), and which dimension is which (<code>axis</code>, <code>standard_name</code>). “CF-correct” means reading these as the conventions define them.</p>
+<table class="table"><colgroup><col width="33%"><col width="33%"><col width="33%"></colgroup><thead><tr><th></th>
+<th>netCDF model</th>
+<th>
+<code>SpatVoxel</code> model</th>
+</tr></thead><tbody><tr><td>Functions</td>
+<td>
+<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> and its <code><a href="reference/extract2d.html">extract2d()</a></code> / <code>extract3d_*()</code> wrappers, <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code>, <code><a href="reference/extract_to_track.html">extract_to_track()</a></code>
+</td>
+<td>
+<code><a href="reference/extract_to_area.html">extract_to_area()</a></code>, <code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code>, <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code><a href="reference/intersects_3d.html">intersects_3d()</a></code>, <code>mask()</code>, voxel profiles, <code><a href="reference/as_voxel.html">as_voxel()</a></code>, <code><a href="reference/as_envelope.html">as_envelope()</a></code>, <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code>, <code><a href="reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code>, <code><a href="reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code>
+</td>
+</tr><tr><td>Input</td>
+<td>netCDF paths, connections or file tables</td>
+<td>
+<code>SpatVoxel</code> / <code>SpatEnvelope</code>, S4 classes extending <code><a href="https://rspatial.github.io/terra/reference/SpatRaster-class.html" class="external-link">terra::SpatRaster</a></code>
+</td>
+</tr><tr><td>Reads with</td>
+<td>ncdf4, only the cells each observation needs</td>
+<td>terra</td>
+</tr><tr><td>Depth</td>
+<td>the netCDF depth coordinate: units converted to metres, <code>positive</code> direction, bounds</td>
+<td>layer names (<code>{variable}_depth={value}</code>), one set of depths for the whole grid</td>
+</tr><tr><td>Time</td>
+<td>CF time decoding (calendars, sub-daily steps, nearest or exact matching, series split across files)</td>
+<td>none</td>
+</tr><tr><td>Cell edges</td>
+<td>CF bounds, or inferred from cell centres</td>
+<td>terra’s regular grid extent and resolution</td>
+</tr></tbody></table><p>The netCDF model keeps 4D data (lon, lat, depth, time) and its CF metadata intact and reads only the cells it needs. The voxel model gets terra’s raster operations (crop, mask, cell area, resampling), which the volume and overlap tools depend on. The cost of the split: a voxel from <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> can’t be passed to <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, a netCDF file can’t be passed to <code><a href="reference/extract_to_area.html">extract_to_area()</a></code>, depth and grid handling is written twice with different rules, and the voxel tools have no time dimension.</p>
+</div>
+<div class="section level3">
+<h3 id="planned-one-model-99">Planned: one model (#99)<a class="anchor" aria-label="anchor" href="#planned-one-model-99"></a></h3>
+<p>This section is the plan from #99. None of it is implemented yet, and the first step (the stars and ncdfCF trial below) may change it.</p>
+<div class="section level4">
+<h4 id="requirements">Requirements<a class="anchor" aria-label="anchor" href="#requirements"></a></h4>
+<ol style="list-style-type: decimal"><li>
+<strong>Time-aware 3D analysis.</strong> Time is a real dimension of the core object (the single object that will hold gridded data; see <a href="#direction-a-hybrid">Direction</a>). Volume, overlap and profiles work through time (for example seasonal habitat volume, or overlap by month), not only on a static voxel.</li>
+<li>
+<strong>Lazy reads for data larger than memory.</strong> Opening a dataset doesn’t read its values, every operation reads only the slices it needs, and heavy processing runs per time step or per chunk, so peak memory follows the size of one slice rather than the whole dataset.</li>
+<li>
+<strong>CF-correct metadata.</strong> Keep the current handling of time units and calendars, sub-daily steps, depth units and direction, bounds and longitude conventions (#71–#75, #88–#96).</li>
+</ol><p>None of the packages compared (terra, stars, ncdf4, ncdfCF) meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy <code>stars_proxy</code> objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package. ncdfCF reads netCDF following CF (time, depth axes, bounds) and exports to terra, but it is marked experimental, and its docs don’t say whether its subsets are read lazily.</p>
+</div>
+<div class="section level4">
+<h4 id="direction-a-hybrid">Direction: a hybrid<a class="anchor" aria-label="anchor" href="#direction-a-hybrid"></a></h4>
+<ul><li>
+<strong>Core object:</strong> one object that describes the dimensions (lon/lat with cell edges, depth, time, coordinate reference system (CRS)) without loading values, in the style of stars. It may be a <code>stars_proxy</code> itself if the trial supports that.</li>
+<li>
+<strong>Reads:</strong> lazy and exact, through stars proxies, or through the package’s own ncdf4 code where stars falls short. Remote Zarr stores (a cloud format Copernicus Marine also serves) would be read with <code>stars::read_mdim()</code>.</li>
+<li>
+<strong>Heavy spatial work:</strong> per time step or per chunk. Read one slice, process it with terra, and combine the results across time.</li>
+<li>
+<strong><code>SpatVoxel</code> / <code>SpatEnvelope</code>:</strong> become views of one time step of the core object, so the existing terra-based tools keep working on a slice.</li>
+<li>
+<strong>Time decoding:</strong> <a href="https://cran.r-project.org/package=CFtime" class="external-link">CFtime</a> replaces the package’s own CF time decoder. It decodes CF time units and handles every CF calendar, including ones R’s date classes can’t represent (<code>noleap</code>, <code>360_day</code>). It is already imported by ncmeta and tidync, which stars uses, so it fits whichever core object the trial picks.</li>
+<li>
+<strong>Extraction:</strong> point, buffer and track extraction keep reading only the cells they touch, and accept anything that can become the core object: a netCDF file, a <code>SpatVoxel</code>, or a Zarr store.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="first-step-stars-and-ncdfcf-trial">First step: stars and ncdfCF trial<a class="anchor" aria-label="anchor" href="#first-step-stars-and-ncdfcf-trial"></a></h4>
+<p>Before any code moves, compare stars and ncdfCF with the current ncdf4 code:</p>
+<ol style="list-style-type: decimal"><li>On the synthetic netCDF fixtures from the tests and the #88–#96 cases: do decoded time, depth, bounds and values match the package’s results?</li>
+<li>On a large real file (for example a multi-year daily global Copernicus Marine product), measure peak memory and run time for opening as a proxy, point extraction across time, volume and overlap for one time step, and a polygon or buffer summary over a time window.</li>
+<li>Optionally, the same dataset as a remote Zarr store.</li>
+</ol><p>The result decides whether stars proxies become the core object, whether ncdfCF can take over CF reading (if it reads lazily and is stable enough to depend on), or whether the package keeps its own lazy reads.</p>
+</div>
+<div class="section level4">
+<h4 id="vector-class-spatvector3d">Vector class: <code>SpatVector3D</code>
+<a class="anchor" aria-label="anchor" href="#vector-class-spatvector3d"></a></h4>
+<p>The raster side already has 3D classes built on <code><a href="https://rspatial.github.io/terra/reference/SpatRaster-class.html" class="external-link">terra::SpatRaster</a></code>. The vector side gets one class that mirrors <code><a href="https://rspatial.github.io/terra/reference/SpatVector-class.html" class="external-link">terra::SpatVector</a></code>: one object holds features of a single geometry type, points, lines or polygons, reported by <code>geomtype()</code>. Each type has the depth and time that make sense for it:</p>
+<table class="table"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><thead><tr><th>Type</th>
+<th>Depth</th>
+<th>Time</th>
+<th>Example</th>
+</tr></thead><tbody><tr><td>points</td>
+<td>one per vertex</td>
+<td>one per vertex (optional)</td>
+<td>a tag detection at 35 m</td>
+</tr><tr><td>lines</td>
+<td>one per vertex</td>
+<td>one per vertex (optional)</td>
+<td>a dive track, a vessel route</td>
+</tr><tr><td>polygons</td>
+<td>a top and a bottom per feature</td>
+<td>an interval per feature (optional)</td>
+<td>an MPA × 0–200 m, a 10 km buffer × 0–50 m</td>
+</tr></tbody></table><p>Compared with the raster classes:</p>
+<table class="table"><colgroup><col width="25%"><col width="25%"><col width="25%"><col width="25%"></colgroup><thead><tr><th></th>
+<th><code>SpatVoxel</code></th>
+<th><code>SpatEnvelope</code></th>
+<th>
+<code>SpatVector3D</code> (planned)</th>
+</tr></thead><tbody><tr><td>Holds</td>
+<td>values of a variable</td>
+<td>a shape</td>
+<td>shapes, one or more features with IDs</td>
+</tr><tr><td>Horizontal</td>
+<td>raster cells</td>
+<td>raster cells (non-<code>NA</code> = footprint)</td>
+<td>points, lines or polygons</td>
+</tr><tr><td>Depth</td>
+<td>layer index, one set of depths for the grid</td>
+<td>
+<code>[depth_min, depth_max]</code> per cell</td>
+<td>per vertex (points, lines), or top and bottom (polygons)</td>
+</tr><tr><td>Time</td>
+<td>none</td>
+<td>none</td>
+<td>per vertex (points, lines), or an interval (polygons)</td>
+</tr></tbody></table><p>Rules:</p>
+<ul><li>
+<strong>Depth by type:</strong> points and lines have a depth at each vertex; polygons have a top and a bottom. A depth range (e.g. a buffer’s depth window) makes it a polygon.</li>
+<li>
+<strong>Buffering</strong> points or lines gives polygons, as <code><a href="https://r-spatial.github.io/sf/reference/geos_unary.html" class="external-link">sf::st_buffer()</a></code> does in 2D, with a depth window and time window added.</li>
+<li>
+<strong>Polygon scope:</strong> one depth interval per horizontal position (each vertical line enters the shape once and leaves once). This covers extruded shapes (cylinders, slabs, an MPA × a depth band), spheres, ellipsoids, cones, and shapes that follow the seafloor or mixed layer. Full 3D volumes (overhangs, several depth bands in one column) are out of scope.</li>
+<li>
+<strong>Polygon surfaces:</strong> <code>top</code> and <code>bottom</code> are each a constant (first version); later, a named shape with parameters (e.g. an ellipsoid buffer), a raster (e.g. relative to GEBCO bathymetry), or, as a fallback, a function of position. Every form reduces to “depth interval at these positions”, so adding a shape doesn’t change extraction code. <code>top &lt;= bottom</code> everywhere in the polygon.</li>
+<li>
+<strong>Volume</strong> is defined for polygons only. <code><a href="reference/volume.html">volume()</a></code> on points or lines is an error suggesting buffering, as area only makes sense for polygons in 2D.</li>
+<li>
+<strong>Conversion</strong> of polygons to a <code>SpatEnvelope</code> (<code>vector3d_to_envelope()</code>) evaluates top and bottom at each cell of a template grid, like <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code>.</li>
+<li>
+<strong>Storage:</strong> points and lines are stored as a vertex table (lon, lat, depth, time, feature ID, order), the format <code><a href="reference/extract_to_track.html">extract_to_track()</a></code> uses now, and convert to and from sf. sf isn’t the storage because it treats Z as height and most of its operations drop depth and time. How polygons are stored depends on the trial.</li>
+<li>
+<code>SpatVolume</code> extends to <code>c("SpatVoxel", "SpatEnvelope", "SpatVector3D")</code>; its docs note that only polygons have volume.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="extraction-on-the-three-steps">Extraction on the three steps<a class="anchor" aria-label="anchor" href="#extraction-on-the-three-steps"></a></h4>
+<p>The three steps are the package design (see <a href="#package-design-build-intersect-summarise">Package design</a>). This section plans the parts extraction still needs: <code>SpatVector3D</code> builders, a coverage function and <code>summarise_3d()</code>. Function names marked “planned” are working names, to be settled in the issue for each step.</p>
+<p><em>1. Build.</em> <code>SpatVector3D</code> builders create shapes without reading the data they will be compared with.</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># points or lines: a depth (and time) at each vertex</span></span>
+<span><span class="va">detections</span> <span class="op">&lt;-</span> <span class="fu">as_vector3d</span><span class="op">(</span><span class="va">obs</span>, depth <span class="op">=</span> <span class="st">"depth"</span>, time <span class="op">=</span> <span class="st">"datetime"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># polygons: a top and bottom (and time interval) per feature</span></span>
+<span><span class="va">mpa_band</span> <span class="op">&lt;-</span> <span class="fu">as_vector3d</span><span class="op">(</span><span class="va">mpa</span>, top <span class="op">=</span> <span class="fl">0</span>, bottom <span class="op">=</span> <span class="fl">200</span>, time <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">t0</span>, <span class="va">t1</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># buffering points or lines gives polygons</span></span>
+<span><span class="va">buffers</span> <span class="op">&lt;-</span> <span class="fu">buffer_3d</span><span class="op">(</span><span class="va">detections</span>, radius_km <span class="op">=</span> <span class="fl">10</span>, depth_window <span class="op">=</span> <span class="fl">25</span>, time_window <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span></code></pre></div>
+<p>Names follow the existing converters: <code>as_&lt;class&gt;()</code> builds an object of that class (<code><a href="reference/as_voxel.html">as_voxel()</a></code>, <code><a href="reference/as_envelope.html">as_envelope()</a></code>, <code>as_vector3d()</code>), and <code>&lt;from&gt;_to_&lt;to&gt;()</code> converts between classes (<code><a href="reference/voxel_to_envelope.html">voxel_to_envelope()</a></code>, <code>vector3d_to_envelope()</code>). <code>buffer_3d()</code> uses the <code>_3d</code> suffix like <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>.</p>
+<ul><li>A <code>SpatVector3D</code> holds one or more features, each with an ID that the later steps keep. One row of an observation table becomes one point; a buffer around it becomes one polygon.</li>
+<li>Sampling a track (vertices, even spacing, one sample per cell) is a build step: it turns lines into points, which can then be buffered. The check that each track segment stays in water belongs here too, so invalid samples are marked before anything is read.</li>
+<li>Converting between classes (<code>SpatVector3D</code> polygons to <code>SpatEnvelope</code> on a template grid, envelope to voxel) is also a build step.</li>
+</ul><p><em>2. Intersect.</em> Intersection finds where shapes and data meet. In extraction, it is the only step that reads the source data, and it reads only the cells, depths and time steps the shapes touch.</p>
+<ul><li>Shape with shape: <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code><a href="reference/intersects_3d.html">intersects_3d()</a></code> and <code>mask()</code> keep their current meaning and gain methods for <code>SpatVector3D</code>. The result is a shape, not data values.</li>
+<li>Source with shape: a new function (working name <code>coverage_3d(source, shapes)</code>) returns a coverage table: one row per feature and source cell, with the cell’s value, its depth and time step, and its weight. The weight depends on the geometry type:
+<ul><li>polygons: the polygon’s volume inside the cell (covered area × depth overlap) times the time overlap;</li>
+<li>lines: the length of line inside the cell, or the time spent in it;</li>
+<li>points: one cell per point with weight 1, picked by the existing nearest or exact matching rules for depth and time (<code>method</code>, <code>time_match</code>). Those rules move here from <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>.</li>
+</ul></li>
+<li>Picking the source file for each shape (multi-file series, tiles) and the CF handling of time, depth and bounds live in this step, on the core object.</li>
+<li>Many features are read in blocks, so each block of the source is read once rather than once per shape.</li>
+</ul><p><em>3. Summarise.</em> Summaries work on the coverage table only. They don’t read files or handle geometry, so they can be tested on small hand-written tables.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">coverage</span> <span class="op">&lt;-</span> <span class="fu">coverage_3d</span><span class="op">(</span><span class="va">source</span>, <span class="va">shapes</span><span class="op">)</span></span>
+<span><span class="fu">summarise_3d</span><span class="op">(</span><span class="va">coverage</span>, statistic <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mean"</span>, <span class="st">"sd"</span><span class="op">)</span>, weighting <span class="op">=</span> <span class="st">"weighted"</span>,</span>
+<span>             min_valid_fraction <span class="op">=</span> <span class="fl">0.8</span>, by <span class="op">=</span> <span class="st">"id"</span><span class="op">)</span></span></code></pre></div>
+<ul><li>One set of statistic names for every shape type: mean, sd, min, max, median, and <code>most_similar</code> with a target column. One <code>weighting</code> argument: <code>"weighted"</code> uses the coverage weights, <code>"equal"</code> ignores them.</li>
+<li>
+<code>by</code> sets the grouping: per feature (one buffer), or across features (all samples along a track, weighted by distance or duration). This replaces the separate per-buffer and per-track summaries in the removed <code>extract_to_buffered_track()</code> (#105).</li>
+<li>
+<code><a href="reference/volume.html">volume()</a></code> and <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> measure shapes rather than values, so they stay as they are; for polygons, the coverage weights sum to the volume.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="order-of-work">Order of work<a class="anchor" aria-label="anchor" href="#order-of-work"></a></h4>
+<p>Each step has its own issue, and each PR branches off <code>main</code>:</p>
+<ol style="list-style-type: decimal"><li>Document the current split: which functions take netCDF and which take <code>SpatVoxel</code> (README function overview and each function’s <code>@param</code>) (#109).</li>
+<li>Move the shared CF/netCDF helpers (time decoding, depth axis, bounds, dimension detection) out of <code>R/extract_to_points.R</code> into their own files (#110).</li>
+<li>Replace the internal CF time decoding with CFtime, with the time tests from #71–#75 and #88–#91 as reference behaviour (#111).</li>
+<li>Run the stars and ncdfCF trial and write up the results with a recommendation for the core object (#112).</li>
+<li>Agree on the core data model and update this section (#112).</li>
+<li>Build the core object and lazy reader, then time-aware volume, overlap and profiles, then <code>SpatVoxel</code> as a time-step view (#113).</li>
+<li>Add <code>SpatVector3D</code> with <code>geomtype()</code>, <code>as_vector3d()</code> and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then <code>buffer_3d()</code> and <code>vector3d_to_envelope()</code> (#114).</li>
+<li>Add the coverage function and <code><a href="reference/intersect_3d.html">intersect_3d()</a></code> / <code><a href="reference/intersects_3d.html">intersects_3d()</a></code> / <code>mask()</code> / <code><a href="reference/volume.html">volume()</a></code> methods for <code>SpatVector3D</code> (#115).</li>
+<li>Add <code>summarise_3d()</code>, then reimplement the extraction functions as build → intersect → summarise wrappers, one function per PR (#116).</li>
+<li>Add track sampling as a build step and buffered tracks (#105); then named shapes, raster and function surfaces for polygons (#117). Block-wise reads for many features are part of #115.</li>
+</ol><p>The existing tests for both models, including the buffer and track tests, define the expected behaviour and must keep passing. New tests check that the same synthetic data gives the same values from a netCDF file, the core object and the matching <code>SpatVoxel</code>. API changes (what <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> and the voxel constructors return, time in volume and overlap) need NEWS entries and should settle before the rOpenSci and CRAN submissions (#12).</p>
+</div>
 </div>
 </div>
 <div class="section level2">
 <h2 id="ocean3d-functionality">
 <code>ocean3d</code> functionality<a class="anchor" aria-label="anchor" href="#ocean3d-functionality"></a></h2>
+<p>Grouped by the step each function belongs to (<a href="#package-design-build-intersect-summarise">Package design</a>).</p>
 <div class="section level3">
-<h3 id="spatial-extractions">Spatial extractions<a class="anchor" aria-label="anchor" href="#spatial-extractions"></a></h3>
+<h3 id="build-conversions-between-spatial-representations">Build: conversions between spatial representations<a class="anchor" aria-label="anchor" href="#build-conversions-between-spatial-representations"></a></h3>
 <ul><li>
-<strong>Point extraction</strong>. Extract the nearest value from multi-depth raster / voxel model (ex. environmental data) to an input point based on its longitude, latitude, depth, and, when available, time.</li>
+<strong>Create a study grid</strong>. A grid for the study area that other data are converted onto (<code><a href="reference/create_study_raster.html">create_study_raster()</a></code>).</li>
 <li>
-<strong>Area extraction</strong>. Extract values from multi-depth raster / voxel model (ex. environmental data) within an input polygon at a specified depth.</li>
+<strong>Convert 2D polygons with depth data to 2.5D.</strong> Combine a 2D polygon with a depth range, bounded by the seafloor (<code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code>), e.g. IUCN Red List species ranges.</li>
 <li>
-<strong>Volume extraction</strong>. Extract values from multi-depth raster / voxel model (ex. environmental data) within a three-dimensional spatial volume defined by horizontal extent and depth range.
-<ul><li>This should be possible for both 2.5D (two-raster stack) and 3D (multi-depth raster stack).</li>
-</ul></li>
+<strong>Convert 2D rasters to 2.5D</strong>. Combine a 2D raster with a depth range (<code><a href="reference/as_envelope.html">as_envelope()</a></code>), e.g. Global Fishing Watch fishing effort by gear type.</li>
+<li>
+<strong>Convert between 2.5D and 3D rasters</strong>. <code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> places an envelope on a set of standard depths; <code><a href="reference/voxel_to_envelope.html">voxel_to_envelope()</a></code> keeps the shallowest and deepest level per cell where a test on the values holds (by default, not <code>NA</code>), filling any gaps in between.</li>
+<li>
+<strong>Build a <code>SpatVector3D</code></strong> <em>(planned)</em>. <code>as_vector3d()</code> builds points or lines from a table or sf object with a depth (and time) per vertex, or polygons with a top and bottom (and time interval) per feature, without snapping them to a grid, e.g. tag detections at their depths, a dive track, or an MPA × a depth band.</li>
+<li>
+<strong>Buffer points and lines into polygons</strong> <em>(planned)</em>. <code>buffer_3d()</code> adds a horizontal radius, depth window and time window, e.g. a 10 km × ±25 m × ±1 day buffer around each tag detection.</li>
+<li>
+<strong>Convert <code>SpatVector3D</code> polygons to 2.5D</strong> <em>(planned)</em>. <code>vector3d_to_envelope(x, template)</code> evaluates the top and bottom at each cell of a template grid, like <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code>. This loses the exact edges and the time interval, so use it only when the next step needs a grid (e.g. volume overlap with a species envelope).</li>
 </ul></div>
 <div class="section level3">
-<h3 id="conversions-between-spatial-representations">Conversions between spatial representations<a class="anchor" aria-label="anchor" href="#conversions-between-spatial-representations"></a></h3>
-<ul><li>
-<strong>Create template voxel grid for study space</strong>. Create the 3D voxel grid for the study space, that can be used as a template to convert other spatial representations to be compatible with it.</li>
-<li>
-<strong>Convert 2D polygons with depth data to 2.5D.</strong> When separate depth ranges are available, use that to convert 2D polygons into 2.5D representations that are bound by bathymetry and depth ranges. Ex. IUCN Red List species ranges.</li>
-<li>
-<strong>Convert 2D rasters to 2.5D</strong>. When depth ranges are available, use that to convert 2D raster data into 2.5D representations. Ex. working with Global Fishing Watch data on fishing effort by gear type.</li>
-</ul></div>
-<div class="section level3">
-<h3 id="spatial-query">Spatial query<a class="anchor" aria-label="anchor" href="#spatial-query"></a></h3>
-<p>Three verbs cover every pairing of a 3D object (<code>SpatEnvelope</code>, <code>SpatVoxel</code>) with another 3D object or with a 2D one (a <code>SpatRaster</code> footprint, or polygons). A 2D object restricts the domain horizontally and leaves its depths alone. - <strong><code>intersect_3d(x, y)</code></strong>: the 3D space the two share. Two envelopes intersect their depth intervals; two voxels keep the levels both occupy; an envelope is placed on a voxel’s levels before the two are compared. The result is a domain, never field values. - <strong><code>intersects_3d(x, y)</code></strong>: whether they share any 3D space, cell by cell, with terra’s three answers: <code>TRUE</code>, <code>FALSE</code> (both present but disjoint, or only one present), <code>NA</code> (neither present). - <strong><code>mask(x, mask)</code></strong>: <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code> made depth-aware. Keeps <code>x</code>’s values where the mask domain reaches that cell at that depth. A voxel masked by an envelope puts the envelope on the voxel’s own levels, so the caller cannot misalign them.</p>
-<p><code><a href="https://rspatial.github.io/terra/reference/intersect.html" class="external-link">terra::intersect()</a></code> is a 2D test, so on a 3D object it is an error pointing to the verbs above. Dispatch names concrete classes only: S4 prefers a <code>SpatRaster</code> method over one on the <code>SpatVolume</code> union, so the union is a documentation device, not a dispatch target.</p>
+<h3 id="intersect-spatial-query">Intersect: spatial query<a class="anchor" aria-label="anchor" href="#intersect-spatial-query"></a></h3>
+<p>Three functions handle pairs of 3D objects (<code>SpatEnvelope</code>, <code>SpatVoxel</code>, and <em>(planned)</em> <code>SpatVector3D</code>), or a 3D object with a 2D one (a <code>SpatRaster</code> footprint, or polygons). A 2D object restricts the shape horizontally and leaves its depths alone. - <strong><code>intersect_3d(x, y)</code></strong>: the 3D space the two share. Two envelopes intersect their depth intervals; two voxels keep the levels both occupy; an envelope is placed on a voxel’s levels before the two are compared. The result is a shape, not data values. - <strong><code>intersects_3d(x, y)</code></strong>: whether they share any 3D space, cell by cell, with terra’s three answers: <code>TRUE</code>, <code>FALSE</code> (both present but disjoint, or only one present), <code>NA</code> (neither present). - <strong><code>mask(x, mask)</code></strong>: <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code> made depth-aware. Keeps <code>x</code>’s values where the mask reaches that cell at that depth. A voxel masked by an envelope puts the envelope on the voxel’s own levels, so the caller cannot misalign them.</p>
+<p><code>SpatVector3D</code> methods <em>(planned)</em>: - <strong>Vector with vector</strong>: <code><a href="reference/intersect_3d.html">intersect_3d()</a></code> intersects the geometries, the depths and the time intervals. Two polygons give a polygon (footprints intersected, depth intervals intersected at each position); a point or line with a polygon gives the points or parts of lines inside it. Features whose times don’t overlap don’t intersect. - <strong>Vector with envelope or voxel</strong>: polygons are evaluated on the raster’s grid (as in <code>vector3d_to_envelope()</code>) and compared cell by cell as two envelopes are now; points and lines are compared in the cells and levels they pass through. <code>mask(voxel, x)</code> keeps the voxel values in the cells and levels <code>x</code> reaches. - <strong>Vector with a data source</strong>: the coverage function, not these three, returns data values, with each cell’s partial coverage as a weight (see <a href="#summarise-extraction">Summarise: extraction</a>).</p>
+<p>These functions are the intersect step of the <a href="#package-design-build-intersect-summarise">package design</a>.</p>
+<p><code><a href="https://rspatial.github.io/terra/reference/intersect.html" class="external-link">terra::intersect()</a></code> is a 2D test, so on a 3D object it is an error pointing to the functions above. The package’s methods name the concrete classes (<code>SpatVoxel</code>, <code>SpatEnvelope</code>). When a generic has both a <code>SpatRaster</code> method and a <code>SpatVolume</code> method, as terra’s generics do, S4 picks the <code>SpatRaster</code> one, so a method on the union would be skipped. The union works as a dispatch target only for generics without a <code>SpatRaster</code> method.</p>
 </div>
 <div class="section level3">
-<h3 id="volume-calculations">Volume calculations<a class="anchor" aria-label="anchor" href="#volume-calculations"></a></h3>
+<h3 id="summarise-extraction">Summarise: extraction<a class="anchor" aria-label="anchor" href="#summarise-extraction"></a></h3>
+<p>The <code>extract_to_*()</code> functions below exist now and combine two or three steps; each is planned to become a wrapper over them. Volume extraction uses <code>mask()</code> from the intersect step, followed by a summary; see <a href="#package-design-build-intersect-summarise">Package design</a>. Items marked <em>(planned)</em> aren’t implemented yet.</p>
 <ul><li>
-<strong>Calculate the volume occupied by 2.5D representation</strong>. Each rasterized range stores presence plus <code>depth_min/depth_max</code> per cell, clamped to the seafloor. Volume is the sum of <code>cell_area × (depth_max - depth_min)</code> over present cells. The overlap between two domains is the volume of <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>’s result, measured the same way.</li>
+<strong>Point extraction</strong>. <code><a href="reference/extract_to_point.html">extract_to_point()</a></code> extracts the nearest value from netCDF files (e.g. environmental data) to an input point based on its longitude, latitude, depth, and, when available, time.</li>
 <li>
-<strong>Calculate the volume occupied by 3D representation</strong>. Each raster layer has a height that it represents, which is defined by the height difference from the next raster layer. Ex. <code>t_an_depth=0</code>, <code>t_an_depth=100</code> would mean that the first <code>t_an_depth=0</code> layer has a height of 100m.</li>
+<strong>Buffer extraction</strong>. <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code> summarises netCDF values within a geodesic circle × depth window × time window around each observation, with cell coverage, layer thickness and time weighting, or picks the value closest to a target.</li>
+<li>
+<strong>Track extraction</strong>. <code><a href="reference/extract_to_track.html">extract_to_track()</a></code> samples points along ordered tracks (e.g. tagging data), extracts netCDF values at them, and can summarise per track.</li>
+<li>
+<strong>Area extraction</strong>. <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> crops a <code>SpatVoxel</code> (e.g. environmental data) to an input polygon and depth band.</li>
+<li>
+<strong>Volume extraction</strong>. <code>mask(voxel, shape)</code> keeps a <code>SpatVoxel</code>‘s values (e.g. environmental data) inside a 3D volume and sets the rest to <code>NA</code>. The volume is a <code>SpatEnvelope</code> (2.5D, e.g. a species range from <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> bounded by the seafloor) or a presence <code>SpatVoxel</code> (3D). With an envelope, <code>bounds</code> sets whether a depth level counts when the envelope reaches its top or its midpoint. The Getting Started vignette uses this to get temperatures within a species’ 3D range.</li>
+<li>
+<strong>Extraction at a <code>SpatVector3D</code></strong> <em>(planned)</em>. The coverage function (working name <code>coverage_3d()</code>) returns the source cells each feature touches with their weights (one cell per point, length or time along lines, volume × time overlap in polygons), and <code>summarise_3d()</code> turns them into statistics. Observations are points, tracks are lines, and buffers and areas are polygons, so this one path replaces the separate code in each function above.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="summarise-volume-calculations">Summarise: volume calculations<a class="anchor" aria-label="anchor" href="#summarise-volume-calculations"></a></h3>
+<ul><li>
+<strong>Calculate the volume occupied by 2.5D representation</strong>. Each rasterized range stores presence plus <code>depth_min/depth_max</code> per cell, clamped to the seafloor. Volume is the sum of <code>cell_area × (depth_max - depth_min)</code> over present cells. The overlap between two shapes is the volume of <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>’s result, measured the same way.</li>
+<li>
+<strong>Calculate the volume occupied by 3D representation</strong>. Each layer’s height is the distance to the next layer: with <code>t_an_depth=0</code> and <code>t_an_depth=100</code>, the 0 m layer is 100 m tall.</li>
+<li>
+<strong>Calculate the volume of <code>SpatVector3D</code> polygons</strong> <em>(planned)</em>. Measured from the geometry, not a grid: polygon area × (<code>bottom</code> - <code>top</code>) for constant surfaces, exact formulas for named shapes (sphere, ellipsoid), and sampling across the polygon for raster or function surfaces. The time interval doesn’t change the volume. Points and lines have no volume, so <code><a href="reference/volume.html">volume()</a></code> on them is an error suggesting <code>buffer_3d()</code>. <code><a href="reference/volume.html">volume()</a></code> and <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> gain <code>SpatVector3D</code> methods, with overlap measured on <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>’s result as for envelopes.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="utilities">Utilities<a class="anchor" aria-label="anchor" href="#utilities"></a></h3>
 <ul><li>
-<strong>Download and prepare data.</strong> Utilities for public APIs and open data incorporated into <code>ocean3d</code>. Includes WOA, Copernicus, IUCN Red List, Global Fishing Watch data.</li>
+<strong>Download and prepare data.</strong> Utilities for public data: WOA, GEBCO bathymetry, IUCN Red List and Global Fishing Watch. Copernicus Marine utilities were removed in #53 and are planned to return with a shared cache (#55).</li>
 <li>
-<strong>Downloads are cached, not manual.</strong> Downloaded big data is cached in location accessible by package functions. Different projects read off the same copy of the data. Keeps analysis reproducible while compact. Downloaded data that is cached is documented by the package, so that the code can be handed to another user with clear information about what versions were used without having to send the big data alongside the code.</li>
+<strong>Cached downloads.</strong> WOA files are cached in one place (<code><a href="reference/woa_cache_dir.html">woa_cache_dir()</a></code>) that all projects read from, so code can be shared without the data. File names give the WOA edition and decade, but the package doesn’t yet record which files an analysis used.</li>
+<li>
+<strong>The cache records what was downloaded</strong> <em>(planned, #55)</em>. For every source, each cached file has a record of the dataset and its version (e.g. WOA23, GEBCO 2025, the Copernicus Marine product and dataset version), the URL it came from, the download date and a checksum. An analysis can then list the exact data it used, and the same versions can be downloaded again elsewhere.</li>
 </ul></div>
 </div>
 <div class="section level2">
@@ -144,25 +432,13 @@
 <ul><li>
 <strong>Depth sign convention.</strong> Depths are positive metres increasing downward, but GEBCO bathymetry is negative below sea level. The voxel constructor flips it and clamps land to 0. Document which convention any new argument uses.</li>
 <li>
-<strong><code>ncdf4</code> vs <code>terra</code></strong>. Work with <code>ncdf4</code> package to read netCDF directly for extraction of point data. Work with <code>terra</code> for large raster operations (1000s of cells), like extracting areas / volumes.</li>
+<strong><code>ncdf4</code> vs <code>terra</code></strong>. Point, buffer and track extraction read netCDF directly with <code>ncdf4</code>, reading only the cells each observation needs. Large raster operations (1000s of cells), like extracting areas and volumes, use <code>terra</code>. This split is planned to become one model; see <a href="#data-model">Data model</a>. Until then, say in each function’s docs which input it takes.</li>
+<li>
+<strong>Time.</strong> Times are decoded from CF units and calendars and matched to observations in UTC. Only the netCDF model has a time dimension for now. Decoding is planned to move to CFtime; see <a href="#data-model">Data model</a>.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="future-directions">Future directions<a class="anchor" aria-label="anchor" href="#future-directions"></a></h2>
-<p>These come after the sections above are established, and are not grounded in existing project code.</p>
-<div class="section level3">
-<h3 id="id_1d-lines--edges-1">1D (Lines / Edges)<a class="anchor" aria-label="anchor" href="#id_1d-lines--edges-1"></a></h3>
-<p>Currently, <code>ocean3d</code> doesn’t handle lines / edges, but it would be useful for working with things like fishing boat routes or tagging data. See Issue <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/31#issue-5270698566" class="external-link">#31</a> for further discussion.</p>
-</div>
-<div class="section level3">
-<h3 id="id_3d-species-distribution-modelling">3D species distribution modelling<a class="anchor" aria-label="anchor" href="#id_3d-species-distribution-modelling"></a></h3>
-<p>Create 3D species distribution models from point observations, combining horizontal (X, Y) occurrence data with vertical (Z) depth information — extending traditional 2D SDMs by incorporating depth as an explicit dimension.</p>
-<ul><li>
-<code>create_3d_sdm(occurrences, bathymetry, env_rasters, depth_breaks)</code> — Build a 3D species distribution model from point observations with depth (X, Y, Z). Fits a model (e.g., MaxEnt, GLM) at each depth layer using environmental covariates extracted at that depth. Returns a multi-layer SpatRaster of predicted habitat suitability by depth.</li>
-<li>
-<code>predict_3d_habitat(model, env_rasters, depth_breaks, bathymetry)</code> — Generate 3D habitat suitability predictions from a fitted model. For each depth layer, extract environmental values and predict suitability. Mask cells where depth layer exceeds bathymetry. Returns multi-layer SpatRaster.</li>
-<li>
-<strong>Handle spatial-autocorrelation in 3D</strong>. Spatial autocorrelation in 2D is known challenge, tools in spatial modelling exist to handle. Need to investigate what is available / possible for spatial-autocorrelation in 3D.</li>
-</ul></div>
+<p>Ideas not yet started are tracked as GitHub issues, e.g. 3D species distribution modelling (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/108" class="external-link">#108</a>).</p>
 </div>
 </div>
 

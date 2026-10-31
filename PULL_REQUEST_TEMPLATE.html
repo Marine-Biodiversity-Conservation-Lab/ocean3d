@@ -70,6 +70,7 @@
 <h2 id="checklist">Checklist<a class="anchor" aria-label="anchor" href="#checklist"></a></h2>
 <!-- Delete rows that don't apply (e.g. tests/docs for a pure chore PR). -->
 <ul class="task-list"><li><label><input type="checkbox">Full roxygen2 docs on any new/changed exported function (<code>@param</code>, <code>@returns</code>, <code>@examples</code>, <code>@export</code>)</label></li>
+<li><label><input type="checkbox">Each new exported function belongs to one step: build, intersect or summarise (see SPEC.md, “Package design”); the PR description says which</label></li>
 <li><label><input type="checkbox">Ran <code>devtools::document()</code> — <code>man/</code> and <code>NAMESPACE</code> are up to date</label></li>
 <li><label><input type="checkbox">Added/updated tests in the mirroring <code>tests/testthat/test-*.R</code>; they use synthetic data (no external files, keys, or network)</label></li>
 <li><label><input type="checkbox"><code>devtools::check()</code> passes locally with no new errors/warnings/NOTEs</label></li>

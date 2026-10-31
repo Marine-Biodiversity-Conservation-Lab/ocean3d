@@ -47,15 +47,16 @@
 
 <p>Thanks for your interest in contributing! <strong>ocean3d</strong> is an R package for three-dimensional marine spatial analysis. It grew out of several lab analyses (Bangladesh fisheries overlap, WOA environmental extraction, deep-sea depth refuge) and is being generalised into reusable, tested functions.</p>
 <p>This document covers how to get set up, how we branch and coordinate, and what a contribution needs to look like to be merged.</p>
-<ul><li><a href="#quick-orientation">Quick orientation</a></li>
+<ul><li><a href="#how-contributing-works-for-ocean3d">How contributing works for ocean3d</a></li>
+<li><a href="#ai-assisted-contributions">AI-assisted contributions</a></li>
+<li><a href="#what-a-good-contribution-looks-like">What a good contribution looks like</a></li>
+<li><a href="#quick-orientation">Quick orientation</a></li>
 <li><a href="#development-setup">Development setup</a></li>
 <li><a href="#data-setup">Data setup</a></li>
-<li><a href="#branching-and-coordination">Branching and coordination</a></li>
-<li><a href="#what-a-good-contribution-looks-like">What a good contribution looks like</a></li>
 <li><a href="#coding-conventions">Coding conventions</a></li>
 <li><a href="#testing">Testing</a></li>
 <li><a href="#documentation-and-vignettes">Documentation and vignettes</a></li>
-<li><a href="#known-rough-edges--good-first-issues">Known rough edges / good first issues</a></li>
+<li><a href="#questions-and-how-to-get-help">Questions, and how to get help</a></li>
 </ul><hr><div class="section level2">
 <h2 id="why-contribute-to-ocean3d">Why contribute to <strong>ocean3d</strong>?<a class="anchor" aria-label="anchor" href="#why-contribute-to-ocean3d"></a></h2>
 <p><strong>ocean3d</strong> is an open-source package, built on collaboration across researchers and projects. Currently, <strong>ocean3d</strong> is a very new project undergoing active development, which means that you can shape and directly contribute to the work done. Functionality that you wished existed? You can write an issue with what you would like, reaching contributors with your direct feedback. Even better, you can develop that functionality and add it to <strong>ocean3d</strong> yourself, broadening the impact of your work. Other people can then come along and use your code to use in their projects, making science overall more efficient and impactful.</p>
@@ -103,7 +104,7 @@
 </ul></li>
 <li>
 <strong>Merge</strong> and delete the branch. Currently, <a href="https://github.com/JayMatsushiba" class="external-link">@JayMatsushiba</a> will be in charge of this step.
-<ul><li>Reference the issue from the PR so it closes automatically. This should happen automatically if the branch is created from the issue.</li>
+<ul><li>Write <code>Closes #N</code> in the PR description so the issue closes when the PR merges into <code>main</code>. <code>(#N)</code> in the title doesn’t close it. A PR from a branch made with <code>Create a branch</code> in the issue sidebar is also linked automatically; branches created locally (as agents do) aren’t.</li>
 </ul></li>
 </ol><p><code>main</code> must always be installable — never push work-in-progress directly to it. All changes to <code>main</code> should be done via a Pull Request.</p>
 </div>
@@ -113,26 +114,37 @@
 <table class="table"><colgroup><col width="33%"><col width="33%"><col width="33%"></colgroup><thead><tr><th>Area</th>
 <th>Files</th>
 <th>Typical SPEC section</th>
-</tr></thead><tbody><tr><td>Volume / voxelisation</td>
-<td><code>R/volume.R</code></td>
-<td>Volume calculation</td>
+</tr></thead><tbody><tr><td>3D classes and conversions</td>
+<td>
+<code>R/AllClasses.R</code>, <code>R/AllGenerics.R</code>, <code>R/create_3d_objects.R</code>, <code>R/voxel_profiles.R</code>, <code>R/accessors.R</code>, <code>R/utils-3d.R</code>
+</td>
+<td>Build</td>
 </tr><tr><td>Spatial query</td>
 <td><code>R/intersect.R</code></td>
-<td>Spatial query</td>
-</tr><tr><td>Bathymetry</td>
-<td><code>R/gebco_bathymetry.R</code></td>
-<td>Data loading and preparation</td>
+<td>Intersect</td>
+</tr><tr><td>Volume</td>
+<td><code>R/volume.R</code></td>
+<td>Summarise: volume calculations</td>
 </tr><tr><td>Environmental extraction</td>
 <td>
-<code>R/extract_to_area.R</code>, <code>R/extract_to_points.R</code>, <code>R/woa.R</code>
+<code>R/extract_to_points.R</code>, <code>R/extract_to_buffer.R</code>, <code>R/extract_to_track.R</code>, <code>R/extract_to_area.R</code>
 </td>
-<td>Environmental extraction, WOA utilities</td>
+<td>Summarise: extraction; Data model</td>
+</tr><tr><td>Conditions</td>
+<td><code>R/utils-conditions.R</code></td>
+<td>—</td>
+</tr><tr><td>Bathymetry</td>
+<td><code>R/gebco_bathymetry.R</code></td>
+<td>Build; Utilities</td>
+</tr><tr><td>WOA</td>
+<td><code>R/woa.R</code></td>
+<td>Build; Utilities</td>
 </tr><tr><td>Fisheries</td>
 <td><code>R/gfw.R</code></td>
-<td>Data source utilities (GFW)</td>
+<td>Build; Utilities</td>
 </tr><tr><td>Species data</td>
 <td><code>R/iucn_utils.R</code></td>
-<td>Data loading and preparation</td>
+<td>Utilities</td>
 </tr></tbody></table><p>Two people <em>can</em> work in the same area — just make the split explicit in the issue thread.</p>
 </div>
 <div class="section level3">
@@ -149,14 +161,21 @@
 <h3 id="review-and-merge">Review and merge<a class="anchor" aria-label="anchor" href="#review-and-merge"></a></h3>
 <ul><li>Every PR needs one approving review from a maintainer (currently <a href="https://github.com/JayMatsushiba" class="external-link">@JayMatsushiba</a>) before merge.</li>
 <li>CI (<code>R CMD check</code>) must be green.</li>
+<li>The PR body says <code>Closes #N</code> (the PR template has a <code>Closes</code> line).</li>
 <li>Merge with a message referencing the issue: <code>Add load_eez() for Marine Regions EEZ polygons (#12)</code>.</li>
 <li>Delete the branch after merging.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="versioning">Versioning<a class="anchor" aria-label="anchor" href="#versioning"></a></h3>
-<p>Development version is <code>0.1.0</code>. Bump the third component in <code>DESCRIPTION</code> (<code>0.1.1</code>, …) when a PR adds or changes an exported function.</p>
+<p>Development versions end in a <code>.9000</code>-style suffix (currently <code>0.1.2.9002</code>). Bump the suffix in <code>DESCRIPTION</code> (<code>0.1.2.9003</code>, …) when a PR adds or changes an exported function.</p>
 <hr></div>
 </div>
+<div class="section level2">
+<h2 id="ai-assisted-contributions">AI-assisted contributions<a class="anchor" aria-label="anchor" href="#ai-assisted-contributions"></a></h2>
+<p>Contributions written with AI coding agents (Claude Code, Codex, Copilot, Cursor and others) are welcome. The person who submits the work is responsible for it: read and understand the changes before asking for review.</p>
+<p>Agents follow the same loop as everyone else. Each agent works on one issue, on its own branch and git worktree from an up-to-date <code>main</code>. Agents can push their branch and open a PR; a person reviews every PR, and the developer approves and squash-merges. Commits and PR descriptions written with an agent say so, for example with a <code>Co-Authored-By:</code> trailer naming the model.</p>
+<p><a href="AGENTS.html">AGENTS.md</a> has the details agents need: reuse rules, internal helpers, conditions, tests, PR size and review. <code>CLAUDE.md</code> points to it.</p>
+<hr></div>
 <div class="section level2">
 <h2 id="what-a-good-contribution-looks-like">What a good contribution looks like<a class="anchor" aria-label="anchor" href="#what-a-good-contribution-looks-like"></a></h2>
 <p>A PR implementing a SPEC function should include <strong>all</strong> of:</p>
@@ -265,7 +284,7 @@
 <ul><li>
 <strong>Style:</strong> tidyverse style (<code>styler::style_pkg()</code> if in doubt). Snake_case function and argument names.</li>
 <li>
-<strong>Imports:</strong> <code>terra</code> is imported wholesale; <code>sf</code>, <code>stringr</code>, <code>ggplot2</code>, <code>rlang</code>, <code>magrittr</code> are imported selectively via <code>@importFrom</code>. Elsewhere prefer explicit <code>pkg::fun()</code> calls. Add new dependencies to <code>DESCRIPTION</code> deliberately — this package is already heavy, so justify each one in the PR.</li>
+<strong>Imports:</strong> <code>terra</code> is imported wholesale; <code>sf</code>, <code>stringr</code>, <code>rlang</code>, <code>magrittr</code>, <code>methods</code> and <code>utils</code> are imported selectively via <code>@importFrom</code>. Other packages (<code>ncdf4</code>, <code>glue</code>, <code>curl</code>, <code>rredlist</code>) are called as <code>pkg::fun()</code>. Add new dependencies to <code>DESCRIPTION</code> deliberately — this package is already heavy, so justify each one in the PR.</li>
 <li>
 <strong>Optional dependencies:</strong> guard with <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace("pkg", quietly = TRUE)</a></code> and give a clear error telling the user what to install (see <code><a href="reference/fetch_species_assessments.html">fetch_species_assessments()</a></code> and <code>rredlist</code>).</li>
 <li>
