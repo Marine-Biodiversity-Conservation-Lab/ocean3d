@@ -303,7 +303,8 @@ The `extract_to_*()` functions below exist now and combine all three steps; each
 
 ### Utilities 
 - **Download and prepare data.** Utilities for public data: WOA, GEBCO bathymetry, IUCN Red List and Global Fishing Watch. Copernicus Marine utilities were removed in #53 and are planned to return with a shared cache (#55). 
-- **Cached downloads.** WOA files are cached in one place (`woa_cache_dir()`) that all projects read from, so code can be shared without the data. File names give the WOA edition and decade, but the package doesn't yet record which files an analysis used. Recording data versions, and caching for other sources, are planned (#55). 
+- **Cached downloads.** WOA files are cached in one place (`woa_cache_dir()`) that all projects read from, so code can be shared without the data. File names give the WOA edition and decade, but the package doesn't yet record which files an analysis used. 
+- **The cache records what was downloaded** *(planned, #55)*. For every source, each cached file has a record of the dataset and its version (e.g. WOA23, GEBCO 2025, the Copernicus Marine product and dataset version), the URL it came from, the download date and a checksum. An analysis can then list the exact data it used, and the same versions can be downloaded again elsewhere. 
 
 ## Conventions
 - **Depth sign convention.** Depths are positive metres increasing downward, but GEBCO bathymetry is negative below sea level. The voxel constructor flips it and clamps land to 0. Document which convention any new argument uses.
