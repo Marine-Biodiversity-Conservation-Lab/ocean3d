@@ -68,8 +68,7 @@ We use issues as the unit of work and the record of its current state.
 5. **Get Pull Request approval**
     - Another contributor should review and approve of your code before the PR can get merged into the main branch. 
 6. **Merge** and delete the branch. Currently, [@JayMatsushiba](https://github.com/JayMatsushiba) will be in charge of this step. 
-    - Write `Closes #N` in the PR description, so the issue is named there and closes when the PR is merged into `main`. 
-    - A PR opened from a branch made with `Create a branch` in the issue's Development sidebar is linked to the issue and also closes it on merge, but branches created locally (as agents do) aren't linked, and `(#N)` in the title doesn't close anything. Write `Closes #N` either way. 
+    - Write `Closes #N` in the PR description so the issue closes when the PR merges into `main`. `(#N)` in the title doesn't close it. A PR from a branch made with `Create a branch` in the issue sidebar is also linked automatically; branches created locally (as agents do) aren't. 
 
 `main` must always be installable — never push work-in-progress directly to it. All changes to `main` should be done via a Pull Request. 
 
@@ -255,9 +254,8 @@ pkgcheck::pkgcheck()          # pkgcheck for rOpenSci submission
   function and argument names.
 - **Imports:** `terra` is imported wholesale; `sf`, `stringr`, `rlang`,
   `magrittr`, `methods` and `utils` are imported selectively via `@importFrom`.
-  Other imported packages (`ncdf4`, `glue`, `curl`, `rredlist`) are called as
-  `pkg::fun()`. Elsewhere
-  prefer explicit `pkg::fun()` calls. Add new dependencies to `DESCRIPTION`
+  Other packages (`ncdf4`, `glue`, `curl`, `rredlist`) are called as
+  `pkg::fun()`. Add new dependencies to `DESCRIPTION`
   deliberately — this package is already heavy, so justify each one in the PR.
 - **Optional dependencies:** guard with `requireNamespace("pkg", quietly =
   TRUE)` and give a clear error telling the user what to install (see
