@@ -1,57 +1,3 @@
-test_that("buffered target locations follow the selected record", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path))
-  .make_track_nc(path)
-  route <- data.frame(lon = c(0, 2), lat = 0, target = 10)
-  out <- extract_to_buffered_track(
-    route, path, spacing_km = 112, horizontal_radius_km = 120,
-    statistic = "most_similar", target_col = "target", infer_bounds = TRUE,
-    quiet = TRUE
-  )
-  expect_equal(out$samples$temp, c(10, 10, 10))
-  expect_equal(out$samples$temp_match_lon, c(1, 1, 1))
-  expect_equal(out$samples$temp_match_lat, c(0, 0, 0))
-  expect_equal(out$samples$lon, c(0, 1, 2))
-  expect_true(all(is.na(out$samples$temp_match_depth)))
-  expect_true(all(is.na(out$samples$temp_match_time)))
-  expect_error(extract_to_buffered_track(
-    transform(route, temp_match_lon = 9), path, horizontal_radius_km = 1,
-    statistic = "most_similar", target_col = "target", infer_bounds = TRUE
-  ), "overwrite")
-})
-
-
-test_that("buffered warnings exclude invalid connections and clear locations", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path))
-  .make_track_nc(path)
-  handle <- ncdf4::nc_open(path, write = TRUE)
-  ncdf4::ncvar_put(handle, "temp", matrix(10, 3, 2))
-  ncdf4::nc_close(handle)
-  route <- data.frame(lon = c(0, 2), lat = 0, target = 10)
-  island <- .track_test_polygon(0.9, 1.1, -0.2, 0.2)
-  domain <- .track_test_polygon(-1, 3, -1, 2)
-  captured <- list()
-  out <- withCallingHandlers(extract_to_buffered_track(
-    route, path, spacing_km = 112, horizontal_radius_km = 120,
-    statistic = "most_similar", target_col = "target", infer_bounds = TRUE,
-    land_mask = island, mask_domain = domain, quiet = TRUE
-  ), ocean3d_target_location_warning = function(warning) {
-    captured[[length(captured) + 1L]] <<- warning
-    invokeRestart("muffleWarning")
-  })
-  expect_length(captured, 1)
-  expect_identical(captured[[1]]$rows, c(1L, 3L))
-  expect_equal(out$samples$temp, c(10, NA, 10))
-  expect_true(is.na(out$samples$temp_match_lon[2]))
-  expect_true(is.na(out$samples$temp_match_lat[2]))
-  expect_true(is.na(out$samples$temp_match_depth[2]))
-  expect_true(is.na(out$samples$temp_match_time[2]))
-  expect_identical(out$samples$temp_match_info[[2]]$status,
-                   "invalid_connection")
-})
-
-
 test_that("balanced sampling shares one subdivision for all limits", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
@@ -184,35 +130,6 @@ test_that("sampling counts retain tracks and missing results", {
   expect_equal(cells$settings$sampling_counts, data.frame(
     track_id = "1", n_observed = 2L, n_assumed = 3L, n_samples = 5L
   ))
-})
-
-
-test_that("buffered tracks share sampling choices and counts", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path))
-  .make_track_nc(path)
-  route <- data.frame(lon = c(0, 2), lat = 0, date = .track_clock(c(0, 3)))
-  out <- extract_to_buffered_track(
-    route, path, spacing_km = 112, time_step = 1, interpolate_time = TRUE,
-    horizontal_radius_km = 1, infer_bounds = TRUE, quiet = TRUE
-  )
-  expect_identical(out$settings$sampling, "balanced")
-  expect_equal(out$samples$date, .track_clock(0:3))
-  expect_equal(out$settings$sampling_counts, data.frame(
-    track_id = "1", n_observed = 2L, n_assumed = 2L, n_samples = 4L
-  ))
-  expect_equal(out$summary$n_assumed, 2)
-  merged <- extract_to_buffered_track(
-    route, path, sampling = "merged_steps", spacing_km = 112,
-    time_step = 1, interpolate_time = TRUE, horizontal_radius_km = 1,
-    infer_bounds = TRUE, statistics = NULL, quiet = TRUE
-  )
-  expect_null(merged$summary)
-  expect_equal(merged$settings$sampling_counts$n_samples, 5)
-  expect_equal(merged$settings$sampling_counts$n_assumed, 3)
-  expect_error(extract_to_buffered_track(
-    route, path, sampling = "regular", horizontal_radius_km = 1
-  ), "arg")
 })
 
 
@@ -1281,64 +1198,52 @@ test_that("variation states distinguish requests, coverage and sample counts", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
   .make_track_nc(path)
-  for (buffered in c(FALSE, TRUE)) {
-    extract <- if (buffered) extract_to_buffered_track else extract_to_track
-    settings <- list(nc = path, var = "temp", weighting = "equal", quiet = TRUE)
-    if (buffered) {
-      settings$horizontal_radius_km <- 1
-      settings$infer_bounds <- TRUE
-    }
-    vertices <- data.frame(lon = 0:2, lat = 0)
-    mean_only <- do.call(extract, c(list(data = vertices), settings))
-    expect_identical(mean_only$summary$variation_status, "not_requested")
-    expect_equal(mean_only$summary$mean, 10)
-    for (requested in list("sd", "se", c("mean", "sd", "se"))) {
-      out <- do.call(extract, c(
-        list(data = vertices, statistics = requested), settings
-      ))
-      expect_identical(out$summary$variation_status, "available")
-      if ("sd" %in% requested) expect_equal(out$summary$sd, 10)
-      if ("se" %in% requested) expect_equal(out$summary$se, 10 / sqrt(3))
-    }
-    requested <- list(statistics = c("mean", "sd", "se"))
-    rejected <- do.call(extract, c(
-      list(data = data.frame(lon = c(0, 1, 3), lat = 0)), requested, settings
+  settings <- list(nc = path, var = "temp", weighting = "equal", quiet = TRUE)
+  vertices <- data.frame(lon = 0:2, lat = 0)
+  mean_only <- do.call(extract_to_track, c(list(data = vertices), settings))
+  expect_identical(mean_only$summary$variation_status, "not_requested")
+  expect_equal(mean_only$summary$mean, 10)
+  for (requested in list("sd", "se", c("mean", "sd", "se"))) {
+    out <- do.call(extract_to_track, c(
+      list(data = vertices, statistics = requested), settings
     ))
-    expect_equal(rejected$summary$n_valid, 2)
-    expect_equal(rejected$summary$valid_fraction, 2 / 3)
-    expect_identical(rejected$summary$status, "insufficient_coverage")
-    expect_identical(rejected$summary$variation_status, "not_available")
-    expect_true(is.na(rejected$summary$sd))
-    expect_true(is.na(rejected$summary$se))
-    threshold <- if (buffered) {
-      "track_min_valid_fraction"
-    } else {
-      "min_valid_fraction"
-    }
-    settings[[threshold]] <- 0.5
-    singleton <- do.call(extract, c(
-      list(data = data.frame(lon = c(1, 3), lat = 0)), requested, settings
-    ))
-    expect_identical(singleton$summary$status, "partial")
-    expect_identical(
-      singleton$summary$variation_status, "insufficient_variation_samples"
-    )
-    expect_equal(singleton$summary$mean, 10)
-    expect_true(is.na(singleton$summary$sd))
-    expect_true(is.na(singleton$summary$se))
-    missing <- do.call(extract, c(
-      list(data = data.frame(lon = 3:4, lat = 0)), requested, settings
-    ))
-    expect_identical(missing$summary$status, "all_missing")
-    expect_identical(missing$summary$variation_status, "not_available")
-    settings$weighting <- "duration"
-    vertices$date <- .track_clock(c(0, 0, 0))
-    stationary_time <- do.call(extract, c(
-      list(data = vertices), requested, settings
-    ))
-    expect_identical(stationary_time$summary$status, "empty")
-    expect_identical(stationary_time$summary$variation_status, "not_available")
+    expect_identical(out$summary$variation_status, "available")
+    if ("sd" %in% requested) expect_equal(out$summary$sd, 10)
+    if ("se" %in% requested) expect_equal(out$summary$se, 10 / sqrt(3))
   }
+  requested <- list(statistics = c("mean", "sd", "se"))
+  rejected <- do.call(extract_to_track, c(
+    list(data = data.frame(lon = c(0, 1, 3), lat = 0)), requested, settings
+  ))
+  expect_equal(rejected$summary$n_valid, 2)
+  expect_equal(rejected$summary$valid_fraction, 2 / 3)
+  expect_identical(rejected$summary$status, "insufficient_coverage")
+  expect_identical(rejected$summary$variation_status, "not_available")
+  expect_true(is.na(rejected$summary$sd))
+  expect_true(is.na(rejected$summary$se))
+  settings$min_valid_fraction <- 0.5
+  singleton <- do.call(extract_to_track, c(
+    list(data = data.frame(lon = c(1, 3), lat = 0)), requested, settings
+  ))
+  expect_identical(singleton$summary$status, "partial")
+  expect_identical(
+    singleton$summary$variation_status, "insufficient_variation_samples"
+  )
+  expect_equal(singleton$summary$mean, 10)
+  expect_true(is.na(singleton$summary$sd))
+  expect_true(is.na(singleton$summary$se))
+  missing <- do.call(extract_to_track, c(
+    list(data = data.frame(lon = 3:4, lat = 0)), requested, settings
+  ))
+  expect_identical(missing$summary$status, "all_missing")
+  expect_identical(missing$summary$variation_status, "not_available")
+  settings$weighting <- "duration"
+  vertices$date <- .track_clock(c(0, 0, 0))
+  stationary_time <- do.call(extract_to_track, c(
+    list(data = vertices), requested, settings
+  ))
+  expect_identical(stationary_time$summary$status, "empty")
+  expect_identical(stationary_time$summary$variation_status, "not_available")
 })
 
 
@@ -1564,65 +1469,6 @@ test_that(
 
 
 test_that(
-  "buffered tracks separate target interpolation and buffer/track summaries",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_track_nc(path)
-    route <- data.frame(lon = c(0, 2), lat = 0, target = c(1, 19))
-    mean <- extract_to_buffered_track(
-      route,
-      path,
-      var = "temp",
-      horizontal_radius_km = 1,
-      infer_bounds = TRUE,
-      quiet = TRUE
-    )
-    expect_equal(mean$samples$temp, c(0, 20))
-    expect_equal(mean$summary$mean, 10)
-    expect_error(
-      extract_to_buffered_track(
-        route,
-        path,
-        spacing_km = 100,
-        statistic = "most_similar",
-        target_col = "target",
-        quiet = TRUE
-      ),
-      "interpolate_target"
-    )
-    selected <- extract_to_buffered_track(
-      route,
-      path,
-      spacing_km = 100,
-      interpolate_target = TRUE,
-      statistic = "most_similar",
-      target_col = "target",
-      horizontal_radius_km = 60,
-      infer_bounds = TRUE,
-      quiet = TRUE
-    )
-    expect_equal(selected$samples$target, c(1, 7, 13, 19))
-    expect_equal(selected$samples$temp, c(0, 10, 10, 20))
-    expect_equal(selected$settings$buffer_min_valid_fraction, 0)
-    expect_equal(selected$settings$track_min_valid_fraction, 0.8)
-    expect_true(
-      all(
-        vapply(
-          selected$samples$temp_match_info,
-          function(x) {
-            nrow(x$target_match$matches) >=
-              1
-          },
-          logical(1)
-        )
-      )
-    )
-  }
-)
-
-
-test_that(
   "masks treat coastal contact conservatively and mark invalid connections",
   {
     path <- tempfile(fileext = ".nc")
@@ -1684,40 +1530,6 @@ test_that(
 )
 
 
-test_that(
-  "buffered cells retain target NA and need no extra permission",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_track_nc(path)
-    route <- data.frame(lon = c(0, 2), lat = 0, target = 10)
-    out <- extract_to_buffered_track(
-      route,
-      path,
-      sampling = "cells",
-      statistic = "most_similar",
-      target_col = "target",
-      horizontal_radius_km = 120,
-      infer_bounds = TRUE,
-      quiet = TRUE
-    )
-    expect_true(all(out$samples$target == 10))
-    expect_true(all(out$samples$temp == 10))
-    missing <- extract_to_buffered_track(
-      transform(route, target = NA_real_),
-      path,
-      sampling = "cells",
-      statistic = "most_similar",
-      target_col = "target",
-      horizontal_radius_km = 1,
-      infer_bounds = TRUE,
-      quiet = TRUE
-    )
-    expect_true(all(is.na(missing$samples$temp)))
-    expect_true(is.na(missing$summary$mean))
-  }
-)
-# Overlapping grids must not silently approximate source-switch boundaries.
 test_that(
   "cells accept disjoint sources and reject incompatible overlap",
   {
@@ -1906,34 +1718,8 @@ test_that(
       out$samples$temp_match_info[[i]]$track_status,
       out$samples$segment_status[i]
     )
-    buffered <- extract_to_buffered_track(
-      route,
-      path,
-      spacing_km = 100,
-      horizontal_radius_km = 10,
-      infer_bounds = TRUE,
-      land_mask = island,
-      mask_domain = domain,
-      quiet = TRUE
-    )
-    expect_equal(
-      buffered$samples$temp_match_info[[i]]$status,
-      "invalid_connection"
-    )
-    expect_equal(
-      buffered$samples$temp_match_info[[i]]$environmental_status,
-      "complete"
-    )
-    expect_equal(
-      buffered$samples$temp_match_info[[i]]$track_status,
-      buffered$samples$segment_status[i]
-    )
-    expect_equal(buffered$settings$buffer$horizontal_radius_km, 10)
-    expect_identical(buffered$settings[["statistic"]], "mean")
-    expect_identical(buffered$settings[["statistics"]], "mean")
     expect_identical(out$settings[["statistics"]], "mean")
-    expect_true(all(nzchar(names(buffered$settings))))
-    expect_true(buffered$settings$mask_checked)
+    expect_true(all(nzchar(names(out$settings))))
   }
 )
 test_that(
@@ -1975,31 +1761,6 @@ test_that(
       ),
       "Cells mode"
     )
-    expect_error(extract_to_buffered_track(route, path, method = "all"), "all")
-  }
-)
-test_that(
-  "buffered tracks retain the original timezone warning",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_track_nc(path, time = c(0, 24))
-    route <- data.frame(
-      lon = c(0, 2),
-      lat = 0,
-      date = "2020-01-01 00:00"
-    )
-    expect_warning(
-      out <- extract_to_buffered_track(
-        route,
-        path,
-        horizontal_radius_km = 10,
-        infer_bounds = TRUE,
-        quiet = TRUE
-      ),
-      "UTC"
-    )
-    expect_equal(as.numeric(out$samples$date), rep(1577836800, 2))
   }
 )
 test_that(

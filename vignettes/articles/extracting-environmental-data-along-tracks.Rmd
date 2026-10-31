@@ -940,9 +940,7 @@ against land information.
 Use [point extraction](extracting-environmental-data-at-points.html) for
 recorded locations and [buffer extraction](extracting-and-weighting-buffer-data.html)
 for environmental support around an observation. Track extraction adds an
-assumed connecting route. For environmental support around each position,
-continue with [buffered tracks](extracting-buffers-along-tracks.html).
-Environmental interpolation and automatic marine routing are not performed.
+assumed connecting route. Environmental interpolation and automatic marine routing are not performed.
 
 Environmental data: E.U. Copernicus Marine Service Information;
 [doi:10.48670/mds-00375](https://doi.org/10.48670/mds-00375). The

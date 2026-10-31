@@ -13,7 +13,6 @@ articles:
   - articles/extracting-environmental-data-at-points
   - articles/extracting-and-weighting-buffer-data
   - articles/extracting-environmental-data-along-tracks
-  - articles/extracting-buffers-along-tracks
 - title: Other articles
   navbar: ~
   contents:
