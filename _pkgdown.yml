@@ -6,6 +6,62 @@ footer:
   components:
     developed_by: "Developed by David Ruiz-García, Jay Matsushiba."
 
+reference:
+- title: 3D classes
+  desc: >
+    Raster-based 3D objects. A `SpatVoxel` holds values by depth level; a
+    `SpatEnvelope` holds a depth range per cell.
+  contents:
+  - SpatVoxel-class
+  - SpatEnvelope-class
+  - SpatVolume-class
+  - depths
+- title: Build
+  desc: Turn inputs into 3D objects, and convert between them.
+  contents:
+  - as_voxel
+  - as_envelope
+  - vect_to_envelope
+  - envelope_to_voxel
+  - voxel_to_envelope
+  - voxel_profiles
+  - occupied
+  - create_study_raster
+- title: Intersect
+  desc: Find where 3D objects meet.
+  contents:
+  - intersect_3d
+  - intersects_3d
+  - mask-3d
+- title: Summarise
+  desc: Measure 3D objects and their overlap.
+  contents:
+  - volume
+  - calc_volume_overlap
+- title: Extraction
+  desc: >
+    Extract environmental values from netCDF files at points, in buffers,
+    along tracks, or from a `SpatVoxel` within an area. These run build,
+    intersect and summarise in one call.
+  contents:
+  - extract_to_point
+  - extract2d
+  - starts_with("extract3d_")
+  - extract_to_buffer
+  - extract_to_track
+  - extract_to_area
+- title: Data sources
+  desc: Download, cache and load public datasets.
+  contents:
+  - load_gebco_bathymetry
+  - woa_download
+  - woa_load_nc
+  - woa_cache_dir
+  - woa_cache_clear
+  - gfw_effort_to_raster
+  - fetch_species_assessments
+  - fill_missing_depths
+
 articles:
 - title: Environmental data extraction
   navbar: ~

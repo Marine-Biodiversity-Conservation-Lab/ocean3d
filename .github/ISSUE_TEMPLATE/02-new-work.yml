@@ -8,7 +8,7 @@ body:
       value: |
         This issue is the record of the work's status. Please assign yourself
         before you start coding — see
-        [CONTRIBUTING.md](../../blob/main/CONTRIBUTING.md#branching-and-coordination).
+        [CONTRIBUTING.md](../../blob/main/CONTRIBUTING.md#how-contributing-works-for-ocean3d).
 
   - type: textarea
     id: problem
