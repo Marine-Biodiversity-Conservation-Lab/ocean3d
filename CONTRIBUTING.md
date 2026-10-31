@@ -80,12 +80,15 @@ because these files are where merge conflicts actually happen:
 
 | Area | Files | Typical SPEC section |
 | --- | --- | --- |
-| Volume / voxelisation | `R/volume.R` | Volume calculation |
-| Spatial query | `R/intersect.R` | Spatial query |
-| Bathymetry | `R/gebco_bathymetry.R` | Data loading and preparation |
-| Environmental extraction | `R/extract_to_area.R`, `R/extract_to_points.R`, `R/woa.R` | Environmental extraction, WOA utilities |
-| Fisheries | `R/gfw.R` | Data source utilities (GFW) |
-| Species data | `R/iucn_utils.R` | Data loading and preparation |
+| 3D classes and conversions | `R/AllClasses.R`, `R/AllGenerics.R`, `R/create_3d_objects.R`, `R/voxel_profiles.R`, `R/accessors.R`, `R/utils-3d.R` | Build |
+| Spatial query | `R/intersect.R` | Intersect |
+| Volume | `R/volume.R` | Summarise: volume calculations |
+| Environmental extraction | `R/extract_to_points.R`, `R/extract_to_buffer.R`, `R/extract_to_track.R`, `R/extract_to_area.R` | Summarise: extraction; Data model |
+| Conditions | `R/utils-conditions.R` | — |
+| Bathymetry | `R/gebco_bathymetry.R` | Build; Utilities |
+| WOA | `R/woa.R` | Build; Utilities |
+| Fisheries | `R/gfw.R` | Build; Utilities |
+| Species data | `R/iucn_utils.R` | Utilities |
 
 Two people *can* work in the same area — just make the split explicit in the
 issue thread.
@@ -114,8 +117,9 @@ The templates apply a type label for you; add priority and area yourself.
 
 ### Versioning
 
-Development version is `0.1.0`. Bump the third component in `DESCRIPTION`
-(`0.1.1`, …) when a PR adds or changes an exported function. 
+Development versions end in a `.9000`-style suffix (currently `0.1.2.9002`).
+Bump the suffix in `DESCRIPTION` (`0.1.2.9003`, …) when a PR adds or changes an
+exported function. 
 
 ---
 
@@ -249,8 +253,10 @@ pkgcheck::pkgcheck()          # pkgcheck for rOpenSci submission
 
 - **Style:** tidyverse style (`styler::style_pkg()` if in doubt). Snake_case
   function and argument names.
-- **Imports:** `terra` is imported wholesale; `sf`, `stringr`, `ggplot2`,
-  `rlang`, `magrittr` are imported selectively via `@importFrom`. Elsewhere
+- **Imports:** `terra` is imported wholesale; `sf`, `stringr`, `rlang`,
+  `magrittr`, `methods` and `utils` are imported selectively via `@importFrom`.
+  Other imported packages (`ncdf4`, `glue`, `curl`, `rredlist`) are called as
+  `pkg::fun()`. Elsewhere
   prefer explicit `pkg::fun()` calls. Add new dependencies to `DESCRIPTION`
   deliberately — this package is already heavy, so justify each one in the PR.
 - **Optional dependencies:** guard with `requireNamespace("pkg", quietly =

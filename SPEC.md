@@ -99,7 +99,7 @@ Polygons in `SpatVector3D` enclose a volume: everything between their top and bo
 
 A 3D raster is a stack of 2D rasters, one per standard depth, as in Copernicus Marine and World Ocean Atlas (WOA) data. netCDF files store these stacks. In 3D graphics this is called a **voxel model**. 
 
-Multi-depth rasters used by `ocean3d` must encode depth in layer names using the format `{variable}_{field}_depth={value}` (e.g., `t_an_depth=0`, `t_an_depth=100` for temperature with annual means at 0 and 100 m depths). 
+Multi-depth rasters used by `ocean3d` must encode depth in layer names using the format `{variable}_depth={value}` (e.g. `t_an_depth=0`, `t_an_depth=100` for WOA annual mean temperature, `t_an`, at 0 and 100 m). 
 
 The depth range each layer covers depends on the source file. WOA, for instance, gives explicit depth bounds: the 0 m layer covers 0–2.5 m, the 5 m layer 2.5–7.5 m, the 10 m layer 7.5–12.5 m, and so on. 
 
@@ -283,7 +283,7 @@ Three functions handle pairs of 3D objects (`SpatEnvelope`, `SpatVoxel`, and *(p
 
 These functions are the intersect step of the [package design](#package-design-build-intersect-summarise).
 
-`terra::intersect()` is a 2D test, so on a 3D object it is an error pointing to the verbs above. Dispatch names concrete classes only: S4 prefers a `SpatRaster` method over one on the `SpatVolume` union, so the union is a documentation device, not a dispatch target.
+`terra::intersect()` is a 2D test, so on a 3D object it is an error pointing to the verbs above. The package's methods name the concrete classes (`SpatVoxel`, `SpatEnvelope`). When a generic has both a `SpatRaster` method and a `SpatVolume` method, as terra's generics do, S4 picks the `SpatRaster` one, so a method on the union would be skipped. The union works as a dispatch target only for generics without a `SpatRaster` method.
 
 ### Summarise: extraction
 

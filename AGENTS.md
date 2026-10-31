@@ -17,6 +17,9 @@ objects built on terra (everything else). #99 plans to unify them.
 - Don't add a third representation or a new conversion between the two without
   checking SPEC.md and #99 first. New work should fit the planned model, not
   widen the split.
+- Each analysis function belongs to one step: build, intersect or summarise
+  (SPEC.md, "Package design"). Add new features to one step; don't add another
+  function that does all three in one call.
 
 ## Reuse before you write
 
