@@ -17,11 +17,44 @@ Technically, this means that `ocean3d` needs to be able to take points (0D), lin
 
 **Key design decisions**
 
+- **Three steps:** an analysis is build → intersect → summarise, and each analysis function belongs to one step ([Package design](#package-design-build-intersect-summarise)). The extraction functions don't follow this yet; they are planned to become wrappers over the three steps.
 - **Now:** two data models. netCDF files are used for point, buffer and track extraction; `SpatVoxel` / `SpatEnvelope` for everything else ([Data model](#data-model)).
 - **Planned (#99):** one model with time as a dimension, reading only the data each step needs. A trial of the stars and ncdfCF packages decides how the data are read and held.
 - **Planned:** one vector class, `SpatVector3D`, holding points, lines and polygons with depth.
-- **Planned:** extraction split into build → intersect → summarise steps.
 - **Planned:** CFtime for time decoding.
+
+## Package design: build, intersect, summarise
+
+An analysis in `ocean3d` has three steps, and each analysis function belongs to one of them (downloads and cache utilities sit outside). The output of one step is the input to the next, and each step can be used on its own.
+
+1. **Build:** turn inputs (observations, tracks, polygons with depth ranges, rasters, netCDF data) into 3D objects.
+2. **Intersect:** find where 3D objects meet each other or the data: the space they share, whether they share any, or the data values inside a shape.
+3. **Summarise:** turn what intersect returns into results: volumes, overlap, and statistics per shape or group.
+
+| Step | Question | Exists now | Planned |
+|---|---|---|---|
+| Build | What is the 3D shape or grid? | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `envelope_to_voxel()`, `voxel_to_envelope()`, `occupied()`, `create_study_raster()`, data loaders (`woa_load_nc()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()`) | `as_vector3d()`, `buffer_3d()`, `vector3d_to_envelope()`, track sampling |
+| Intersect | Where do they meet? | `intersect_3d()`, `intersects_3d()`, `mask()` | the same functions for `SpatVector3D`; a coverage verb that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
+| Summarise | How much, and what values? | `volume()`, `calc_volume_overlap()` | `summarise_3d()` for statistics on intersect results |
+
+The Getting Started vignette follows the three steps: it builds a species' 3D range with `vect_to_envelope()`, keeps the temperatures inside it with `mask()`, and summarises them per depth with `terra::global()`.
+
+Rules:
+
+- Each step is exported, so users can stop after any step, inspect the result, or use their own shapes or statistics.
+- Arguments with the same meaning have the same name and default in every step (#101). Input checks are shared (#104).
+- New features go into one step, not into a function that combines steps. A new shape (e.g. an ellipsoid buffer) is a builder; a new statistic is an option of the summary function.
+
+**Combined functions.** Some functions run all three steps for a common task. Today point, buffer and track extraction each do everything in one call: they turn the input into a shape, find the data cells inside it, and compute a statistic. `extract_to_buffer()` alone has about 2100 lines and 36 arguments for this, and the same work is written separately for points, buffers, tracks and areas, with different arguments for the same idea (#101, #104, #105). They are planned to become wrappers over the three steps, keeping their current arguments and results and adding only the join back to the input table and the printed reports:
+
+| Function | Build | Intersect | Summarise |
+|---|---|---|---|
+| `extract_to_point()` | points, one per row | one cell per point | none (the value) |
+| `extract_to_buffer()` | points, buffered into polygons (radius × depth window × time window) | cells and weights per polygon | per row |
+| `extract_to_area()` | one polygon × depth band | `mask()` or coverage | optional |
+| `extract_to_track()` | lines, sampled into points (optionally buffered) | as for points or polygons | per sample, then per track |
+
+How the planned functions work is described in [Extraction on the three steps](#extraction-on-the-three-steps).
 
 ## Vector Representations in 3D space
 For more background: https://en.wikipedia.org/wiki/Geometric_primitive
@@ -162,19 +195,11 @@ Rules:
 - **Storage:** points and lines are stored as a vertex table (lon, lat, depth, time, feature ID, order), the format `extract_to_track()` uses now, and convert to and from sf. sf isn't the storage because it treats Z as height and most of its operations drop depth and time. How polygons are stored depends on the trial.
 - `SpatVolume` extends to `c("SpatVoxel", "SpatEnvelope", "SpatVector3D")`; its docs note that only polygons have volume.
 
-#### Extraction in three steps: build, intersect, summarise
+#### Extraction on the three steps
 
-Today point, buffer and track extraction each do everything in one call: it turns its input into a shape, finds the source cells inside that shape, and computes a statistic. `extract_to_buffer()` alone has about 2100 lines and 36 arguments for this. The same three jobs are written separately for points, buffers, tracks and areas, with different arguments for the same idea (#101, #104, #105). The plan splits them into three sets of functions, each usable on its own, where the output of one step is the input to the next:
+The three steps are the package design (see [Package design](#package-design-build-intersect-summarise)). This section plans the parts extraction still needs: `SpatVector3D` builders, a coverage verb and `summarise_3d()`. Function names marked "planned" are working names, to be settled in the issue for each step.
 
-| Step | Input | Output | Exists now | Planned |
-|---|---|---|---|---|
-| 1. Build | observations, polygons, lines, rasters, depth and time ranges | 3D shapes: `SpatVector3D`, `SpatEnvelope`, `SpatVoxel` | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `voxel_to_envelope()`, `envelope_to_voxel()`, `create_study_raster()` | `as_vector3d()`, `buffer_3d()`, `vector3d_to_envelope()`, track sampling (below) |
-| 2. Intersect | two 3D objects, or a source and a shape | the shared space, or the source cells inside a shape with their weights | `intersect_3d()`, `intersects_3d()`, `mask()` for `SpatVoxel` / `SpatEnvelope` | the same verbs for `SpatVector3D` and the core object; a coverage verb (below) |
-| 3. Summarise | a coverage table | one row of statistics per shape or group | inside `extract_to_buffer()` and `extract_to_track()` only | `summarise_3d()` (below) |
-
-Function names marked "planned" are working names, to be settled in the issue for each step.
-
-*1. Build.* Builders create shapes and never read source values.
+*1. Build.* `SpatVector3D` builders create shapes without reading the data they will be compared with.
 
 ```r
 # points or lines: a depth (and time) at each vertex
@@ -215,21 +240,6 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 - `by` sets the grouping: per feature (one buffer), or across features (all samples along a track, weighted by distance or duration). This replaces the separate per-buffer and per-track summaries in the removed `extract_to_buffered_track()` (#105).
 - `volume()` and `calc_volume_overlap()` measure shapes rather than values, so they stay as they are; for polygons, the coverage weights sum to the volume.
 
-*Wrappers.* `extract_to_point()`, `extract_to_buffer()`, `extract_to_area()` and `extract_to_track()` keep their current arguments and results and become build → intersect → summarise, plus joining the results back to the input table and printing reports:
-
-| Function | Build | Intersect | Summarise |
-|---|---|---|---|
-| `extract_to_point()` | points, one per row | one cell per point | none (the value) |
-| `extract_to_buffer()` | points, buffered into polygons (radius × depth window × time window) | cells and weights per polygon | per row |
-| `extract_to_area()` | one polygon × depth band | `mask()` or coverage | optional |
-| `extract_to_track()` | lines, sampled into points (optionally buffered) | as for points or polygons | per sample, then per track |
-
-Rules for the split:
-
-- Each step is exported, so users can stop after any step, inspect the result, or swap in their own shapes or statistics.
-- Arguments with the same meaning have the same name and default in every step and wrapper (#101). Input checks are shared (#104).
-- New extraction features go into one of the three steps, not into a wrapper. A new shape (e.g. an ellipsoid buffer) is a builder; a new statistic is an option of `summarise_3d()`.
-
 #### Order of work
 
 Each step is its own issue and PR off `main`:
@@ -249,18 +259,9 @@ The existing tests for both models, including the buffer and track tests, define
 
 ## `ocean3d` functionality
 
-### Spatial extractions 
+Grouped by the step each function belongs to ([Package design](#package-design-build-intersect-summarise)).
 
-The extraction functions below exist now. Each is planned to become a wrapper over build, intersect and summarise steps on a `SpatVector3D`; see [Data model](#data-model). Items marked *(planned)* aren't implemented yet.
-
-- **Point extraction**. `extract_to_point()` extracts the nearest value from netCDF files (e.g. environmental data) to an input point based on its longitude, latitude, depth, and, when available, time.
-- **Buffer extraction**. `extract_to_buffer()` summarises netCDF values within a geodesic circle × depth window × time window around each observation, with cell coverage, layer thickness and time weighting, or picks the value closest to a target.
-- **Track extraction**. `extract_to_track()` samples points along ordered tracks (e.g. tagging data), extracts netCDF values at them, and can summarise per track.
-- **Area extraction**. `extract_to_area()` crops a `SpatVoxel` (e.g. environmental data) to an input polygon and depth band. 
-- **Volume extraction**. `mask(voxel, domain)` keeps a `SpatVoxel`'s values (e.g. environmental data) inside a 3D volume and sets the rest to `NA`. The volume is a `SpatEnvelope` (2.5D, e.g. a species range from `vect_to_envelope()` bounded by the seafloor) or a presence `SpatVoxel` (3D). With an envelope, `bounds` sets whether a depth level counts when the envelope reaches its top or its midpoint. The Getting Started vignette uses this to get temperatures within a species' 3D range.
-- **Extraction at a `SpatVector3D`** *(planned)*. The coverage verb (working name `coverage_3d()`) returns the source cells each feature touches with their weights (one cell per point, length or time along lines, volume × time overlap in polygons), and `summarise_3d()` turns them into statistics. Observations are points, tracks are lines, and buffers and areas are polygons, so this one path replaces the separate code in each function above.
-
-### Conversions between spatial representations
+### Build: conversions between spatial representations
 - **Create template voxel grid for study space**. Create the 3D voxel grid for the study space, that can be used as a template to convert other spatial representations to be compatible with it (`create_study_raster()`). 
 - **Convert 2D polygons with depth data to 2.5D.** When separate depth ranges are available, use that to convert 2D polygons into 2.5D representations that are bound by bathymetry and depth ranges (`vect_to_envelope()`), e.g. IUCN Red List species ranges. 
 - **Convert 2D rasters to 2.5D**. When depth ranges are available, use that to convert 2D raster data into 2.5D representations (`as_envelope()`), e.g. Global Fishing Watch fishing effort by gear type.
@@ -269,7 +270,7 @@ The extraction functions below exist now. Each is planned to become a wrapper ov
 - **Buffer points and lines into polygons** *(planned)*. `buffer_3d()` adds a horizontal radius, depth window and time window, e.g. a 10 km × ±25 m × ±1 day buffer around each tag detection.
 - **Convert `SpatVector3D` polygons to 2.5D** *(planned)*. `vector3d_to_envelope(x, template)` evaluates the top and bottom at each cell of a template grid, like `vect_to_envelope()`. This loses the exact edges and the time interval, so use it only when the next step needs a grid (e.g. volume overlap with a species envelope).
 
-### Spatial query
+### Intersect: spatial query
 Three functions handle pairs of 3D objects (`SpatEnvelope`, `SpatVoxel`, and *(planned)* `SpatVector3D`), or a 3D object with a 2D one (a `SpatRaster` footprint, or polygons). A 2D object restricts the domain horizontally and leaves its depths alone.
 - **`intersect_3d(x, y)`**: the 3D space the two share. Two envelopes intersect their depth intervals; two voxels keep the levels both occupy; an envelope is placed on a voxel's levels before the two are compared. The result is a shape, not data values.
 - **`intersects_3d(x, y)`**: whether they share any 3D space, cell by cell, with terra's three answers: `TRUE`, `FALSE` (both present but disjoint, or only one present), `NA` (neither present).
@@ -278,13 +279,24 @@ Three functions handle pairs of 3D objects (`SpatEnvelope`, `SpatVoxel`, and *(p
 `SpatVector3D` methods *(planned)*:
 - **Vector with vector**: `intersect_3d()` intersects the geometries, the depths and the time intervals. Two polygons give a polygon (footprints intersected, depth intervals intersected at each position); a point or line with a polygon gives the points or parts of lines inside it. Features whose times don't overlap don't intersect.
 - **Vector with envelope or voxel**: polygons are evaluated on the raster's grid (as in `vector3d_to_envelope()`) and compared cell by cell as two envelopes are now; points and lines are compared in the cells and levels they pass through. `mask(voxel, x)` keeps the voxel values in the cells and levels `x` reaches.
-- **Vector with a data source**: the coverage verb, not these three, returns data values, with each cell's partial coverage as a weight (see [Spatial extractions](#spatial-extractions)).
+- **Vector with a data source**: the coverage verb, not these three, returns data values, with each cell's partial coverage as a weight (see [Summarise: extraction](#summarise-extraction)).
 
-These verbs are the intersect step of the planned extraction design (see [Data model](#data-model)).
+These functions are the intersect step of the [package design](#package-design-build-intersect-summarise).
 
 `terra::intersect()` is a 2D test, so on a 3D object it is an error pointing to the verbs above. Dispatch names concrete classes only: S4 prefers a `SpatRaster` method over one on the `SpatVolume` union, so the union is a documentation device, not a dispatch target.
 
-### Volume calculations 
+### Summarise: extraction
+
+The `extract_to_*()` functions below exist now and combine all three steps; each is planned to become a wrapper over them. Volume extraction uses `mask()` from the intersect step, followed by a summary; see [Package design](#package-design-build-intersect-summarise). Items marked *(planned)* aren't implemented yet.
+
+- **Point extraction**. `extract_to_point()` extracts the nearest value from netCDF files (e.g. environmental data) to an input point based on its longitude, latitude, depth, and, when available, time.
+- **Buffer extraction**. `extract_to_buffer()` summarises netCDF values within a geodesic circle × depth window × time window around each observation, with cell coverage, layer thickness and time weighting, or picks the value closest to a target.
+- **Track extraction**. `extract_to_track()` samples points along ordered tracks (e.g. tagging data), extracts netCDF values at them, and can summarise per track.
+- **Area extraction**. `extract_to_area()` crops a `SpatVoxel` (e.g. environmental data) to an input polygon and depth band. 
+- **Volume extraction**. `mask(voxel, domain)` keeps a `SpatVoxel`'s values (e.g. environmental data) inside a 3D volume and sets the rest to `NA`. The volume is a `SpatEnvelope` (2.5D, e.g. a species range from `vect_to_envelope()` bounded by the seafloor) or a presence `SpatVoxel` (3D). With an envelope, `bounds` sets whether a depth level counts when the envelope reaches its top or its midpoint. The Getting Started vignette uses this to get temperatures within a species' 3D range.
+- **Extraction at a `SpatVector3D`** *(planned)*. The coverage verb (working name `coverage_3d()`) returns the source cells each feature touches with their weights (one cell per point, length or time along lines, volume × time overlap in polygons), and `summarise_3d()` turns them into statistics. Observations are points, tracks are lines, and buffers and areas are polygons, so this one path replaces the separate code in each function above.
+
+### Summarise: volume calculations
 - **Calculate the volume occupied by 2.5D representation**. Each rasterized range stores presence plus `depth_min/depth_max` per cell, clamped to the seafloor. Volume is the sum of `cell_area × (depth_max - depth_min)` over present cells. The overlap between two domains is the volume of `intersect_3d()`'s result, measured the same way.
 - **Calculate the volume occupied by 3D representation**. Each layer's height is the distance to the next layer: with `t_an_depth=0` and `t_an_depth=100`, the 0 m layer is 100 m tall. 
 - **Calculate the volume of `SpatVector3D` polygons** *(planned)*. Measured from the geometry, not a grid: polygon area × (`bottom` - `top`) for constant surfaces, exact formulas for named shapes (sphere, ellipsoid), and sampling across the polygon for raster or function surfaces. The time interval doesn't change the volume. Points and lines have no volume, so `volume()` on them is an error suggesting `buffer_3d()`. `volume()` and `calc_volume_overlap()` gain `SpatVector3D` methods, with overlap measured on `intersect_3d()`'s result as for envelopes.
