@@ -112,16 +112,61 @@ No single package meets all three. terra stores depth and time as layer labels o
 
 The result decides whether stars proxies become the core object, or only describe dimensions while the package keeps its own lazy reads.
 
-**Extraction on regions.** Point, buffer, area and track extraction are all "summarise the source over a 3D (or 4D) region". On top of the core object:
+**Extraction in three steps: build, intersect, summarise.** Today each `extract_to_*()` function does everything in one call: it turns its input into a shape, finds the source cells inside that shape, and computes a statistic. `extract_to_buffer()` alone has about 2100 lines and 36 arguments for this. The same three jobs are written separately for points, buffers, tracks and areas, with different arguments for the same idea (#101, #104, #105). The plan splits them into three sets of functions, each usable on its own, where the output of one step is the input to the next:
+
+| Step | Input | Output | Exists now | Planned |
+|---|---|---|---|---|
+| 1. Build | observations, polygons, lines, rasters, depth and time ranges | 3D shapes: `SpatSolid`, `SpatEnvelope`, `SpatVoxel` | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `voxel_to_envelope()`, `envelope_to_voxel()`, `create_study_raster()` | `region_3d()` and builders for observations and tracks (below) |
+| 2. Intersect | two 3D objects, or a source and a shape | the shared space, or the source cells inside a shape with their weights | `intersect_3d()`, `intersects_3d()`, `mask()` for `SpatVoxel` / `SpatEnvelope` | the same verbs for `SpatSolid` and the core object; a coverage verb (below) |
+| 3. Summarise | a coverage table | one row of statistics per shape or group | inside `extract_to_buffer()` and `extract_to_track()` only | `summarise_3d()` (below) |
+
+Function names marked "planned" are working names, to be settled in the issue for each step.
+
+*1. Build.* Builders create shapes and never read source values.
 
 ```r
 # one horizontal geometry (point, line or polygon) + one depth range + one time range
 region <- region_3d(geometry, depth = c(0, 50), time = c(t0, t1))
-
-extract_to_region(source, region, statistic = "mean", weighting = "weighted")
 ```
 
-A point is the zero-radius case, an area is a polygon, and a track is a buffered line. `extract_to_point()`, `extract_to_buffer()`, `extract_to_area()` and `extract_to_track()` stay as wrappers with their current arguments and results. The first version holds one geometry per region; collections of regions (one per observation or track segment), summarised in batches so each block of the source is read once, come later.
+- One shape per object in the first version. Builders for many shapes come next: one shape per row of an observation table (point, or buffer with a radius and depth and time windows), and positions or buffers sampled along a track. They return a collection with an ID per shape, which the later steps keep.
+- Sampling a track (vertices, even spacing, one sample per cell) is a build step: it turns lines into points or solids. The marine-mask check on track connections belongs here too, so invalid samples are marked before anything is read.
+- Converting between shape types (`SpatSolid` to `SpatEnvelope` on a template grid, envelope to voxel) is also a build step.
+
+*2. Intersect.* Intersection finds where shapes and data meet. It is the only step that reads source values, and it reads only the cells, depths and time steps the shapes touch.
+
+- Shape with shape: `intersect_3d()`, `intersects_3d()` and `mask()` keep their current meaning and gain methods for `SpatSolid`. The result is a domain, never field values.
+- Source with shape: a new verb (working name `coverage_3d(source, shapes)`) returns a coverage table: one row per shape and source cell, with the cell's value, its depth and time step, and its weight. The weight is the shape's volume inside the cell (covered area × depth overlap) times the time overlap.
+- A point is the zero-size case: one cell per point with weight 1, picked by the existing nearest or exact matching rules for depth and time (`method`, `time_match`). Those rules move here from `extract_to_point()`.
+- Picking the source file for each shape (multi-file series, tiles) and the CF handling of time, depth and bounds live in this step, on the core object.
+- Collections are read in blocks, so each block of the source is read once rather than once per shape.
+
+*3. Summarise.* Summaries work on the coverage table only. They don't read files or handle geometry, so they can be tested on small hand-written tables.
+
+```r
+coverage <- coverage_3d(source, shapes)
+summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
+             min_valid_fraction = 0.8, by = "shape_id")
+```
+
+- One set of statistic names for every shape type: mean, sd, min, max, median, and `most_similar` with a target column. One `weighting` argument: `"weighted"` uses the coverage weights, `"equal"` ignores them.
+- `by` sets the grouping: per shape (one buffer), or across shapes (all samples along a track, weighted by distance or duration). This replaces the separate per-buffer and per-track summaries in the removed `extract_to_buffered_track()` (#105).
+- `volume()` and `calc_volume_overlap()` measure shapes rather than values, so they stay as they are; on a coverage table, volume is the sum of the weights.
+
+*Wrappers.* `extract_to_point()`, `extract_to_buffer()`, `extract_to_area()` and `extract_to_track()` keep their current arguments and results and become build → intersect → summarise, plus joining the results back to the input table and printing reports:
+
+| Function | Build | Intersect | Summarise |
+|---|---|---|---|
+| `extract_to_point()` | one point per row | one cell per point | none (the value) |
+| `extract_to_buffer()` | one solid per row (radius × depth window × time window) | cells and weights per solid | per row |
+| `extract_to_area()` | one polygon × depth band | `mask()` or coverage | optional |
+| `extract_to_track()` | points or solids sampled along each track | as for points or buffers | per sample, then per track |
+
+Rules for the split:
+
+- Each step is exported, so users can stop after any step, inspect the result, or swap in their own shapes or statistics.
+- Arguments with the same meaning have the same name and default in every step and wrapper (#101). Input checks are shared (#104).
+- New extraction features go into one of the three steps, not into a wrapper. A new shape (e.g. an ellipsoid buffer) is a builder; a new statistic is an option of `summarise_3d()`.
 
 **Vector 3D shape class: `SpatSolid`.** The region is a new class alongside `SpatVoxel` and `SpatEnvelope`. `SpatEnvelope` is "footprint + top + bottom" on a grid; `SpatSolid` is the vector version:
 
@@ -134,7 +179,7 @@ A point is the zero-radius case, an area is a polygon, and a track is a buffered
 
 - **Scope:** one depth interval per horizontal position (each vertical line enters the shape once and leaves once). This covers extruded shapes (cylinders, slabs, an MPA × a depth band), spheres, ellipsoids, cones, and shapes that follow the seafloor or mixed layer. Full 3D solids (overhangs, several depth bands in one column) are out of scope.
 - **Surfaces:** `top` and `bottom` are each a constant (first version), a named shape with parameters (e.g. an ellipsoid buffer), a raster (e.g. relative to GEBCO bathymetry), or, as a fallback, a function of position. Every form reduces to "depth interval at these positions", so adding a shape doesn't change extraction code. `top <= bottom` everywhere in the footprint.
-- **Extraction weight** per cell is the solid's volume inside that cell.
+- **Coverage weight** per cell is the solid's volume inside that cell (see step 2 above).
 - **Conversion** to a `SpatEnvelope` evaluates top and bottom at each cell of a template grid, like `vect_to_envelope()`.
 - `SpatVolume` extends to `c("SpatVoxel", "SpatEnvelope", "SpatSolid")`. Whether `SpatSolid` extends `terra::SpatVector` or something else depends on the core object chosen by the trial.
 
@@ -145,14 +190,19 @@ A point is the zero-radius case, an area is a polygon, and a track is a buffered
 3. Run the stars trial and write up the results with a recommendation for the core object.
 4. Agree on the core data model and update this section.
 5. Build the core object and lazy reader, then time-aware volume, overlap and profiles, then `SpatVoxel` as a time-step view.
-6. Add `region_3d()` / `extract_to_region()` and reimplement the extraction functions as wrappers.
-7. Add `SpatSolid` (one geometry, constant top and bottom, optional time) and its conversion to `SpatEnvelope`; then named shapes, raster and function surfaces.
+6. Add `SpatSolid` (one geometry, constant top and bottom, optional time), `region_3d()` and its conversion to `SpatEnvelope`.
+7. Add the coverage verb and `intersect_3d()` / `intersects_3d()` / `mask()` methods for `SpatSolid`.
+8. Add `summarise_3d()`, then reimplement the extraction functions as build → intersect → summarise wrappers, one function per PR.
+9. Add builders for collections (observation tables, sampled tracks, buffered tracks for #105) and block-wise reads for them; then named shapes, raster and function surfaces.
 
 The existing tests for both models, including the buffer and track tests, are the reference behaviour: they keep passing, and new tests check that the same synthetic data gives the same values from a netCDF file, from the core object and from the equivalent `SpatVoxel`. API changes (what `woa_load_nc()` and the voxel constructors return, time in volume and overlap) need NEWS entries and should settle before the rOpenSci and CRAN submissions (#12).
 
 ## `ocean3d` functionality
 
 ### Spatial extractions 
+
+These are the current functions. Each is planned to become a wrapper over build, intersect and summarise steps; see [Data model](#data-model).
+
 - **Point extraction**. `extract_to_point()` extracts the nearest value from netCDF files (ex. environmental data) to an input point based on its longitude, latitude, depth, and, when available, time.
 - **Buffer extraction**. `extract_to_buffer()` summarises netCDF values within a geodesic circle × depth window × time window around each observation, with cell coverage, layer thickness and time weighting, or picks the value closest to a target.
 - **Track extraction**. `extract_to_track()` samples points along ordered tracks (ex. tagging data), extracts netCDF values at them, and can summarise per track.
@@ -170,6 +220,8 @@ Three verbs cover every pairing of a 3D object (`SpatEnvelope`, `SpatVoxel`) wit
 - **`intersect_3d(x, y)`**: the 3D space the two share. Two envelopes intersect their depth intervals; two voxels keep the levels both occupy; an envelope is placed on a voxel's levels before the two are compared. The result is a domain, never field values.
 - **`intersects_3d(x, y)`**: whether they share any 3D space, cell by cell, with terra's three answers: `TRUE`, `FALSE` (both present but disjoint, or only one present), `NA` (neither present).
 - **`mask(x, mask)`**: `terra::mask()` made depth-aware. Keeps `x`'s values where the mask domain reaches that cell at that depth. A voxel masked by an envelope puts the envelope on the voxel's own levels, so the caller cannot misalign them.
+
+These verbs are the intersect step of the planned extraction design (see [Data model](#data-model)), which adds methods for `SpatSolid` and a coverage verb that returns source cells with weights.
 
 `terra::intersect()` is a 2D test, so on a 3D object it is an error pointing to the verbs above. Dispatch names concrete classes only: S4 prefers a `SpatRaster` method over one on the `SpatVolume` union, so the union is a documentation device, not a dispatch target.
 
