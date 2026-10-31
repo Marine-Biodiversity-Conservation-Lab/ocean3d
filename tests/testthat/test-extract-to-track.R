@@ -217,7 +217,7 @@ test_that("buffered tracks share sampling choices and counts", {
 
 
 test_that(
-  "vertices reuse known point values a ... original row order",
+  "vertices reuse point values and keep input columns and row order",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -252,7 +252,7 @@ test_that(
 
 
 test_that(
-  "balanced sampling inserts the route, ... and bounds spacing",
+  "balanced sampling inserts assumed positions and bounds spacing",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -288,7 +288,7 @@ test_that(
 
 
 test_that(
-  "known statistics use endpoint suppo ... qual sample counts",
+  "statistics use endpoint support weights or equal sample counts",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -329,7 +329,7 @@ test_that(
 
 
 test_that(
-  "time support and distance support a ... distinct questions",
+  "time support and distance support answer distinct questions",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -405,7 +405,7 @@ test_that(
 
 
 test_that(
-  "all-missing and stationary tracks h ... cit summary states",
+  "all-missing and stationary tracks have explicit summary states",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -452,7 +452,7 @@ test_that(
 
 
 test_that(
-  "depth interpolation requires opt-in ... mples known layers",
+  "depth interpolation requires opt-in; without it samples known layers",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -490,7 +490,7 @@ test_that(
 
 
 test_that(
-  "time interpolation preserves UTC in ... mporal step limits",
+  "time interpolation preserves UTC instants and temporal step limits",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -546,7 +546,7 @@ test_that(
 
 
 test_that(
-  "POSIX local times keep instants and ... ns even when quiet",
+  "POSIX local times keep instants and warn about zones even when quiet",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -582,7 +582,7 @@ test_that(
 
 
 test_that(
-  "missing dates and depths are retain ...  missing endpoints",
+  "missing dates and depths are retained and not interpolated",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -626,7 +626,7 @@ test_that(
 
 
 test_that(
-  "surface bottom all and 2d follow th ...  selection methods",
+  "surface, bottom, all and 2d follow the point selection methods",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -680,7 +680,7 @@ test_that(
 
 
 test_that(
-  "mixed static temporal variables and ... es are independent",
+  "mixed static and temporal variables and output names are independent",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -723,7 +723,7 @@ test_that(
 
 
 test_that(
-  "complementary singleton files are m ... ly in either order",
+  "complementary singleton files are matched in either order",
   {
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
@@ -781,7 +781,7 @@ test_that(
 
 
 test_that(
-  "custom columns matrices and named l ... xtraction contract",
+  "custom columns, matrices and named lists follow the point contract",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -825,7 +825,7 @@ test_that(
 
 
 test_that(
-  "sf lines transform CRS and accept e ... -vertex attributes",
+  "sf lines transform CRS and accept XYZ depth and per-vertex attributes",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -910,7 +910,7 @@ test_that(
 
 
 test_that(
-  "antimeridian routes take the short  ... r arcs stay finite",
+  "antimeridian routes take the short way and polar arcs stay finite",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -939,7 +939,7 @@ test_that(
 
 
 test_that(
-  "default sampling retains vertices a ... ces memory budgets",
+  "default sampling retains vertices and enforces memory budgets",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -983,7 +983,7 @@ test_that(
 
 
 test_that(
-  "time ordering and gap limits preven ... tended connections",
+  "time ordering and gap limits prevent unintended connections",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1031,7 +1031,7 @@ test_that(
 
 
 test_that(
-  "invalid controls names and unsuppor ... tions fail clearly",
+  "invalid controls, names and unsupported options fail clearly",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1136,7 +1136,7 @@ test_that(
 
 
 test_that(
-  "samples-only mode and source settin ... elected provenance",
+  "samples-only mode and source settings report selected provenance",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1156,7 +1156,7 @@ test_that(
 )
 
 test_that(
-  "ambiguous geometries and malformed  ... butes are rejected",
+  "ambiguous geometries and malformed sf attributes are rejected",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1487,7 +1487,7 @@ test_that("non-finite variation results are not marked available", {
 
 
 test_that(
-  "WGS84 geodesics have independent kn ... uatorial distances",
+  "WGS84 geodesic lengths match known equatorial distances",
   {
     arc <- .track_geodesic(c(0, 1), c(0, 0))
     expect_equal(arc$length_km, 111.319490793274, tolerance = 1e-10)
@@ -1529,7 +1529,7 @@ test_that(
 
 
 test_that(
-  "cells split changing depth and time ... ntal interpolation",
+  "cells split changing depth and time without environmental interpolation",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1566,7 +1566,7 @@ test_that(
 
 
 test_that(
-  "calendar steps clamp month ends and ... it sampling intent",
+  "calendar steps clamp month ends and reject implicit sampling intent",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1610,7 +1610,7 @@ test_that(
 
 
 test_that(
-  "marine masks examine connections, r ... ct unknown support",
+  "marine masks examine connections and reject unknown support",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1687,7 +1687,7 @@ test_that(
 
 
 test_that(
-  "buffered tracks separate target int ... er/track summaries",
+  "buffered tracks separate target interpolation and buffer/track summaries",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1746,7 +1746,7 @@ test_that(
 
 
 test_that(
-  "masks treat coastal contact conserv ... nvalid connections",
+  "masks treat coastal contact conservatively and mark invalid connections",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1808,7 +1808,7 @@ test_that(
 
 
 test_that(
-  "buffered cells retain target NA and ... t extra permission",
+  "buffered cells retain target NA and need no extra permission",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1842,7 +1842,7 @@ test_that(
 )
 # Overlapping grids must not silently approximate source-switch boundaries.
 test_that(
-  "cells accept disjoint sources and r ... compatible overlap",
+  "cells accept disjoint sources and reject incompatible overlap",
   {
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
@@ -1868,7 +1868,7 @@ test_that(
   }
 )
 test_that(
-  "cells detect thin cells that coarse ... r samples can miss",
+  "cells detect thin cells that coarser samples can miss",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1920,7 +1920,7 @@ test_that(
 )
 
 test_that(
-  "temporal limits leave unavailable d ... in the denominator",
+  "temporal limits leave unavailable support in the denominator",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -2002,7 +2002,7 @@ test_that(
 )
 
 test_that(
-  "invalid routes are distinct from va ... nmental candidates",
+  "invalid routes are distinct from valid environmental candidates",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
