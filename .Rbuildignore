@@ -24,3 +24,4 @@
 ^pkgdown$
 ^vignettes/articles$
 ^CITATION\.cff$
+^dev$
