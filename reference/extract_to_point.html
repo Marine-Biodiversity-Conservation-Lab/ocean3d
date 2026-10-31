@@ -17,7 +17,7 @@ function."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2.9001</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2.9002</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -29,10 +29,11 @@ function."></head><body>
 <li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
-    <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="dropdown-item" href="../articles/extracting-environmental-data-at-points.html">Extracting environmental data at observation points</a></li>
     <li><a class="dropdown-item" href="../articles/extracting-and-weighting-buffer-data.html">Extracting environmental data around observation points</a></li>
-    <li><a class="dropdown-item" href="../articles/extracting-environmental-data-at-points.html">Extracting environmental conditions at observation points</a></li>
+    <li><a class="dropdown-item" href="../articles/extracting-environmental-data-along-tracks.html">Extracting environmental data along tracks</a></li>
+    <li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
+    <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul></li>
@@ -94,7 +95,8 @@ function.</p>
 <span>  spatial_match <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"within"</span>, <span class="st">"nearest"</span><span class="op">)</span>,</span>
 <span>  max_distance_km <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  spatial_report <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  depth_report <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  depth_report <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  return_match_info <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -293,6 +295,12 @@ more than one local layer spacing away, and displaced singleton layers
 whose spacing cannot be assessed. TRUE also reports normal surface, bottom
 and exact depth selections; FALSE hides the depth report. Depths are in
 metres, positive down. Report modes do not change returned values.</p></dd>
+
+
+<dt id="arg-return-match-info">return_match_info<a class="anchor" aria-label="anchor" href="#arg-return-match-info"></a></dt>
+<dd><p>Logical, FALSE by default. With table inputs, add
+one list column per output describing the selected source file, cell,
+depth and timestamp. Missing outputs have no assigned selected source.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -617,7 +625,7 @@ same variable. Time bounds describe intervals, not sampling frequency.</p>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Jay Matsushiba, David Ruiz-García.</p>
+  <p>Developed by David Ruiz-García, Jay Matsushiba.</p>
 </div>
 
 <div class="pkgdown-footer-right">

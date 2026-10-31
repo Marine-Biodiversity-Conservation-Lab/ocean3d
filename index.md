@@ -225,7 +225,7 @@ usethis::edit_r_environ()
 
 - [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)
   — turn the long-format apparent-fishing-hours tibble from
-  [`gfwr::gfw_ais_fishing_hours()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html)
+  [`gfwr::gfw_ais_fishing_hours()`](https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html)
   into a multi-layer `SpatRaster`, one layer per gear (or other
   grouping). Extending that into 3D uses the general converters —
   [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)

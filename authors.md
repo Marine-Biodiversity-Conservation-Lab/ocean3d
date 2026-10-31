@@ -14,13 +14,13 @@ Source:
 [`DESCRIPTION`](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/DESCRIPTION)
 
 Matsushiba J, Ruiz-García D (2026). *ocean3d: Three-Dimensional Marine
-Spatial Analysis*. R package version 0.1.2.9001,
+Spatial Analysis*. R package version 0.1.2.9002,
 <https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d>.
 
     @Manual{,
       title = {ocean3d: Three-Dimensional Marine Spatial Analysis},
       author = {Jay Matsushiba and David Ruiz-García},
       year = {2026},
-      note = {R package version 0.1.2.9001},
+      note = {R package version 0.1.2.9002},
       url = {https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d},
     }

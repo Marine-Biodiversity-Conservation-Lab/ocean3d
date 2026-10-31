@@ -19,7 +19,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2.9001</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2.9002</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -33,10 +33,11 @@
 <li class="active nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
-    <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
+<li><a class="dropdown-item" href="../articles/extracting-environmental-data-at-points.html">Extracting environmental data at observation points</a></li>
     <li><a class="dropdown-item" href="../articles/extracting-and-weighting-buffer-data.html">Extracting environmental data around observation points</a></li>
-    <li><a class="dropdown-item" href="../articles/extracting-environmental-data-at-points.html">Extracting environmental conditions at observation points</a></li>
+    <li><a class="dropdown-item" href="../articles/extracting-environmental-data-along-tracks.html">Extracting environmental data along tracks</a></li>
+    <li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
+    <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul>
@@ -102,7 +103,7 @@ risk.</p>
 <ol style="list-style-type: decimal">
 <li>
 <strong>Fetch</strong> effort for a region with
-<code><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html" class="external-link">gfwr::gfw_ais_fishing_hours()</a></code>, grouped by gear type.</li>
+<code><a href="https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html" class="external-link">gfwr::gfw_ais_fishing_hours()</a></code>, grouped by gear type.</li>
 <li>
 <strong>Rasterise</strong> it onto your study grid with
 [gfw_effort_to_raster()], one layer per gear.</li>
@@ -121,7 +122,7 @@ turn that window into depth layers with [as_envelope()] and
 <li>
 <strong>A GFW API token.</strong> Register at <a href="https://globalfishingwatch.org/our-apis/tokens" class="external-link uri">https://globalfishingwatch.org/our-apis/tokens</a>, then set
 the key as the <code>GFW_TOKEN</code> environment variable.
-<code><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_auth.html" class="external-link">gfwr::gfw_auth()</a></code> reads it from there.</li>
+<code><a href="https://rdrr.io/pkg/gfwr/man/gfw_auth.html" class="external-link">gfwr::gfw_auth()</a></code> reads it from there.</li>
 <li>
 <strong>A local bathymetry file.</strong> The examples use
 GEBCO.</li>
@@ -140,16 +141,16 @@ output shown is an illustration rather than a live result.</p>
 <div class="section level3">
 <h3 id="step-1-fetch-apparent-fishing-effort">Step 1: Fetch apparent fishing effort<a class="anchor" aria-label="anchor" href="#step-1-fetch-apparent-fishing-effort"></a>
 </h3>
-<p><code><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html" class="external-link">gfw_ais_fishing_hours()</a></code> returns a long tibble with one
+<p><code><a href="https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html" class="external-link">gfw_ais_fishing_hours()</a></code> returns a long tibble with one
 row per cell, time bucket, and group level. For an EEZ, MPA, or RFMO
 region, first convert the region name into a numeric ID with
-<code><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_region_id.html" class="external-link">gfwr::gfw_region_id()</a></code>. The API needs the ID, not an ISO3
+<code><a href="https://rdrr.io/pkg/gfwr/man/gfw_region_id.html" class="external-link">gfwr::gfw_region_id()</a></code>. The API needs the ID, not an ISO3
 code.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Resolve the Japan EEZ to its numeric region ID.</span></span>
-<span><span class="va">jpn_eez</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_region_id.html" class="external-link">gfw_region_id</a></span><span class="op">(</span>region <span class="op">=</span> <span class="st">"JPN"</span>, region_source <span class="op">=</span> <span class="st">"EEZ"</span><span class="op">)</span><span class="op">$</span><span class="va">id</span></span>
+<span><span class="va">jpn_eez</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/gfwr/man/gfw_region_id.html" class="external-link">gfw_region_id</a></span><span class="op">(</span>region <span class="op">=</span> <span class="st">"JPN"</span>, region_source <span class="op">=</span> <span class="st">"EEZ"</span><span class="op">)</span><span class="op">$</span><span class="va">id</span></span>
 <span></span>
-<span><span class="va">effort</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html" class="external-link">gfw_ais_fishing_hours</a></span><span class="op">(</span></span>
+<span><span class="va">effort</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html" class="external-link">gfw_ais_fishing_hours</a></span><span class="op">(</span></span>
 <span>  spatial_resolution  <span class="op">=</span> <span class="st">"HIGH"</span>,        <span class="co"># 0.01 deg</span></span>
 <span>  temporal_resolution <span class="op">=</span> <span class="st">"YEARLY"</span>,      <span class="co"># one bucket per year in [start, end]</span></span>
 <span>  start_date          <span class="op">=</span> <span class="st">"2022-01-01"</span>,</span>
@@ -782,7 +783,7 @@ of <code>depth_lookup</code>.</li>
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td><code><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html" class="external-link">gfwr::gfw_ais_fishing_hours()</a></code></td>
+<td><code><a href="https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html" class="external-link">gfwr::gfw_ais_fishing_hours()</a></code></td>
 <td>Fetch GFW apparent fishing effort for a region, aggregated
 server-side by <code>group_by</code>
 </td>
@@ -818,7 +819,7 @@ total</td>
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Jay Matsushiba, David Ruiz-García.</p>
+  <p>Developed by David Ruiz-García, Jay Matsushiba.</p>
 </div>
 
 <div class="pkgdown-footer-right">

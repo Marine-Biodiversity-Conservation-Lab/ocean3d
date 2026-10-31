@@ -225,7 +225,7 @@ usethis::edit_r_environ()
 
 - [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)
   — turn the long-format apparent-fishing-hours tibble from
-  [`gfwr::gfw_ais_fishing_hours()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html)
+  [`gfwr::gfw_ais_fishing_hours()`](https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html)
   into a multi-layer `SpatRaster`, one layer per gear (or other
   grouping). Extending that into 3D uses the general converters —
   [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)
@@ -306,6 +306,8 @@ Marine Habitat.*
   : Summarise environmental values around observations
 - [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
   : Extract values from netCDFs to one or more point observations
+- [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
+  : Extract environmental values along tracks and lines
 - [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fetch_species_assessments.md)
   : Fetch species assessment data from IUCN Red List API
 - [`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fill_missing_depths.md)
@@ -347,19 +349,24 @@ Marine Habitat.*
 
 # Articles
 
-### All vignettes
+### Environmental data extraction
 
+- [Extracting environmental data at observation
+  points](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-environmental-data-at-points.md):
+- [Extracting environmental data around observation
+  points](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-and-weighting-buffer-data.md):
+- [Extracting environmental data along
+  tracks](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-environmental-data-along-tracks.md):
+
+### Other articles
+
+- [Getting started with
+  ocean3d](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/ocean3d.md):
 - [3D Volume Overlap Between Species and
   Fisheries](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.md):
 - [Depth levels and the slabs they stand
   for](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/depth-levels.md):
-- [Extracting environmental data around observation
-  points](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-and-weighting-buffer-data.md):
-- [Extracting environmental conditions at observation
-  points](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-environmental-data-at-points.md):
 - [Depth-Stratified Fishing Effort from Global Fishing
   Watch](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/gfw-fishing-effort-3d.md):
-- [Getting started with
-  ocean3d](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/ocean3d.md):
 - [Extracting 3D Environmental Data for a Single
   Species](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/woa-environmental-extraction-single-species.md):

@@ -21,7 +21,7 @@
 
     <a class="navbar-brand me-2" href="index.html">ocean3d</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2.9001</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.2.9002</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -35,10 +35,11 @@
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
-    <li><a class="dropdown-item" href="articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
+<li><a class="dropdown-item" href="articles/extracting-environmental-data-at-points.html">Extracting environmental data at observation points</a></li>
     <li><a class="dropdown-item" href="articles/extracting-and-weighting-buffer-data.html">Extracting environmental data around observation points</a></li>
-    <li><a class="dropdown-item" href="articles/extracting-environmental-data-at-points.html">Extracting environmental conditions at observation points</a></li>
+    <li><a class="dropdown-item" href="articles/extracting-environmental-data-along-tracks.html">Extracting environmental data along tracks</a></li>
+    <li><a class="dropdown-item" href="articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
+    <li><a class="dropdown-item" href="articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
     <li><a class="dropdown-item" href="articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul>
@@ -223,7 +224,7 @@
 </h4>
 <ul>
 <li>
-<code><a href="reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code> — turn the long-format apparent-fishing-hours tibble from <code><a href="https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html" class="external-link">gfwr::gfw_ais_fishing_hours()</a></code> into a multi-layer <code>SpatRaster</code>, one layer per gear (or other grouping). Extending that into 3D uses the general converters — <code><a href="reference/as_envelope.html">as_envelope()</a></code> and <code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> — driven by a gear-to-depth-band lookup. Those operating-depth priors are analysis assumptions rather than package data, so they live in the <code>gfw-fishing-effort-3d</code> article.</li>
+<code><a href="reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code> — turn the long-format apparent-fishing-hours tibble from <code><a href="https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html" class="external-link">gfwr::gfw_ais_fishing_hours()</a></code> into a multi-layer <code>SpatRaster</code>, one layer per gear (or other grouping). Extending that into 3D uses the general converters — <code><a href="reference/as_envelope.html">as_envelope()</a></code> and <code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> — driven by a gear-to-depth-band lookup. Those operating-depth priors are analysis assumptions rather than package data, so they live in the <code>gfw-fishing-effort-3d</code> article.</li>
 </ul>
 </div>
 </div>
@@ -308,7 +309,7 @@
 
 
     <footer><div class="pkgdown-footer-left">
-  <p>Developed by Jay Matsushiba, David Ruiz-García.</p>
+  <p>Developed by David Ruiz-García, Jay Matsushiba.</p>
 </div>
 
 <div class="pkgdown-footer-right">

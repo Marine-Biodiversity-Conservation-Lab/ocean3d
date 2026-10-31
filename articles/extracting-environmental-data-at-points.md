@@ -1,4 +1,4 @@
-# Extracting environmental conditions at observation points
+# Extracting environmental data at observation points
 
 Marine observations often come with a geographical location, a depth and
 a date. These may describe an animal location recorded by a tracking
@@ -989,3 +989,64 @@ against the original for all three depth selections and stores results
 and messages from the public functions for every interactive menu
 combination. The widget is an explorer of these finite examples, not a
 general-purpose replacement for running the extraction in R.
+
+## All arguments and defaults
+
+Expand or collapse the complete extract_to_point() signature
+
+This signature is generated from the current function. Arguments without
+a default require input. A vector lists alternatives with the default
+first; choose one alternative when calling the function.
+
+``` r
+
+extract_to_point(
+  # Data and sources
+  data = NULL, nc, var = NULL,
+
+  # Direct observation coordinates
+  lon = NULL, lat = NULL, depth = NULL, date = NULL,
+
+  # Depth selection
+  method = c("2d", "surface", "bottom", "nearest", "all"),
+
+  # Observation and output columns
+  lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
+  output_col = NULL, output_prefix = NULL, id_col = NULL,
+
+  # Source columns and dimensions
+  file_col = "file", lon_dim = NULL, lat_dim = NULL, depth_dim = NULL,
+  time_dim = NULL,
+
+  # Temporal selection
+  time_match = c("nearest", "exact"),
+  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly", "custom"),
+  custom_time_interval = NULL, max_time_diff = NULL,
+
+  # Spatial selection
+  spatial_match = c("within", "nearest"), max_distance_km = NULL,
+
+  # Diagnostics and messages
+  return_match_info = FALSE, time_report = TRUE, spatial_report = NULL,
+  depth_report = NULL, verbose = FALSE
+)
+```
+
+| Decision | Choices, meaning and effective default |
+|:---|:---|
+| Input and variables | `data = NULL` uses direct lon/lat/depth/date inputs; supply a table or sf points instead. Direct inputs default to NULL; dates are required only for temporal variables. `nc` is required; `var = NULL` detects variables or accepts explicit names. |
+| `method` | `"2d"` has no depth selection; `"nearest"` selects the closest valid layer to the requested depth; `"surface"` selects the physically shallowest layer; `"bottom"` selects the deepest valid layer. Default: `"2d"`. `"all"` returns surface, bottom and nearest outputs. |
+| Convenience functions | extract2d, extract3d_surface, extract3d_bottom and extract3d_nearest fix the corresponding method and forward point options. |
+| `spatial_match` | `spatial_match = "within"` (default) selects containing cells on point-selected axes; `"nearest"` allows a nearby cell only within an explicit `max_distance_km`. That distance limit defaults to NULL. |
+| `time_match` | `"nearest"` (default) chooses the nearest eligible timestamp or calendar label; `"exact"` requires the requested timestamp or label. `max_time_diff = NULL` has no additional time-distance limit; a nonnegative value limits it in days. |
+| `time_resolution` | `"auto"` follows observation precision; `"datetime"` preserves instants; `"daily"`, `"monthly"`, `"yearly"` compare UTC calendar labels. `"custom"` keeps full timestamps and requires a positive difftime `custom_time_interval` as a displacement warning threshold; it does not reject candidates. Default: `"auto"`; custom_time_interval defaults to NULL. No averaging is performed. |
+| Missing dates | A selected static variable needs no date. A temporal variable requires the date input or column. An explicit NA preserves the row and returns a missing value. |
+| Input and source names | `lon_col`, `lat_col`, `depth_col`, `date_col` default to lon, lat, depth, date. `id_col = NULL` means no ID column; `file_col = "file"` names the source-table path column. Dimension names default to NULL (detect); set lon_dim, lat_dim, depth_dim or time_dim to override. |
+| Output names | `output_col = NULL` chooses names automatically; supply explicit names to override. `output_prefix = NULL` adds no prefix; supply text to add one. Requested coordinates are retained; selected centres are separate diagnostics. |
+| Reports | `time_report = TRUE` (default) reports temporal selections needing explanation; FALSE hides it. `spatial_report` / `depth_report`: NULL (default) reports exceptional selections, TRUE adds routine detail, FALSE hides that report. |
+| Diagnostics | `return_match_info = FALSE` (default) omits detailed provenance; TRUE adds actual source, coordinates, depth and timestamp per output for table input. `verbose = FALSE` (default) suppresses progress detail; TRUE shows it. |
+
+See
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+for accepted formats, units, matching limits and the full output
+description.

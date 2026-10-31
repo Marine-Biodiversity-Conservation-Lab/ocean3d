@@ -36,6 +36,8 @@
   : Summarise environmental values around observations
 - [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
   : Extract values from netCDFs to one or more point observations
+- [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
+  : Extract environmental values along tracks and lines
 - [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fetch_species_assessments.md)
   : Fetch species assessment data from IUCN Red List API
 - [`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fill_missing_depths.md)

@@ -30,7 +30,7 @@ against flat effort will over- or under-state the risk.
 The workflow has three steps:
 
 1.  **Fetch** effort for a region with
-    [`gfwr::gfw_ais_fishing_hours()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html),
+    [`gfwr::gfw_ais_fishing_hours()`](https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html),
     grouped by gear type.
 2.  **Rasterise** it onto your study grid with
     \[gfw_effort_to_raster()\], one layer per gear.
@@ -46,8 +46,8 @@ You need three things:
 - **A GFW API token.** Register at
   <https://globalfishingwatch.org/our-apis/tokens>, then set the key as
   the `GFW_TOKEN` environment variable.
-  [`gfwr::gfw_auth()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_auth.html)
-  reads it from there.
+  [`gfwr::gfw_auth()`](https://rdrr.io/pkg/gfwr/man/gfw_auth.html) reads
+  it from there.
 - **A local bathymetry file.** The examples use GEBCO.
 - **Your own file paths.** The paths below point to one machine. Replace
   them with yours.
@@ -65,11 +65,11 @@ library(gfwr)
 
 ### Step 1: Fetch apparent fishing effort
 
-[`gfw_ais_fishing_hours()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html)
+[`gfw_ais_fishing_hours()`](https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html)
 returns a long tibble with one row per cell, time bucket, and group
 level. For an EEZ, MPA, or RFMO region, first convert the region name
 into a numeric ID with
-[`gfwr::gfw_region_id()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_region_id.html).
+[`gfwr::gfw_region_id()`](https://rdrr.io/pkg/gfwr/man/gfw_region_id.html).
 The API needs the ID, not an ISO3 code.
 
 ``` r
@@ -685,7 +685,7 @@ documentation](https://globalfishingwatch.org/data-documentation/apparent-fishin
 
 | Function | Purpose |
 |----|----|
-| [`gfwr::gfw_ais_fishing_hours()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html) | Fetch GFW apparent fishing effort for a region, aggregated server-side by `group_by` |
+| [`gfwr::gfw_ais_fishing_hours()`](https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html) | Fetch GFW apparent fishing effort for a region, aggregated server-side by `group_by` |
 | \[gfw_effort_to_raster()\] | Rasterise the gfwr tibble onto the study grid, one layer per group level |
 | \[as_envelope()\] | Turn a gear’s effort footprint plus its depth limits into a 2.5D envelope |
 | \[envelope_to_voxel()\] | Spread each cell’s effort down the standard depths its window reaches |

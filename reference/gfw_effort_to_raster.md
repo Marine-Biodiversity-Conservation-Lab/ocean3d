@@ -1,9 +1,9 @@
 # Rasterise a GFW effort tibble onto a target grid
 
 Turn the long-format apparent-fishing-hours tibble returned by
-[`gfwr::gfw_ais_fishing_hours()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html)
+[`gfwr::gfw_ais_fishing_hours()`](https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html)
 (formerly
-[`gfwr::get_raster()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_renamed.html))
+[`gfwr::get_raster()`](https://rdrr.io/pkg/gfwr/man/gfw_renamed.html))
 into a multi-layer SpatRaster on the package's canonical study grid.
 Each level of `layer_by` becomes its own layer, named `effort_<level>`
 (e.g. `effort_drifting_longlines`).
@@ -25,7 +25,7 @@ gfw_effort_to_raster(
 - effort:
 
   Data frame. Output of
-  [`gfwr::gfw_ais_fishing_hours()`](https://globalfishingwatch.github.io/gfwr/reference/gfw_ais_fishing_hours.html)
+  [`gfwr::gfw_ais_fishing_hours()`](https://rdrr.io/pkg/gfwr/man/gfw_ais_fishing_hours.html)
   (a long-format tibble with at minimum `Lat`, `Lon`, a value, and a
   grouping column).
 
