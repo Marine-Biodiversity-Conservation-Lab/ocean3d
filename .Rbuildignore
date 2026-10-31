@@ -12,6 +12,7 @@
 ^output$
 ^example_data$
 ^ABSTRACT\.md$
+^AGENTS\.md$
 ^CLAUDE\.md$
 ^SPEC\.md$
 ^\.github$

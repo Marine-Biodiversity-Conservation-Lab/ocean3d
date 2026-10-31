@@ -9,15 +9,16 @@ reusable, tested functions.
 This document covers how to get set up, how we branch and coordinate, and what
 a contribution needs to look like to be merged.
 
+- [How contributing works for ocean3d](#how-contributing-works-for-ocean3d)
+- [AI-assisted contributions](#ai-assisted-contributions)
+- [What a good contribution looks like](#what-a-good-contribution-looks-like)
 - [Quick orientation](#quick-orientation)
 - [Development setup](#development-setup)
 - [Data setup](#data-setup)
-- [Branching and coordination](#branching-and-coordination)
-- [What a good contribution looks like](#what-a-good-contribution-looks-like)
 - [Coding conventions](#coding-conventions)
 - [Testing](#testing)
 - [Documentation and vignettes](#documentation-and-vignettes)
-- [Known rough edges / good first issues](#known-rough-edges--good-first-issues)
+- [Questions, and how to get help](#questions-and-how-to-get-help)
 
 ---
 
@@ -66,8 +67,8 @@ We use issues as the unit of work and the record of its current state.
     - A draft Pull Request is fine. This way, others can see what areas are being worked on. A Pull Request is a review of the work done on the branch, so that it can be merged with the main branch. This is the main gate for coordinating work done. Ideally, we would have some formal process for PRs, but for now Jay will review these before merging with main to keep work coordinated.
 5. **Get Pull Request approval**
     - Another contributor should review and approve of your code before the PR can get merged into the main branch. 
-5. **Merge** and delete the branch. Currently, [@JayMatsushiba](https://github.com/JayMatsushiba) will be in charge of this step. 
-    - Reference the issue from the PR so it closes automatically. This should happen automatically if the branch is created from the issue. 
+6. **Merge** and delete the branch. Currently, [@JayMatsushiba](https://github.com/JayMatsushiba) will be in charge of this step. 
+    - Write `Closes #N` in the PR body so the issue closes when the PR is merged. A reference in the title, like `(#N)`, doesn't close it, and neither does creating the branch from the issue. 
 
 `main` must always be installable — never push work-in-progress directly to it. All changes to `main` should be done via a Pull Request. 
 
@@ -105,6 +106,7 @@ The templates apply a type label for you; add priority and area yourself.
 - Every PR needs one approving review from a maintainer (currently
   [@JayMatsushiba](https://github.com/JayMatsushiba)) before merge.
 - CI (`R CMD check`) must be green.
+- The PR body says `Closes #N` (the PR template has a `Closes` line).
 - Merge with a message referencing the issue:
   `Add load_eez() for Marine Regions EEZ polygons (#12)`.
 - Delete the branch after merging.
@@ -113,6 +115,24 @@ The templates apply a type label for you; add priority and area yourself.
 
 Development version is `0.1.0`. Bump the third component in `DESCRIPTION`
 (`0.1.1`, …) when a PR adds or changes an exported function. 
+
+---
+
+## AI-assisted contributions
+
+Contributions written with AI coding agents (Claude Code, Codex, Copilot,
+Cursor and others) are welcome. The person who submits the work is
+responsible for it: read and understand the changes before asking for review.
+
+Agents follow the same loop as everyone else. Each agent works on one issue,
+on its own branch and git worktree from an up-to-date `main`. Agents commit
+locally; the developer pushes, reviews and squash-merges. Commits and PR
+descriptions written with an agent say so, for example with a
+`Co-Authored-By:` trailer naming the model.
+
+[AGENTS.md](AGENTS.md) has the details agents need: reuse rules, internal
+helpers, conditions, tests, PR size and review. Agents that read `CLAUDE.md`
+are pointed to it.
 
 ---
 
