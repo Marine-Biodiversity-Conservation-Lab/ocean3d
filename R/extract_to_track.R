@@ -23,10 +23,8 @@
 }
 
 
-.track_input <- function(
-  data, track_col, lon_col, lat_col, depth_col,
-  z_as_depth
-) {
+.track_input <- function(data, track_col, lon_col, lat_col, depth_col,
+                         z_as_depth) {
   if (inherits(data, "sf")) {
     if (is.na(sf::st_crs(data))) {
       stop("Track geometries need a CRS.", call. = FALSE)
@@ -34,10 +32,7 @@
     types <- as.character(sf::st_geometry_type(data))
     if (any(types != "LINESTRING") || any(sf::st_is_empty(data))) {
       stop(
-        paste0(
-          "Use non-empty LINESTRING features; split multipart ",
-          "lines explicitly."
-        ),
+        "Use non-empty LINESTRING features; split multipart lines explicitly.",
         call. = FALSE
       )
     }
@@ -73,9 +68,8 @@
         bad <- which(lengths(values) != 1L & lengths(values) != n)
         if (length(bad)) {
           stop(
-            "List column `", name,
-            "` must have one value or one per vertex ",
-            "in feature ", bad[1L], ".",
+            "List column `", name, "` must have one value or one per ",
+            "vertex in feature ", bad[1L], ".",
             call. = FALSE
           )
         }
@@ -87,10 +81,8 @@
     if ("Z" %in% colnames(coordinates)) {
       if (!z_as_depth) {
         stop(
-          paste0(
-            "XYZ lines require `z_as_depth = TRUE`: Z must be ",
-            "metres positive down."
-          ),
+          "XYZ lines require `z_as_depth = TRUE`: Z must be metres positive ",
+          "down.",
           call. = FALSE
         )
       }
@@ -116,9 +108,6 @@
     } else {
       as.character(result[[track_col]])
     }
-  }
-  if (anyDuplicated(names(result))) {
-    stop("Input column names must be unique.", call. = FALSE)
   }
   if (anyNA(result$track_id) || any(!nzchar(result$track_id))) {
     stop("Track IDs must be non-missing and non-empty.", call. = FALSE)
@@ -150,14 +139,11 @@
 .track_interpolate <- function(x, i, fractions, enabled, name, used) {
   a <- x[i]
   b <- x[i + 1L]
-  if (
-      any(fractions > 0 & fractions < 1) && used && !enabled && !is.na(a) &&
-        !is.na(b) && a != b) {
+  changes <- !is.na(a) && !is.na(b) && a != b
+  if (any(fractions > 0 & fractions < 1) && used && !enabled && changes) {
     stop(
-      "`", name, paste0(
-        "` changes between vertices. Enable its interpolation ",
-        "explicitly "
-      ), "or use sampling = 'vertices'.",
+      "`", name, "` changes between vertices. Enable its interpolation ",
+      "explicitly or use sampling = 'vertices'.",
       call. = FALSE
     )
   }
@@ -247,10 +233,8 @@
 }
 
 
-.track_summaries <- function(
-  samples, columns, statistics, weighting,
-  threshold
-) {
+.track_summaries <- function(samples, columns, statistics, weighting,
+                             threshold) {
   if (!length(statistics)) {
     return(NULL)
   }
@@ -442,8 +426,7 @@
   # segments.
   result[fractions == 0, ] <- c(arc$longitude[segment], arc$latitude[segment])
   result[fractions == 1, ] <- c(
-    arc$longitude[segment + 1L], arc$latitude[segment +
-                                                1L]
+    arc$longitude[segment + 1L], arc$latitude[segment + 1L]
   )
   colnames(result) <- c("lon", "lat")
   result
@@ -451,9 +434,7 @@
 
 
 .track_time_breaks <- function(start, end, step, unit, budget) {
-  if (
-      is.null(step) || !is.finite(start) || !is.finite(end) || end ==
-        start) {
+  if (is.null(step) || !is.finite(start) || !is.finite(end) || end == start) {
     return(c(0, 1))
   }
   # .prepare_track() has validated `step`, including whole calendar steps.
@@ -462,9 +443,6 @@
     values <- start
     while (as.numeric(current) < end) {
       following <- .buffer_shift_time(current, step, unit)
-      if (following <= current) {
-        stop("Calendar step did not advance time.")
-      }
       if (length(values) >= budget) {
         stop("time_step exceeds max_samples.")
       }
@@ -514,76 +492,54 @@
 }
 
 
-.track_grid_breaks <- function(
-  arc, segment, metadata, depths, times,
-  resolution, matching, budget
-) {
-  position <- function(f) .track_geodesic_positions(arc, segment, f)
+.track_grid_breaks <- function(arc, segment, metadata, depths, times,
+                               resolution, matching, budget) {
   reference <- arc$longitude[segment]
+  wrap <- function(lon) reference + (lon - reference + 180) %% 360 - 180
   coordinate <- function(f, axis) {
-    value <- position(f)[, axis]
-    if (axis == 1L) {
-      value <- reference + (value - reference + 180) %% 360 - 180
-    }
-    value
+    value <- .track_geodesic_positions(arc, segment, f)[, axis]
+    if (axis == 1L) wrap(value) else value
+  }
+  # Distinct values of `field(m)` across all source descriptions.
+  axis_values <- function(field) {
+    unique(unlist(lapply(metadata, field)))
   }
   cuts <- c(0, 1)
-  # Latitude may turn within one geodesic; bracket each monotonic
-  # portion.
+  # Latitude may turn within one geodesic; bracket each monotonic portion.
+  latitude <- function(f) coordinate(f, 2L)
   turns <- c(
-    0, 1, stats::optimize(
-      function(f) coordinate(f, 2L), c(0, 1),
-      tol = 1e-12
-    )$minimum, stats::optimize(
-      function(f) -coordinate(f, 2L),
-      c(0, 1),
-      tol = 1e-12
-    )$minimum
+    0, 1,
+    stats::optimize(latitude, c(0, 1), tol = 1e-12)$minimum,
+    stats::optimize(latitude, c(0, 1), tol = 1e-12, maximum = TRUE)$maximum
   )
   turns <- sort(unique(round(turns, 12)))
   for (axis in 1:2) {
-    brackets <- if (axis == 1L) {
-      c(0, 1)
-    } else {
-      turns
-    }
+    brackets <- if (axis == 1L) c(0, 1) else turns
     extrema <- coordinate(brackets, axis)
     if (axis == 2L && any(abs(extrema) > 89.999999)) {
       stop("Cells mode needs waypoints away from a pole.", call. = FALSE)
     }
-    edges <- unique(
-      unlist(
-        lapply(
-          metadata, function(m) {
-            a <- if (axis == 1L) {
-              m$lon_axis
-            } else {
-              m$lat_axis
-            }
-            edges <- c(a$lower, a$upper)
-            order <- order(a$centres)
-            overlapping <- length(order) > 1L && any(
-              tail(a$lower[order], -1L) < head(a$upper[order], -1L) - 1e-9
-            )
-            if (overlapping) {
-              centres <- a$centres
-              if (axis == 1L) {
-                centres <- reference + (centres - reference + 180) %% 360 - 180
-              }
-              edges <- c(edges, .track_midpoint_boundaries(
-                centres, min(extrema), max(extrema), budget
-              ))
-            }
-            edges
-          }
-        )
+    edges <- axis_values(function(m) {
+      a <- if (axis == 1L) m$lon_axis else m$lat_axis
+      edges <- c(a$lower, a$upper)
+      order <- order(a$centres)
+      overlapping <- length(order) > 1L && any(
+        tail(a$lower[order], -1L) < head(a$upper[order], -1L) - 1e-9
       )
-    )
+      if (overlapping) {
+        centres <- if (axis == 1L) wrap(a$centres) else a$centres
+        edges <- c(edges, .track_midpoint_boundaries(
+          centres, min(extrema), max(extrema), budget
+        ))
+      }
+      edges
+    })
     if (axis == 1L) {
-      edges <- reference + (edges - reference + 180) %% 360 - 180
+      edges <- wrap(edges)
     }
-    edges <- edges[is.finite(edges) & edges > min(extrema) & edges <
-                     max(extrema)]
+    edges <- edges[
+      is.finite(edges) & edges > min(extrema) & edges < max(extrema)
+    ]
     if (length(edges) > budget) {
       stop("Grid intersections exceed max_samples.")
     }
@@ -591,90 +547,53 @@
       interval <- brackets[c(j, j + 1L)]
       at_ends <- coordinate(interval, axis)
       for (edge in edges[edges > min(at_ends) & edges < max(at_ends)]) {
-        cuts <- c(
-          cuts, stats::uniroot(
-            function(f) {
-              coordinate(f, axis) -
-                edge
-            }, interval,
-            tol = 1e-12
-          )$root
-        )
+        root <- stats::uniroot(
+          function(f) coordinate(f, axis) - edge, interval, tol = 1e-12
+        )$root
+        cuts <- c(cuts, root)
       }
     }
   }
   if (all(is.finite(depths)) && diff(depths) != 0) {
-    levels <- unique(
-      unlist(
-        lapply(
-          metadata, function(m) {
-            if (m$method %in% c("nearest", "all")) {
-              m$depth_m
-            } else {
-              NULL
-            }
-          }
-        )
-      )
-    )
+    levels <- axis_values(function(m) {
+      if (m$method %in% c("nearest", "all")) m$depth_m
+    })
     edges <- .track_midpoint_boundaries(
-      levels, min(depths), max(depths),
-      budget
+      levels, min(depths), max(depths), budget
     )
     cuts <- c(cuts, (edges - depths[1L]) / diff(depths))
   }
   if (all(is.finite(times)) && diff(times) > 0) {
     if (resolution %in% c("daily", "monthly", "yearly")) {
       step <- switch(resolution,
-        daily = "day",
-        monthly = "month",
-        yearly = "year"
+        daily = "day", monthly = "month", yearly = "year"
       )
       first <- .time_comparison_values(
-        as.POSIXct(times[1L], origin = "1970-01-01", tz = "UTC"),
-        resolution
+        as.POSIXct(times[1L], origin = "1970-01-01", tz = "UTC"), resolution
       )
       seconds_min <- switch(resolution,
-        daily = 86400,
-        monthly = 28 *
-          86400,
-        yearly = 365 * 86400
+        daily = 86400, monthly = 28 * 86400, yearly = 365 * 86400
       )
       if (diff(times) / seconds_min > budget) {
         stop("Time grid exceeds max_samples.")
       }
-      edges <- as.numeric(
-        seq(
-          first, as.POSIXct(
-            times[2L] + seconds_min,
-            origin = "1970-01-01", tz = "UTC"
-          ),
-          by = step
-        )
+      last <- as.POSIXct(
+        times[2L] + seconds_min, origin = "1970-01-01", tz = "UTC"
       )
+      edges <- as.numeric(seq(first, last, by = step))
     } else {
-      values <- unique(
-        unlist(
-          lapply(
-            metadata, function(m) {
-              v <- sort(m$time_values)
-              c(
-                v[v >= times[1L] & v <= times[2L]], tail(
-                  v[v < times[1L]],
-                  1L
-                ), head(v[v > times[2L]], 1L)
-              )
-            }
-          )
+      values <- axis_values(function(m) {
+        v <- sort(m$time_values)
+        c(
+          v[v >= times[1L] & v <= times[2L]],
+          tail(v[v < times[1L]], 1L),
+          head(v[v > times[2L]], 1L)
         )
-      )
+      })
       edges <- if (identical(matching$time_match, "exact")) {
         values
       } else {
-        .track_midpoint_boundaries(
-          values, times[1L], times[2L],
-          budget
-        )
+        .track_midpoint_boundaries(values, times[1L], times[2L], budget)
       }
       if (!is.null(matching$max_time_diff)) {
         edges <- c(
@@ -685,14 +604,7 @@
     }
     cuts <- c(cuts, (edges - times[1L]) / diff(times))
   }
-  cuts <- sort(
-    unique(
-      c(
-        0, 1, cuts[is.finite(cuts) & cuts > 0 & cuts <
-                     1]
-      )
-    )
-  )
+  cuts <- sort(unique(c(0, 1, cuts[is.finite(cuts) & cuts > 0 & cuts < 1])))
   if (length(cuts) > budget + 1) {
     stop("Grid intersections exceed max_samples.")
   }
@@ -803,19 +715,10 @@
   }
   if (!is.null(options$max_segment_km) &&
         any(arc$length_km > options$max_segment_km)) {
-    stop(
-      paste0(
-        "A segment exceeds max_segment_km; split the track or ",
-        "add waypoints."
-      )
-    )
+    stop("A segment exceeds max_segment_km; split the track or add waypoints.")
   }
-  if (
-      !is.null(options$max_gap_hours) && any(
-        dt > options$max_gap_hours *
-          3600,
-        na.rm = TRUE
-      )) {
+  if (!is.null(options$max_gap_hours) &&
+        any(dt > options$max_gap_hours * 3600, na.rm = TRUE)) {
     stop("A time gap exceeds max_gap_hours; split the track.")
   }
   land <- vapply(
@@ -844,32 +747,16 @@
   pieces <- list()
   for (i in seq_along(dt)) {
     cuts <- c(0, 1)
+    ends <- c(i, i + 1L)
     if (options$sampling != "vertices") {
       count <- if (is.null(options$spacing_km)) {
         1
       } else {
         max(1, ceiling(arc$length_km[i] / options$spacing_km))
       }
-      if (
-          !is.null(options$depth_step_m) && all(
-            is.finite(
-              depths[c(
-                i,
-                i + 1L
-              )]
-            )
-          )) {
+      if (!is.null(options$depth_step_m) && all(is.finite(depths[ends]))) {
         count <- max(
-          count, ceiling(
-            abs(
-              diff(
-                depths[c(
-                  i, i +
-                    1L
-                )]
-              )
-            ) / options$depth_step_m
-          )
+          count, ceiling(abs(diff(depths[ends])) / options$depth_step_m)
         )
       }
       if (!is.finite(count) || count + 1 > budget) {
@@ -893,11 +780,10 @@
               arc$length_km[i] * (last - first) / options$spacing_km
             }
             vertical <- if (is.null(options$depth_step_m) ||
-                              any(!is.finite(depths[c(i, i + 1L)]))) {
+                              any(!is.finite(depths[ends]))) {
               1
             } else {
-              abs(diff(depths[c(i, i + 1L)])) * (last - first) /
-                options$depth_step_m
+              abs(diff(depths[ends])) * (last - first) / options$depth_step_m
             }
             n <- max(1, ceiling(horizontal), ceiling(vertical))
             if (length(cuts) + n > budget) {
@@ -916,31 +802,18 @@
         cuts <- sort(unique(c(seq(0, 1, length.out = count + 1L), time_cuts)))
       }
       if (options$sampling == "cells") {
-        cuts <- sort(
-          unique(
-            c(
-              cuts, .track_grid_breaks(
-                arc, i,
-                options$metadata, depths[c(i, i + 1L)], times[c(
-                  i,
-                  i + 1L
-                )], options$resolution, options$matching, budget
-              )
-            )
-          )
+        breaks <- .track_grid_breaks(
+          arc, i, options$metadata, depths[ends], times[ends],
+          options$resolution, options$matching, budget
         )
+        cuts <- sort(unique(c(cuts, breaks)))
       }
     }
     a <- head(cuts, -1L)
     b <- tail(cuts, -1L)
-    fractions <- if (options$sampling == "cells") {
-      (a + b) / 2
-    } else {
-      a
-    }
-    if (
-        length(fractions) + sum(vapply(pieces, nrow, integer(1))) +
-          1 > budget) {
+    fractions <- if (options$sampling == "cells") (a + b) / 2 else a
+    used <- sum(vapply(pieces, nrow, integer(1)))
+    if (length(fractions) + used + 1 > budget) {
       stop("Track sampling exceeds max_samples.")
     }
     xy <- .track_geodesic_positions(arc, i, fractions)
@@ -958,8 +831,8 @@
     row$segment_start_fraction <- a
     row$segment_end_fraction <- b
     row$is_interpolated <- !original
-    row$distance_km <- sum(head(arc$length_km, i - 1L)) + fractions *
-      arc$length_km[i]
+    row$distance_km <- sum(head(arc$length_km, i - 1L)) +
+      fractions * arc$length_km[i]
     row$segment_status <- land[i]
     row$support_km <- (b - a) * arc$length_km[i]
     row$support_seconds <- (b - a) * dt[i]
@@ -971,11 +844,7 @@
   if (options$sampling == "cells") {
     last <- vertices[rows, , drop = FALSE]
     if (!is.null(time_values)) {
-      last[[date_col]] <- as.POSIXct(
-        times,
-        origin = "1970-01-01",
-        tz = "UTC"
-      )
+      last[[date_col]] <- as.POSIXct(times, origin = "1970-01-01", tz = "UTC")
     }
     last$source_row <- rows
     last$segment_id <- pmin(seq_along(rows), length(dt))
@@ -989,15 +858,11 @@
     last$available_km <- last$available_seconds <- 0
   } else {
     last <- tail(pieces[[length(pieces)]], 1L)
-    last[intersect(names(vertices), names(last))] <- vertices[tail(
-      rows,
-      1L
-    ), , drop = FALSE]
+    last[intersect(names(vertices), names(last))] <-
+      vertices[tail(rows, 1L), , drop = FALSE]
     if (!is.null(time_values)) {
       last[[date_col]] <- as.POSIXct(
-        tail(times, 1L),
-        origin = "1970-01-01",
-        tz = "UTC"
+        tail(times, 1L), origin = "1970-01-01", tz = "UTC"
       )
     }
     last$source_row <- tail(rows, 1L)
@@ -1013,17 +878,10 @@
     stop("Track sampling exceeds max_samples.")
   }
   if (options$sampling != "cells") {
-    for (
-         pair in list(
-           c("support_km", "available_km"), c(
-             "support_seconds",
-             "available_seconds"
-           )
-         )) {
-      for (name in pair) {
-        intervals <- head(result[[name]], -1L)
-        result[[name]] <- (c(0, intervals) + c(intervals, 0)) / 2
-      }
+    for (name in c("support_km", "available_km", "support_seconds",
+                   "available_seconds")) {
+      intervals <- head(result[[name]], -1L)
+      result[[name]] <- (c(0, intervals) + c(intervals, 0)) / 2
     }
   }
   result$sample_id <- seq_len(nrow(result))
@@ -1039,10 +897,8 @@
 }
 
 
-.track_collapse_cells <- function(
-  samples, columns, context, lon_col,
-  lat_col, depth_col, date_col
-) {
+.track_collapse_cells <- function(samples, columns, context, lon_col,
+                                  lat_col, depth_col, date_col) {
   pieces <- list()
   for (id in unique(samples$track_id)) {
     rows <- which(samples$track_id == id)
@@ -1050,45 +906,28 @@
     arc <- track$arc
     for (segment in unique(samples$segment_id[rows])) {
       selected <- rows[samples$segment_id[rows] == segment &
-                         samples$sample_kind[rows] ==
-                           "cell_interval"]
+                         samples$sample_kind[rows] == "cell_interval"]
       if (!length(selected)) {
         next
       }
-      keys <- vapply(
-        selected, function(i) {
-          info <- lapply(
-            columns, function(column) {
-              x <- samples[[paste0(column, "_match_info")]][[i]]
-              x[c(
-                "status", "source_file", "lon_index", "lat_index",
-                "depth_m", "time_index"
-              )]
-            }
-          )
-          values <- unname(unlist(samples[i, columns, drop = FALSE]))
-          paste(
-            utils::capture.output(
-              dput(
-                list(
-                  info, samples$segment_status[i],
-                  values
-                )
-              )
-            ),
-            collapse = ""
-          )
-        }, character(1)
+      fields <- c(
+        "status", "source_file", "lon_index", "lat_index", "depth_m",
+        "time_index"
       )
+      keys <- vapply(selected, function(i) {
+        info <- lapply(columns, function(column) {
+          samples[[paste0(column, "_match_info")]][[i]][fields]
+        })
+        values <- unname(unlist(samples[i, columns, drop = FALSE]))
+        key <- list(info, samples$segment_status[i], values)
+        paste(utils::capture.output(dput(key)), collapse = "")
+      }, character(1))
       groups <- cumsum(c(TRUE, keys[-1L] != head(keys, -1L)))
       for (group in unique(groups)) {
         indices <- selected[groups == group]
         row <- samples[indices[1L], , drop = FALSE]
-        for (
-             name in c(
-               "support_km", "support_seconds", "available_km",
-               "available_seconds"
-             )) {
+        for (name in c("support_km", "support_seconds", "available_km",
+                       "available_seconds")) {
           row[[name]] <- sum(samples[[name]][indices])
         }
         row$segment_start_fraction <-
@@ -1099,12 +938,8 @@
         xy <- .track_geodesic_positions(arc, segment, fraction)
         row[[lon_col]] <- xy[1L, 1L]
         row[[lat_col]] <- xy[1L, 2L]
-        row$distance_km <- sum(
-          head(
-            arc$length_km, segment -
-              1L
-          )
-        ) + arc$length_km[segment] * fraction
+        row$distance_km <- sum(head(arc$length_km, segment - 1L)) +
+          arc$length_km[segment] * fraction
         row <- .track_interpolate_row(
           row, track, segment, fraction, context$options, depth_col, date_col
         )
@@ -1112,38 +947,25 @@
           name <- paste0(column, "_match_info")
           info <- row[[name]][[1L]]
           if (identical(info$status, "selected")) {
-            matching_sources <- Filter(
-              function(m) {
-                identical(m$file, info$source_file) && identical(
-                  m$variable,
-                  info$variable
-                )
-              }, context$metadata
-            )
+            matching_sources <- Filter(function(m) {
+              identical(m$file, info$source_file) &&
+                identical(m$variable, info$variable)
+            }, context$metadata)
             if (length(matching_sources)) {
               m <- matching_sources[[1L]]
-              horizontal <- .horizontal_match_row(.match_horizontal_cells(
-                m$lon_axis,
-                m$lat_axis, m$longitude, m$latitude, row[[lon_col]],
-                row[[lat_col]], "within", NULL
-              ), 1L)
-              info$distance_km <- horizontal$distance_km
+              cells <- .match_horizontal_cells(
+                m$lon_axis, m$lat_axis, m$longitude, m$latitude,
+                row[[lon_col]], row[[lat_col]], "within", NULL
+              )
+              info$distance_km <- .horizontal_match_row(cells, 1L)$distance_km
             }
             if (!is.null(context$prepared)) {
-              info$time_displacement_days <- abs(
-                as.numeric(
-                  difftime(
-                    .time_comparison_values(
-                      info$timestamp_utc,
-                      context$options$resolution
-                    ), .time_comparison_values(
-                      row[[date_col]],
-                      context$options$resolution
-                    ),
-                    units = "days"
-                  )
-                )
-              )
+              resolution <- context$options$resolution
+              info$time_displacement_days <- abs(as.numeric(difftime(
+                .time_comparison_values(info$timestamp_utc, resolution),
+                .time_comparison_values(row[[date_col]], resolution),
+                units = "days"
+              )))
             }
             row[[name]][[1L]] <- info
           }
@@ -1319,27 +1141,21 @@
 #' @seealso [extract_to_point()], [extract_to_buffer()]
 #' @export
 extract_to_track <- function(
-  data, nc, var = NULL, track_col = NULL,
-  sampling = NULL,
-  spacing_km = NULL,
+  data, nc, var = NULL, track_col = NULL, sampling = NULL, spacing_km = NULL,
   interpolate_depth = FALSE, interpolate_time = FALSE, depth_step_m = NULL,
-  time_step_seconds = NULL, method = NULL, statistics = "mean", weighting = c(
-    "distance",
-    "duration", "equal"
-  ), min_valid_fraction = 0.8, lon_col = "lon",
-  lat_col = "lat", depth_col = "depth", date_col = "date", output_col = NULL,
+  time_step_seconds = NULL, method = NULL, statistics = "mean",
+  weighting = c("distance", "duration", "equal"), min_valid_fraction = 0.8,
+  lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
+  output_col = NULL,
   time_resolution = c(
-    "auto", "datetime", "daily", "monthly", "yearly",
-    "custom"
-  ), max_samples = 100000L, max_segment_km = NULL, max_gap_hours = NULL,
-  z_as_depth = FALSE, quiet = FALSE, time_step = NULL, time_unit = c(
-    "hours",
-    "minutes", "seconds", "days", "months", "years"
-  ), land_mask = NULL, marine_values = NULL, mask_type = c(
-    "land",
-    "marine"
-  ), mask_domain = NULL, land_policy = c("skip", "error"),
-  mask_step_km = 0.5, ...
+    "auto", "datetime", "daily", "monthly", "yearly", "custom"
+  ),
+  max_samples = 100000L, max_segment_km = NULL, max_gap_hours = NULL,
+  z_as_depth = FALSE, quiet = FALSE, time_step = NULL,
+  time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
+  land_mask = NULL, marine_values = NULL, mask_type = c("land", "marine"),
+  mask_domain = NULL, land_policy = c("skip", "error"), mask_step_km = 0.5,
+  ...
 ) {
   if (!is.null(sampling)) {
     sampling <- match.arg(
@@ -1365,26 +1181,18 @@ extract_to_track <- function(
   } else {
     time_resolution
   }
-  prefixes <- .buffer_output_names(
-    variables, output_col, names(samples),
-    FALSE
-  )
+  prefixes <- .buffer_output_names(variables, output_col, names(samples), FALSE)
   output_columns <- character()
   for (variable in variables) {
-    group <- Filter(
-      function(x) {
-        x$variable == variable
-      }, metadata
-    )
+    group <- Filter(function(x) x$variable == variable, metadata)
     selected_method <- group[[1L]]$method
-    columns <- .output_column_names(selected_method, variable,
-                                    prefixes[[variable]])
+    columns <- .output_column_names(
+      selected_method, variable, prefixes[[variable]]
+    )
     if (any(columns %in% names(samples))) {
       stop(
-        paste0(
-          "Extraction output would overwrite an existing column; ",
-          "change `output_col`."
-        ),
+        "Extraction output would overwrite an existing column; ",
+        "change `output_col`.",
         call. = FALSE
       )
     }
@@ -1411,25 +1219,19 @@ extract_to_track <- function(
   }
   if (sampling == "cells") {
     samples <- .track_collapse_cells(
-      samples, output_columns, context,
-      lon_col, lat_col, depth_col, date_col
+      samples, output_columns, context, lon_col, lat_col, depth_col, date_col
     )
   }
   samples <- .track_mask_invalid(samples, output_columns)
   summary <- .track_summaries(
-    samples, output_columns, statistics,
-    weighting, min_valid_fraction
+    samples, output_columns, statistics, weighting, min_valid_fraction
   )
   if (!quiet && !is.null(summary) && any(summary$status != "complete")) {
     message(
       "Track report: ", sum(summary$status != "complete"),
-      paste0(
-        " track/output summary row(s) need attention. See ",
-        "`result$summary` for "
-      ), paste0(
-        "coverage and status; NA samples remain part of the ",
-        "requested support."
-      )
+      " track/output summary row(s) need attention. See `result$summary` ",
+      "for coverage and status; NA samples remain part of the requested ",
+      "support."
     )
   }
   list(
@@ -1470,66 +1272,45 @@ extract_to_track <- function(
     args$time_step <- args$time_step_seconds
     args$time_unit <- "seconds"
   }
-  if (
-      args$time_unit %in% c("months", "years") && !is.null(args$time_step) &&
+  if (args$time_unit %in% c("months", "years") && !is.null(args$time_step) &&
         args$time_step != floor(args$time_step)) {
     stop("Calendar steps require whole months or years.")
   }
   if (!is.null(args$time_step) && !args$interpolate_time) {
     stop("time_step requires interpolate_time.")
   }
-  if (
-      args$sampling %in% c("balanced", "merged_steps") && all(
-        vapply(
-          list(
-            args$spacing_km, args$depth_step_m,
-            args$time_step
-          ), is.null, logical(1)
-        )
-      )) {
+  no_steps <- is.null(args$spacing_km) && is.null(args$depth_step_m) &&
+    is.null(args$time_step)
+  if (args$sampling %in% c("balanced", "merged_steps") && no_steps) {
     stop("Balanced or merged_steps sampling needs an explicit spacing or step.")
   }
   custom_matching <- identical(spatial_policy, "nearest") ||
     identical(args$time_resolution, "custom")
   if (args$sampling == "cells" && custom_matching) {
     stop(
-      paste0(
-        "Cells mode requires spatial within matching and ",
-        "standard time precision."
-      )
+      "Cells mode requires spatial within matching and standard time precision."
     )
   }
   if (!is.null(args$method)) {
     args$method <- match.arg(
-      args$method, c(
-        "2d", "nearest", "surface", "bottom",
-        "all"
-      )
+      args$method, c("2d", "nearest", "surface", "bottom", "all")
     )
   }
-  for (
-       name in c(
-         "interpolate_depth", "interpolate_time", "z_as_depth",
-         "quiet"
-       )) {
+  for (name in c("interpolate_depth", "interpolate_time", "z_as_depth",
+                 "quiet")) {
     .track_flag(args[[name]], name)
   }
-  for (
-       name in c(
-         "spacing_km", "depth_step_m", "time_step_seconds",
-         "max_segment_km", "max_gap_hours"
-       )) {
+  for (name in c("spacing_km", "depth_step_m", "time_step_seconds",
+                 "max_segment_km", "max_gap_hours")) {
     .track_positive(args[[name]], name)
   }
   .track_positive(args$max_samples, "max_samples", optional = FALSE)
   if (args$max_samples != floor(args$max_samples)) {
     stop("`max_samples` must be an integer.", call. = FALSE)
   }
-  if (
-      !is.numeric(args$min_valid_fraction) ||
-        length(args$min_valid_fraction) != 1L ||
-        !is.finite(args$min_valid_fraction) ||
-        args$min_valid_fraction < 0 || args$min_valid_fraction > 1) {
+  fraction <- args$min_valid_fraction
+  if (!is.numeric(fraction) || length(fraction) != 1L ||
+        !is.finite(fraction) || fraction < 0 || fraction > 1) {
     stop("`min_valid_fraction` must be between zero and one.", call. = FALSE)
   }
   supported_statistics <- c("mean", "sd", "se", "min", "max")
@@ -1539,10 +1320,7 @@ extract_to_track <- function(
     any(!args$statistics %in% supported_statistics)
   if (!is.null(args$statistics) && bad_statistics) {
     stop(
-      paste0(
-        "`statistics` must be NULL or distinct supported ",
-        "statistic names."
-      ),
+      "`statistics` must be NULL or distinct supported statistic names.",
       call. = FALSE
     )
   }
@@ -1556,8 +1334,7 @@ extract_to_track <- function(
     if (is.null(value) && name == "track_col") {
       next
     }
-    if (
-        !is.character(value) || length(value) != 1L || is.na(value) ||
+    if (!is.character(value) || length(value) != 1L || is.na(value) ||
           !nzchar(value)) {
       stop("`", name, "` must name one column.", call. = FALSE)
     }
@@ -1567,16 +1344,11 @@ extract_to_track <- function(
     "source_row", "segment_id", "segment_fraction", "is_interpolated",
     "distance_km", "sample_id", "support_km", "support_seconds",
     "available_km", "available_seconds", "segment_status",
-    "segment_start_fraction",
-    "segment_end_fraction", "sample_kind"
+    "segment_start_fraction", "segment_end_fraction", "sample_kind"
   )
-  if (
-      anyDuplicated(coordinates) || any(
-        coordinates %in% c(
-          reserved,
-          "track_id"
-        )
-      ) || (!is.null(args$track_col) && args$track_col %in% coordinates)) {
+  if (anyDuplicated(coordinates) ||
+        any(coordinates %in% c(reserved, "track_id")) ||
+        (!is.null(args$track_col) && args$track_col %in% coordinates)) {
     stop(
       "Coordinate, track and generated column names must be distinct.",
       call. = FALSE
@@ -1590,15 +1362,11 @@ extract_to_track <- function(
   if (anyDuplicated(input_names)) {
     stop("Input column names must be unique.", call. = FALSE)
   }
-  if (
-      any(reserved %in% input_names) || (
-        "track_id" %in% input_names && !identical(args$track_col, "track_id")
-      )) {
+  if (any(reserved %in% input_names) ||
+        ("track_id" %in% input_names &&
+           !identical(args$track_col, "track_id"))) {
     stop(
-      paste0(
-        "Input contains reserved track output columns. Rename ",
-        "them first."
-      ),
+      "Input contains reserved track output columns. Rename them first.",
       call. = FALSE
     )
   }
@@ -1610,10 +1378,7 @@ extract_to_track <- function(
     )
   }
   if (args$sampling == "vertices" && has_steps) {
-    stop(
-      "Step limits cannot be used with vertices sampling.",
-      call. = FALSE
-    )
+    stop("Step limits cannot be used with vertices sampling.", call. = FALSE)
   }
   if (!is.null(dots$time_match)) {
     dots$time_match <- match.arg(dots$time_match, c("nearest", "exact"))
@@ -1632,12 +1397,9 @@ extract_to_track <- function(
       call. = FALSE
     )
   }
-  dimension_args <- dots[intersect(
-    names(dots), c(
-      "lon_dim", "lat_dim",
-      "depth_dim", "time_dim"
-    )
-  )]
+  dimension_args <- dots[
+    intersect(names(dots), c("lon_dim", "lat_dim", "depth_dim", "time_dim"))
+  ]
   # Tracks keep point extraction's support for climatological time axes.
   described <- .describe_netcdf_sources(
     args$nc, args$var,
@@ -1655,8 +1417,9 @@ extract_to_track <- function(
           "nearest"
         },
         temporal = !is.null(dims$time), longitude = lon, latitude = lat,
-        lon_axis = .prepare_spatial_axis(handle, dims$lon, lon,
-                                         longitude = TRUE),
+        lon_axis = .prepare_spatial_axis(
+          handle, dims$lon, lon, longitude = TRUE
+        ),
         lat_axis = .prepare_spatial_axis(handle, dims$lat, lat),
         depth_m = if (!is.null(dims$depth)) {
           .read_depth_axis(
@@ -1678,13 +1441,9 @@ extract_to_track <- function(
   })
   if (args$sampling == "cells") .track_check_cell_sources(metadata)
   time_used <- any(vapply(metadata, function(x) x$temporal, logical(1)))
-  depth_used <- any(
-    vapply(
-      metadata, function(x) {
-        x$method %in% c("nearest", "all")
-      }, logical(1)
-    )
-  )
+  depth_used <- any(vapply(
+    metadata, function(x) x$method %in% c("nearest", "all"), logical(1)
+  ))
   vertices <- .track_input(
     args$data, args$track_col, args$lon_col, args$lat_col, args$depth_col,
     args$z_as_depth
@@ -1715,7 +1474,6 @@ extract_to_track <- function(
     )
     time_values <- as.numeric(prepared$values)
   }
-
   if (inherits(args$land_mask, "SpatRaster")) {
     if (!is.null(args$mask_domain)) {
       stop(
@@ -1727,14 +1485,9 @@ extract_to_track <- function(
           !nzchar(terra::crs(args$land_mask))) {
       stop("A marine raster needs one layer and a CRS.", call. = FALSE)
     }
-    if (
-        is.null(args$marine_values) || !is.numeric(args$marine_values) ||
-          !length(args$marine_values) ||
-          any(!is.finite(args$marine_values))) {
-      stop(
-        "Specify marine_values explicitly for a raster mask.",
-        call. = FALSE
-      )
+    values <- args$marine_values
+    if (!is.numeric(values) || !length(values) || any(!is.finite(values))) {
+      stop("Specify marine_values explicitly for a raster mask.", call. = FALSE)
     }
     outside_longitudes <- terra::xmin(args$land_mask) < -180 - 1e-8 ||
       terra::xmax(args$land_mask) > 180 + 1e-8
@@ -1746,8 +1499,7 @@ extract_to_track <- function(
     }
   } else if (!is.null(args$land_mask)) {
     polygon_types <- c("POLYGON", "MULTIPOLYGON")
-    if (
-        !inherits(args$land_mask, c("sf", "sfc")) ||
+    if (!inherits(args$land_mask, c("sf", "sfc")) ||
           is.na(sf::st_crs(args$land_mask)) ||
           any(!sf::st_is_valid(args$land_mask)) ||
           any(!sf::st_geometry_type(args$land_mask) %in% polygon_types)) {
@@ -1768,16 +1520,13 @@ extract_to_track <- function(
     args[c(
       "sampling", "spacing_km", "interpolate_depth", "interpolate_time",
       "depth_step_m", "time_step_seconds", "time_step", "time_unit",
-      "land_mask", "marine_values", "mask_type",
-      "mask_domain", "land_policy", "mask_step_km"
+      "land_mask", "marine_values", "mask_type", "mask_domain",
+      "land_policy", "mask_step_km"
     )],
     list(
       metadata = metadata,
-      resolution = if (is.null(prepared)) {
-        args$time_resolution
-      } else {
-        prepared$resolution
-      },
+      resolution = if (is.null(prepared)) args$time_resolution else
+        prepared$resolution,
       matching = dots
     ),
     args[c("max_segment_km", "max_gap_hours")]

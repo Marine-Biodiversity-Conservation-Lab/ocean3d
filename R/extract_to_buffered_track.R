@@ -57,37 +57,28 @@
 #' @export
 extract_to_buffered_track <- function(
   data, nc, var = NULL, track_col = NULL,
-  sampling = NULL,
-  spacing_km = NULL,
-  interpolate_depth = FALSE, interpolate_time = FALSE,
-  interpolate_target = FALSE,
-  depth_step_m = NULL, time_step = NULL, time_unit = c(
-    "hours", "minutes",
-    "seconds", "days", "months", "years"
-  ), horizontal_radius_km = 0,
-  depth_radius_m = 0, lon_cell_radius = NULL, lat_cell_radius = NULL,
-  depth_layer_radius = NULL, time_before = 0, time_after = 0,
+  sampling = NULL, spacing_km = NULL, interpolate_depth = FALSE,
+  interpolate_time = FALSE, interpolate_target = FALSE, depth_step_m = NULL,
+  time_step = NULL,
+  time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
+  horizontal_radius_km = 0, depth_radius_m = 0, lon_cell_radius = NULL,
+  lat_cell_radius = NULL, depth_layer_radius = NULL, time_before = 0,
+  time_after = 0,
   buffer_time_unit = c(
-    "days",
-    "hours", "minutes", "seconds", "months", "years"
-  ), statistic = "mean",
-  buffer_weighting = c("weighted", "equal"), min_valid_fraction = NULL,
-  track_min_valid_fraction = 0.8, infer_bounds = FALSE, method = NULL,
-  statistics = "mean", weighting = c("distance", "duration", "equal"),
-  target_col = NULL, max_target_difference = NULL, target_ties = c(
-    "NA",
-    "lower", "higher"
-  ), lon_col = "lon", lat_col = "lat", depth_col = "depth",
-  date_col = "date", output_col = NULL, time_resolution = c(
-    "auto",
-    "datetime", "daily", "monthly", "yearly"
-  ), max_samples = 100000L,
-  max_segment_km = NULL, max_gap_hours = NULL, z_as_depth = FALSE,
-  land_mask = NULL, marine_values = NULL,
-  mask_type = c("land", "marine"), mask_domain = NULL, land_policy = c(
-    "skip",
-    "error"
-  ), mask_step_km = 0.5, quiet = FALSE, ...
+    "days", "hours", "minutes", "seconds", "months", "years"
+  ),
+  statistic = "mean", buffer_weighting = c("weighted", "equal"),
+  min_valid_fraction = NULL, track_min_valid_fraction = 0.8,
+  infer_bounds = FALSE, method = NULL, statistics = "mean",
+  weighting = c("distance", "duration", "equal"), target_col = NULL,
+  max_target_difference = NULL, target_ties = c("NA", "lower", "higher"),
+  lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
+  output_col = NULL,
+  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly"),
+  max_samples = 100000L, max_segment_km = NULL, max_gap_hours = NULL,
+  z_as_depth = FALSE, land_mask = NULL, marine_values = NULL,
+  mask_type = c("land", "marine"), mask_domain = NULL,
+  land_policy = c("skip", "error"), mask_step_km = 0.5, quiet = FALSE, ...
 ) {
   .track_flag(interpolate_target, "interpolate_target")
   if (identical(method, "all")) {
@@ -106,47 +97,30 @@ extract_to_buffered_track <- function(
   mask_type <- match.arg(mask_type)
   land_policy <- match.arg(land_policy)
   target_ties <- match.arg(target_ties)
-  preparation <- list(
-    data = data, nc = nc, var = var, track_col = track_col,
-    sampling = sampling, spacing_km = spacing_km,
-    interpolate_depth = interpolate_depth,
-    interpolate_time = interpolate_time, depth_step_m = depth_step_m,
-    time_step_seconds = NULL, time_step = time_step, time_unit = time_unit,
-    method = method,
-    statistics = statistics, weighting = weighting,
-    min_valid_fraction = track_min_valid_fraction,
-    lon_col = lon_col, lat_col = lat_col, depth_col = depth_col,
-    date_col = date_col, output_col = output_col,
-    time_resolution = time_resolution,
-    max_samples = max_samples, max_segment_km = max_segment_km,
-    max_gap_hours = max_gap_hours,
-    z_as_depth = z_as_depth,
-    land_mask = land_mask,
-    marine_values = marine_values, mask_type = mask_type,
-    mask_domain = mask_domain,
-    land_policy = land_policy, mask_step_km = mask_step_km, quiet = quiet
-  )
+  # The track arguments .prepare_track() shares with extract_to_track().
+  preparation <- mget(c(
+    "data", "nc", "var", "track_col", "sampling", "spacing_km",
+    "interpolate_depth", "interpolate_time", "depth_step_m", "time_step",
+    "time_unit", "method", "statistics", "weighting", "lon_col", "lat_col",
+    "depth_col", "date_col", "output_col", "time_resolution", "max_samples",
+    "max_segment_km", "max_gap_hours", "z_as_depth", "land_mask",
+    "marine_values", "mask_type", "mask_domain", "land_policy",
+    "mask_step_km", "quiet"
+  ))
+  preparation$min_valid_fraction <- track_min_valid_fraction
   dots <- list(...)
   prepare_names <- c(
-    "file_col", "lon_dim", "lat_dim", "depth_dim",
-    "time_dim", "time_match", "max_time_diff", "spatial_match",
-    "max_distance_km"
+    "file_col", "lon_dim", "lat_dim", "depth_dim", "time_dim", "time_match",
+    "max_time_diff", "spatial_match", "max_distance_km"
   )
-  if (
-      length(dots) && (
-                       is.null(names(dots)) || any(
-                         !names(dots) %in%
-                           prepare_names
-                       ))) {
+  if (length(dots) &&
+        (is.null(names(dots)) || any(!names(dots) %in% prepare_names))) {
     stop("Use supported named buffer selection options in ... .")
   }
   context <- .prepare_track(preparation, dots)
   samples <- context$samples
   variables <- unique(
-    vapply(
-      context$metadata, function(x) x$variable,
-      character(1)
-    )
+    vapply(context$metadata, function(x) x$variable, character(1))
   )
   if (identical(statistic, "most_similar")) {
     targets <- .target_columns(context$vertices, variables, target_col)
@@ -159,10 +133,8 @@ extract_to_buffered_track <- function(
           }
           rows <- which(context$vertices$track_id == samples$track_id[i])
           .track_interpolate(
-            values[rows], samples$segment_id[i],
-            samples$segment_fraction[i], interpolate_target,
-            "interpolate_target",
-            TRUE
+            values[rows], samples$segment_id[i], samples$segment_fraction[i],
+            interpolate_target, "interpolate_target", TRUE
           )
         }, numeric(1)
       )
@@ -177,8 +149,8 @@ extract_to_buffered_track <- function(
     .warn_time_zone(context$prepared, paste0("`data$", date_col, "`"))
   }
   output <- .buffer_output_names(
-    variables, output_col, names(samples),
-    TRUE, locations = statistic == "most_similar"
+    variables, output_col, names(samples), TRUE,
+    locations = statistic == "most_similar"
   )
   samples <- withCallingHandlers(do.call(
     extract_to_buffer, c(
@@ -220,14 +192,11 @@ extract_to_buffered_track <- function(
     }
   }
   summary <- .track_summaries(
-    samples, unname(output), statistics,
-    weighting, track_min_valid_fraction
+    samples, unname(output), statistics, weighting, track_min_valid_fraction
   )
   settings <- .track_settings(
-    context, samples, statistics = statistics,
-    statistic = statistic,
-    buffer_weighting = buffer_weighting,
-    track_weighting = weighting,
+    context, samples, statistics = statistics, statistic = statistic,
+    buffer_weighting = buffer_weighting, track_weighting = weighting,
     track_min_valid_fraction = track_min_valid_fraction,
     buffer_min_valid_fraction = if (is.null(min_valid_fraction)) {
       if (statistic == "most_similar") 0 else 0.8
