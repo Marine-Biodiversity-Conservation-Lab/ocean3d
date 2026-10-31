@@ -14,7 +14,7 @@ objects built on terra (everything else). #99 plans to unify them.
 
 - Check which model a function takes before passing data to it or adding to
   it, and say which one in its `@param` docs.
-- Don't add a third representation or a new bridge between the two without
+- Don't add a third representation or a new conversion between the two without
   checking SPEC.md and #99 first. New work should fit the planned model, not
   widen the split.
 
@@ -28,8 +28,9 @@ before adding new ones.
   profile). Use it, or extend it with an argument, instead of writing a
   second version for your feature.
 - If an existing helper is close but not quite right, change it in one place
-  and update its callers, rather than copying it under a new name
-  (e.g. `.buffer_read_bounds()` next to the point code's bounds reader).
+  and update its callers, rather than copying it under a new name. #83 did
+  this with a second bounds reader for buffers, which then had to be merged
+  back.
 - Use the existing classes (`SpatVoxel`, `SpatEnvelope`, `SpatVolume`) and
   their constructors and converters (`as_voxel()`, `as_envelope()`,
   `vect_to_envelope()`, `envelope_to_voxel()`) instead of new structures for
@@ -108,14 +109,13 @@ exported function rather than deleting them.
   `docs/59-getting-started-vignette`).
 - Put `Closes #N` in the PR body so the issue closes on merge. `(#N)` in the
   title is not enough.
-- Keep PRs small enough to review in one sitting: at most about 400 changed
-  lines in `R/`, and about 1000 changed lines in total including tests.
-  Generated files (`man/`, `NAMESPACE`, `renv.lock`, rendered articles) don't
-  count. If the work is bigger, split it into separate PRs that each branch
-  from `main`, do one thing and pass `devtools::check()` on their own, and
-  open the next one only after the previous one is merged (e.g. shared
-  helpers first, then the new function, then articles). #83 (a 2100-line
-  `extract_to_buffer.R`) is the example to avoid.
+- Keep PRs reviewable in one sitting: about 400 changed lines in `R/` and
+  1000 in total. Generated files (`man/`, `NAMESPACE`, `renv.lock`, rendered
+  articles) don't count. Split bigger work into PRs that each branch from
+  `main`, do one thing and pass `devtools::check()`. Open the next one after
+  the previous one merges (e.g. shared helpers, then the function, then
+  articles). #83 (a 2100-line `extract_to_buffer.R`) is the example to
+  avoid.
 - Don't stack PRs (a PR whose base is another open PR's branch). Every change
   to a lower PR has to be merged into and re-reviewed in each PR above it,
   which multiplies review work. Branch from `main`, and wait for the PR your

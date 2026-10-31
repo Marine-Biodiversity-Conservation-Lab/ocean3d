@@ -132,8 +132,7 @@ descriptions written with an agent say so, for example with a
 `Co-Authored-By:` trailer naming the model.
 
 [AGENTS.md](AGENTS.md) has the details agents need: reuse rules, internal
-helpers, conditions, tests, PR size and review. Agents that read `CLAUDE.md`
-are pointed to it.
+helpers, conditions, tests, PR size and review. `CLAUDE.md` points to it.
 
 ---
 
