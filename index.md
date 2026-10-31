@@ -261,6 +261,9 @@ work!
 David Ruiz-García, Rachel Aitchison, Wade VanderWright, Amanda Arnold,
 Dr. Samm Sherman, Dr. Alifa Haque, Prof Nicholas K. Dulvy.
 
+This work was funded by the Natural Sciences and Engineering Research
+Council of Canada grants (RGPIN-2025-03984 and ALLRP 594217-24).
+
 ## Citation
 
 Jay H. Matsushiba, David Ruiz-García, Rachel M. Aitchison, Wade J.
