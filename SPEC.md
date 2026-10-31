@@ -9,6 +9,10 @@ The primary operation that `ocean3d` is focused on is the spatial querying of la
 
 while considering three-dimensional space. 
 
+![Conceptual overview: a species' 2D range, depth range and bathymetry combine into a 3D distribution, which is then queried against environmental data](vignettes/figures/Figure1_conceptual3Ddistribution.png)
+
+*Figure 1. A species' geographical range (A) and depth range, bounded by bathymetry, give its potential 3D distribution (B). Environmental data are then summarised within that space (C). From the Getting Started vignette.*
+
 Technically, this means that `ocean3d` needs to be able to take 1D (points), 2D (polygons), and 3D (raster stack) and query how these intersect with one another. 
 
 ## Vector Representations in 3D space
@@ -41,9 +45,9 @@ Currently, `ocean3d` does not handle volumes. This might become useful to work w
 
 ### 3D (Voxel)
 
-![alt text](figures/fig-voxel-model.png)
+![The same species distribution as a SpatEnvelope (depth_min and depth_max rasters) and as a SpatVoxel (presence at standard depth levels), converted with envelope_to_voxel()](vignettes/figures/Comparison_SpatEnvelope_SpatVoxel.png)
 
-![Figure 2](figures/fig-species-voxel.png)
+*Figure 2. The two raster representations of the same distribution. (A) A `SpatEnvelope` ([min-max 2.5D](#3d-min-max-25d)) stores `depth_min` and `depth_max` per cell, bounded by the seafloor. (B) `envelope_to_voxel()` converts it to a `SpatVoxel`, one layer per standard depth. From the Getting Started vignette.*
 
 To extend rasters into 3D, we simply create multiple rasters for a set of standard depths. This is the convention from oceanography datasets, like Copernicus Marine and World Ocean Atlas (WOA). This raster stack is supported with netCDF file type and with the `terra` and `ncdf4` packages. This raster stack is called a **voxel model** in 3D graphics / modelling field. 
 
@@ -59,7 +63,7 @@ Data source utilities are responsible for converting other formats into this con
 
 Colloquially referred to as the 2.5D model, this is often used for terrain models in GIS. Think like Digital Elevation Models, where the raster values correspond with the height of the landscape. 
 
-We can represent spaces, like species ranges, by describing the space that they occupy with a minimum depth and maximum depth raster. Maximum depth could be bound by the bathymetry raster, or by the maximum depth the species is found at. 
+We can represent spaces, like species ranges, by describing the space that they occupy with a minimum depth and maximum depth raster (Figure 2A). Maximum depth could be bound by the bathymetry raster, or by the maximum depth the species is found at. 
 
 This representation is more efficient than the 3D Voxel representation, since it only needs two rasters for min and max respectively, compared to needing a raster for every standard depth. The downside is that the 2.5 representation doesn't model situations where there may not be presences between the min and max depths. 
 
