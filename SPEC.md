@@ -102,7 +102,7 @@ This section is the plan from #99. None of it is implemented yet, and the first 
 2. **Lazy reads for data larger than memory.** Opening a dataset doesn't read its values, every operation reads only the slices it needs, and heavy processing runs per time step or per chunk, so peak memory follows the size of one slice rather than the whole dataset.
 3. **CF-correct metadata.** Keep the current handling of time units and calendars, sub-daily steps, depth units and direction, bounds and longitude conventions (#71–#75, #88–#96).
 
-No single package meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy `stars_proxy` objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package.
+No single package meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy `stars_proxy` objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package. ncdfCF reads netCDF following CF and exports to terra, but it is marked experimental and has a single maintainer, so it isn't a candidate for the core object.
 
 #### Direction: a hybrid
 
@@ -110,6 +110,7 @@ No single package meets all three. terra stores depth and time as layer labels o
 - **Reads:** lazy and exact, through stars proxies, or through the package's own ncdf4 `start` / `count` code where stars falls short. Remote Zarr stores (for example Copernicus Marine ARCO data) would be read through GDAL's multidimensional API (`stars::read_mdim()`).
 - **Heavy spatial work:** per time step or per chunk. Read one slice, process it with terra, and combine the results across time.
 - **`SpatVoxel` / `SpatEnvelope`:** become views of one time step of the core object, so the existing terra-based tools keep working on a slice.
+- **Time decoding:** [CFtime](https://cran.r-project.org/package=CFtime) replaces the package's own CF time decoder. It decodes CF time units and handles every CF calendar, including ones R's date classes can't represent (`noleap`, `360_day`). It is already imported by ncmeta and tidync, which stars uses, so it fits whichever core object the trial picks.
 - **Extraction:** point, buffer and track extraction keep reading only the cells they touch, and accept anything that can become the core object: a netCDF file, a `SpatVoxel`, or a Zarr store.
 
 #### First step: stars trial
@@ -227,13 +228,14 @@ Each step is its own issue and PR off `main`:
 
 1. Document the current split: which functions take netCDF and which take `SpatVoxel` (README function overview and each function's `@param`).
 2. Move the shared CF/netCDF helpers (time decoding, depth axis, bounds, dimension detection) out of `R/extract_to_points.R` into their own files.
-3. Run the stars trial and write up the results with a recommendation for the core object.
-4. Agree on the core data model and update this section.
-5. Build the core object and lazy reader, then time-aware volume, overlap and profiles, then `SpatVoxel` as a time-step view.
-6. Add `SpatVector3D` with `geomtype()`, `as_vector3d()` and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()`.
-7. Add the coverage verb and `intersect_3d()` / `intersects_3d()` / `mask()` / `volume()` methods for `SpatVector3D`.
-8. Add `summarise_3d()`, then reimplement the extraction functions as build → intersect → summarise wrappers, one function per PR.
-9. Add track sampling as a build step, buffered tracks (#105), and block-wise reads for many features; then named shapes, raster and function surfaces for polygons.
+3. Replace the internal CF time decoding with CFtime, with the time tests from #71–#75 and #88–#91 as reference behaviour.
+4. Run the stars trial and write up the results with a recommendation for the core object.
+5. Agree on the core data model and update this section.
+6. Build the core object and lazy reader, then time-aware volume, overlap and profiles, then `SpatVoxel` as a time-step view.
+7. Add `SpatVector3D` with `geomtype()`, `as_vector3d()` and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()`.
+8. Add the coverage verb and `intersect_3d()` / `intersects_3d()` / `mask()` / `volume()` methods for `SpatVector3D`.
+9. Add `summarise_3d()`, then reimplement the extraction functions as build → intersect → summarise wrappers, one function per PR.
+10. Add track sampling as a build step, buffered tracks (#105), and block-wise reads for many features; then named shapes, raster and function surfaces for polygons.
 
 The existing tests for both models, including the buffer and track tests, are the reference behaviour: they keep passing, and new tests check that the same synthetic data gives the same values from a netCDF file, from the core object and from the equivalent `SpatVoxel`. API changes (what `woa_load_nc()` and the voxel constructors return, time in volume and overlap) need NEWS entries and should settle before the rOpenSci and CRAN submissions (#12).
 
@@ -287,7 +289,7 @@ These verbs are the intersect step of the planned extraction design (see [Data m
 ## Conventions
 - **Depth sign convention.** Depths are positive metres increasing downward, but GEBCO bathymetry is negative below sea level. The voxel constructor flips it and clamps land to 0. Document which convention any new argument uses.
 - **`ncdf4` vs `terra`**. Point, buffer and track extraction read netCDF directly with `ncdf4`, reading only the cells each observation needs. Large raster operations (1000s of cells), like extracting areas and volumes, use `terra`. This split is planned to become one model; see [Data model](#data-model). Until then, say in each function's docs which input it takes.
-- **Time.** Times are decoded from CF units and calendars and matched to observations in UTC. Only the netCDF model has a time dimension for now.
+- **Time.** Times are decoded from CF units and calendars and matched to observations in UTC. Only the netCDF model has a time dimension for now. Decoding is planned to move to CFtime; see [Data model](#data-model).
 
 ## Future directions
 
