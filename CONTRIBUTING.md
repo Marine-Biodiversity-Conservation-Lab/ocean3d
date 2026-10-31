@@ -68,7 +68,8 @@ We use issues as the unit of work and the record of its current state.
 5. **Get Pull Request approval**
     - Another contributor should review and approve of your code before the PR can get merged into the main branch. 
 6. **Merge** and delete the branch. Currently, [@JayMatsushiba](https://github.com/JayMatsushiba) will be in charge of this step. 
-    - Write `Closes #N` in the PR body so the issue closes when the PR is merged. A reference in the title, like `(#N)`, doesn't close it, and neither does creating the branch from the issue. 
+    - Write `Closes #N` in the PR description, so the issue is named there and closes when the PR is merged into `main`. 
+    - A PR opened from a branch made with `Create a branch` in the issue's Development sidebar is linked to the issue and also closes it on merge, but branches created locally (as agents do) aren't linked, and `(#N)` in the title doesn't close anything. Write `Closes #N` either way. 
 
 `main` must always be installable — never push work-in-progress directly to it. All changes to `main` should be done via a Pull Request. 
 

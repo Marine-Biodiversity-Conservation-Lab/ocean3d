@@ -94,7 +94,7 @@ The netCDF model keeps 4D data (lon, lat, depth, time) and its CF metadata intac
 
 ### Planned: one model (#99)
 
-This section is the plan from #99. None of it is implemented yet, and the first step (the stars trial below) may change it.
+This section is the plan from #99. None of it is implemented yet, and the first step (the stars and ncdfCF trial below) may change it.
 
 #### Requirements
 
@@ -102,7 +102,7 @@ This section is the plan from #99. None of it is implemented yet, and the first 
 2. **Lazy reads for data larger than memory.** Opening a dataset doesn't read its values, every operation reads only the slices it needs, and heavy processing runs per time step or per chunk, so peak memory follows the size of one slice rather than the whole dataset.
 3. **CF-correct metadata.** Keep the current handling of time units and calendars, sub-daily steps, depth units and direction, bounds and longitude conventions (#71–#75, #88–#96).
 
-No single package meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy `stars_proxy` objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package. ncdfCF reads netCDF following CF and exports to terra, but it is marked experimental and has a single maintainer, so it isn't a candidate for the core object.
+No single package meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy `stars_proxy` objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package. ncdfCF reads netCDF following CF (time, depth axes, bounds) and exports to terra, but it is marked experimental and has a single maintainer, and the docs don't say whether its subsets are read lazily.
 
 #### Direction: a hybrid
 
@@ -113,15 +113,15 @@ No single package meets all three. terra stores depth and time as layer labels o
 - **Time decoding:** [CFtime](https://cran.r-project.org/package=CFtime) replaces the package's own CF time decoder. It decodes CF time units and handles every CF calendar, including ones R's date classes can't represent (`noleap`, `360_day`). It is already imported by ncmeta and tidync, which stars uses, so it fits whichever core object the trial picks.
 - **Extraction:** point, buffer and track extraction keep reading only the cells they touch, and accept anything that can become the core object: a netCDF file, a `SpatVoxel`, or a Zarr store.
 
-#### First step: stars trial
+#### First step: stars and ncdfCF trial
 
-Before any code moves, compare stars with the current ncdf4 code:
+Before any code moves, compare stars and ncdfCF with the current ncdf4 code:
 
 1. On the synthetic netCDF fixtures from the tests and the #88–#96 cases: do decoded time, depth, bounds and values match the package's results?
 2. On a large real file (for example a multi-year daily global Copernicus Marine product), measure peak memory and run time for opening as a proxy, point extraction across time, volume and overlap for one time step, and a polygon or buffer summary over a time window.
 3. Optionally, the same dataset as a remote Zarr store.
 
-The result decides whether stars proxies become the core object, or only describe dimensions while the package keeps its own lazy reads.
+The result decides whether stars proxies become the core object, whether ncdfCF can take over CF reading (if it reads lazily and its maintenance looks dependable), or whether the package keeps its own lazy reads.
 
 #### Vector class: `SpatVector3D`
 
@@ -229,7 +229,7 @@ Each step is its own issue and PR off `main`:
 1. Document the current split: which functions take netCDF and which take `SpatVoxel` (README function overview and each function's `@param`).
 2. Move the shared CF/netCDF helpers (time decoding, depth axis, bounds, dimension detection) out of `R/extract_to_points.R` into their own files.
 3. Replace the internal CF time decoding with CFtime, with the time tests from #71–#75 and #88–#91 as reference behaviour.
-4. Run the stars trial and write up the results with a recommendation for the core object.
+4. Run the stars and ncdfCF trial and write up the results with a recommendation for the core object.
 5. Agree on the core data model and update this section.
 6. Build the core object and lazy reader, then time-aware volume, overlap and profiles, then `SpatVoxel` as a time-step view.
 7. Add `SpatVector3D` with `geomtype()`, `as_vector3d()` and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()`.
@@ -249,8 +249,7 @@ The extraction functions below exist now. Each is planned to become a wrapper ov
 - **Buffer extraction**. `extract_to_buffer()` summarises netCDF values within a geodesic circle × depth window × time window around each observation, with cell coverage, layer thickness and time weighting, or picks the value closest to a target.
 - **Track extraction**. `extract_to_track()` samples points along ordered tracks (ex. tagging data), extracts netCDF values at them, and can summarise per track.
 - **Area extraction**. `extract_to_area()` crops a `SpatVoxel` (ex. environmental data) to an input polygon and depth band. 
-- **Volume extraction**. Extract values from multi-depth raster / voxel model (ex. environmental data) within a three-dimensional spatial volume defined by horizontal extent and depth range. 
-  - This should be possible for both 2.5D (two-raster stack) and 3D (multi-depth raster stack). 
+- **Volume extraction**. `mask(voxel, domain)` keeps a `SpatVoxel`'s values (ex. environmental data) inside a 3D volume and sets the rest to `NA`. The volume is a `SpatEnvelope` (2.5D, e.g. a species range from `vect_to_envelope()` bounded by the seafloor) or a presence `SpatVoxel` (3D). With an envelope, `bounds` sets whether a depth level counts when the envelope reaches its top or its midpoint. The Getting Started vignette uses this to get temperatures within a species' 3D range.
 - **Extraction at a `SpatVector3D`** *(planned)*. The coverage verb (working name `coverage_3d()`) returns the source cells each feature touches with their weights (one cell per point, length or time along lines, volume × time overlap in polygons), and `summarise_3d()` turns them into statistics. Observations are points, tracks are lines, and buffers and areas are polygons, so this one path replaces the separate code in each function above.
 
 ### Conversions between spatial representations
