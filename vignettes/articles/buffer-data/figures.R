@@ -71,6 +71,60 @@ buffer_explorer <- function(example, script) {
   htmlwidgets::onRender(p, paste(readLines(script, warn = FALSE), collapse = "\n"), data = data)
 }
 
+
+# Drawing helpers for the track tutorial ---------------------------------------
+
+plot_track_map <- function(samples, vertices) {
+  values <- samples$temperature
+  palette <- grDevices::hcl.colors(64, "Viridis")
+  colour <- if (diff(range(values, na.rm = TRUE)) == 0) {
+    rep(palette[32], length(values))
+  } else {
+    palette[cut(values, 64, labels = FALSE)]
+  }
+  plot(samples$lon, samples$lat, type = "l", col = "grey60",
+       asp = 1 / cos(mean(samples$lat) * pi / 180),
+       xlab = "Longitude (degrees east)", ylab = "Latitude (degrees north)")
+  points(samples$lon, samples$lat, pch = 16, col = colour, cex = 0.8)
+  points(vertices$lon, vertices$lat, pch = 21, bg = "white", cex = 1.4)
+  legend("topleft", legend = c("Recorded vertex", "Sampled route"),
+         pch = c(21, 16), pt.bg = c("white", NA),
+         col = c("black", palette[32]), bty = "n")
+}
+
+
+track_explorer <- function(samples) {
+  hover <- paste0(
+    "Sample ", samples$sample_id,
+    "<br>", ifelse(
+      samples$is_interpolated, "Assumed position", "Recorded vertex"
+    ),
+    "<br>Distance: ", round(samples$distance_km, 2), " km",
+    "<br>Requested depth: ", round(samples$depth, 1), " m",
+    "<br>UTC: ", format(samples$date, "%Y-%m-%d %H:%M", tz = "UTC"),
+    "<br>Selected temperature: ", round(samples$temperature, 2), " degrees C"
+  )
+  figure <- plotly::plot_ly(
+    x = samples$lon, y = samples$lat, z = samples$depth,
+    type = "scatter3d", mode = "lines+markers",
+    color = samples$temperature, colors = grDevices::hcl.colors(64, "Viridis"),
+    text = hover, hoverinfo = "text", marker = list(size = 4), height = 520
+  )
+  figure <- plotly::layout(figure, scene = list(
+    aspectmode = "manual", aspectratio = list(x = 1.4, y = 1, z = 0.9),
+    camera = list(eye = list(x = 1.6, y = 1.8, z = 0.8)),
+    xaxis = list(title = "Longitude"), yaxis = list(title = "Latitude"),
+    zaxis = list(title = "Assumed depth (m)", autorange = "reversed")
+  ), margin = list(l = 25, r = 15, b = 20, t = 15))
+  figure <- plotly::colorbar(figure, title = "Temperature (C)", thickness = 12)
+  figure <- plotly::config(figure, displaylogo = FALSE, responsive = TRUE)
+  htmlwidgets::onRender(figure, paste0(
+    "function(el,x){el.style.width='100%';",
+    "function resize(){window.Plotly.Plots.resize(el);}",
+    "window.addEventListener('resize',resize);resize();}"
+  ))
+}
+
 # Display complete function arguments in related groups for the tutorials.
 article_signature <- function(fun, name) {
   groups <- list(
@@ -135,4 +189,27 @@ article_signature <- function(fun, name) {
   lines <- c(lines[-length(lines)], ")")
   cat("```r\n", paste(lines, collapse = "\n"), "\n```\n", sep = "")
   invisible(lines)
+}
+
+
+# Explain the selection options forwarded by both track interfaces.
+article_selection_notes <- function(arguments) {
+  notes <- c(
+    file_col = "Source-table path column; default file.",
+    lon_dim = "NULL detects the longitude dimension; supply a name to override.",
+    lat_dim = "NULL detects the latitude dimension; supply a name to override.",
+    depth_dim = "NULL detects the depth dimension; supply a name to override.",
+    time_dim = "NULL detects the time dimension; supply a name to override.",
+    time_match = "nearest selects the nearest eligible timestamp/label (default); exact requires the requested timestamp/label.",
+    max_time_diff = "NULL has no extra temporal-distance limit; a nonnegative number sets a limit in days.",
+    custom_time_interval = "Positive difftime warning threshold for custom resolution, which retains full timestamps. NULL by default; does not reject candidates.",
+    spatial_match = "within requires a containing cell (default); nearest allows a nearby cell with an explicit max_distance_km.",
+    max_distance_km = "Nonnegative distance to cell centre, required for nearest; NULL for within.",
+    time_report = "TRUE reports displaced or missing temporal results (default); FALSE hides the report.",
+    spatial_report = "NULL reports exceptional spatial selections (default); TRUE adds routine detail; FALSE hides the report.",
+    depth_report = "NULL reports exceptional depth selections (default); TRUE adds routine detail; FALSE hides the report.",
+    verbose = "FALSE suppresses progress detail (default); TRUE shows it."
+  )
+  stopifnot(all(arguments %in% names(notes)))
+  unname(notes[arguments])
 }

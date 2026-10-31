@@ -34,7 +34,8 @@ extract_to_point(
   spatial_match = c("within", "nearest"),
   max_distance_km = NULL,
   spatial_report = NULL,
-  depth_report = NULL
+  depth_report = NULL,
+  return_match_info = FALSE
 )
 }
 \arguments{
@@ -170,6 +171,10 @@ more than one local layer spacing away, and displaced singleton layers
 whose spacing cannot be assessed. TRUE also reports normal surface, bottom
 and exact depth selections; FALSE hides the depth report. Depths are in
 metres, positive down. Report modes do not change returned values.}
+
+\item{return_match_info}{Logical, FALSE by default. With table inputs, add
+one list column per output describing the selected source file, cell,
+depth and timestamp. Missing outputs have no assigned selected source.}
 }
 \value{
 If \code{data} is provided, the input observations with extracted values

@@ -4635,3 +4635,35 @@ test_that("depth references tolerate float32 axes and blame missing layers", {
   deepest <- .depth_selection_reference(float32, 3.819495, float32[2])
   expect_false(deepest$outside)
 })
+
+test_that("point provenance describes the actual selected record", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
+  data <- data.frame(
+    lon = 1, lat = 0, depth = 19, date = as.Date("2020-01-02")
+  )
+  out <- extract_to_point(
+    data, path,
+    var = "temp", method = "nearest", return_match_info = TRUE,
+    time_report = FALSE, depth_report = FALSE
+  )
+  expect_equal(out$temp, 24030)
+  info <- out$temp_match_info[[1L]]
+  expect_equal(info$longitude, 1)
+  expect_equal(info$latitude, 0)
+  expect_equal(info$depth_m, 20)
+  expect_equal(as.numeric(info$timestamp_utc), 1577923200)
+  expect_equal(normalizePath(info$source_file), normalizePath(path))
+  expect_error(
+    extract_to_point(lon = 1, lat = 0, nc = path, return_match_info = TRUE),
+    "table"
+  )
+  expect_error(
+    extract_to_point(
+      transform(data, temp_match_info = 1), path,
+      var = "temp", method = "nearest", return_match_info = TRUE
+    ),
+    "overwrite"
+  )
+})

@@ -14,7 +14,16 @@ function(el, x, data) {
   details.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;';
   diagnostics.append(summary, details);
   el.parentNode.insertBefore(controls, el); el.parentNode.insertBefore(status, el);
-  el.parentNode.insertBefore(diagnostics, el.nextSibling);
+  var caption = el.nextElementSibling;
+  while (caption && caption.tagName === 'SCRIPT') caption = caption.nextElementSibling;
+  if (caption && caption.tagName === 'P' && /^Figure\s+\d+\./.test(caption.textContent.trim())) {
+    caption.classList.add('caption');
+    caption.id = el.id + '-caption';
+    el.setAttribute('aria-describedby', caption.id);
+    caption.insertAdjacentElement('afterend', diagnostics);
+  } else {
+    el.parentNode.insertBefore(diagnostics, el.nextSibling);
+  }
   var textColour = getComputedStyle(el).color, font = getComputedStyle(el).fontFamily;
   function f(n, digits) {return n === null || n === undefined ? 'NA' : Number(n).toFixed(digits === undefined ? 2 : digits);}
   function select(label, values) {

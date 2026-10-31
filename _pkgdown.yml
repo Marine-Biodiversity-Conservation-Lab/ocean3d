@@ -2,3 +2,23 @@ url: https://marine-biodiversity-conservation-lab.github.io/ocean3d/
 template:
   bootstrap: 5
 
+footer:
+  components:
+    developed_by: "Developed by David Ruiz-García, Jay Matsushiba."
+
+articles:
+- title: Environmental data extraction
+  navbar: ~
+  contents:
+  - articles/extracting-environmental-data-at-points
+  - articles/extracting-and-weighting-buffer-data
+  - articles/extracting-environmental-data-along-tracks
+- title: Other articles
+  navbar: ~
+  contents:
+  - ocean3d
+  - articles/bangladesh-fisheries-3d-overlap
+  - depth-levels
+  - articles/gfw-fishing-effort-3d
+  - articles/woa-environmental-extraction-single-species
+
