@@ -116,7 +116,7 @@ The result decides whether stars proxies become the core object, or only describ
 
 | Step | Input | Output | Exists now | Planned |
 |---|---|---|---|---|
-| 1. Build | observations, polygons, lines, rasters, depth and time ranges | 3D shapes: `SpatSolid`, `SpatEnvelope`, `SpatVoxel` | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `voxel_to_envelope()`, `envelope_to_voxel()`, `create_study_raster()` | `region_3d()` and builders for observations and tracks (below) |
+| 1. Build | observations, polygons, lines, rasters, depth and time ranges | 3D shapes: `SpatSolid`, `SpatEnvelope`, `SpatVoxel` | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `voxel_to_envelope()`, `envelope_to_voxel()`, `create_study_raster()` | `as_solid()`, `solid_to_envelope()`, and builders for observations and tracks (below) |
 | 2. Intersect | two 3D objects, or a source and a shape | the shared space, or the source cells inside a shape with their weights | `intersect_3d()`, `intersects_3d()`, `mask()` for `SpatVoxel` / `SpatEnvelope` | the same verbs for `SpatSolid` and the core object; a coverage verb (below) |
 | 3. Summarise | a coverage table | one row of statistics per shape or group | inside `extract_to_buffer()` and `extract_to_track()` only | `summarise_3d()` (below) |
 
@@ -125,9 +125,11 @@ Function names marked "planned" are working names, to be settled in the issue fo
 *1. Build.* Builders create shapes and never read source values.
 
 ```r
-# one horizontal geometry (point, line or polygon) + one depth range + one time range
-region <- region_3d(geometry, depth = c(0, 50), time = c(t0, t1))
+# one horizontal geometry (point, line or polygon) + top and bottom depths + an optional time range
+solid <- as_solid(geometry, top = 0, bottom = 50, time = c(t0, t1))
 ```
+
+Names follow the existing converters: `as_<class>()` builds an object of that class (`as_voxel()`, `as_envelope()`, `as_solid()`), and `<from>_to_<to>()` converts between classes (`voxel_to_envelope()`, `solid_to_envelope()`).
 
 - One shape per object in the first version. Builders for many shapes come next: one shape per row of an observation table (point, or buffer with a radius and depth and time windows), and positions or buffers sampled along a track. They return a collection with an ID per shape, which the later steps keep.
 - Sampling a track (vertices, even spacing, one sample per cell) is a build step: it turns lines into points or solids. The marine-mask check on track connections belongs here too, so invalid samples are marked before anything is read.
@@ -168,7 +170,7 @@ Rules for the split:
 - Arguments with the same meaning have the same name and default in every step and wrapper (#101). Input checks are shared (#104).
 - New extraction features go into one of the three steps, not into a wrapper. A new shape (e.g. an ellipsoid buffer) is a builder; a new statistic is an option of `summarise_3d()`.
 
-**Vector 3D shape class: `SpatSolid`.** The region is a new class alongside `SpatVoxel` and `SpatEnvelope`. `SpatEnvelope` is "footprint + top + bottom" on a grid; `SpatSolid` is the vector version:
+**Vector 3D shape class: `SpatSolid`.** The shape built by `as_solid()` is a new class alongside `SpatVoxel` and `SpatEnvelope`. `SpatEnvelope` is "footprint + top + bottom" on a grid; `SpatSolid` is the vector version:
 
 | | `SpatVoxel` | `SpatEnvelope` | `SpatSolid` (planned) |
 |---|---|---|---|
@@ -180,7 +182,7 @@ Rules for the split:
 - **Scope:** one depth interval per horizontal position (each vertical line enters the shape once and leaves once). This covers extruded shapes (cylinders, slabs, an MPA × a depth band), spheres, ellipsoids, cones, and shapes that follow the seafloor or mixed layer. Full 3D solids (overhangs, several depth bands in one column) are out of scope.
 - **Surfaces:** `top` and `bottom` are each a constant (first version), a named shape with parameters (e.g. an ellipsoid buffer), a raster (e.g. relative to GEBCO bathymetry), or, as a fallback, a function of position. Every form reduces to "depth interval at these positions", so adding a shape doesn't change extraction code. `top <= bottom` everywhere in the footprint.
 - **Coverage weight** per cell is the solid's volume inside that cell (see step 2 above).
-- **Conversion** to a `SpatEnvelope` evaluates top and bottom at each cell of a template grid, like `vect_to_envelope()`.
+- **Conversion** to a `SpatEnvelope` (`solid_to_envelope()`) evaluates top and bottom at each cell of a template grid, like `vect_to_envelope()`.
 - `SpatVolume` extends to `c("SpatVoxel", "SpatEnvelope", "SpatSolid")`. Whether `SpatSolid` extends `terra::SpatVector` or something else depends on the core object chosen by the trial.
 
 **Order of work.** Each step is its own issue and PR off `main`:
@@ -190,7 +192,7 @@ Rules for the split:
 3. Run the stars trial and write up the results with a recommendation for the core object.
 4. Agree on the core data model and update this section.
 5. Build the core object and lazy reader, then time-aware volume, overlap and profiles, then `SpatVoxel` as a time-step view.
-6. Add `SpatSolid` (one geometry, constant top and bottom, optional time), `region_3d()` and its conversion to `SpatEnvelope`.
+6. Add `SpatSolid` (one geometry, constant top and bottom, optional time), `as_solid()` and `solid_to_envelope()`.
 7. Add the coverage verb and `intersect_3d()` / `intersects_3d()` / `mask()` methods for `SpatSolid`.
 8. Add `summarise_3d()`, then reimplement the extraction functions as build → intersect → summarise wrappers, one function per PR.
 9. Add builders for collections (observation tables, sampled tracks, buffered tracks for #105) and block-wise reads for them; then named shapes, raster and function surfaces.
