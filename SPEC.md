@@ -203,7 +203,7 @@ The existing tests for both models, including the buffer and track tests, are th
 
 ### Spatial extractions 
 
-These are the current functions. Each is planned to become a wrapper over build, intersect and summarise steps; see [Data model](#data-model).
+The extraction functions below exist now. Each is planned to become a wrapper over build, intersect and summarise steps on a `SpatSolid`; see [Data model](#data-model). Items marked *(planned)* aren't implemented yet.
 
 - **Point extraction**. `extract_to_point()` extracts the nearest value from netCDF files (ex. environmental data) to an input point based on its longitude, latitude, depth, and, when available, time.
 - **Buffer extraction**. `extract_to_buffer()` summarises netCDF values within a geodesic circle × depth window × time window around each observation, with cell coverage, layer thickness and time weighting, or picks the value closest to a target.
@@ -211,25 +211,35 @@ These are the current functions. Each is planned to become a wrapper over build,
 - **Area extraction**. `extract_to_area()` crops a `SpatVoxel` (ex. environmental data) to an input polygon and depth band. 
 - **Volume extraction**. Extract values from multi-depth raster / voxel model (ex. environmental data) within a three-dimensional spatial volume defined by horizontal extent and depth range. 
   - This should be possible for both 2.5D (two-raster stack) and 3D (multi-depth raster stack). 
+- **Extraction within a `SpatSolid`** *(planned)*. The coverage verb (working name `coverage_3d()`) returns the source cells inside each solid with their weights (the solid's volume in the cell × time overlap), and `summarise_3d()` turns them into statistics. Points, buffers, tracks and polygon × depth band areas are all solids, so this one path replaces the separate code in each function above.
 
 ### Conversions between spatial representations
-- **Create template voxel grid for study space**. Create the 3D voxel grid for the study space, that can be used as a template to convert other spatial representations to be compatible with it. 
-- **Convert 2D polygons with depth data to 2.5D.** When separate depth ranges are available, use that to convert 2D polygons into 2.5D representations that are bound by bathymetry and depth ranges. Ex. IUCN Red List species ranges. 
-- **Convert 2D rasters to 2.5D**. When depth ranges are available, use that to convert 2D raster data into 2.5D representations. Ex. working with Global Fishing Watch data on fishing effort by gear type.
+- **Create template voxel grid for study space**. Create the 3D voxel grid for the study space, that can be used as a template to convert other spatial representations to be compatible with it (`create_study_raster()`). 
+- **Convert 2D polygons with depth data to 2.5D.** When separate depth ranges are available, use that to convert 2D polygons into 2.5D representations that are bound by bathymetry and depth ranges (`vect_to_envelope()`). Ex. IUCN Red List species ranges. 
+- **Convert 2D rasters to 2.5D**. When depth ranges are available, use that to convert 2D raster data into 2.5D representations (`as_envelope()`). Ex. working with Global Fishing Watch data on fishing effort by gear type.
+- **Convert between 2.5D and 3D rasters**. `envelope_to_voxel()` places an envelope on a set of standard depths; `voxel_to_envelope()` keeps the shallowest and deepest level per cell where a test on the values holds (by default, not `NA`), filling any gaps in between.
+- **Build a `SpatSolid` from vector geometry** *(planned)*. `as_solid(geometry, top, bottom, time)` combines one point, line or polygon with top and bottom depths and an optional time interval, without snapping it to a grid. Ex. a 10 km buffer × 0–50 m around a tag detection, or an MPA × a depth band. Builders for many solids at once (one per observation row, or per sample along a track) come after.
+- **Convert a `SpatSolid` to 2.5D** *(planned)*. `solid_to_envelope(solid, template)` evaluates the top and bottom at each cell of a template grid, like `vect_to_envelope()`. This loses the exact edges and the time interval, so use it only when the next step needs a grid (ex. volume overlap with a species envelope).
 
 ### Spatial query
-Three verbs cover every pairing of a 3D object (`SpatEnvelope`, `SpatVoxel`) with another 3D object or with a 2D one (a `SpatRaster` footprint, or polygons). A 2D object restricts the domain horizontally and leaves its depths alone.
+Three verbs cover every pairing of a 3D object (`SpatEnvelope`, `SpatVoxel`, and *(planned)* `SpatSolid`) with another 3D object or with a 2D one (a `SpatRaster` footprint, or polygons). A 2D object restricts the domain horizontally and leaves its depths alone.
 - **`intersect_3d(x, y)`**: the 3D space the two share. Two envelopes intersect their depth intervals; two voxels keep the levels both occupy; an envelope is placed on a voxel's levels before the two are compared. The result is a domain, never field values.
 - **`intersects_3d(x, y)`**: whether they share any 3D space, cell by cell, with terra's three answers: `TRUE`, `FALSE` (both present but disjoint, or only one present), `NA` (neither present).
 - **`mask(x, mask)`**: `terra::mask()` made depth-aware. Keeps `x`'s values where the mask domain reaches that cell at that depth. A voxel masked by an envelope puts the envelope on the voxel's own levels, so the caller cannot misalign them.
 
-These verbs are the intersect step of the planned extraction design (see [Data model](#data-model)), which adds methods for `SpatSolid` and a coverage verb that returns source cells with weights.
+`SpatSolid` methods *(planned)*:
+- **Solid with solid**: `intersect_3d()` intersects the footprints as vector geometry, the depth intervals at each position, and the time intervals. The result is a `SpatSolid`; solids whose time intervals don't overlap don't intersect.
+- **Solid with envelope or voxel**: the solid is evaluated on the raster's grid (as in `solid_to_envelope()`) and compared cell by cell as two envelopes are now. `mask(voxel, solid)` keeps the voxel values in cells and levels the solid reaches.
+- **Solid with a data source**: the coverage verb, not these three, returns field values, with each cell's partial coverage as a weight (see [Spatial extractions](#spatial-extractions)).
+
+These verbs are the intersect step of the planned extraction design (see [Data model](#data-model)).
 
 `terra::intersect()` is a 2D test, so on a 3D object it is an error pointing to the verbs above. Dispatch names concrete classes only: S4 prefers a `SpatRaster` method over one on the `SpatVolume` union, so the union is a documentation device, not a dispatch target.
 
 ### Volume calculations 
 - **Calculate the volume occupied by 2.5D representation**. Each rasterized range stores presence plus `depth_min/depth_max` per cell, clamped to the seafloor. Volume is the sum of `cell_area × (depth_max - depth_min)` over present cells. The overlap between two domains is the volume of `intersect_3d()`'s result, measured the same way.
 - **Calculate the volume occupied by 3D representation**. Each raster layer has a height that it represents, which is defined by the height difference from the next raster layer. Ex. `t_an_depth=0`, `t_an_depth=100` would mean that the first `t_an_depth=0` layer has a height of 100m. 
+- **Calculate the volume of a `SpatSolid`** *(planned)*. Measured from the geometry, not a grid: footprint area × (`bottom` - `top`) for constant surfaces, exact formulas for named shapes (sphere, ellipsoid), and sampling across the footprint for raster or function surfaces. Points and lines have no area, so their volume is 0 unless buffered. The time interval doesn't change the volume. `volume()` and `calc_volume_overlap()` gain `SpatSolid` methods, with overlap measured on `intersect_3d()`'s result as for envelopes.
 
 ### Utilities 
 - **Download and prepare data.** Utilities for public APIs and open data incorporated into `ocean3d`. Includes WOA, Copernicus, IUCN Red List, Global Fishing Watch data. 
