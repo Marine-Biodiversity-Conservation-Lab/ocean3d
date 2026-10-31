@@ -45,7 +45,6 @@ extract_to_buffered_track(
   max_samples = 100000L,
   max_segment_km = NULL,
   max_gap_hours = NULL,
-  z_as_depth = FALSE,
   land_mask = NULL,
   marine_values = NULL,
   mask_type = c("land", "marine"),
@@ -57,17 +56,18 @@ extract_to_buffered_track(
 )
 }
 \arguments{
-\item{data}{Ordered vertex table, or sf LINESTRING features with a CRS.
-Tables may be data frames, matrices or named lists. Rows are traversed in
-their supplied order within each track; they are never sorted by date.
-sf attributes may be scalar per line or list columns with one value per
-vertex.}
+\item{data}{Ordered vertex table: a data frame, matrix, named list or sf
+POINT features, as for \code{\link[=extract_to_point]{extract_to_point()}}. Rows are traversed in their
+supplied order within each track; they are never sorted by date. Convert
+sf LINESTRING features first, e.g. with
+\code{as.data.frame(sf::st_coordinates(sf::st_transform(lines, 4326)))} and
+\verb{lon_col = "X", lat_col = "Y", track_col = "L1"}.}
 
 \item{nc, var}{netCDF sources and selected variable names. See
 \code{\link[=extract_to_buffer]{extract_to_buffer()}}.}
 
-\item{track_col}{Optional track identifier column. Without it, a table is one
-track and each sf feature is a separate track. IDs are returned as text.}
+\item{track_col}{Optional track identifier column. Without it, the input is
+one track. IDs are returned as text.}
 
 \item{sampling}{NULL (default) uses 'balanced' when spacing_km,
 depth_step_m, time_step_seconds or time_step is supplied, and
@@ -174,9 +174,7 @@ auto, the original observations determine precision, before interpolation.}
 \item{max_samples}{Maximum total sampled positions, a positive integer.}
 
 \item{max_segment_km, max_gap_hours}{Optional limits that reject long segments
-or known elapsed time gaps. Split disconnected trajectories explicitly.}
-
-\item{z_as_depth}{Interpret sf XYZ geometry as metres positive downwards.
+or known elapsed time gaps. Split disconnected trajectories explicitly.
 FALSE by default because geometric elevation may use a different
 convention.}
 

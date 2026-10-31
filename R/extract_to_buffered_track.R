@@ -76,7 +76,7 @@ extract_to_buffered_track <- function(
   output_col = NULL,
   time_resolution = c("auto", "datetime", "daily", "monthly", "yearly"),
   max_samples = 100000L, max_segment_km = NULL, max_gap_hours = NULL,
-  z_as_depth = FALSE, land_mask = NULL, marine_values = NULL,
+  land_mask = NULL, marine_values = NULL,
   mask_type = c("land", "marine"), mask_domain = NULL,
   land_policy = c("skip", "error"), mask_step_km = 0.5, quiet = FALSE, ...
 ) {
@@ -103,7 +103,7 @@ extract_to_buffered_track <- function(
     "interpolate_depth", "interpolate_time", "depth_step_m", "time_step",
     "time_unit", "method", "statistics", "weighting", "lon_col", "lat_col",
     "depth_col", "date_col", "output_col", "time_resolution", "max_samples",
-    "max_segment_km", "max_gap_hours", "z_as_depth", "land_mask",
+    "max_segment_km", "max_gap_hours", "land_mask",
     "marine_values", "mask_type", "mask_domain", "land_policy",
     "mask_step_km", "quiet"
   ))

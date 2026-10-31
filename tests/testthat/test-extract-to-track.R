@@ -825,86 +825,35 @@ test_that(
 
 
 test_that(
-  "sf lines transform CRS and accept XYZ depth and per-vertex attributes",
+  "sf points are tracks and converted LINESTRINGs match vertex tables",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
-    .make_track_nc(path, depth = c(0, 10, 20), time = 0:2)
-    line <- sf::st_sf(
-      id = "haul",
-      depth = I(list(c(0, 20))),
-      date = I(
-        list(
-          .track_clock(
-            c(
-              0,
-              2
-            )
-          )
-        )
-      ),
+    .make_track_nc(path)
+    vertices <- data.frame(id = "haul", lon = c(0, 2), lat = 0)
+    expected <- extract_to_track(
+      vertices, path, track_col = "id", spacing_km = 112, quiet = TRUE
+    )
+    points <- sf::st_transform(
+      sf::st_as_sf(vertices, coords = c("lon", "lat"), crs = 4326), 3857
+    )
+    from_points <- extract_to_track(
+      points, path, track_col = "id", spacing_km = 112, quiet = TRUE
+    )
+    expect_false(inherits(from_points$samples, "sf"))
+    expect_equal(from_points$samples$temp, expected$samples$temp)
+    lines <- sf::st_sf(
       geometry = sf::st_sfc(
-        sf::st_linestring(
-          rbind(
-            c(0, 0),
-            c(2, 0)
-          )
-        ),
-        crs = 4326
+        sf::st_linestring(rbind(c(0, 0), c(2, 0))), crs = 4326
       )
     )
-    for (input in list(line, sf::st_transform(line, 3857))) {
-      out <- extract_to_track(
-        input,
-        path,
-        track_col = "id",
-        spacing_km = 112,
-        interpolate_depth = TRUE,
-        interpolate_time = TRUE,
-        quiet = TRUE
-      )
-      expect_equal(out$samples$temp, c(0, 1020, 2040))
-      expect_identical(out$samples$track_id, rep("haul", 3))
-    }
-    bad_list <- line
-    bad_list$depth <- I(list(c(0, 10, 20)))
-    expect_error(
-      extract_to_track(bad_list, path, interpolate_depth = TRUE, quiet = TRUE),
-      "one value or one per vertex in feature 1"
-    )
-    measured <- sf::st_sf(
-      geometry = sf::st_sfc(
-        sf::st_linestring(rbind(c(0, 0, 1), c(2, 0, 2)), dim = "XYM"),
-        crs = 4326
-      )
-    )
-    expect_error(extract_to_track(measured, path), "Measured")
-    line3d <- sf::st_sf(
-      date = .track_clock(0),
-      geometry = sf::st_sfc(
-        sf::st_linestring(
-          rbind(
-            c(
-              0,
-              0,
-              0
-            ),
-            c(2, 0, 20)
-          )
-        ),
-        crs = 4326
-      )
-    )
-    expect_error(extract_to_track(line3d, path, spacing_km = 112), "z_as_depth")
-    out <- extract_to_track(
-      line3d,
-      path,
-      spacing_km = 112,
-      z_as_depth = TRUE,
-      interpolate_depth = TRUE,
+    expect_error(extract_to_track(lines, path), "POINT geometries")
+    converted <- extract_to_track(
+      as.data.frame(sf::st_coordinates(lines)), path,
+      lon_col = "X", lat_col = "Y", track_col = "L1", spacing_km = 112,
       quiet = TRUE
     )
-    expect_equal(out$samples$temp, c(0, 20, 40))
+    expect_equal(converted$samples$temp, expected$samples$temp)
   }
 )
 
@@ -1152,78 +1101,6 @@ test_that(
     expect_equal(out$samples$temp, c(0, 20))
     expect_equal(out$settings$candidate_sources, path)
     expect_match(out$settings$integration, "approximate")
-  }
-)
-
-test_that(
-  "ambiguous geometries and malformed sf attributes are rejected",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_track_nc(path)
-    geometry <- sf::st_sfc(
-      sf::st_linestring(rbind(c(0, 0), c(2, 0))),
-      crs = 4326
-    )
-    line <- sf::st_sf(id = "one", geometry = geometry)
-    expect_error(extract_to_track(sf::st_set_crs(line, NA), path), "CRS")
-    points <- sf::st_sf(geometry = sf::st_sfc(sf::st_point(c(0, 0))))
-    sf::st_crs(points) <- 4326
-    expect_error(extract_to_track(points, path), "LINESTRING")
-    empty <- sf::st_sf(
-      geometry = sf::st_sfc(
-        sf::st_linestring(
-          matrix(
-            numeric(),
-            ncol = 2
-          )
-        ),
-        crs = 4326
-      )
-    )
-    expect_error(extract_to_track(empty, path), "non-empty")
-    expect_error(extract_to_track(line[FALSE, ], path), "at least one")
-    repeated <- rbind(line, line)
-    expect_error(
-      extract_to_track(repeated, path, track_col = "id"),
-      "distinct track ID"
-    )
-    line$depth <- I(list(c(1, 2, 3)))
-    expect_error(extract_to_track(line, path), "one per vertex")
-    measured <- sf::st_sf(
-      geometry = sf::st_sfc(
-        sf::st_linestring(
-          rbind(
-            c(
-              0,
-              0,
-              1
-            ),
-            c(2, 0, 2)
-          ),
-          dim = "XYM"
-        ),
-        crs = 4326
-      )
-    )
-    expect_error(extract_to_track(measured, path), "Measured")
-    three <- sf::st_sf(
-      depth = 2,
-      geometry = sf::st_sfc(
-        sf::st_linestring(
-          rbind(
-            c(
-              0,
-              0,
-              1
-            ),
-            c(2, 0, 2)
-          )
-        ),
-        crs = 4326
-      )
-    )
-    expect_error(extract_to_track(three, path, z_as_depth = TRUE), "not both")
   }
 )
 

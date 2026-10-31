@@ -23,91 +23,21 @@
 }
 
 
-.track_input <- function(data, track_col, lon_col, lat_col, depth_col,
-                         z_as_depth) {
-  if (inherits(data, "sf")) {
-    if (is.na(sf::st_crs(data))) {
-      stop("Track geometries need a CRS.", call. = FALSE)
-    }
-    types <- as.character(sf::st_geometry_type(data))
-    if (any(types != "LINESTRING") || any(sf::st_is_empty(data))) {
-      stop(
-        "Use non-empty LINESTRING features; split multipart lines explicitly.",
-        call. = FALSE
-      )
-    }
-    if (!nrow(data)) {
-      stop("Supply at least one track.", call. = FALSE)
-    }
-    lines <- sf::st_geometry(sf::st_transform(data, 4326))
-    attributes <- sf::st_drop_geometry(data)
-    ids <- if (is.null(track_col)) {
-      as.character(seq_len(nrow(data)))
-    } else {
-      .check_required_cols(attributes, track_col)
-      as.character(attributes[[track_col]])
-    }
-    if (anyDuplicated(ids)) {
-      stop("Each LINESTRING needs a distinct track ID.", call. = FALSE)
-    }
-    coordinates <- sf::st_coordinates(lines)
-    if ("M" %in% colnames(coordinates)) {
-      stop(
-        "Measured (M) lines are unsupported; supply time explicitly.",
-        call. = FALSE
-      )
-    }
-    n <- tabulate(coordinates[, "L1"], length(lines))
-    if (any(n < 2L)) {
-      stop("Each track needs at least two vertices.", call. = FALSE)
-    }
-    result <- attributes[rep(seq_along(lines), n), , drop = FALSE]
-    for (name in names(attributes)) {
-      if (is.list(attributes[[name]])) {
-        values <- attributes[[name]]
-        bad <- which(lengths(values) != 1L & lengths(values) != n)
-        if (length(bad)) {
-          stop(
-            "List column `", name, "` must have one value or one per ",
-            "vertex in feature ", bad[1L], ".",
-            call. = FALSE
-          )
-        }
-        result[[name]] <- do.call(
-          c, unname(Map(function(x, k) rep(x, length.out = k), values, n))
-        )
-      }
-    }
-    if ("Z" %in% colnames(coordinates)) {
-      if (!z_as_depth) {
-        stop(
-          "XYZ lines require `z_as_depth = TRUE`: Z must be metres positive ",
-          "down.",
-          call. = FALSE
-        )
-      }
-      if (depth_col %in% names(attributes)) {
-        stop(
-          "Supply depth either as Z or in `depth_col`, not both.",
-          call. = FALSE
-        )
-      }
-      result[[depth_col]] <- unname(coordinates[, "Z"])
-    }
-    result[[lon_col]] <- unname(coordinates[, "X"])
-    result[[lat_col]] <- unname(coordinates[, "Y"])
-    result$track_id <- rep(ids, n)
+.track_input <- function(data, track_col, lon_col, lat_col) {
+  # Same inputs as extract_to_point(): tables, matrices, named lists and sf
+  # POINT features. Rows are vertices in traversal order.
+  result <- .normalize_points_input(data, lon_col, lat_col)
+  if (inherits(result, "sf")) {
+    result <- sf::st_drop_geometry(result)
+  }
+  .check_required_cols(result, c(lon_col, lat_col, track_col))
+  if (!nrow(result)) {
+    stop("Supply at least one track.", call. = FALSE)
+  }
+  result$track_id <- if (is.null(track_col)) {
+    "1"
   } else {
-    result <- .normalize_points_input(data, lon_col, lat_col)
-    .check_required_cols(result, c(lon_col, lat_col, track_col))
-    if (!nrow(result)) {
-      stop("Supply at least one track.", call. = FALSE)
-    }
-    result$track_id <- if (is.null(track_col)) {
-      "1"
-    } else {
-      as.character(result[[track_col]])
-    }
+    as.character(result[[track_col]])
   }
   if (anyNA(result$track_id) || any(!nzchar(result$track_id))) {
     stop("Track IDs must be non-missing and non-empty.", call. = FALSE)
@@ -996,15 +926,16 @@
 #' Sample ordered trajectories and reuse [extract_to_point()] for environmental
 #' selection. Return sampled positions and optional summaries per track.
 #'
-#' @param data Ordered vertex table, or sf LINESTRING features with a CRS.
-#'   Tables may be data frames, matrices or named lists. Rows are traversed in
-#'   their supplied order within each track; they are never sorted by date.
-#'   sf attributes may be scalar per line or list columns with one value per
-#'   vertex.
+#' @param data Ordered vertex table: a data frame, matrix, named list or sf
+#'   POINT features, as for [extract_to_point()]. Rows are traversed in their
+#'   supplied order within each track; they are never sorted by date. Convert
+#'   sf LINESTRING features first, e.g. with
+#'   `as.data.frame(sf::st_coordinates(sf::st_transform(lines, 4326)))` and
+#'   `lon_col = "X", lat_col = "Y", track_col = "L1"`.
 #' @param nc,var netCDF sources and selected variable names. See
 #'   [extract_to_buffer()].
-#' @param track_col Optional track identifier column. Without it, a table is one
-#'   track and each sf feature is a separate track. IDs are returned as text.
+#' @param track_col Optional track identifier column. Without it, the input is
+#'   one track. IDs are returned as text.
 #' @param sampling NULL (default) uses 'balanced' when spacing_km,
 #'   depth_step_m, time_step_seconds or time_step is supplied, and
 #'   'vertices' otherwise. 'vertices' uses observations only; 'balanced'
@@ -1066,7 +997,6 @@
 #' @param max_samples Maximum total sampled positions, a positive integer.
 #' @param max_segment_km,max_gap_hours Optional limits that reject long segments
 #'   or known elapsed time gaps. Split disconnected trajectories explicitly.
-#' @param z_as_depth Interpret sf XYZ geometry as metres positive downwards.
 #'   FALSE by default because geometric elevation may use a different
 #'   convention.
 #' @param quiet Hide explanatory reports; scientific and time-zone warnings
@@ -1094,7 +1024,7 @@
 #'   insufficient_coverage, partial or complete.
 #'   Samples follow traversal order. For vertices-only sampling the global
 #'   input row order is retained. Non-coordinate attributes of inserted samples
-#'   are NA. source_row indexes the expanded vertex table for sf lines.
+#'   are NA. source_row indexes the input rows.
 #'
 #' @section Interpretation and limits:
 #' Positions follow WGS84 shortest geodesics. Distances are
@@ -1151,7 +1081,7 @@ extract_to_track <- function(
     "auto", "datetime", "daily", "monthly", "yearly", "custom"
   ),
   max_samples = 100000L, max_segment_km = NULL, max_gap_hours = NULL,
-  z_as_depth = FALSE, quiet = FALSE, time_step = NULL,
+  quiet = FALSE, time_step = NULL,
   time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
   land_mask = NULL, marine_values = NULL, mask_type = c("land", "marine"),
   mask_domain = NULL, land_policy = c("skip", "error"), mask_step_km = 0.5,
@@ -1296,8 +1226,7 @@ extract_to_track <- function(
       args$method, c("2d", "nearest", "surface", "bottom", "all")
     )
   }
-  for (name in c("interpolate_depth", "interpolate_time", "z_as_depth",
-                 "quiet")) {
+  for (name in c("interpolate_depth", "interpolate_time", "quiet")) {
     .track_flag(args[[name]], name)
   }
   for (name in c("spacing_km", "depth_step_m", "time_step_seconds",
@@ -1445,8 +1374,7 @@ extract_to_track <- function(
     metadata, function(x) x$method %in% c("nearest", "all"), logical(1)
   ))
   vertices <- .track_input(
-    args$data, args$track_col, args$lon_col, args$lat_col, args$depth_col,
-    args$z_as_depth
+    args$data, args$track_col, args$lon_col, args$lat_col
   )
   if (depth_used || args$interpolate_depth) {
     .check_required_cols(vertices, args$depth_col)

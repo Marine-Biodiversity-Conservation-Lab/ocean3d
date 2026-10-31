@@ -901,28 +901,32 @@ track instead of treating a computed detour as an observed route.
 
 ## Step 8: Working with LINESTRING features
 
-A spatial line can supply its coordinates directly. Its CRS is required;
-projected lines are transformed to longitude and latitude. A date or depth
-may be constant for the whole feature, or supplied as a list with one value
-per vertex. Each feature must have a distinct track ID.
+Track extraction takes a table of vertices, or sf POINT features, as
+`extract_to_point()` does. A spatial line is converted to vertices first.
+`sf::st_coordinates()` returns one row per vertex, with `X` and `Y`
+coordinates and an `L1` column numbering the lines, so each line becomes one
+track. Transform the line to longitude and latitude first, and add any dates
+or depths as columns of the vertex table.
 
 ```{r sf-line}
 line <- sf::st_sf(
-  haul = "haul_A", date = as.Date("2026-09-20"),
+  haul = "haul_A",
   geometry = sf::st_sfc(sf::st_linestring(as.matrix(haul[c("lon", "lat")])),
                         crs = 4326)
 )
+line_vertices <- as.data.frame(
+  sf::st_coordinates(sf::st_transform(line, 4326))
+)
+line_vertices$date <- as.Date("2026-09-20")
 line_result <- extract_to_track(
-  line, nc_file, var = "thetao", track_col = "haul", spacing_km = 1,
-  method = "bottom", quiet = TRUE
+  line_vertices, nc_file, var = "thetao", lon_col = "X", lat_col = "Y",
+  track_col = "L1", spacing_km = 1, method = "bottom", quiet = TRUE
 )
 line_result$summary
 ```
 
-Multipart lines are rejected: split disconnected parts explicitly instead
-of joining them. For XYZ lines, `z_as_depth = TRUE` confirms that Z is metres
-positive downwards. Elevation, negative depth and M coordinates are not
-silently reinterpreted.
+Split multipart lines into separate lines first, so that disconnected parts
+are not joined.
 
 ## Summary
 
@@ -960,11 +964,11 @@ article_signature(extract_to_track, "extract_to_track")
 
 | Decision | Choices, meaning and effective default |
 |:--|:--|
-| Data and grouping | `data` supplies vertices or LINESTRING features; `nc` supplies sources. `var = NULL` detects variables; `track_col = NULL` treats the input as one track, otherwise names its ID column. |
+| Data and grouping | `data` supplies vertices (a table or sf POINT features); `nc` supplies sources. `var = NULL` detects variables; `track_col = NULL` treats the input as one track, otherwise names its ID column. |
 | `sampling` | `"vertices"` uses supplied observations; `"balanced"` shares subdivisions across all step limits; `"merged_steps"` retains separate distance/depth and time cuts; `"cells"` uses crossed grid-interval midpoints. Default: vertices; supplying a step with sampling omitted activates balanced. |
 | Route steps | `spacing_km`, `depth_step_m`, `time_step` default to NULL: no implicit step. Set positive maximum horizontal distance, depth change and elapsed/calendar time. `time_step_seconds` is the alternative seconds-only input; do not combine it with `time_step`. |
 | `time_unit` | `"seconds"`, `"minutes"`, `"hours"`, `"days"` are elapsed units (days = 24 hours); `"months"` and `"years"` are whole UTC calendar shifts, clamped at month ends. Default: `"hours"`. |
-| Interpolation and Z | `interpolate_depth` / `interpolate_time`: FALSE (default) requires unchanged values between vertices; TRUE permits linear changes along the assumed segment. `z_as_depth = FALSE` rejects XYZ lines; TRUE explicitly uses LINESTRING Z as positive-down metres. |
+| Interpolation | `interpolate_depth` / `interpolate_time`: FALSE (default) requires unchanged values between vertices; TRUE permits linear changes along the assumed segment. |
 | `method` | `"2d"` has no depth selection; `"nearest"` selects the closest valid layer to the requested depth; `"surface"` selects the physically shallowest layer; `"bottom"` selects the deepest valid layer. NULL (default) chooses 2d or nearest per variable. `"all"` returns the surface, bottom and nearest selections. |
 | `statistics` | `"mean"` averages values; `"sd"` describes spread; `"se"` reports the standard error; `"min"` / `"max"` return the lowest / highest value. Default: `"mean"`; choose one or several, or NULL to omit summary statistics. |
 | `weighting` | `"distance"` weights represented route length (default); `"duration"` weights elapsed time; `"equal"` gives each supported sample equal weight. Distance and duration are separate alternatives. |
