@@ -845,11 +845,6 @@ test_that("extraction leaves caller-owned netCDF connections open", {
 })
 
 test_that("dimension helpers read coordinates and report missing names", {
-  expect_error(
-    .match_name(c("x", "y"), "lon"),
-    "Available names are: x, y"
-  )
-  expect_null(.match_name("x", "lon", required = FALSE))
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, coordinate_var = TRUE)

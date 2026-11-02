@@ -165,31 +165,6 @@
   var
 }
 
-.match_name <- function(available,
-                        candidates,
-                        required = TRUE,
-                        what = "dimension") {
-  hit <- candidates[candidates %in% available]
-
-  if (length(hit) > 0) {
-    return(hit[1])
-  }
-
-  if (isTRUE(required)) {
-    stop(
-      sprintf(
-        "Could not find %s. Tried: %s. Available names are: %s",
-        what,
-        toString(candidates),
-        toString(available)
-      ),
-      call. = FALSE
-    )
-  }
-
-  NULL
-}
-
 
 .decode_netcdf_time <- function(nc, time_dim, offsets = NULL) {
   if (is.null(time_dim)) {
