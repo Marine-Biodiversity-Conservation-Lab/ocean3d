@@ -19,7 +19,7 @@ Technically, this means that `ocean3d` needs to be able to take points (0D), lin
 
 - **Three steps:** an analysis is build → intersect → summarise, and each analysis function belongs to one step ([Package design](#package-design-build-intersect-summarise)). The extraction functions don't follow this yet; they are planned to become wrappers over the three steps.
 - **Now:** two data models. netCDF files are used for point, buffer and track extraction; `SpatVoxel` / `SpatEnvelope` for everything else ([Data model](#data-model)).
-- **Planned (#99):** one model with time as a dimension, reading only the data each step needs. A trial of the stars and ncdfCF packages decides how the data are read and held.
+- **Planned (#99):** one model with time as a dimension, reading only the data each step needs. The package keeps its own core object and lazy ncdf4 reads; the stars and ncdfCF trial (#112) is in [`dev/data-model-trial.md`](dev/data-model-trial.md).
 - **Planned:** one vector class, `SpatVector3D`, holding points, lines and polygons with depth.
 - **Planned:** CFtime for time decoding.
 
@@ -136,7 +136,7 @@ The netCDF model keeps 4D data (lon, lat, depth, time) and its CF metadata intac
 
 ### Planned: one model (#99)
 
-This section is the plan from #99. None of it is implemented yet, and the first step (the stars and ncdfCF trial below) may change it.
+This section is the plan from #99, updated with the result of the stars and ncdfCF trial (#112). None of it is implemented yet.
 
 #### Requirements
 
@@ -144,26 +144,25 @@ This section is the plan from #99. None of it is implemented yet, and the first 
 2. **Lazy reads for data larger than memory.** Opening a dataset doesn't read its values, every operation reads only the slices it needs, and heavy processing runs per time step or per chunk, so peak memory follows the size of one slice rather than the whole dataset.
 3. **CF-correct metadata.** Keep the current handling of time units and calendars, sub-daily steps, depth units and direction, bounds and longitude conventions (#71–#75, #88–#96).
 
-None of the packages compared (terra, stars, ncdf4, ncdfCF) meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy `stars_proxy` objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package. ncdfCF reads netCDF following CF (time, depth axes, bounds) and exports to terra, but it is marked experimental, and its docs don't say whether its subsets are read lazily.
+None of the packages compared (terra, stars, ncdf4, ncdfCF) meets all three. terra stores depth and time as layer labels on a stack of 2D layers. stars has real dimensions and lazy `stars_proxy` objects, but only some operations stay lazy. ncdf4 reads exactly what is asked for but leaves everything above reading to the package. ncdfCF reads netCDF following CF (time, depth axes, bounds), reads its subsets lazily and exports to terra, but it is marked experimental and its API still changes between releases.
 
 #### Direction: a hybrid
 
-- **Core object:** one object that describes the dimensions (lon/lat with cell edges, depth, time, coordinate reference system (CRS)) without loading values, in the style of stars. It may be a `stars_proxy` itself if the trial supports that.
-- **Reads:** lazy and exact, through stars proxies, or through the package's own ncdf4 code where stars falls short. Remote Zarr stores (a cloud format Copernicus Marine also serves) would be read with `stars::read_mdim()`.
+- **Core object:** the package's own object that describes the dimensions (lon/lat with cell edges, depth in metres positive down, time, coordinate reference system (CRS)) without loading values, in the style of stars. Not a `stars_proxy`: in the trial, stars' operations on proxies read far more than they needed (`st_extract()`), and `read_mdim()` misread coordinates.
+- **Reads:** lazy and exact, through the package's own ncdf4 code. Unit conversion, `positive = "up"` axes, bounds and choosing between files in a series stay in the package; the trial found no reader that does all of these. Remote Zarr stores (a cloud format Copernicus Marine also serves) are an optional source read with `stars::read_mdim()` (Suggests), with the package correcting its coordinates.
+- **ncdfCF:** not a dependency for now. It reads lazily and decodes CF well, but its API changed in 4 of its last 8 releases. Its results are a reference for the reader's tests; revisit at its 1.0 release.
 - **Heavy spatial work:** per time step or per chunk. Read one slice, process it with terra, and combine the results across time.
 - **`SpatVoxel` / `SpatEnvelope`:** become views of one time step of the core object, so the existing terra-based tools keep working on a slice.
 - **Time decoding:** [CFtime](https://cran.r-project.org/package=CFtime) replaces the package's own CF time decoder. It decodes CF time units and handles every CF calendar, including ones R's date classes can't represent (`noleap`, `360_day`). It is already imported by ncmeta and tidync, which stars uses, so it fits whichever core object the trial picks.
 - **Extraction:** point, buffer and track extraction keep reading only the cells they touch, and accept anything that can become the core object: a netCDF file, a `SpatVoxel`, or a Zarr store.
 
-#### First step: stars and ncdfCF trial
+#### First step: stars and ncdfCF trial (#112)
 
-Before any code moves, compare stars and ncdfCF with the current ncdf4 code:
+The trial ([`dev/data-model-trial.md`](dev/data-model-trial.md)) compared stars (`read_ncdf()`, `read_mdim()`), ncdfCF and the current ncdf4 code on 29 CF cases (the test fixtures and #88–#96), on a 60 GB synthetic daily 4D file, on two years of NOAA OISST, and on the Copernicus Marine global daily product as a remote Zarr store. In short:
 
-1. On the synthetic netCDF fixtures from the tests and the #88–#96 cases: do decoded time, depth, bounds and values match the package's results?
-2. On a large real file (for example a multi-year daily global Copernicus Marine product), measure peak memory and run time for opening as a proxy, point extraction across time, volume and overlap for one time step, and a polygon or buffer summary over a time window.
-3. Optionally, the same dataset as a remote Zarr store.
-
-The result decides whether stars proxies become the core object, whether ncdfCF can take over CF reading (if it reads lazily and is stable enough to depend on), or whether the package keeps its own lazy reads.
+- stars `read_ncdf()` and ncdfCF each got 25 of the 29 cases right, `read_mdim()` 12 and the current code 13. Both readers that decode time with CFtime got every time case right, which supports the CFtime step.
+- Every option opened files without reading values and kept peak memory under 400 MB for points, series and buffers on the 60 GB file. stars' own `st_extract()` on a proxy took 243 s for 2 points.
+- The package's `extract_to_buffer()` took 434 s for one buffer that a plain block read handles in 5–7 s.
 
 #### Vector class: `SpatVector3D`
 
