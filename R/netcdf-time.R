@@ -64,23 +64,14 @@
   # CFtime reads the units and reference date-time (UTC or Z suffixes,
   # unpadded dates, missing seconds, years before 1000) and converts offsets
   # to date-times without the rounding error of origin + offset * seconds.
-  axis <- withCallingHandlers(
-    tryCatch(
-      CFtime::CFtime(units, calendar, values),
-      error = function(e) {
-        rlang::abort(glue::glue(
-          "Unsupported time units for `{time_dim}`: '{units}'.\n",
-          "Expected a unit such as days or hours followed by 'since' and ",
-          "a reference date-time ({conditionMessage(e)})."
-        ), class = "ocean3d_error_time_units", call = NULL)
-      }
-    ),
-    # Repeated or unsorted time steps are dealt with when observations are
-    # matched to the axis.
-    warning = function(w) {
-      if (grepl("monotonic", conditionMessage(w), fixed = TRUE)) {
-        invokeRestart("muffleWarning")
-      }
+  axis <- tryCatch(
+    CFtime::CFtime(units, calendar, values),
+    error = function(e) {
+      rlang::abort(glue::glue(
+        "Unsupported time units for `{time_dim}`: '{units}'.\n",
+        "Expected a unit such as days or hours followed by 'since' and ",
+        "a reference date-time ({conditionMessage(e)})."
+      ), class = "ocean3d_error_time_units", call = NULL)
     }
   )
 
