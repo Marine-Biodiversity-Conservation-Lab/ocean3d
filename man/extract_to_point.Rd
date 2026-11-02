@@ -199,15 +199,18 @@ function.
 \details{
 Numeric netCDF time coordinates must provide units expressed as
 milliseconds, seconds, minutes, hours or days since a reference
-date-time. Singular and plural unit names are accepted.
+date-time. Singular and plural unit names are accepted. A single time
+step in months or years since a reference date-time is also accepted;
+several are not, because their length is ambiguous.
 
 Reference date-times are interpreted in UTC. A trailing "Z" or
 "UTC" is accepted; numeric timezone offsets such as "+02:00"
 are not currently supported.
 
 Supported calendars are "standard", "gregorian" and
-"proleptic_gregorian". The first two are supported only for
-reference dates and timestamps on or after 1582-10-15.
+"proleptic_gregorian". With the first two, time steps before 1582-10-15
+can't be shown as R date-times and produce an error; reference dates
+before then are fine.
 Unsupported units, calendars or missing time units produce an error.
 
 Temporal resolution controls comparison of timestamp labels.

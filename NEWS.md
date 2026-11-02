@@ -44,6 +44,11 @@ calls that used to return a value now return `NA` or stop with an error:
   `months since` units, as in World Ocean Atlas files (#88). A time axis
   of several months or years still stops with an error, because their
   length is ambiguous.
+* Reference dates before 1582-10-15 on the `standard` and `gregorian`
+  calendars are accepted, such as `hours since 1-1-1 00:00:0.0` in
+  older NCEP reanalysis files; CFtime counts the Julian days before the
+  calendar change. Time steps before 1582-10-15 on these calendars still
+  stop with an error.
 * Time steps stored as fractional days (for example 10-minute data in
   `days since 1970-01-01`) decode exactly, so exact time matching no
   longer returns `NA` for observations on a file timestamp (#90).

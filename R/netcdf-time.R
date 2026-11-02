@@ -105,26 +105,7 @@
     ), class = "ocean3d_error_time_units", call = NULL)
   }
 
-  timestamps <- axis$as_timestamp(asPOSIX = TRUE)
-
-  # R's date-times use the Gregorian calendar throughout, unlike CF's
-  # standard calendar before 1582-10-15.
-  if (calendar %in% c("standard", "gregorian")) {
-    transition <- as.POSIXct("1582-10-15 00:00:00", tz = "UTC")
-    origin_before <- origin$year < 1582 ||
-      (origin$year == 1582 &&
-         (origin$month < 10 || (origin$month == 10 && origin$day < 15)))
-
-    if (origin_before || any(timestamps < transition)) {
-      stop(
-        "Historical standard/gregorian dates before 1582-10-15 ",
-        "require a calendar-aware decoder.",
-        call. = FALSE
-      )
-    }
-  }
-
-  timestamps
+  axis$as_timestamp(asPOSIX = TRUE)
 }
 
 .prepare_time_input <- function(
