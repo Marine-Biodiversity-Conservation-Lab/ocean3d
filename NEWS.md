@@ -58,6 +58,17 @@ calls that used to return a value now return `NA` or stop with an error:
 * Files on calendars other than `standard`, `gregorian` and
   `proleptic_gregorian` (such as `noleap` or `360_day`) still stop, now with
   an error that names the calendar.
+* Matching observation dates to long time axes is fast again: 500 dates
+  against a 10-year daily file take about 0.35 s, down from about 11 s
+  (#89).
+* A time step that appears more than once (for example after joining two
+  files that overlap) no longer stops the whole extraction. It is an error
+  only when an observation selects it, and the error names the file and
+  the timestamp (#91).
+* An observation exactly halfway between two time steps takes the one on
+  its own UTC day. Midnight date-times, as `readxl::read_excel()` returns
+  for Excel dates, used to get the previous day on files stamped at noon
+  (#71).
 
 ## Dependencies
 
