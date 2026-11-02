@@ -1,0 +1,54 @@
+dataset	reader	step	seconds	peak_MB	status	result
+synthetic	ocean3d	load	3.34	236	0	loaded	
+synthetic	ocean3d	open	3.35	244	0	time steps: 730	
+synthetic	stars_ncdf	load	2.74	214	0	loaded	
+synthetic	stars_ncdf	open	3.62	250	0	time steps: 730	
+synthetic	stars_mdim	load	2.73	214	0	loaded	
+synthetic	stars_mdim	open	2.90	227	0	time steps: 730	
+synthetic	ncdfCF	load	2.48	204	0	loaded	
+synthetic	ncdfCF	open	2.89	230	0	time steps: 730	
+synthetic	ocean3d	volume	12.20	1866	0	volume_10_20_km3=116835900 volume_15_25_km3=111867900 overlap_km3=69352360	
+synthetic	ocean3d	series	10.66	303	0	n=730 mean=26.6419 na=0	
+synthetic	ocean3d	buffer	433.65	419	0	mean=25.50317	
+synthetic	stars_ncdf	series	11.70	296	0	n=730 mean=26.6419 na=0	
+synthetic	stars_ncdf	buffer	6.85	273	0	mean=25.50388	
+synthetic	stars_mdim	series	10.35	286	0	n=730 mean=26.6419 na=0	
+synthetic	stars_mdim	buffer	5.49	252	0	mean=25.50388	
+synthetic	ncdfCF	volume	13.79	2774	0	volume_10_20_km3=116835900 volume_15_25_km3=111867900 overlap_km3=69352360	
+synthetic	stars_ncdf	volume	12.56	2248	0	volume_10_20_km3=116835900 volume_15_25_km3=111867900 overlap_km3=69352360	
+synthetic	stars_mdim	volume	10.81	2094	0	volume_10_20_km3=116835900 volume_15_25_km3=111867900 overlap_km3=69352360	
+synthetic	ncdfCF	series	10.53	310	0	n=730 mean=26.6419 na=0	
+synthetic	ncdfCF	buffer	5.68	276	0	mean=25.50388	
+synthetic	ocean3d	points	49.33	302	0	n=500 mean=15.8731 na=0	
+synthetic	stars_ncdf	points	276.78	250	0	n=500 mean=15.8731 na=0	
+synthetic	stars_mdim	points	36.43	258	0	n=500 mean=16.2477 na=0	
+synthetic	ncdfCF	points	32.74	385	0	n=500 mean=15.8731 na=0	
+synthetic	stars_ncdf	points_native	242.94	1020	0	points=2 values=20 mean=17.2958	
+synthetic	stars_mdim	points_native	3.56	230	0	ERROR: cannot allocate vector of size 56.4 Gb	
+oisst	ocean3d	load	3.34	236	0	loaded	
+oisst	ocean3d	open	3.48	247	0	time steps: 730	
+oisst	ocean3d	points	11.25	288	0	n=500 mean=18.4863 na=115	
+oisst	ocean3d	series	15.47	339	0	n=730 mean=24.9048 na=0	
+oisst	ocean3d	buffer	91.64	384	0	mean=24.902	
+oisst	stars_ncdf	load	3.13	215	0	loaded	
+oisst	stars_ncdf	open	4.60	251	0	time steps: 730	
+oisst	stars_ncdf	points	266.20	255	0	n=500 mean=18.4863 na=115	
+oisst	stars_ncdf	series	14.75	277	0	n=730 mean=24.9048 na=0	
+oisst	stars_ncdf	buffer	6.03	272	0	mean=24.89858	
+oisst	stars_mdim	load	3.15	215	0	loaded	
+oisst	stars_mdim	open	3.18	227	0	time steps: 730	
+oisst	stars_mdim	points	42.00	239	0	n=500 mean=18.4551 na=115	
+oisst	stars_mdim	series	12.38	259	0	n=730 mean=24.9048 na=0	
+oisst	stars_mdim	buffer	3.80	253	0	mean=24.89858	
+oisst	ncdfCF	load	2.84	205	0	loaded	
+oisst	ncdfCF	open	3.21	230	0	time steps: 730	
+oisst	ncdfCF	points	27.13	330	0	n=500 mean=18.4863 na=115	
+oisst	ncdfCF	series	12.39	248	0	n=730 mean=24.9048 na=0	
+oisst	ncdfCF	buffer	3.94	263	0	mean=24.89858	
+zarr	stars_mdim	ncdf4	2.82	210	0	ERROR: Error in nc_open trying to open file https://s3.waw3-1.cloudferro.com/mdl-arco-time-012/arco/GLOBAL_ANALYSISFORECAST_PHY_001_024/cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m_202406/timeChunked.zarr#mode=zarr,s3 (return_on_error= FALSE )	
+synthetic	ncdfCF	lazy_subset	3.40	233	0	subset dims 1440x720x1x730	
+synthetic	ncdfCF	lazy_subset_read	3.27	337	0	dims 1440x720x1x2, read 2073600 values, mean=17.8353	
+zarr	stars_mdim	open	13.86	216	0	dims 4320x2041x50x1625; time 2022-06-01 .. 2026-11-11 (Date); elevation -5728 .. -0.494	
+zarr	stars_mdim	series	89.45	220	0	n=1625 mean=25.079 na=0	
+zarr	stars_mdim	map	78.87	532	0	n=8817120 mean=14.177 na=2681786	
+zarr	stars_mdim	volume	310.21	480	1	volume_10_20_km3=199226.9 volume_15_25_km3=242608.1 overlap_km3=85121.3	
