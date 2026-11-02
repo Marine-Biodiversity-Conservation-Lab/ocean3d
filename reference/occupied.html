@@ -67,7 +67,8 @@ fishing effort. It does not say which cells count as occupied.
 
 
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
-<dd><p>A <a href="SpatVoxel-class.html">SpatVoxel</a>.</p></dd>
+<dd><p>A <a href="SpatVoxel-class.html">SpatVoxel</a>. A netCDF file isn't accepted: load it as a
+<code>SpatRaster</code> (e.g. with <code><a href="woa_load_nc.html">woa_load_nc()</a></code>) and wrap it with <code><a href="as_voxel.html">as_voxel()</a></code>.</p></dd>
 
 
 <dt id="arg-fun">fun<a class="anchor" aria-label="anchor" href="#arg-fun"></a></dt>

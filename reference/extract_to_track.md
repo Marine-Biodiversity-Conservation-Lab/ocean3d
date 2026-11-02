@@ -61,6 +61,9 @@ extract_to_track(
 
   netCDF sources and selected variable names. See
   [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md).
+  Files are read directly with ncdf4; a
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+  or other `SpatRaster` isn't accepted.
 
 - track_col:
 

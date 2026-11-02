@@ -40,7 +40,11 @@ mask(x, mask, ...)
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
   a
   [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
-  or a plain `SpatRaster`.
+  or a plain `SpatRaster`. A netCDF file isn't accepted: load it as a
+  `SpatRaster` (e.g. with
+  [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md))
+  and wrap it with
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 
 - mask:
 

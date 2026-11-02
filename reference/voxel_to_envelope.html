@@ -71,7 +71,9 @@ and the deepest becomes <code>depth_max</code>. Cells where the predicate is nev
 
 <dl><dt id="arg-v">v<a class="anchor" aria-label="anchor" href="#arg-v"></a></dt>
 <dd><p>SpatVoxel (or a multi-depth SpatRaster with
-<code>{variable}_depth={value}</code> layer names).</p></dd>
+<code>{variable}_depth={value}</code> layer names). A netCDF file isn't accepted:
+load it as a <code>SpatRaster</code> (e.g. with <code><a href="woa_load_nc.html">woa_load_nc()</a></code>) and wrap it with
+<code><a href="as_voxel.html">as_voxel()</a></code>.</p></dd>
 
 
 <dt id="arg-fun">fun<a class="anchor" aria-label="anchor" href="#arg-fun"></a></dt>

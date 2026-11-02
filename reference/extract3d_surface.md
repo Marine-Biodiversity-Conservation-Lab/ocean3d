@@ -21,7 +21,12 @@ extract3d_surface(data, nc, var = NULL, ...)
 
   netCDF source. Can be a file path, vector of file paths, list of file
   paths, opened `ncdf4` object, list of opened objects, or a data frame
-  with a file column.
+  with a file column. Files are read directly with ncdf4, only the cells
+  each observation needs. A
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+  or other `SpatRaster` isn't accepted; for those, see
+  [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
+  and [`mask()`](https://rspatial.github.io/terra/reference/mask.html).
 
 - var:
 

@@ -97,7 +97,8 @@ values where the other is present, use <code><a href="https://rspatial.github.io
 <dd><p>The two objects. At least one must be a <a href="SpatEnvelope-class.html">SpatEnvelope</a> or
 a <a href="SpatVoxel-class.html">SpatVoxel</a>. The other can be either of those, a single-layer
 <code>SpatRaster</code> footprint, or polygons (<code>SpatVector</code>, <code>sf</code>, <code>sfc</code>). Rasters
-must share one grid (CRS, extent, resolution).</p></dd>
+must share one grid (CRS, extent, resolution). netCDF files aren't
+accepted; load them with terra and wrap them with <code><a href="as_voxel.html">as_voxel()</a></code> first.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

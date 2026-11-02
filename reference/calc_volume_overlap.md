@@ -43,6 +43,9 @@ calc_volume_overlap(x, y, ...)
   [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   or
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
+  netCDF files aren't accepted; load them with terra and wrap them with
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  first.
 
 - ...:
 

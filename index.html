@@ -74,15 +74,16 @@
 <div class="section level2">
 <h2 id="how-it-works">How it works<a class="anchor" aria-label="anchor" href="#how-it-works"></a>
 </h2>
+<p>Species ranges and other spatial layers are usually stored as 2D maps, but marine species and activities also occupy a depth range, bounded by the seafloor. <code>ocean3d</code> combines a 2D range, a depth range, bathymetry and gridded environmental data into one 3D representation, so you can ask, for example, which temperatures occur within a species’ 3D distribution.</p>
+<div class="float">
+<img src="articles/figures/Figure1_conceptual3Ddistribution.png" alt="A species’ range as a 2D polygon on a bathymetry map (A) and as a 3D distribution between the surface and the seafloor in a vertical cross-section (B). Panel C shows the inputs ocean3d combines: the range polygon, the depth range, bathymetry and temperature at several depths, to find the temperatures within the 3D distribution."><div class="figcaption">A species’ range as a 2D polygon on a bathymetry map (A) and as a 3D distribution between the surface and the seafloor in a vertical cross-section (B). Panel C shows the inputs ocean3d combines: the range polygon, the depth range, bathymetry and temperature at several depths, to find the temperatures within the 3D distribution.</div>
+</div>
 <p>In order to represent the 3D space in the ocean, we use a stacked-raster approach built on <code>terra</code>. We call this the Spatial Voxel Model, with the class <code>SpatVoxel</code>. Using this <code>SpatVoxel</code>, we can represent any number of spatial phenomena in the ocean, including species distributions, fishing effort, and oceanographic variables.</p>
+<p><code>ocean3d</code> uses two representations for 3D geometry: A <code>SpatEnvelope</code> stores one continuous <code>[depth_min, depth_max]</code> interval per cell; a <code>SpatVoxel</code> stores a value at each of a set of depth levels, so it can hold a variable and interior gaps. <code>SpatEnvelope</code> is useful for representing discrete 3D geometry (ex. species ranges with defined boundaries for area and depth). In contrast, <code>SpatVoxel</code> is ideal for representing continuous values (ex. species distribution models with probabilities of occurrence, rather than presence and absences). <code>SpatVoxel</code> can also represent overhangs, holes, etc. in 3D space since it contains a value for every depth, rather than a depth range.</p>
 <div class="float">
-<img src="figures/fig-ocean-voxel-model.png" alt="Diagram that represents the multi-depth spatial voxel model"><div class="figcaption">Diagram that represents the multi-depth spatial voxel model</div>
+<img src="articles/figures/Comparison_SpatEnvelope_SpatVoxel.png" alt="A SpatEnvelope (A), storing a depth_min and depth_max per cell above the seafloor, converted with envelope_to_voxel() into a SpatVoxel (B), storing presence at each depth level (0, 50, 100, 200 and 500 m)."><div class="figcaption">A SpatEnvelope (A), storing a depth_min and depth_max per cell above the seafloor, converted with envelope_to_voxel() into a SpatVoxel (B), storing presence at each depth level (0, 50, 100, 200 and 500 m).</div>
 </div>
-<p>This package includes functions for converting common vector representations to the <code>SpatVoxel</code> class 3D representation. One example operation enabled by <code>ocean3d</code> is to take an existing vector and observed depth range, and have it match with a pre-existing <code>SpatVoxel</code>.</p>
-<div class="float">
-<img src="figures/fig-species-voxel.png" alt="Converting species range vector into SpatVoxel"><div class="figcaption">Converting species range vector into SpatVoxel</div>
-</div>
-<p><code>ocean3d</code> uses two representations for 3D geometry: A <code>SpatEnvelope</code> stores one continuous <code>[depth_min, depth_max]</code> interval per cell; a <code>SpatVoxel</code> (shown above) stores a value at each of a set of depth levels, so it can hold a variable and interior gaps. <code>SpatEnvelope</code> is useful for representing discrete 3D geometry (ex. species ranges with defined boundaries for area and depth). In contrast, <code>SpatVoxel</code> is ideal for representing continuous values (ex. species distribution models with probabilities of occurrence, rather than presence and absences). <code>SpatVoxel</code> can also represent overhangs, holes, etc. in 3D space since it contains a value for every depth, rather than a depth range.</p>
+<p>This package includes functions for converting common vector representations to these 3D representations. For example, <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> turns a species range polygon and its observed depth range into a <code>SpatEnvelope</code> bounded by the seafloor, and <code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> places it on the depth levels of a <code>SpatVoxel</code>, as in the figure above.</p>
 <p>This package includes utilities for working with commonly used datasets in marine habitat spatial analyses, including IUCN Red List, World Ocean Atlas, GEBCO, Copernicus Marine, and Global Fishing Watch.</p>
 </div>
 <div class="section level2">
@@ -102,40 +103,68 @@
 <div class="section level2">
 <h2 id="function-overview">Function overview<a class="anchor" aria-label="anchor" href="#function-overview"></a>
 </h2>
+<p>An analysis in <code>ocean3d</code> has three steps: <strong>build</strong> 3D objects from your inputs, <strong>intersect</strong> them with each other or with the data, and <strong>summarise</strong> the result as volumes, overlaps or statistics. The functions below are grouped by step (see the <a href="SPEC.html#package-design-build-intersect-summarise">package design in SPEC.md</a>).</p>
 <div class="section level3">
-<h3 id="create-a-raster-covering-extent-of-multiple-spatial-inputs">Create a raster covering extent of multiple spatial inputs<a class="anchor" aria-label="anchor" href="#create-a-raster-covering-extent-of-multiple-spatial-inputs"></a>
+<h3 id="which-input-each-function-takes">Which input each function takes<a class="anchor" aria-label="anchor" href="#which-input-each-function-takes"></a>
 </h3>
+<p><code>ocean3d</code> currently has two data models for gridded data, and each function takes one of them:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr>
+<th>Input</th>
+<th>Functions</th>
+<th>Reads with</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>netCDF files (paths, open <code>ncdf4</code> connections or a file table)</td>
+<td>
+<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> and its <code><a href="reference/extract2d.html">extract2d()</a></code> / <code>extract3d_*()</code> wrappers, <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code>, <code><a href="reference/extract_to_track.html">extract_to_track()</a></code>
+</td>
+<td>ncdf4, only the cells each observation needs; keeps the time dimension</td>
+</tr>
+<tr>
+<td>
+<code>SpatVoxel</code> / <code>SpatEnvelope</code> (3D classes built on <code><a href="https://rspatial.github.io/terra/reference/SpatRaster-class.html" class="external-link">terra::SpatRaster</a></code>)</td>
+<td>the build, intersect and volume functions, <code>mask()</code> and <code><a href="reference/extract_to_area.html">extract_to_area()</a></code>
+</td>
+<td>terra; no time dimension</td>
+</tr>
+</tbody>
+</table>
+<p>The two don’t convert into each other yet. A voxel from <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> and <code><a href="reference/as_voxel.html">as_voxel()</a></code> can’t be passed to <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, and a netCDF file can’t be passed to <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> or <code><a href="reference/volume.html">volume()</a></code>. To use a netCDF file with the voxel functions, load it as a <code>SpatRaster</code> (e.g. with <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code>) and wrap it with <code><a href="reference/as_voxel.html">as_voxel()</a></code>. Merging the two into one model with time is planned in <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99" class="external-link">#99</a>.</p>
+</div>
+<div class="section level3">
+<h3 id="build-3d-objects">Build: 3D objects<a class="anchor" aria-label="anchor" href="#build-3d-objects"></a>
+</h3>
+<p>Input: <code>SpatRaster</code> layers and polygons (<code>sf</code>, <code>SpatVector</code>). Output: <code>SpatVoxel</code> or <code>SpatEnvelope</code>.</p>
 <ul>
 <li>
 <code><a href="reference/create_study_raster.html">create_study_raster()</a></code> — build an empty study-area <code>SpatRaster</code> covering the combined extent of one or more spatial inputs.</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="id_3d-representations">3D representations<a class="anchor" aria-label="anchor" href="#id_3d-representations"></a>
-</h3>
-<ul>
 <li>
-<code><a href="reference/as_voxel.html">as_voxel()</a></code> — wrap a multi-depth <code>SpatRaster</code> (or a list of single-depth ones) as a validated <code>SpatVoxel</code>, ordered shallow to deep with <code>{variable}_depth={value}</code> layer names.</li>
+<code><a href="reference/as_voxel.html">as_voxel()</a></code> — wrap a multi-depth <code>SpatRaster</code> (or a list of single-depth ones) as a validated <code>SpatVoxel</code>, ordered shallow to deep with <code>{variable}_depth={value}</code> layer names. This is how gridded data, including netCDF files loaded with terra, enter the voxel model.</li>
 <li>
 <code><a href="reference/as_envelope.html">as_envelope()</a></code> — define a 3D envelope with two rasters, with <code>depth_min</code> and <code>depth_max</code> corresponding to the minimum and maximum depths present in given cell.</li>
-</ul>
-</div>
-<div class="section level3">
-<h3 id="conversion-between-3d-representations">Conversion between 3D representations<a class="anchor" aria-label="anchor" href="#conversion-between-3d-representations"></a>
-</h3>
-<ul>
 <li>
 <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> — rasterize a single species range or fishery footprint onto the study grid and attach per-cell <code>depth_min</code> / <code>depth_max</code>, returning a <code>SpatEnvelope</code>.</li>
 <li>
-<code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> — expand an envelope onto a set of depth levels.</li>
+<code><a href="reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> — expand an envelope onto a set of depth levels. <code><a href="reference/voxel_profiles.html">profile_flat()</a></code> and <code><a href="reference/voxel_profiles.html">profile_equal()</a></code> set how a cell’s value is spread down the levels it occupies.</li>
 <li>
 <code><a href="reference/voxel_to_envelope.html">voxel_to_envelope()</a></code> — collapse a voxel to the envelope bounding it, using a predicate on the cell values. Lossy: interior gaps are filled.</li>
+<li>
+<code><a href="reference/occupied.html">occupied()</a></code> — turn a voxel of values (e.g. temperature) into a presence voxel, using a predicate on the cell values.</li>
+<li>
+<code><a href="reference/depths.html">depths()</a></code> — read the depth of each layer of a voxel.</li>
 </ul>
 </div>
 <div class="section level3">
-<h3 id="id_3d-spatial-query">3D spatial query<a class="anchor" aria-label="anchor" href="#id_3d-spatial-query"></a>
+<h3 id="intersect-3d-spatial-query">Intersect: 3D spatial query<a class="anchor" aria-label="anchor" href="#intersect-3d-spatial-query"></a>
 </h3>
-<p>Three functions ask how a <code>SpatEnvelope</code> or <code>SpatVoxel</code> relates to another object in 3D. The other object can be a 3D object or a 2D one: a <code>SpatRaster</code> footprint or polygons (<code>SpatVector</code>, <code>sf</code>). A 2D object restricts the domain horizontally and without restricting the depths.</p>
+<p>Input: <code>SpatVoxel</code> or <code>SpatEnvelope</code>, compared with another 3D object or a 2D one: a <code>SpatRaster</code> footprint or polygons (<code>SpatVector</code>, <code>sf</code>). A 2D object restricts the domain horizontally without restricting the depths.</p>
 <ul>
 <li>
 <code>intersect_3d(x, y)</code> — the shared 3D space between the two inputs. Returns an envelope with the shared depth interval or a presence voxel, depending on inputs.</li>
@@ -146,9 +175,9 @@
 </ul>
 </div>
 <div class="section level3">
-<h3 id="id_3d-volume">3D volume<a class="anchor" aria-label="anchor" href="#id_3d-volume"></a>
+<h3 id="summarise-3d-volume">Summarise: 3D volume<a class="anchor" aria-label="anchor" href="#summarise-3d-volume"></a>
 </h3>
-<p>Both dispatch on the 3D representation, so they take either a <code>SpatEnvelope</code> or a <code>SpatVoxel</code>. A voxel’s volume sums the slab each occupied depth level stands for, so interior gaps cost volume instead of being filled in. Given one of each, the envelope is discretized onto the voxel’s depth levels.</p>
+<p>Input: <code>SpatEnvelope</code> or <code>SpatVoxel</code>. A voxel’s volume sums the slab each occupied depth level stands for, so interior gaps cost volume instead of being filled in. Given one of each, the envelope is discretized onto the voxel’s depth levels.</p>
 <ul>
 <li>
 <code><a href="reference/volume.html">volume()</a></code> — total 3D volume (km³) of a rasterized domain.</li>
@@ -157,20 +186,25 @@
 </ul>
 </div>
 <div class="section level3">
-<h3 id="environmental-extraction-to-areas">Environmental extraction to areas<a class="anchor" aria-label="anchor" href="#environmental-extraction-to-areas"></a>
+<h3 id="summarise-environmental-extraction-from-a-spatvoxel">Summarise: environmental extraction from a <code>SpatVoxel</code>
+<a class="anchor" aria-label="anchor" href="#summarise-environmental-extraction-from-a-spatvoxel"></a>
 </h3>
+<p>Input: a <code>SpatVoxel</code> already loaded with terra.</p>
 <ul>
 <li>
 <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> — crop a <code>SpatVoxel</code> to an area polygon and select layers within a depth range.</li>
+<li>
+<code>mask()</code> (above) — keep a <code>SpatVoxel</code>‘s values inside a 3D volume, such as a species’ range from <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code>.</li>
 </ul>
 <p>See <code><a href="articles/ocean3d.html">vignette("ocean3d")</a></code> for the full workflow, from a range polygon through to a vertical profile of the values inside it.</p>
 </div>
 <div class="section level3">
-<h3 id="environmental-extraction-to-point-observations">Environmental extraction to point observations<a class="anchor" aria-label="anchor" href="#environmental-extraction-to-point-observations"></a>
+<h3 id="summarise-environmental-extraction-from-netcdf-files">Summarise: environmental extraction from netCDF files<a class="anchor" aria-label="anchor" href="#summarise-environmental-extraction-from-netcdf-files"></a>
 </h3>
+<p>Input: observations (data frame, tibble, <code>sf</code> POINT, matrix, or named list) and one or more netCDF files. These functions read the files directly, only the cells each observation needs, and match time as well as depth. They don’t take a <code>SpatVoxel</code>.</p>
 <ul>
 <li>
-<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> — the general engine: match observation points (data frame, tibble, <code>sf</code> POINT, matrix, or named list) against one or more NetCDF files. By default a point takes the value of the grid cell that contains it (<code>NA</code> outside the grid); <code>spatial_match = "nearest"</code> accepts the nearest cell centre within <code>max_distance_km</code>. Time is matched to the nearest timestamp and depth by physical depth in metres. Returns the input with the extracted values appended, structure preserved.</li>
+<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> — the general engine: match observation points against one or more netCDF files. By default a point takes the value of the grid cell that contains it (<code>NA</code> outside the grid); <code>spatial_match = "nearest"</code> accepts the nearest cell centre within <code>max_distance_km</code>. Time is matched to the nearest timestamp and depth by physical depth in metres. Returns the input with the extracted values appended, structure preserved.</li>
 <li>
 <code><a href="reference/extract2d.html">extract2d()</a></code> — for variables with no depth dimension.</li>
 <li>
@@ -179,11 +213,16 @@
 <code><a href="reference/extract3d_surface.html">extract3d_surface()</a></code> / <code><a href="reference/extract3d_bottom.html">extract3d_bottom()</a></code> — the physically shallowest depth layer, or the deepest non-missing one at that cell.</li>
 <li>
 <code><a href="reference/extract3d_all.html">extract3d_all()</a></code> — nearest, surface and bottom in one pass, as three columns.</li>
+<li>
+<code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code> — summarise values within a geodesic circle × depth window × time window around each observation, weighted by cell coverage, layer thickness and time, or pick the value closest to a target.</li>
+<li>
+<code><a href="reference/extract_to_track.html">extract_to_track()</a></code> — sample points along ordered tracks (e.g. tagging data), extract values at them, and optionally summarise per track.</li>
 </ul>
 </div>
 <div class="section level3">
-<h3 id="common-spatial-dataset-utilities">Common spatial dataset utilities<a class="anchor" aria-label="anchor" href="#common-spatial-dataset-utilities"></a>
+<h3 id="data-utilities">Data utilities<a class="anchor" aria-label="anchor" href="#data-utilities"></a>
 </h3>
+<p>These download or load public datasets. The loaders return a plain <code>SpatRaster</code>; wrap it with <code><a href="reference/as_voxel.html">as_voxel()</a></code> or <code><a href="reference/as_envelope.html">as_envelope()</a></code> to use it with the build, intersect and volume functions above. The netCDF extraction functions take the downloaded files themselves (e.g. from <code><a href="reference/woa_download.html">woa_download()</a></code>).</p>
 <div class="section level4">
 <h4 id="iucn-red-list-api-utilities">IUCN Red List API utilities<a class="anchor" aria-label="anchor" href="#iucn-red-list-api-utilities"></a>
 </h4>

@@ -50,7 +50,10 @@ intersects_3d(x, y, ...)
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
   The other can be either of those, a single-layer `SpatRaster`
   footprint, or polygons (`SpatVector`, `sf`, `sfc`). Rasters must share
-  one grid (CRS, extent, resolution).
+  one grid (CRS, extent, resolution). netCDF files aren't accepted; load
+  them with terra and wrap them with
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  first.
 
 - ...:
 

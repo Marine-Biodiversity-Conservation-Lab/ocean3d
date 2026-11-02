@@ -106,7 +106,10 @@ assessing coverage. Observations and input order are retained.</p>
 
 
 <dt id="arg-nc">nc<a class="anchor" aria-label="anchor" href="#arg-nc"></a></dt>
-<dd><p>netCDF path, paths, opened ncdf4 connection, list, or file table.</p></dd>
+<dd><p>netCDF path, paths, opened ncdf4 connection, list, or file table.
+Files are read directly with ncdf4, only the cells each observation
+needs. A <a href="SpatVoxel-class.html">SpatVoxel</a> or other <code>SpatRaster</code> isn't accepted; for
+those, see <code><a href="extract_to_area.html">extract_to_area()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code>.</p></dd>
 
 
 <dt id="arg-var">var<a class="anchor" aria-label="anchor" href="#arg-var"></a></dt>

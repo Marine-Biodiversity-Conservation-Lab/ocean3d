@@ -57,6 +57,12 @@ extract_to_buffer(
 - nc:
 
   netCDF path, paths, opened ncdf4 connection, list, or file table.
+  Files are read directly with ncdf4, only the cells each observation
+  needs. A
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+  or other `SpatRaster` isn't accepted; for those, see
+  [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
+  and [`mask()`](https://rspatial.github.io/terra/reference/mask.html).
 
 - var:
 

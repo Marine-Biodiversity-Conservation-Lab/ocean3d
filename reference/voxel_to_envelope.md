@@ -20,7 +20,11 @@ voxel_to_envelope(v, fun = function(x) !is.na(x))
 - v:
 
   SpatVoxel (or a multi-depth SpatRaster with `{variable}_depth={value}`
-  layer names).
+  layer names). A netCDF file isn't accepted: load it as a `SpatRaster`
+  (e.g. with
+  [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md))
+  and wrap it with
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 
 - fun:
 

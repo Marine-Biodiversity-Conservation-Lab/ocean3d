@@ -65,7 +65,9 @@ following the <code>{variable}_depth={value}</code> convention.</p>
 
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
 <dd><p>SpatRaster with <code>{variable}_depth={value}</code> layer names, a list of
-single-depth SpatRasters, or an existing <a href="SpatVoxel-class.html">SpatVoxel</a>.</p></dd>
+single-depth SpatRasters, or an existing <a href="SpatVoxel-class.html">SpatVoxel</a>. This is how
+gridded data enter the <code>SpatVoxel</code> model: read a netCDF file with
+<code><a href="woa_load_nc.html">woa_load_nc()</a></code> or <code><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">terra::rast()</a></code> first. netCDF paths aren't accepted.</p></dd>
 
 
 <dt id="arg-depths">depths<a class="anchor" aria-label="anchor" href="#arg-depths"></a></dt>

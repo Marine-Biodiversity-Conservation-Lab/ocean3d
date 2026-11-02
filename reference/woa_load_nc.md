@@ -30,7 +30,14 @@ woa_load_nc(file_path, field = "an")
 
 ## Value
 
-SpatRaster with standardized depth layer names.
+SpatRaster with standardized depth layer names. Wrap it with
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+to use it with the `SpatVoxel` functions
+([`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+[`mask()`](https://rspatial.github.io/terra/reference/mask.html),
+[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md),
+...). The point, buffer and track extraction functions take the netCDF
+file itself, not this raster.
 
 ## Examples
 

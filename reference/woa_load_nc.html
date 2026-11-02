@@ -84,7 +84,10 @@ Documentation:
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>SpatRaster with standardized depth layer names.</p>
+    <p>SpatRaster with standardized depth layer names. Wrap it with
+<code><a href="as_voxel.html">as_voxel()</a></code> to use it with the <code>SpatVoxel</code> functions (<code><a href="volume.html">volume()</a></code>,
+<code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code>, <code><a href="extract_to_area.html">extract_to_area()</a></code>, ...). The point, buffer and track
+extraction functions take the netCDF file itself, not this raster.</p>
     </div>
 
     <div class="section level2">

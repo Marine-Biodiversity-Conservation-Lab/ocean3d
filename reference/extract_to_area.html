@@ -73,7 +73,8 @@ Reprojected to the voxel's CRS when the two differ.</p></dd>
 
 <dt id="arg-rast-d">rast_3d<a class="anchor" aria-label="anchor" href="#arg-rast-d"></a></dt>
 <dd><p><a href="SpatVoxel-class.html">SpatVoxel</a>. Multi-depth raster, e.g. from <code><a href="as_voxel.html">as_voxel()</a></code>
-or <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>.</p></dd>
+or <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. A netCDF file isn't accepted: load it as a
+<code>SpatRaster</code> (e.g. with <code><a href="woa_load_nc.html">woa_load_nc()</a></code>) and wrap it with <code><a href="as_voxel.html">as_voxel()</a></code>.</p></dd>
 
 
 <dt id="arg-min-depth">min_depth<a class="anchor" aria-label="anchor" href="#arg-min-depth"></a></dt>
@@ -93,16 +94,18 @@ range.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>This is the area counterpart of <code><a href="extract_to_point.html">extract_to_point()</a></code>: the same "restrict a
-3D source to a target geometry" operation, with a polygon as the target
-rather than observation points.</p>
+    <p>Unlike <code><a href="extract_to_point.html">extract_to_point()</a></code>, <code><a href="extract_to_buffer.html">extract_to_buffer()</a></code> and <code><a href="extract_to_track.html">extract_to_track()</a></code>,
+which read netCDF files, this function takes a <a href="SpatVoxel-class.html">SpatVoxel</a> already
+loaded with terra. It has no time dimension and computes no statistic; it
+only crops the voxel and selects depth layers.</p>
 <p>To restrict a voxel to a species' <em>per-cell</em> depth window rather than one
 depth band across the whole area, build a <a href="SpatEnvelope-class.html">SpatEnvelope</a> and mask with
 it instead: <code>mask(rast_3d, range_rast)</code>. See <a href="mask-3d.html">mask-3d</a>.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="extract_to_point.html">extract_to_point()</a></code> for the point counterpart; <code><a href="depths.html">depths()</a></code> for the
+    <div class="dont-index"><p><code><a href="extract_to_point.html">extract_to_point()</a></code> to extract from netCDF files at points;
+<code><a href="depths.html">depths()</a></code> for the
 layer depths the bounds snap to.</p></div>
     </div>
 

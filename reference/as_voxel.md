@@ -19,6 +19,12 @@ as_voxel(x, depths = NULL, varname = "value")
   SpatRaster with `{variable}_depth={value}` layer names, a list of
   single-depth SpatRasters, or an existing
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
+  This is how gridded data enter the `SpatVoxel` model: read a netCDF
+  file with
+  [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
+  or
+  [`terra::rast()`](https://rspatial.github.io/terra/reference/rast.html)
+  first. netCDF paths aren't accepted.
 
 - depths:
 

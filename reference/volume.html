@@ -78,7 +78,8 @@ extent differently:</p>
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
 <dd><p>A <a href="SpatEnvelope-class.html">SpatEnvelope</a> or <a href="SpatVoxel-class.html">SpatVoxel</a>. A bare SpatRaster is
 rejected; build one with <code><a href="as_envelope.html">as_envelope()</a></code>, <code><a href="vect_to_envelope.html">vect_to_envelope()</a></code> or
-<code><a href="as_voxel.html">as_voxel()</a></code> first.</p></dd>
+<code><a href="as_voxel.html">as_voxel()</a></code> first. A netCDF file isn't accepted: load it as a
+<code>SpatRaster</code> (e.g. with <code><a href="woa_load_nc.html">woa_load_nc()</a></code>) and wrap it with <code><a href="as_voxel.html">as_voxel()</a></code>.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

@@ -27,6 +27,10 @@ extract_to_area(area, rast_3d, min_depth = NULL, max_depth = NULL)
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   or
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
+  A netCDF file isn't accepted: load it as a `SpatRaster` (e.g. with
+  [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md))
+  and wrap it with
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 
 - min_depth:
 
@@ -46,10 +50,15 @@ cropped to `area` and filtered to the depth range.
 
 ## Details
 
-This is the area counterpart of
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md):
-the same "restrict a 3D source to a target geometry" operation, with a
-polygon as the target rather than observation points.
+Unlike
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
+[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+and
+[`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md),
+which read netCDF files, this function takes a
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+already loaded with terra. It has no time dimension and computes no
+statistic; it only crops the voxel and selects depth layers.
 
 To restrict a voxel to a species' *per-cell* depth window rather than
 one depth band across the whole area, build a
@@ -60,7 +69,7 @@ and mask with it instead: `mask(rast_3d, range_rast)`. See
 ## See also
 
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-for the point counterpart;
+to extract from netCDF files at points;
 [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
 for the layer depths the bounds snap to.
 

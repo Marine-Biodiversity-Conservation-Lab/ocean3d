@@ -87,7 +87,9 @@ where the mask domain reaches that cell at that depth.</p>
 
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
 <dd><p>The raster whose values are kept: a <a href="SpatVoxel-class.html">SpatVoxel</a>, a
-<a href="SpatEnvelope-class.html">SpatEnvelope</a>, or a plain <code>SpatRaster</code>.</p></dd>
+<a href="SpatEnvelope-class.html">SpatEnvelope</a>, or a plain <code>SpatRaster</code>. A netCDF file isn't
+accepted: load it as a <code>SpatRaster</code> (e.g. with <code><a href="woa_load_nc.html">woa_load_nc()</a></code>) and wrap
+it with <code><a href="as_voxel.html">as_voxel()</a></code>.</p></dd>
 
 
 <dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
