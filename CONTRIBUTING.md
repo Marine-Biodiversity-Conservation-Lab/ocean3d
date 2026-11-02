@@ -124,6 +124,7 @@ lines, because these files are where merge conflicts actually happen:
 | Spatial query | `R/intersect.R` | Intersect |
 | Volume | `R/volume.R` | Summarise: volume calculations |
 | Environmental extraction | `R/extract_to_points.R`, `R/extract_to_buffer.R`, `R/extract_to_track.R`, `R/extract_to_area.R` | Summarise: extraction; Data model |
+| netCDF reading (shared by extraction) | `R/netcdf-sources.R`, `R/netcdf-dims.R`, `R/netcdf-read.R`, `R/netcdf-horizontal.R`, `R/netcdf-depth.R`, `R/netcdf-bounds.R` | Data model |
 | Conditions | `R/utils-conditions.R` | — |
 | Bathymetry | `R/gebco_bathymetry.R` | Build; Utilities |
 | WOA | `R/woa.R` | Build; Utilities |

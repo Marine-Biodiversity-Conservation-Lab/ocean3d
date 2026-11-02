@@ -695,18 +695,22 @@ of 2 November 2026.
     them, because its result decides what those steps build towards. It
     also settled the grids in scope, where voxels keep depth and time,
     and that the extraction functions may be retired.
-3.  **Move the shared CF/netCDF helpers** (time decoding, depth axis,
-    bounds, dimension detection) out of `R/extract_to_points.R` into
-    their own files (#110). *Not started.* They become the starting
-    point for the core object’s axis handling in step 5, so the move
-    groups them by axis rather than by the extraction function that uses
-    them.
-4.  **Replace the internal CF time decoding with CFtime** (#111), with
-    the time tests from \#71–#75 and \#88–#91 as reference behaviour.
-    *Not started.* Decides how dates on non-standard calendars appear in
-    output columns and in voxels (see [Open
-    questions](#open-questions)). Must be done before step 5, because
-    the core object’s time axis is a CFtime object.
+3.  **Move the shared CF/netCDF helpers** for sources, dimension
+    detection, reading, longitude and latitude, depth and bounds out of
+    `R/extract_to_points.R` into `R/netcdf-sources.R`,
+    `R/netcdf-dims.R`, `R/netcdf-read.R`, `R/netcdf-horizontal.R`,
+    `R/netcdf-depth.R` and `R/netcdf-bounds.R`, unchanged (#110).
+    *Done.* They are the starting point for the core object’s axis
+    handling in step 5, so they are grouped by axis rather than by the
+    extraction function that uses them. The time helpers stay in
+    `R/extract_to_points.R` for step 4, which replaces them.
+4.  **Replace the internal CF time decoding with CFtime and fix time
+    matching** (#111), with the time tests from \#71–#75 as reference
+    behaviour, fixing \#88–#91. The time helpers move out of
+    `R/extract_to_points.R` into their own file. *Not started.* Decides
+    how dates on non-standard calendars appear in output columns and in
+    voxels (see [Open questions](#open-questions)). Must be done before
+    step 5, because the core object’s time axis is a CFtime object.
 5.  **Build the core object** (#113). *Not started.* Sources (files,
     series, Zarr, in-memory voxels); standard axes built at open,
     including the axis and longitude fixes from \#93 and \#95; the lazy
