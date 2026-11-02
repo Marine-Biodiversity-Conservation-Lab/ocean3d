@@ -4,6 +4,27 @@
 # nearest or an exactly equal time step. Shared by point, buffer and track
 # extraction.
 
+# Calendars the package decodes. Files on other CF calendars (noleap,
+# 360_day, all_leap, julian) stop here until output columns and voxels can
+# show dates that R's date-times can't hold (SPEC.md, "Time decoding"). The
+# core object (#113) is to use the same check, so support can be added in one
+# place.
+.check_time_calendar <- function(calendar, time_dim) {
+  if (is.null(calendar)) return("standard")
+  supported <- c("standard", "gregorian", "proleptic_gregorian")
+  if (is.character(calendar) && length(calendar) == 1L &&
+        !is.na(calendar) && tolower(calendar) %in% supported) {
+    return(tolower(calendar))
+  }
+  rlang::abort(glue::glue(
+    "Time coordinate `{time_dim}` uses an unsupported calendar: ",
+    "{toString(calendar)}.\n",
+    "ocean3d currently supports the standard, gregorian and ",
+    "proleptic_gregorian calendars. Convert the file to one of these ",
+    "first, for example with CDO."
+  ), class = "ocean3d_error_calendar", call = NULL)
+}
+
 .decode_netcdf_time <- function(nc, time_dim, offsets = NULL) {
   if (is.null(time_dim)) {
     return(NULL)
@@ -22,105 +43,9 @@
     )
   }
 
-  calendar <- .read_time_attribute(nc, time_dim, "calendar")
-
-  if (is.null(calendar)) {
-    calendar <- "standard"
-  }
-
-  supported <- c("standard", "gregorian", "proleptic_gregorian")
-
-  if (!is.character(calendar) || length(calendar) != 1L ||
-        is.na(calendar) ||
-        !tolower(calendar) %in% supported) {
-    stop(
-      "Time coordinate `", time_dim,
-      "` uses an unsupported calendar: ", toString(calendar), ". ",
-      "This reader currently supports standard, gregorian and ",
-      "proleptic_gregorian calendars.",
-      call. = FALSE
-    )
-  }
-
-  pattern <- paste0(
-    "^\\s*",
-    "(milliseconds?|seconds?|minutes?|hours?|days?)",
-    "\\s+since\\s+(.+?)\\s*$"
+  calendar <- .check_time_calendar(
+    .read_time_attribute(nc, time_dim, "calendar"), time_dim
   )
-
-  parts <- regmatches(
-    units,
-    regexec(pattern, units, ignore.case = TRUE, perl = TRUE)
-  )[[1]]
-
-  if (length(parts) != 3L) {
-    stop(
-      "Unsupported time units for `", time_dim, "`: '", units, "'. ",
-      "Expected milliseconds, seconds, minutes, hours or days ",
-      "followed by 'since' and a reference date-time. ",
-      "Months, years and climatologies require separate handling.",
-      call. = FALSE
-    )
-  }
-
-  unit <- sub("s$", "", tolower(parts[2]))
-
-  seconds_per_unit <- switch(
-    unit,
-    millisecond = 0.001,
-    second = 1,
-    minute = 60,
-    hour = 3600,
-    day = 86400
-  )
-
-  origin_text <- trimws(parts[3])
-  origin_text <- sub("T", " ", origin_text, fixed = TRUE)
-  origin_text <- sub(
-    "\\s*(UTC|Z)$", "",
-    origin_text,
-    ignore.case = TRUE
-  )
-  origin_text <- trimws(origin_text)
-
-  # This first reader supports origins written in UTC without
-  # numeric timezone offsets. Reject other forms explicitly.
-  date_pattern <- "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-  datetime_pattern <- paste0(
-    "^[0-9]{4}-[0-9]{2}-[0-9]{2} ",
-    "[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?$"
-  )
-
-  if (grepl(date_pattern, origin_text)) {
-    origin_text <- paste(origin_text, "00:00:00")
-  } else if (!grepl(datetime_pattern, origin_text)) {
-    stop(
-      "Unsupported reference date-time in units '", units, "'. ",
-      "Expected YYYY-MM-DD or YYYY-MM-DD HH:MM:SS in UTC, ",
-      "optionally followed by Z or UTC. ",
-      "Numeric timezone offsets are not supported by this reader yet.",
-      call. = FALSE
-    )
-  }
-
-  origin <- as.POSIXct(
-    strptime(
-      origin_text,
-      format = "%Y-%m-%d %H:%M:%OS",
-      tz = "UTC"
-    )
-  )
-
-  # Round-trip validation catches invalid dates and times that
-  # a platform might otherwise normalise.
-  if (is.na(origin) ||
-        format(origin, "%Y-%m-%d %H:%M:%S", tz = "UTC") !=
-          substr(origin_text, 1L, 19L)) {
-    stop(
-      "Invalid reference date-time in units '", units, "'.",
-      call. = FALSE
-    )
-  }
 
   values <- if (is.null(offsets)) {
     as.vector(.get_dim_values(nc, time_dim))
@@ -136,17 +61,61 @@
     )
   }
 
-  timestamps <- origin + values * seconds_per_unit
+  # CFtime reads the units and reference date-time (UTC or Z suffixes,
+  # unpadded dates, missing seconds, years before 1000) and converts offsets
+  # to date-times without the rounding error of origin + offset * seconds.
+  axis <- withCallingHandlers(
+    tryCatch(
+      CFtime::CFtime(units, calendar, values),
+      error = function(e) {
+        rlang::abort(glue::glue(
+          "Unsupported time units for `{time_dim}`: '{units}'.\n",
+          "Expected a unit such as days or hours followed by 'since' and ",
+          "a reference date-time ({conditionMessage(e)})."
+        ), class = "ocean3d_error_time_units", call = NULL)
+      }
+    ),
+    # Repeated or unsorted time steps are dealt with when observations are
+    # matched to the axis.
+    warning = function(w) {
+      if (grepl("monotonic", conditionMessage(w), fixed = TRUE)) {
+        invokeRestart("muffleWarning")
+      }
+    }
+  )
 
-  # R's ordinary date-time arithmetic does not implement the
-  # historical mixed Julian/Gregorian calendar.
-  if (tolower(calendar) %in% c("standard", "gregorian")) {
-    transition <- as.POSIXct(
-      "1582-10-15 00:00:00",
-      tz = "UTC"
-    )
+  origin <- axis$cal$origin
+  if (!identical(origin$tz, "+0000")) {
+    rlang::abort(glue::glue(
+      "Unsupported reference date-time in units '{units}': time zone ",
+      "offset {origin$tz}.\n",
+      "Numeric time zone offsets are not supported yet; the reference ",
+      "date-time must be in UTC (optionally followed by Z or UTC)."
+    ), class = "ocean3d_error_time_units", call = NULL)
+  }
 
-    if (origin < transition || any(timestamps < transition)) {
+  # Months and years have no fixed length, so a series of them is ambiguous
+  # (CF defines a month as 1/12 of a year; producers often mean calendar
+  # months). A single step needs no conversion.
+  if (axis$unit %in% c("months", "years") && length(unique(values)) > 1L) {
+    rlang::abort(glue::glue(
+      "Unsupported time units for `{time_dim}`: '{units}'.\n",
+      "A time axis of several months or years is ambiguous; months, years ",
+      "and climatologies require separate handling."
+    ), class = "ocean3d_error_time_units", call = NULL)
+  }
+
+  timestamps <- axis$as_timestamp(asPOSIX = TRUE)
+
+  # R's date-times use the Gregorian calendar throughout, unlike CF's
+  # standard calendar before 1582-10-15.
+  if (calendar %in% c("standard", "gregorian")) {
+    transition <- as.POSIXct("1582-10-15 00:00:00", tz = "UTC")
+    origin_before <- origin$year < 1582 ||
+      (origin$year == 1582 &&
+         (origin$month < 10 || (origin$month == 10 && origin$day < 15)))
+
+    if (origin_before || any(timestamps < transition)) {
       stop(
         "Historical standard/gregorian dates before 1582-10-15 ",
         "require a calendar-aware decoder.",

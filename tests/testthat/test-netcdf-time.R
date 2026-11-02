@@ -1,0 +1,109 @@
+# CF time decoding through the exported extraction functions (#88, #90,
+# #111). Each file is a 2 x 2 grid with a time axis; `temp` at time step t
+# equals t, so each extracted value is the index of the selected time step.
+
+make_time_file <- function(time_vals, units, calendar = NULL, unlim = FALSE) {
+  f <- tempfile(fileext = ".nc")
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
+  tm <- ncdf4::ncdim_def("time", units, time_vals, unlim = unlim)
+  nc <- ncdf4::nc_create(f, ncdf4::ncvar_def(
+    "temp", "1", list(lon, lat, tm), -9999, prec = "double"
+  ))
+  nt <- length(time_vals)
+  ncdf4::ncvar_put(nc, "temp", array(rep(seq_len(nt), each = 4), c(2, 2, nt)),
+                   count = c(2, 2, nt))
+  if (!is.null(calendar)) ncdf4::ncatt_put(nc, "time", "calendar", calendar)
+  ncdf4::nc_close(nc)
+  f
+}
+
+at_date <- function(f, date) {
+  out <- extract2d(data.frame(lon = 0, lat = 40, date = date), f,
+                   var = "temp", time_report = FALSE)
+  out$temp
+}
+
+test_that("CF time units that the old decoder rejected are read (#88)", {
+  day <- as.Date("2020-01-03")
+  cases <- list(
+    list(units = "days since 2020-01-01 UTC", vals = c(0, 2, 5)),
+    list(units = "days since 2020-01-01T00:00:00Z", vals = c(0, 2, 5)),
+    list(units = "hours since 2020-01-01 00:00:0.0", vals = c(0, 48, 120)),
+    list(units = "days since 2020-1-1 00:00:00", vals = c(0, 2, 5)),
+    list(units = "hours since 2020-01-01 00:00", vals = c(0, 48, 120)),
+    list(units = "days since 0001-01-01 00:00:00",
+         vals = c(737424, 737426, 737429), calendar = "proleptic_gregorian")
+  )
+  for (case in cases) {
+    f <- make_time_file(case$vals, case$units, case$calendar)
+    on.exit(unlink(f), add = TRUE)
+    expect_equal(at_date(f, day), 2, label = case$units)
+  }
+})
+
+test_that("a single-step months axis is read and a longer one rejected (#88)", {
+  one <- make_time_file(0, "months since 1955-01-01 00:00:00")
+  several <- make_time_file(c(0, 1, 2), "months since 2020-01-01")
+  on.exit(unlink(c(one, several)), add = TRUE)
+
+  # The only time step is 1955, so the temporal warning is expected.
+  expect_warning(
+    value <- at_date(one, as.Date("2020-01-03")),
+    class = "ocean3d_time_warning"
+  )
+  expect_equal(value, 1)
+  expect_error(
+    at_date(several, as.Date("2020-01-03")),
+    class = "ocean3d_error_time_units"
+  )
+  err <- tryCatch(at_date(several, as.Date("2020-01-03")),
+                  error = function(e) conditionMessage(e))
+  expect_match(err, "months since 2020-01-01", fixed = TRUE)
+  expect_match(err, "several months or years is ambiguous", fixed = TRUE)
+})
+
+test_that("reference times with a numeric time zone offset are rejected", {
+  f <- make_time_file(c(0, 24), "hours since 2020-01-01 05:00:00+05:00")
+  on.exit(unlink(f), add = TRUE)
+
+  expect_error(at_date(f, as.Date("2020-01-02")),
+               class = "ocean3d_error_time_units")
+  err <- tryCatch(at_date(f, as.Date("2020-01-02")),
+                  error = function(e) conditionMessage(e))
+  expect_match(err, "time zone offset +0500", fixed = TRUE)
+})
+
+test_that("fractional-day timestamps match exactly (#90)", {
+  base <- as.numeric(as.Date("2020-06-15"))
+  f <- make_time_file(base + (0:143) / 144, "days since 1970-01-01")
+  on.exit(unlink(f), add = TRUE)
+  times <- as.POSIXct("2020-06-15", tz = "UTC") + (0:143) * 600
+
+  out <- extract2d(
+    data.frame(lon = 0, lat = 40, date = times), f, var = "temp",
+    time_match = "exact", time_resolution = "datetime", time_report = FALSE
+  )
+  expect_equal(out$temp, as.numeric(1:144))
+})
+
+test_that("calendars other than the standard ones stop with a clear error", {
+  for (calendar in c("noleap", "360_day", "all_leap", "julian")) {
+    f <- make_time_file(c(0, 1), "days since 2000-01-01", calendar)
+    on.exit(unlink(f), add = TRUE)
+    expect_error(at_date(f, as.Date("2000-01-02")),
+                 class = "ocean3d_error_calendar", label = calendar)
+    err <- tryCatch(at_date(f, as.Date("2000-01-02")),
+                    error = function(e) conditionMessage(e))
+    expect_match(err, paste("unsupported calendar:", calendar), fixed = TRUE)
+  }
+})
+
+test_that("the standard calendars are accepted under each name", {
+  for (calendar in c("standard", "gregorian", "proleptic_gregorian",
+                     "Gregorian")) {
+    f <- make_time_file(c(0, 2, 5), "days since 2020-01-01", calendar)
+    on.exit(unlink(f), add = TRUE)
+    expect_equal(at_date(f, as.Date("2020-01-03")), 2, label = calendar)
+  }
+})
