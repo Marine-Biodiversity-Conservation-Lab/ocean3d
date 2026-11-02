@@ -1,49 +1,55 @@
 # Data model trial: stars, ncdfCF and the current ncdf4 code (#112)
 
-Trial run on 2 November 2026 with stars 0.7.3, ncdfCF 0.8.2, CFtime 1.7.3,
-ncdf4 1.24, terra 1.9.50 and GDAL 3.8.4, on R 4.5.3 (Linux, 8 cores, 31 GB
-RAM). Scripts and raw results are in [`data-model-trial/`](data-model-trial/).
+Trial run on 2 November 2026 on a machine with 31 GB of memory. Package
+versions, scripts and raw results are in
+[`data-model-trial/`](data-model-trial/).
 
-## Recommendation
+## Decision
 
-**Keep the package's own core object with lazy ncdf4 reads, and use CFtime
-for time, as SPEC.md already plans. Don't make a `stars_proxy` the core
-object, and don't depend on ncdfCF yet. Read remote Zarr stores with
-`stars::read_mdim()` as an optional source (Suggests), with the package
-correcting its coordinates.**
+**Keep the package's own core object (its description of a gridded dataset,
+without the values), read it lazily (only the values each step needs) with
+ncdf4, and use CFtime for time, as SPEC.md already plans. Don't make a stars
+proxy the core object, and don't depend on ncdfCF yet. Read remote Zarr
+stores (a cloud storage format) with `stars::read_mdim()` as an optional
+dependency, with the package correcting its coordinates.**
 
-- **stars proxies don't stay lazy for the operations the package needs.**
-  `st_extract()` on a proxy took 198 s for 2 points on the real Copernicus
-  file (`read_ncdf()`), and tried to allocate 51 GB on a `read_mdim()`
-  proxy. Reads through `read_ncdf(ncsub = )` return the right values but
-  keep the full time axis in the dimensions, and cost about 0.5 s per call
-  (266–333 s for 500 points against 11–49 s for the package). Slices of the
-  Copernicus file can't be converted to terra for volume ("only regular
-  rasters can be converted"). `read_mdim()` gets 17 of the 29 CF cases
-  wrong, and its errors show up on real data: its 500-point means differ
-  from every other reader on all three datasets.
-- **ncdfCF reads lazily and gets 25 of the 29 CF cases right (as does stars
-  `read_ncdf()`, which ignores explicit bounds), but its API is still
-  moving.** `subset()` doesn't read values: subsetting 757 million cells
-  (6 GB) used no more memory than opening the file. For 500 points it took
-  47 s on the Copernicus file (package 11 s), 33 s on the synthetic file
-  (package 49 s) and 27 s on OISST (package 11 s), and its volumes matched
-  the package's.
-  But it is marked experimental,
-  has broken its API in 4 of its last 8 releases, has one maintainer, and has
-  quirks the package would have to work around (below). It is a good
-  reference to test against, and the dependency question can be revisited at
-  its 1.0 release, or if native model grids come into scope (below).
+Agreed by Jay Matsushiba on 2 November 2026 and recorded in SPEC.md
+("Planned: one model"). "CF" below means the Climate and Forecast
+conventions for netCDF metadata; "as doubles" is a file's size once loaded
+into R.
+
+- **stars objects that point to a file without reading it (proxies) read
+  far more than needed.** Extracting 2 points took 198 s, or failed asking
+  for 51 GB of memory. Reading cell by cell took 266–333 s for 500 points
+  (package: 11–49 s). stars couldn't hand slices of the real Copernicus file
+  to terra for volume. Its second reader, `read_mdim()`, got 17 of 29 cases
+  wrong, and its 500-point results differ from every other reader on all
+  three datasets.
+- **ncdfCF reads only what is asked for and gets 25 of 29 cases right (as
+  does stars `read_ncdf()`, which ignores explicit bounds), but its interface
+  still changes between releases.** Its values and volumes matched the
+  package's, and its speed was similar. It is marked experimental, changed
+  its interface in 4 of its last 8 releases, has one maintainer, and has
+  quirks the package would have to work around (section 4). It is a useful
+  reference for tests; revisit at its 1.0 release or if native model grids
+  come into scope.
 - **CFtime fixes the time cases.** Every time failure in the package's
   current reader (T03–T12) is decoded correctly by both readers that use
   CFtime (stars `read_ncdf()` and ncdfCF), and `CFtime::indexOf()` matched
   500 dates to a 10-year daily axis in 0.08 s. This supports #111 as planned.
-- **Some CF handling stays in the package whichever reader is used.** No
-  reader converts depth units to metres (D02) or flips `positive = "up"`
-  axes to depth (D03): stars drops the information and ncdfCF only exposes
-  it. Choosing between files in a series (#94, #96) and the nearest-layer
-  and nearest-time rules are package logic in every option.
-
+- **Some CF handling stays in the package whichever reader is used.** None
+  of the readers tested converts depth units to metres (D02) or turns
+  upward elevation into depth (D03): stars drops the information and
+  ncdfCF only exposes it. Choosing between files in a series (#94, #96) and
+  the nearest-layer and nearest-time rules stay package code with each of
+  them.
+- **terra's own netCDF reading is wrong without warning on some files** (19
+  of 29 cases right): `360_day` dates move by a day, explicit cell bounds
+  are ignored, and irregular grids become index positions. So ncdf4 also
+  reads the slices that become voxels.
+- **The package's buffer extraction is slow:** 76–434 s for one 200 km
+  buffer that a single block read handles in 4–7 s. This is the current
+  code, not a reader limit.
 - **Native model grids are out of scope for now** (decided by Jay
   Matsushiba, 2 November 2026). Inputs are regular lon/lat grids with fixed
   depth levels. NEMO-style curvilinear grids and terrain-following (sigma)
@@ -71,8 +77,9 @@ buffer) is in `bench.R`. It uses only what each reader returns.
 29 small netCDF files (`cases.R`), each testing one CF feature, with the
 expected value at a query cell. For #88–#96 the expected value is the one
 written in the issue; otherwise it is the package's current, tested result.
-The package (last column) reproduces every failure described in #88–#96,
-which confirms the cases match the issues.
+The package (last column) fails in the same way as described in each issue
+from #88 to #96 that a case covers, which confirms the cases match the
+issues.
 
 "ok": right cell. "wrong": wrong cell or no value. "error": the reader
 stopped. stars and ncdfCF are scored on their coordinates as returned, with
@@ -113,7 +120,7 @@ no unit conversion or direction flip added.
 
 1. `read_mdim()` decodes time only when the axis has a `calendar` attribute.
    Without one (T01, T02, T06–T09, T11–T14), time is a plain number. CF
-   makes `calendar` optional (default `standard`), and many files leave it
+   makes `calendar` optional (default `standard`), so files may leave it
    out.
 2. Right cell, but `read_ncdf()` ignores `time_bnds`: it builds intervals
    from neighbouring time values ([16 Jan, 15 Feb) instead of [1 Jan, 1 Feb)).
@@ -140,11 +147,12 @@ no unit conversion or direction flip added.
    because its grids must be regular. It also can't place a file with a
    single latitude row, so the longitude cases use two rows.
 
-**Multi-file cases (#94, #96).** Neither stars nor ncdfCF chooses between
-files in a series: `read_mdim()` reads one file, and `read_ncdf()` and ncdfCF
-read one file at a time (ncdfCF can `append()` along time after reading). The
-static-file and cadence rules from #94 and #96 stay in package code with any
-reader.
+**Multi-file cases (#94, #96).** Of the routes tested, none chooses between
+files in a series: `read_ncdf()`, `read_mdim()` and ncdfCF each read one file
+(ncdfCF can join files along time afterwards with `append()`). stars'
+`read_stars()`, which can stack files along a dimension, wasn't tested. The
+static-file and cadence rules from #94 and #96 stay in package code with the
+readers tested.
 
 **#92** (a caller-opened ncdf4 connection with `readunlim = FALSE`) is
 specific to accepting ncdf4 connections; stars and ncdfCF open the file
@@ -163,28 +171,24 @@ day, bounds that change cell edges (and so volumes) are ignored, irregular
 grids become index positions. Using it for voxel slices would need its grid
 checked against the core object's axes on every read, with ncdf4 as the
 fallback: two read paths with two sets of CF rules. So ncdf4 reads all
-netCDF, including voxel slices, and terra works on the slices once they are
-in memory.
+netCDF files that have depth or time, including voxel slices, and terra works
+on the slices once they are in memory.
 
 ## 2. Memory and speed
 
-Each step ran in a new R process, so "peak" is the whole process's peak
-resident memory (GNU `time`), including R and the loaded packages (the
-"load" row). Each process had a 12 GB address-space limit.
+Peak memory is for the whole R process, including about 200–240 MB for R
+and the packages (the "load" row). How it was measured is in the
+[README](data-model-trial/README.md).
 
 Three datasets, all larger than memory or split across files:
 
-- **Copernicus Marine download (main test).**
-  `cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m` (global daily 1/12°
-  temperature), subset with the Copernicus Marine toolbox to 150°E–150°W,
-  30°S–30°N, the top 18 levels (0.5–47 m) and two years (1 June 2022 to 31
-  May 2024): 721 × 721 × 18 × 731 cells, `float`, compressed, chunks of 46 ×
-  46 cells × 2 levels × 23 days. 16.9 GB on disk and **54.7 GB as doubles**.
-  Longitudes run 150–210 across the antimeridian.
-- **Synthetic** (`make_large_file.R`): 1440 × 720 at 0.25°, 10 depths, 730
-  daily steps, `short` with `scale_factor`, `_FillValue` on land, one chunk
-  per depth and day (the layout that is slowest for point series). 8.7 GB
-  on disk, **60 GB as doubles**.
+- **Copernicus Marine download (main test):** global daily temperature at
+  1/12°, cut to 150°E–150°W, 30°S–30°N, the top 47 m and two years (June
+  2022 to May 2024). 16.9 GB on disk, **54.7 GB once loaded**, stored in
+  blocks of 23 days.
+- **Synthetic:** a 0.25° global file shaped like a Copernicus download,
+  stored one day per block, the slowest layout for time series. 8.7 GB on
+  disk, **60 GB once loaded**.
 - **NOAA OISST v2.1**, daily global 0.25° sea surface temperature, one file
   per year (2022, 2023; 470 MB each, 2D + time), as a multi-file series.
 
@@ -235,24 +239,21 @@ buffer's ±15-day window crosses the year boundary.
 
 Results agree between readers except where marked:
 
-- **Points:** `read_ncdf()` and ncdfCF return the same 500 values on all
-  three datasets (Copernicus mean 27.3469 with 3 `NA`s near land; synthetic
-  15.8731; OISST 18.4863 with 115 land `NA`s). The package matches them on
-  the synthetic file and OISST; on the Copernicus file it finds a value for
-  one more coastal point (27.3465, 2 `NA`s), because its nearest-depth rule
-  skips missing layers. ⚠ `read_mdim()` differs on every dataset (27.3758,
-  16.2477, 18.4551): its half-cell coordinate shift (note 6) picks a
-  neighbouring layer or cell for some points.
+- **Points:** `read_ncdf()` and ncdfCF returned the same 500 values on all
+  three datasets. The package matched them, except for one extra coastal
+  value on the Copernicus file (its nearest-depth rule skips missing
+  layers). ⚠ `read_mdim()` differed on every dataset: its half-cell
+  coordinate shift (note 6) picks a neighbouring layer or cell for some
+  points. The values are in `results/benchmarks.tsv`.
 - **Volume:** every reader that completed gives the same volumes
   (Copernicus: 6,438 km³ at 10–20 °C, 360,362 km³ at 15–25 °C; synthetic:
   116,835,900 km³, 111,867,900 km³ and 69,352,360 km³ overlap). Peak memory
   is one day's slice plus the package's terra steps, so it follows the
   slice size, not the file.
 - **Series and buffers:** identical series means. The package's buffer
-  (27.85381 Copernicus, 25.50317 synthetic, 24.902 OISST) differs slightly
-  from the plain equal-weight mean of the cells inside the radius (27.85036,
-  25.50388, 24.89858) because it weights cells by their overlap with the
-  buffer. With a depth window reaching below the file's deepest level it
+  means differ from a plain average of the cells inside the radius by under
+  0.01 °C, because it weights cells by how much of each lies in the buffer.
+  With a depth window reaching below the file's deepest level it
   returns `NA` with `insufficient_coverage` (less than 80% of the buffer has
   data), where the plain reads silently average what is there.
 
@@ -269,10 +270,8 @@ What this shows:
   terra, are where this matters.
 - **The package's `extract_to_buffer()` is slow:** 76 s (Copernicus), 92 s
   (OISST) and 434 s (synthetic) for one buffer that plain block reads handle
-  in 4–7 s. This is the current code, not a reader limit, and is worth its
-  own issue.
-- **Converting a 3D stars object to terra** needs `as(x, "SpatRaster")`;
-  `terra::rast()` fails on a depth dimension ("1:dd[4]: NA/NaN argument").
+  in 4–7 s. This is the current code, not a reader limit; the block reads
+  planned for #115 address it.
 
 ## 3. Remote Zarr (optional)
 
@@ -296,9 +295,6 @@ stores, without a login (`zarr.R`).
    rasters can be converted").
 
 - Reads stay lazy: memory follows the slice read, not the 2.9 TB store.
-- The path must be written `ZARR:"/vsicurl/<url>"` with
-  `normalize_path = FALSE`; a plain `/vsicurl/` path fails (HTTP 403 on the
-  bucket listing).
 - The vertical axis is `elevation` with `positive = "up"` (−5728 to −0.494
   m), returned as is, and time comes back as `Date`. The package would flip
   elevation to depth (D03) and keep sub-daily time itself.
@@ -306,7 +302,7 @@ stores, without a login (`zarr.R`).
   `geoChunked` (134 days per chunk) and maps from `timeChunked` (one day per
   chunk). The core object would need to know both stores.
 
-## 4. ncdfCF: lazy `subset()` and API stability
+## 4. ncdfCF: lazy `subset()` and interface stability
 
 - **Lazy:** yes, for regular lon/lat grids. `subset()` returns a
   file-backed `CFVariable` with start and count and reads nothing until
@@ -323,14 +319,9 @@ stores, without a login (`zarr.R`).
     computes cell areas (and volumes) on a plane until the CRS is set.
   - `profile()` reads the whole depth × time column at a point, which on
     files chunked by time step means decompressing every chunk.
-- **Stability:** 11 releases from June 2024 to March 2026, with API breaks
+- **Stability:** 11 releases from June 2024 to March 2026, with interface changes
   in 0.4 (`CFData` renamed `CFArray`), 0.6 (`subset()` signature), 0.7
   (`CFArray` merged into `CFVariable`) and 0.8 (indexing must include
   length-1 axes, `CFResource` renamed `NCResource`). One maintainer (who
-  also maintains CFtime); built on RNetCDF, not ncdf4. Its only CRAN
-  reverse dependency is stars (Suggests).
-
-## What changes in SPEC.md
-
-"Planned: one model → Direction: a hybrid" and "First step" are updated with
-this decision once it is agreed (#112, step 5 of the order of work).
+  also maintains CFtime); built on RNetCDF, not ncdf4. On CRAN on 2
+  November 2026, only stars listed it, as an optional dependency.

@@ -1,7 +1,21 @@
 # Data model trial scripts (#112)
 
 Scripts behind [`dev/data-model-trial.md`](../data-model-trial.md). Run them
-from the package root. stars, ncdfCF and CFtime aren't package dependencies,
+from the package root.
+
+The trial ran on 2 November 2026 with stars 0.7.3, ncdfCF 0.8.2, CFtime
+1.7.3, ncdf4 1.24, terra 1.9.50 and GDAL 3.8.4, on R 4.5.3 (Linux, 8 cores,
+31 GB RAM). Each benchmark step ran in a new R process, so peak memory is the
+whole process's peak resident memory as reported by GNU `time`, including R
+and the loaded packages (the "load" rows). Each process had a 12 GB
+address-space limit.
+
+The Copernicus Marine download is
+`cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m`: 721 × 721 × 18 × 731 cells
+(0.5–47 m, 1 June 2022 to 31 May 2024), `float`, compressed, chunks of 46 ×
+46 cells × 2 levels × 23 days, longitudes 150–210. The synthetic file is
+1440 × 720 × 10 × 730 cells, `short` with `scale_factor`, `_FillValue` on
+land, one chunk per depth and day. stars, ncdfCF and CFtime aren't package dependencies,
 so the scripts take a library path where they are installed:
 
 ```r
