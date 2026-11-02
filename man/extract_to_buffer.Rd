@@ -47,7 +47,10 @@ extract_to_buffer(
 \arguments{
 \item{data}{Observation table, matrix, named list or sf POINT object.}
 
-\item{nc}{netCDF path, paths, opened ncdf4 connection, list, or file table.}
+\item{nc}{netCDF path, paths, opened ncdf4 connection, list, or file table.
+Files are read directly with ncdf4, only the cells each observation
+needs. A \link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't accepted; for
+those, see \code{\link[=extract_to_area]{extract_to_area()}} and \code{\link[terra:mask]{mask()}}.}
 
 \item{var}{Variable name or vector of names. NULL detects one data variable
 per file, excluding referenced bounds and coordinate variables.}

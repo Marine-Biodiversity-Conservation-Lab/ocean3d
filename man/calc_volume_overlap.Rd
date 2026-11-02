@@ -23,7 +23,8 @@ calc_volume_overlap(x, y, ...)
 }
 \arguments{
 \item{x, y}{The two domains, each a \link[=SpatEnvelope-class]{SpatEnvelope} or
-\link[=SpatVoxel-class]{SpatVoxel}.}
+\link[=SpatVoxel-class]{SpatVoxel}. netCDF files aren't accepted; load them with terra
+and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
 \item{...}{Arguments for the voxel methods, which are an error for a pair
 of envelopes.}

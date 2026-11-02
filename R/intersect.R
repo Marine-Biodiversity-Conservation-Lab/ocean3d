@@ -300,7 +300,9 @@ setMethod("intersects_3d", c("ANY", "ANY"),
 #' class is kept. No method is added for those cases.
 #'
 #' @param x The raster whose values are kept: a [SpatVoxel-class], a
-#'   [SpatEnvelope-class], or a plain `SpatRaster`.
+#'   [SpatEnvelope-class], or a plain `SpatRaster`. A netCDF file isn't
+#'   accepted: load it as a `SpatRaster` (e.g. with [woa_load_nc()]) and wrap
+#'   it with [as_voxel()].
 #' @param mask The 3D domain to keep `x` inside: a [SpatEnvelope-class] or a
 #'   [SpatVoxel-class] on the same grid as `x`.
 #' @param bounds Only when one side is an envelope and the other a voxel. How

@@ -7,7 +7,8 @@
 occupied(x, fun = function(v) !is.na(v))
 }
 \arguments{
-\item{x}{A \link[=SpatVoxel-class]{SpatVoxel}.}
+\item{x}{A \link[=SpatVoxel-class]{SpatVoxel}. A netCDF file isn't accepted: load it as a
+\code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{fun}{Function taking a vector of cell values and returning a logical
 vector of the same length. \code{NA} counts as \code{FALSE}. Defaults to

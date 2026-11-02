@@ -8,7 +8,9 @@ as_voxel(x, depths = NULL, varname = "value")
 }
 \arguments{
 \item{x}{SpatRaster with \verb{\{variable\}_depth=\{value\}} layer names, a list of
-single-depth SpatRasters, or an existing \link[=SpatVoxel-class]{SpatVoxel}.}
+single-depth SpatRasters, or an existing \link[=SpatVoxel-class]{SpatVoxel}. This is how
+gridded data enter the \code{SpatVoxel} model: read a netCDF file with
+\code{\link[=woa_load_nc]{woa_load_nc()}} or \code{\link[terra:rast]{terra::rast()}} first. netCDF paths aren't accepted.}
 
 \item{depths}{Optional numeric vector, one depth per layer, in metres. When
 supplied, layer names are (re)built from \code{depths} and \code{varname}, replacing

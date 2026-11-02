@@ -49,7 +49,8 @@ sf LINESTRING features first, e.g. with
 \verb{lon_col = "X", lat_col = "Y", track_col = "L1"}.}
 
 \item{nc, var}{netCDF sources and selected variable names. See
-\code{\link[=extract_to_buffer]{extract_to_buffer()}}.}
+\code{\link[=extract_to_buffer]{extract_to_buffer()}}. Files are read directly with ncdf4; a
+\link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't accepted.}
 
 \item{track_col}{Optional track identifier column. Without it, the input is
 one track. IDs are returned as text.}

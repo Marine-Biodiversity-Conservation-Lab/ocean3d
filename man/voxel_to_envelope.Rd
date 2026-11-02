@@ -8,7 +8,9 @@ voxel_to_envelope(v, fun = function(x) !is.na(x))
 }
 \arguments{
 \item{v}{SpatVoxel (or a multi-depth SpatRaster with
-\verb{\{variable\}_depth=\{value\}} layer names).}
+\verb{\{variable\}_depth=\{value\}} layer names). A netCDF file isn't accepted:
+load it as a \code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with
+\code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{fun}{Function taking a vector of cell values and returning a logical
 vector of the same length. \code{NA} results are treated as \code{FALSE}. Defaults to

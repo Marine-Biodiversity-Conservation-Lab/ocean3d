@@ -20,7 +20,10 @@ Documentation:
 \url{https://repository.library.noaa.gov/view/noaa/70581}}
 }
 \value{
-SpatRaster with standardized depth layer names.
+SpatRaster with standardized depth layer names. Wrap it with
+\code{\link[=as_voxel]{as_voxel()}} to use it with the \code{SpatVoxel} functions (\code{\link[=volume]{volume()}},
+\code{\link[terra:mask]{mask()}}, \code{\link[=extract_to_area]{extract_to_area()}}, ...). The point, buffer and track
+extraction functions take the netCDF file itself, not this raster.
 }
 \description{
 Load a WOA .nc file and select layers for a given statistical field.

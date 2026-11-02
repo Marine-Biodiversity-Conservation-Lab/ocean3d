@@ -421,7 +421,10 @@ woa_download <- function(variable,
 #'   Documentation:
 #'   <https://repository.library.noaa.gov/view/noaa/70581>
 #'
-#' @returns SpatRaster with standardized depth layer names.
+#' @returns SpatRaster with standardized depth layer names. Wrap it with
+#'   [as_voxel()] to use it with the `SpatVoxel` functions ([volume()],
+#'   [mask()], [extract_to_area()], ...). The point, buffer and track
+#'   extraction functions take the netCDF file itself, not this raster.
 #' @examples
 #' # Build a small WOA-style NetCDF to demonstrate field selection.
 #' # Real files come from woa_download().

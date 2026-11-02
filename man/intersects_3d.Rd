@@ -37,7 +37,8 @@ intersects_3d(x, y, ...)
 \item{x, y}{The two objects. At least one must be a \link[=SpatEnvelope-class]{SpatEnvelope} or
 a \link[=SpatVoxel-class]{SpatVoxel}. The other can be either of those, a single-layer
 \code{SpatRaster} footprint, or polygons (\code{SpatVector}, \code{sf}, \code{sfc}). Rasters
-must share one grid (CRS, extent, resolution).}
+must share one grid (CRS, extent, resolution). netCDF files aren't
+accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
 \item{...}{Arguments for the voxel methods. They are an error when both
 inputs are envelopes.}

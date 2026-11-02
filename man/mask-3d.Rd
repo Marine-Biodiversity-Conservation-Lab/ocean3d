@@ -24,7 +24,9 @@
 }
 \arguments{
 \item{x}{The raster whose values are kept: a \link[=SpatVoxel-class]{SpatVoxel}, a
-\link[=SpatEnvelope-class]{SpatEnvelope}, or a plain \code{SpatRaster}.}
+\link[=SpatEnvelope-class]{SpatEnvelope}, or a plain \code{SpatRaster}. A netCDF file isn't
+accepted: load it as a \code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap
+it with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{mask}{The 3D domain to keep \code{x} inside: a \link[=SpatEnvelope-class]{SpatEnvelope} or a
 \link[=SpatVoxel-class]{SpatVoxel} on the same grid as \code{x}.}
