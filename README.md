@@ -34,22 +34,32 @@ documented workflows and reusable functions for:
 
 ## How it works
 
+Species ranges and other spatial layers are usually stored as 2D maps, but
+marine species and activities also occupy a depth range, bounded by the
+seafloor. `ocean3d` combines a 2D range, a depth range, bathymetry and
+gridded environmental data into one 3D representation, so you can ask, for
+example, which temperatures occur within a species' 3D distribution.
+
+![A species' range as a 2D polygon on a bathymetry map (A) and as a 3D distribution between the surface and the seafloor in a vertical cross-section (B). Panel C shows the inputs ocean3d combines: the range polygon, the depth range, bathymetry and temperature at several depths, to find the temperatures within the 3D distribution.](vignettes/figures/Figure1_conceptual3Ddistribution.png)
+
 In order to represent the 3D space in the ocean, we use a stacked-raster approach built on `terra`. We call this the Spatial Voxel Model, with the class `SpatVoxel`. Using this `SpatVoxel`, we can represent any number of spatial phenomena in the ocean, including species distributions, fishing effort, and oceanographic variables. 
 
-![Diagram that represents the multi-depth spatial voxel model](figures/fig-ocean-voxel-model.png)
-
-This package includes functions for converting common vector representations to the `SpatVoxel` class 3D representation. One example operation enabled by `ocean3d` is to take an existing vector and observed depth range, and have it match with a pre-existing `SpatVoxel`. 
-
-![Converting species range vector into SpatVoxel](figures/fig-species-voxel.png)
-
 `ocean3d` uses two representations for 3D geometry: A `SpatEnvelope` stores one 
-continuous `[depth_min, depth_max]` interval per cell; a `SpatVoxel` (shown above) stores a 
+continuous `[depth_min, depth_max]` interval per cell; a `SpatVoxel` stores a 
 value at each of a set of depth levels, so it can hold a variable and interior gaps.
 `SpatEnvelope` is useful for representing discrete 3D geometry (ex. species ranges 
 with defined boundaries for area and depth). In contrast, `SpatVoxel` is ideal for 
 representing continuous values (ex. species distribution models with probabilities 
 of occurrence, rather than presence and absences). `SpatVoxel` can also represent 
 overhangs, holes, etc. in 3D space since it contains a value for every depth, rather than a depth range. 
+
+![A SpatEnvelope (A), storing a depth_min and depth_max per cell above the seafloor, converted with envelope_to_voxel() into a SpatVoxel (B), storing presence at each depth level (0, 50, 100, 200 and 500 m).](vignettes/figures/Comparison_SpatEnvelope_SpatVoxel.png)
+
+This package includes functions for converting common vector representations
+to these 3D representations. For example, `vect_to_envelope()` turns a
+species range polygon and its observed depth range into a `SpatEnvelope`
+bounded by the seafloor, and `envelope_to_voxel()` places it on the depth
+levels of a `SpatVoxel`, as in the figure above.
 
 This package includes utilities for working with commonly used datasets in
 marine habitat spatial analyses, including IUCN Red List, World Ocean Atlas, 
