@@ -1,4 +1,4 @@
-# CF time decoding through the exported extraction functions (#88, #90,
+# CF time decoding through the exported extraction functions (#88, #90, #92,
 # #111). Each file is a 2 x 2 grid with a time axis; `temp` at time step t
 # equals t, so each extracted value is the index of the selected time step.
 
@@ -106,4 +106,14 @@ test_that("the standard calendars are accepted under each name", {
     on.exit(unlink(f), add = TRUE)
     expect_equal(at_date(f, as.Date("2020-01-03")), 2, label = calendar)
   }
+})
+
+test_that("a readunlim = FALSE connection reads the time axis (#92)", {
+  f <- make_time_file(c(0, 2, 5), "days since 2020-01-01", unlim = TRUE)
+  on.exit(unlink(f), add = TRUE)
+  con <- ncdf4::nc_open(f, readunlim = FALSE)
+  on.exit(ncdf4::nc_close(con), add = TRUE)
+
+  expect_equal(at_date(f, as.Date("2020-01-03")), 2)
+  expect_equal(at_date(con, as.Date("2020-01-03")), 2)
 })
