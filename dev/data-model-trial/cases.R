@@ -68,9 +68,10 @@ library(ncdf4)
   nc_close(nc)
 }
 
-# Longitude axis with one latitude row; value at cell i equals vals[i].
+# Longitude axis with two latitude rows (GDAL, and so terra, cannot place a
+# single row); value at cell i equals vals[i] in both rows.
 .mk_lon <- function(path, lons, vals = seq_along(lons), bounds = NULL,
-                    lats = 40) {
+                    lats = c(40, 41)) {
   lon <- ncdim_def("lon", "degrees_east", lons)
   lat <- ncdim_def("lat", "degrees_north", lats)
   vars <- list(ncvar_def("temp", "1", list(lon, lat), -9999, prec = "double"))

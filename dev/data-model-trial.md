@@ -60,6 +60,7 @@ The rest of this note gives the results each point rests on.
 | stars `read_ncdf()` | ncmeta and RNetCDF, `proxy = TRUE` |
 | stars `read_mdim()` | GDAL's multidimensional API, `proxy = TRUE` |
 | ncdfCF | `open_ncdf()`, then `subset()` (lazy) and `raw()` / `terra()` |
+| terra (correctness only) | `terra::rast(file)` through GDAL's netCDF driver, with `depth()` and `time()`; how `woa_load_nc()` reads now |
 
 For stars and ncdfCF, the code the package would still write on top (picking
 the file for a date, the nearest cell on each axis, the cells inside a
@@ -77,38 +78,38 @@ which confirms the cases match the issues.
 stopped. stars and ncdfCF are scored on their coordinates as returned, with
 no unit conversion or direction flip added.
 
-| Case | From | stars `read_ncdf` | stars `read_mdim` | ncdfCF | ocean3d |
-|---|---|---|---|---|---|
-| T01 days since, steps 0, 2, 5 | fixture | ok | wrong¹ | ok | ok |
-| T02 origin with an hour (06:00) | test | ok | wrong¹ | ok | ok |
-| T03 `noleap` calendar | test | ok | ok | ok | error |
-| T04 `360_day` calendar | test | ok | ok | ok | error |
-| T05 `months since`, one step (WOA23) | #88 | ok | ok | ok | error |
-| T06 `... UTC` suffix (GHRSST) | #88 | ok | wrong¹ | ok | error |
-| T07 `00:00:0.0` origin (NCEP, ERA5) | #88 | ok | wrong¹ | ok | error |
-| T08 unpadded `2020-1-1` (PSL ERSST) | #88 | ok | wrong¹ | ok | error |
-| T09 no seconds `00:00` (NCEI ERSST) | #88 | ok | wrong¹ | ok | error |
-| T10 year 0001, `proleptic_gregorian` | #88 | ok | ok | ok | error |
-| T11 10-minute steps as fractional days | #90 | ok | wrong¹ | ok | wrong (32 NA) |
-| T12 repeated timestamp | #91 | ok | wrong¹ | ok | error |
-| T13 UNLIMITED time dimension | #92 | ok | wrong¹ | ok | ok |
-| T14 monthly means with `time_bnds` | test | ok² | wrong¹ | ok | ok |
-| D01 depth (m), `positive = "down"` | fixture | ok | ok | wrong³ | ok |
-| D02 depth in cm | test | wrong⁴ | wrong⁴ | wrong⁴ | ok |
-| D03 elevation, `positive = "up"` (Copernicus Zarr) | test | wrong⁵ | wrong⁵ | wrong⁵ | error |
-| D04 depth stored deepest first | test | ok | wrong⁶ | wrong³ | ok |
-| D05 `altitude` with `axis = "Z"` | #93 | ok | ok | ok | error |
-| D06 explicit depth bounds | test | wrong⁷ | wrong⁶ | ok | differs⁸ |
-| D07 depth with `standard_name`, `axis = "Z"` (Copernicus) | layout | ok | ok | ok | ok |
-| H01 0–360 file, query −90 | test | ok | ok | ok | ok |
-| H02 −180–180 file, query 270 | test | ok | ok | ok | ok |
-| H03 explicit longitude bounds | test | wrong⁷ | wrong⁷ | ok | ok |
-| H04 axes named `x`/`y`, CF labels swapped | #93 | ok | wrong | ok | wrong |
-| H05 units-only 2D `nav_lon`/`nav_lat` | #93 | ok (error) | wrong | ok (error) | wrong |
-| H06 coarse longitudes 0, 200, 300 | #95 | ok | ok | ok | error |
-| H07 latitude stored north to south | test | ok | ok | ok | ok |
-| V01 `short` with `scale_factor`, `add_offset`, `_FillValue` | layout | ok | ok | ok | ok |
-| **Right** | | **25** | **12** | **25** | **13** |
+| Case | From | stars `read_ncdf` | stars `read_mdim` | ncdfCF | terra | ocean3d |
+|---|---|---|---|---|---|---|
+| T01 days since, steps 0, 2, 5 | fixture | ok | wrong¹ | ok | ok | ok |
+| T02 origin with an hour (06:00) | test | ok | wrong¹ | ok | ok | ok |
+| T03 `noleap` calendar | test | ok | ok | ok | ok | error |
+| T04 `360_day` calendar | test | ok | ok | ok | wrong⁹ | error |
+| T05 `months since`, one step (WOA23) | #88 | ok | ok | ok | wrong⁹ | error |
+| T06 `... UTC` suffix (GHRSST) | #88 | ok | wrong¹ | ok | ok | error |
+| T07 `00:00:0.0` origin (NCEP, ERA5) | #88 | ok | wrong¹ | ok | ok | error |
+| T08 unpadded `2020-1-1` (PSL ERSST) | #88 | ok | wrong¹ | ok | ok | error |
+| T09 no seconds `00:00` (NCEI ERSST) | #88 | ok | wrong¹ | ok | ok | error |
+| T10 year 0001, `proleptic_gregorian` | #88 | ok | ok | ok | ok | error |
+| T11 10-minute steps as fractional days | #90 | ok | wrong¹ | ok | wrong⁹ | wrong (32 NA) |
+| T12 repeated timestamp | #91 | ok | wrong¹ | ok | ok | error |
+| T13 UNLIMITED time dimension | #92 | ok | wrong¹ | ok | ok | ok |
+| T14 monthly means with `time_bnds` | test | ok² | wrong¹ | ok | ok | ok |
+| D01 depth (m), `positive = "down"` | fixture | ok | ok | wrong³ | ok | ok |
+| D02 depth in cm | test | wrong⁴ | wrong⁴ | wrong⁴ | wrong | ok |
+| D03 elevation, `positive = "up"` (Copernicus Zarr) | test | wrong⁵ | wrong⁵ | wrong⁵ | wrong | error |
+| D04 depth stored deepest first | test | ok | wrong⁶ | wrong³ | ok | ok |
+| D05 `altitude` with `axis = "Z"` | #93 | ok | ok | ok | ok | error |
+| D06 explicit depth bounds | test | wrong⁷ | wrong⁶ | ok | wrong⁷ | differs⁸ |
+| D07 depth with `standard_name`, `axis = "Z"` (Copernicus) | layout | ok | ok | ok | ok | ok |
+| H01 0–360 file, query −90 | test | ok | ok | ok | ok | ok |
+| H02 −180–180 file, query 270 | test | ok | ok | ok | ok | ok |
+| H03 explicit longitude bounds | test | wrong⁷ | wrong⁷ | ok | wrong⁷ | ok |
+| H04 axes named `x`/`y`, CF labels swapped | #93 | ok | wrong | ok | wrong | wrong |
+| H05 units-only 2D `nav_lon`/`nav_lat` | #93 | ok (error) | wrong | ok (error) | wrong | wrong |
+| H06 coarse longitudes 0, 200, 300 | #95 | ok | ok | ok | wrong⁹ | error |
+| H07 latitude stored north to south | test | ok | ok | ok | ok | ok |
+| V01 `short` with `scale_factor`, `add_offset`, `_FillValue` | layout | ok | ok | ok | ok | ok |
+| **Right** | | **25** | **12** | **25** | **19** | **13** |
 
 1. `read_mdim()` decodes time only when the axis has a `calendar` attribute.
    Without one (T01, T02, T06–T09, T11–T14), time is a plain number. CF
@@ -132,6 +133,12 @@ no unit conversion or direction flip added.
    are inferred from the centres.
 8. `method = "nearest"` picks the nearest layer centre by design and doesn't
    use depth bounds; the case expects the layer whose bounds contain 35 m.
+9. terra (GDAL's netCDF driver) converts `360_day` dates to R dates (30
+   February becomes 1 March), returns `months since` as a bare number,
+   rounds fractional-day steps off (16 of 144 exact matches fail, as in
+   #90), and reads irregular coordinates (0, 200, 300) as index positions
+   because its grids must be regular. It also can't place a file with a
+   single latitude row, so the longitude cases use two rows.
 
 **Multi-file cases (#94, #96).** Neither stars nor ncdfCF chooses between
 files in a series: `read_mdim()` reads one file, and `read_ncdf()` and ncdfCF
@@ -146,6 +153,18 @@ themselves and read the UNLIMITED axis correctly (T13).
 **#89 (speed of date matching).** 500 dates against a 3,650-step daily axis:
 `extract2d()` 10.9 s end to end, `CFtime::indexOf()` 0.08 s, both 500 of 500
 right (`time_matching.R`).
+
+**terra as a reader.** terra is in the table because it already reads
+netCDF for the voxel tools (`woa_load_nc()` calls `terra::rast(file)`). It
+fills `terra::depth()` and `terra::time()` from the file and reads regular
+Copernicus-style grids correctly (its volumes matched on the real file), but
+its errors on the other cases are silent: a `360_day` date moves to the next
+day, bounds that change cell edges (and so volumes) are ignored, irregular
+grids become index positions. Using it for voxel slices would need its grid
+checked against the core object's axes on every read, with ncdf4 as the
+fallback: two read paths with two sets of CF rules. So ncdf4 reads all
+netCDF, including voxel slices, and terra works on the slices once they are
+in memory.
 
 ## 2. Memory and speed
 

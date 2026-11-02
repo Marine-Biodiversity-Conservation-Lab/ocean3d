@@ -6,6 +6,7 @@
 #   stars_ncdf  stars::read_ncdf()   (ncmeta + RNetCDF)
 #   stars_mdim  stars::read_mdim()   (GDAL multidimensional API)
 #   ncdfCF      ncdfCF::open_ncdf()
+#   terra       terra::rast() (GDAL netCDF driver), depth() and time()
 #   ocean3d     the package's ncdf4 code (extract_to_point() and its helpers)
 #
 # For the three external readers the cell is picked from the coordinates the
@@ -104,6 +105,37 @@ read_ncdfcf <- function(path, var) {
                ax$attribute("units"), ax$attribute("positive"))
   })
   list(dims = dims, values = as.numeric(v$raw()), shape = v$dim())
+}
+
+# terra (GDAL's netCDF driver): one layer per depth and time step, with the
+# depth and time of each layer in terra::depth() and terra::time().
+read_terra <- function(path, var) {
+  r <- suppressWarnings(terra::rast(path, subds = var))
+  x <- terra::xFromCol(r, seq_len(terra::ncol(r)))
+  y <- terra::yFromRow(r, seq_len(terra::nrow(r)))
+  hx <- terra::xres(r) / 2
+  hy <- terra::yres(r) / 2
+  z_layer <- terra::depth(r)
+  t_layer <- terra::time(r)
+  has_z <- length(unique(z_layer)) > 1 || !all(z_layer == 0)
+  has_t <- !all(is.na(t_layer))
+  z <- if (has_z) unique(z_layer) else 0
+  t <- if (has_t) unique(t_layer) else NA
+  arr <- array(NA_real_, c(length(x), length(y), length(z), length(t)))
+  vals <- terra::values(r, mat = TRUE)  # cells (row by row from the top) x layers
+  for (l in seq_len(terra::nlyr(r))) {
+    zi <- if (has_z) match(z_layer[l], z) else 1L
+    ti <- if (has_t) match(t_layer[l], t) else 1L
+    arr[, , zi, ti] <- matrix(vals[, l], length(x), length(y))
+  }
+  dims <- list(
+    .dim_entry("x", "x", x, x - hx, x + hx),
+    .dim_entry("y", "y", y, y - hy, y + hy)
+  )
+  if (has_z) dims <- c(dims, list(.dim_entry("z", "z", z)))
+  if (has_t) dims <- c(dims, list(.dim_entry("t", "t", t)))
+  shape <- c(length(x), length(y), if (has_z) length(z), if (has_t) length(t))
+  list(dims = dims, values = as.numeric(arr), shape = shape)
 }
 
 # Picking the query cell from returned coordinates ---------------------------
@@ -259,7 +291,8 @@ describe_ocean3d <- function(path, var) {
 readers <- list(
   stars_ncdf = read_stars_ncdf,
   stars_mdim = read_stars_mdim,
-  ncdfCF = read_ncdfcf
+  ncdfCF = read_ncdfcf,
+  terra = read_terra
 )
 
 .capture <- function(expr) {
