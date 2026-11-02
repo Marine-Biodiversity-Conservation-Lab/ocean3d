@@ -10,7 +10,13 @@
   }
 
   if (dim_name %in% names(nc$dim)) {
-    return(nc$dim[[dim_name]]$vals)
+    dim <- nc$dim[[dim_name]]
+    # A connection opened with nc_open(readunlim = FALSE) doesn't hold the
+    # values of an unlimited dimension (they are NA), so read them (#92).
+    if (isTRUE(dim$unlim) && isTRUE(dim$create_dimvar) && anyNA(dim$vals)) {
+      return(as.vector(ncdf4::ncvar_get(nc, dim_name)))
+    }
+    return(dim$vals)
   }
 
   # Some files store coordinate values as variables rather than only as

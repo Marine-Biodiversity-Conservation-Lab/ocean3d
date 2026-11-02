@@ -24,7 +24,8 @@ Imports:
     stringr,
     terra,
     rredlist,
-    ncdf4
+    ncdf4,
+    CFtime (>= 1.7.3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 Suggests:
