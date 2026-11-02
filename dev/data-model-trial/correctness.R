@@ -122,7 +122,8 @@ read_terra <- function(path, var) {
   z <- if (has_z) unique(z_layer) else 0
   t <- if (has_t) unique(t_layer) else NA
   arr <- array(NA_real_, c(length(x), length(y), length(z), length(t)))
-  vals <- terra::values(r, mat = TRUE)  # cells (row by row from the top) x layers
+  # Cells (row by row from the top) x layers.
+  vals <- terra::values(r, mat = TRUE)
   for (l in seq_len(terra::nlyr(r))) {
     zi <- if (has_z) match(z_layer[l], z) else 1L
     ti <- if (has_t) match(t_layer[l], t) else 1L
