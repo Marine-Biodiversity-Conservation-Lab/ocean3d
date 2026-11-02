@@ -338,10 +338,13 @@
           reason <- "cadence_exceeded"
         }
       }
-      records[[length(records) + 1L]] <- data.frame(
+      # Collect plain values and build the data frame once at the end:
+      # one data frame per row was most of the run time (#89).
+      records[[length(records) + 1L]] <- list(
         row = i, column = column, source_index = source,
         variable = selected$variable[i],
-        requested = requested[i], selected = timestamp,
+        requested = as.numeric(requested[i]),
+        selected = as.numeric(timestamp),
         difference_seconds = delta, resolution = resolution,
         cadence = cadence$type, cadence_basis = cadence$basis,
         cadence_seconds = cadence$seconds, cadence_months = cadence$months,
@@ -357,12 +360,18 @@
           info$source_file
         },
         status = if (delta == 0) "matched" else "shifted",
-        reason = reason, stringsAsFactors = FALSE
+        reason = reason
       )
     }
   }
   if (!length(records)) return(data.frame())
-  do.call(rbind, records)
+  columns <- lapply(stats::setNames(nm = names(records[[1L]])), function(name) {
+    unlist(lapply(records, `[[`, name), use.names = FALSE)
+  })
+  out <- as.data.frame(columns, stringsAsFactors = FALSE)
+  out$requested <- .POSIXct(out$requested, tz = "UTC")
+  out$selected <- .POSIXct(out$selected, tz = "UTC")
+  out
 }
 
 .validate_custom_time_interval <- function(resolution, interval) {
