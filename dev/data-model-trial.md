@@ -33,7 +33,7 @@ correcting its coordinates.**
   has broken its API in 4 of its last 8 releases, has one maintainer, and has
   quirks the package would have to work around (below). It is a good
   reference to test against, and the dependency question can be revisited at
-  its 1.0 release.
+  its 1.0 release, or if native model grids come into scope (below).
 - **CFtime fixes the time cases.** Every time failure in the package's
   current reader (T03–T12) is decoded correctly by both readers that use
   CFtime (stars `read_ncdf()` and ncdfCF), and `CFtime::indexOf()` matched
@@ -43,6 +43,12 @@ correcting its coordinates.**
   axes to depth (D03): stars drops the information and ncdfCF only exposes
   it. Choosing between files in a series (#94, #96) and the nearest-layer
   and nearest-time rules are package logic in every option.
+
+- **Native model grids are out of scope for now** (decided by Jay
+  Matsushiba, 2 November 2026). Inputs are regular lon/lat grids with fixed
+  depth levels. NEMO-style curvilinear grids and terrain-following (sigma)
+  depths, the main things ncdfCF handles that the package doesn't, are
+  regridded before use.
 
 The rest of this note gives the results each point rests on.
 
