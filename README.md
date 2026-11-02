@@ -73,34 +73,59 @@ New to ocean3d? Watch the recording of the EEA 2026 workshop, which walks throug
 
 ## Function overview
 
-### Create a raster covering extent of multiple spatial inputs
+An analysis in `ocean3d` has three steps: **build** 3D objects from your
+inputs, **intersect** them with each other or with the data, and
+**summarise** the result as volumes, overlaps or statistics. The functions
+below are grouped by step (see the [package design in SPEC.md](SPEC.md#package-design-build-intersect-summarise)).
+
+### Which input each function takes
+
+`ocean3d` currently has two data models for gridded data, and each function
+takes one of them:
+
+| Input | Functions | Reads with |
+|---|---|---|
+| netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_buffer()`, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
+| `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions, `mask()` and `extract_to_area()` | terra; no time dimension |
+
+The two don't convert into each other yet. A voxel from `woa_load_nc()` and
+`as_voxel()` can't be passed to `extract_to_point()`, and a netCDF file can't
+be passed to `extract_to_area()` or `volume()`. To use a netCDF file with the
+voxel functions, load it as a `SpatRaster` (e.g. with `woa_load_nc()`) and
+wrap it with `as_voxel()`. Merging the two into one model with time is
+planned in [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
+
+### Build: 3D objects
+
+Input: `SpatRaster` layers and polygons (`sf`, `SpatVector`). Output:
+`SpatVoxel` or `SpatEnvelope`.
 
 - `create_study_raster()` — build an empty study-area `SpatRaster`
   covering the combined extent of one or more spatial inputs.
-
-### 3D representations
-
 - `as_voxel()` — wrap a multi-depth `SpatRaster` (or a list of
   single-depth ones) as a validated `SpatVoxel`, ordered shallow to deep
-  with `{variable}_depth={value}` layer names. 
+  with `{variable}_depth={value}` layer names. This is how gridded data,
+  including netCDF files loaded with terra, enter the voxel model.
 - `as_envelope()` — define a 3D envelope with two rasters, with `depth_min` 
   and `depth_max` corresponding to the minimum and maximum depths present in 
   given cell. 
-
-### Conversion between 3D representations
 - `vect_to_envelope()` — rasterize a single species range or fishery
   footprint onto the study grid and attach per-cell `depth_min` /
   `depth_max`, returning a `SpatEnvelope`. 
 - `envelope_to_voxel()` — expand an envelope onto a set of depth levels.
+  `profile_flat()` and `profile_equal()` set how a cell's value is spread
+  down the levels it occupies.
 - `voxel_to_envelope()` — collapse a voxel to the envelope bounding it,
   using a predicate on the cell values. Lossy: interior gaps are filled.
+- `occupied()` — turn a voxel of values (e.g. temperature) into a presence
+  voxel, using a predicate on the cell values.
+- `depths()` — read the depth of each layer of a voxel.
 
-### 3D spatial query
+### Intersect: 3D spatial query
 
-Three functions ask how a `SpatEnvelope` or `SpatVoxel` relates to another
-object in 3D. The other object can be a 3D object or a 2D one: a
-`SpatRaster` footprint or polygons (`SpatVector`, `sf`). A 2D object
-restricts the domain horizontally and without restricting the depths.
+Input: `SpatVoxel` or `SpatEnvelope`, compared with another 3D object or a
+2D one: a `SpatRaster` footprint or polygons (`SpatVector`, `sf`). A 2D
+object restricts the domain horizontally without restricting the depths.
 
 - `intersect_3d(x, y)` — the shared 3D space between the two inputs. Returns an envelope with the shared depth interval or a presence voxel, depending on inputs.
 - `intersects_3d(x, y)` — whether inputs share any 3D space, cell by cell:
@@ -108,10 +133,9 @@ restricts the domain horizontally and without restricting the depths.
   `NA` (neither present). 
 - `mask(x, mask)` — `terra::mask()` made depth-aware. Keeps the values of `x` where the mask domain reaches that cell *at that depth*.
 
-### 3D volume
+### Summarise: 3D volume
 
-Both dispatch on the 3D representation, so they take either a
-`SpatEnvelope` or a `SpatVoxel`. A voxel’s volume sums the slab each
+Input: `SpatEnvelope` or `SpatVoxel`. A voxel’s volume sums the slab each
 occupied depth level stands for, so interior gaps cost volume instead of
 being filled in. Given one of each, the envelope is discretized onto the
 voxel’s depth levels.
@@ -121,23 +145,32 @@ voxel’s depth levels.
   rasterized domains and their intersection (returns a 9-layer stack).
   Built on `intersect_3d()`.
 
-### Environmental extraction to areas
+### Summarise: environmental extraction from a `SpatVoxel`
+
+Input: a `SpatVoxel` already loaded with terra.
 
 - `extract_to_area()` — crop a `SpatVoxel` to an area polygon and select
   layers within a depth range.
+- `mask()` (above) — keep a `SpatVoxel`'s values inside a 3D volume, such as
+  a species' range from `vect_to_envelope()`.
 
 See `vignette("ocean3d")` for the full workflow, from a
 range polygon through to a vertical profile of the values inside it.
 
-### Environmental extraction to point observations
+### Summarise: environmental extraction from netCDF files
+
+Input: observations (data frame, tibble, `sf` POINT, matrix, or named list)
+and one or more netCDF files. These functions read the files directly, only
+the cells each observation needs, and match time as well as depth. They don't
+take a `SpatVoxel`.
 
 - `extract_to_point()` — the general engine: match observation points
-  (data frame, tibble, `sf` POINT, matrix, or named list) against one or
-  more NetCDF files. By default a point takes the value of the grid cell
-  that contains it (`NA` outside the grid); `spatial_match = "nearest"`
-  accepts the nearest cell centre within `max_distance_km`. Time is matched
-  to the nearest timestamp and depth by physical depth in metres. Returns
-  the input with the extracted values appended, structure preserved.
+  against one or more netCDF files. By default a point takes the value of
+  the grid cell that contains it (`NA` outside the grid);
+  `spatial_match = "nearest"` accepts the nearest cell centre within
+  `max_distance_km`. Time is matched to the nearest timestamp and depth by
+  physical depth in metres. Returns the input with the extracted values
+  appended, structure preserved.
 - `extract2d()` — for variables with no depth dimension.
 - `extract3d_nearest()` — the valid, non-missing depth layer closest to
   each observation’s depth, so a cell below the seabed does not silently
@@ -146,8 +179,18 @@ range polygon through to a vertical profile of the values inside it.
   shallowest depth layer, or the deepest non-missing one at that cell.
 - `extract3d_all()` — nearest, surface and bottom in one pass, as three
   columns.
+- `extract_to_buffer()` — summarise values within a geodesic circle ×
+  depth window × time window around each observation, weighted by cell
+  coverage, layer thickness and time, or pick the value closest to a target.
+- `extract_to_track()` — sample points along ordered tracks (e.g. tagging
+  data), extract values at them, and optionally summarise per track.
 
-### Common spatial dataset utilities
+### Data utilities
+
+These download or load public datasets. The loaders return a plain
+`SpatRaster`; wrap it with `as_voxel()` or `as_envelope()` to use it with
+the build, intersect and volume functions above. The netCDF extraction
+functions take the downloaded files themselves (e.g. from `woa_download()`).
 
 #### IUCN Red List API utilities
 
