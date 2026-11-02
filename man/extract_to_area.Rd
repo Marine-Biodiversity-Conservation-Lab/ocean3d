@@ -11,7 +11,8 @@ extract_to_area(area, rast_3d, min_depth = NULL, max_depth = NULL)
 Reprojected to the voxel's CRS when the two differ.}
 
 \item{rast_3d}{\link[=SpatVoxel-class]{SpatVoxel}. Multi-depth raster, e.g. from \code{\link[=as_voxel]{as_voxel()}}
-or \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}.}
+or \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. A netCDF file isn't accepted: load it as a
+\code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{min_depth}{Numeric. Shallowest depth in metres. \code{NULL} (the default)
 starts at the voxel's shallowest layer.}
@@ -30,9 +31,10 @@ within a given depth range. The nearest available depth layers to
 always has at least one layer; omit either to run to that end of the voxel.
 }
 \details{
-This is the area counterpart of \code{\link[=extract_to_point]{extract_to_point()}}: the same "restrict a
-3D source to a target geometry" operation, with a polygon as the target
-rather than observation points.
+Unlike \code{\link[=extract_to_point]{extract_to_point()}}, \code{\link[=extract_to_buffer]{extract_to_buffer()}} and \code{\link[=extract_to_track]{extract_to_track()}},
+which read netCDF files, this function takes a \link[=SpatVoxel-class]{SpatVoxel} already
+loaded with terra. It has no time dimension and computes no statistic; it
+only crops the voxel and selects depth layers.
 
 To restrict a voxel to a species' \emph{per-cell} depth window rather than one
 depth band across the whole area, build a \link[=SpatEnvelope-class]{SpatEnvelope} and mask with
@@ -57,6 +59,7 @@ terra::ext(out)   # cropped to the polygon
 names(extract_to_area(area, v))
 }
 \seealso{
-\code{\link[=extract_to_point]{extract_to_point()}} for the point counterpart; \code{\link[=depths]{depths()}} for the
+\code{\link[=extract_to_point]{extract_to_point()}} to extract from netCDF files at points;
+\code{\link[=depths]{depths()}} for the
 layer depths the bounds snap to.
 }

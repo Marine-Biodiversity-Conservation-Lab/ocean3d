@@ -2067,6 +2067,9 @@
 #'
 #' @param data Observation table, matrix, named list or sf POINT object.
 #' @param nc netCDF path, paths, opened ncdf4 connection, list, or file table.
+#'   Files are read directly with ncdf4, only the cells each observation
+#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
+#'   those, see [extract_to_area()] and [mask()].
 #' @param var Variable name or vector of names. NULL detects one data variable
 #'   per file, excluding referenced bounds and coordinate variables.
 #' @param horizontal_radius_km Horizontal geodesic radius in kilometres.

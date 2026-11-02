@@ -3034,6 +3034,9 @@
 #' @param nc netCDF source. Can be a file path, vector of file paths, list of
 #'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
 #'   with a file column.
+#'   Files are read directly with ncdf4, only the cells each observation
+#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
+#'   those, see [extract_to_area()] and [mask()].
 #' @param lon Optional numeric longitude value or vector for direct point
 #'   extraction when `data = NULL`.
 #' @param lat Optional numeric latitude value or vector for direct point
@@ -3695,6 +3698,9 @@ extract_to_point <- function(data = NULL,
 #' @param nc netCDF source. Can be a file path, vector of file paths, list of
 #'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
 #'   with a file column.
+#'   Files are read directly with ncdf4, only the cells each observation
+#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
+#'   those, see [extract_to_area()] and [mask()].
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -3738,6 +3744,9 @@ extract2d <- function(data, nc, var = NULL, ...) {
 #' @param nc netCDF source. Can be a file path, vector of file paths, list of
 #'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
 #'   with a file column.
+#'   Files are read directly with ncdf4, only the cells each observation
+#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
+#'   those, see [extract_to_area()] and [mask()].
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -3785,6 +3794,9 @@ extract3d_surface <- function(data, nc, var = NULL, ...) {
 #' @param nc netCDF source. Can be a file path, vector of file paths, list of
 #'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
 #'   with a file column.
+#'   Files are read directly with ncdf4, only the cells each observation
+#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
+#'   those, see [extract_to_area()] and [mask()].
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -3830,6 +3842,9 @@ extract3d_bottom <- function(data, nc, var = NULL, ...) {
 #' @param nc netCDF source. Can be a file path, vector of file paths, list of
 #'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
 #'   with a file column.
+#'   Files are read directly with ncdf4, only the cells each observation
+#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
+#'   those, see [extract_to_area()] and [mask()].
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.
@@ -3879,6 +3894,9 @@ extract3d_nearest <- function(data, nc, var = NULL, ...) {
 #' @param nc netCDF source. Can be a file path, vector of file paths, list of
 #'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
 #'   with a file column.
+#'   Files are read directly with ncdf4, only the cells each observation
+#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
+#'   those, see [extract_to_area()] and [mask()].
 #' @param var Name of the variable to extract from the netCDF file. If `NULL`,
 #'   the function tries to detect the variable automatically from each file.
 #'   This only works when each netCDF file contains one single variable.

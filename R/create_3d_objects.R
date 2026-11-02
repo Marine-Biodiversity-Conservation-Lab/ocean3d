@@ -159,7 +159,9 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' negated, since flipping the sign would change what the data mean.
 #'
 #' @param x SpatRaster with `{variable}_depth={value}` layer names, a list of
-#'   single-depth SpatRasters, or an existing [SpatVoxel-class].
+#'   single-depth SpatRasters, or an existing [SpatVoxel-class]. This is how
+#'   gridded data enter the `SpatVoxel` model: read a netCDF file with
+#'   [woa_load_nc()] or [terra::rast()] first. netCDF paths aren't accepted.
 #' @param depths Optional numeric vector, one depth per layer, in metres. When
 #'   supplied, layer names are (re)built from `depths` and `varname`, replacing
 #'   any existing names. Required if `x` has no conforming layer names.
@@ -526,7 +528,9 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 #' `[0, 200]`. Use [SpatVoxel-class] directly where interior gaps matter.
 #'
 #' @param v SpatVoxel (or a multi-depth SpatRaster with
-#'   `{variable}_depth={value}` layer names).
+#'   `{variable}_depth={value}` layer names). A netCDF file isn't accepted:
+#'   load it as a `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with
+#'   [as_voxel()].
 #' @param fun Function taking a vector of cell values and returning a logical
 #'   vector of the same length. `NA` results are treated as `FALSE`. Defaults to
 #'   `\(x) !is.na(x)`.
@@ -635,7 +639,8 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
 #'
 #' Running `occupied()` on a presence voxel returns it unchanged.
 #'
-#' @param x A [SpatVoxel-class].
+#' @param x A [SpatVoxel-class]. A netCDF file isn't accepted: load it as a
+#'   `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with [as_voxel()].
 #' @param fun Function taking a vector of cell values and returning a logical
 #'   vector of the same length. `NA` counts as `FALSE`. Defaults to
 #'   `function(v) !is.na(v)`, which treats any recorded value as occupied.

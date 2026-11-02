@@ -5,9 +5,10 @@
 #' `min_depth` and `max_depth` are used as the inclusive bounds, so the result
 #' always has at least one layer; omit either to run to that end of the voxel.
 #'
-#' This is the area counterpart of [extract_to_point()]: the same "restrict a
-#' 3D source to a target geometry" operation, with a polygon as the target
-#' rather than observation points.
+#' Unlike [extract_to_point()], [extract_to_buffer()] and [extract_to_track()],
+#' which read netCDF files, this function takes a [SpatVoxel-class] already
+#' loaded with terra. It has no time dimension and computes no statistic; it
+#' only crops the voxel and selects depth layers.
 #'
 #' To restrict a voxel to a species' *per-cell* depth window rather than one
 #' depth band across the whole area, build a [SpatEnvelope-class] and mask with
@@ -16,7 +17,8 @@
 #' @param area sf, sfc, or SpatVector. Area polygon to crop the voxel to.
 #'   Reprojected to the voxel's CRS when the two differ.
 #' @param rast_3d [SpatVoxel-class]. Multi-depth raster, e.g. from [as_voxel()]
-#'   or [envelope_to_voxel()].
+#'   or [envelope_to_voxel()]. A netCDF file isn't accepted: load it as a
+#'   `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with [as_voxel()].
 #' @param min_depth Numeric. Shallowest depth in metres. `NULL` (the default)
 #'   starts at the voxel's shallowest layer.
 #' @param max_depth Numeric. Deepest depth in metres. `NULL` (the default) runs
@@ -25,7 +27,8 @@
 #' @returns A [SpatVoxel-class] cropped to `area` and filtered to the depth
 #'   range.
 #'
-#' @seealso [extract_to_point()] for the point counterpart; [depths()] for the
+#' @seealso [extract_to_point()] to extract from netCDF files at points;
+#'   [depths()] for the
 #'   layer depths the bounds snap to.
 #'
 #' @examples

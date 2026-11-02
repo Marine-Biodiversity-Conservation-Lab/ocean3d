@@ -33,7 +33,8 @@ NULL
 #'
 #' @param x A [SpatEnvelope-class] or [SpatVoxel-class]. A bare SpatRaster is
 #'   rejected; build one with [as_envelope()], [vect_to_envelope()] or
-#'   [as_voxel()] first.
+#'   [as_voxel()] first. A netCDF file isn't accepted: load it as a
+#'   `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with [as_voxel()].
 #' @param ... Arguments for the [SpatVoxel-class] method, which are an error
 #'   for an envelope.
 #' @param bounds SpatVoxel only. What each depth level stands for vertically:
@@ -111,7 +112,8 @@ setGeneric("volume", function(x, ...) standardGeneric("volume"))
 #' @param x,y The two objects. At least one must be a [SpatEnvelope-class] or
 #'   a [SpatVoxel-class]. The other can be either of those, a single-layer
 #'   `SpatRaster` footprint, or polygons (`SpatVector`, `sf`, `sfc`). Rasters
-#'   must share one grid (CRS, extent, resolution).
+#'   must share one grid (CRS, extent, resolution). netCDF files aren't
+#'   accepted; load them with terra and wrap them with [as_voxel()] first.
 #' @param ... Arguments for the voxel methods. They are an error when both
 #'   inputs are envelopes.
 #' @param bounds Only when one input is an envelope and the other a voxel. How
@@ -222,7 +224,8 @@ setGeneric("intersects_3d",
 #' [intersects_3d()]; it computes no volumes.
 #'
 #' @param x,y The two domains, each a [SpatEnvelope-class] or
-#'   [SpatVoxel-class].
+#'   [SpatVoxel-class]. netCDF files aren't accepted; load them with terra
+#'   and wrap them with [as_voxel()] first.
 #' @param ... Arguments for the voxel methods, which are an error for a pair
 #'   of envelopes.
 #' @param bounds Voxel methods only. See [volume()]. Also governs how an

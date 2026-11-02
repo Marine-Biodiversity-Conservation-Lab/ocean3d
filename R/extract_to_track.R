@@ -893,7 +893,8 @@
 #'   `as.data.frame(sf::st_coordinates(sf::st_transform(lines, 4326)))` and
 #'   `lon_col = "X", lat_col = "Y", track_col = "L1"`.
 #' @param nc,var netCDF sources and selected variable names. See
-#'   [extract_to_buffer()].
+#'   [extract_to_buffer()]. Files are read directly with ncdf4; a
+#'   [SpatVoxel-class] or other `SpatRaster` isn't accepted.
 #' @param track_col Optional track identifier column. Without it, the input is
 #'   one track. IDs are returned as text.
 #' @param sampling NULL (default) uses 'balanced' when spacing_km,

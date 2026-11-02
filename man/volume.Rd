@@ -18,7 +18,8 @@ volume(x, ...)
 \arguments{
 \item{x}{A \link[=SpatEnvelope-class]{SpatEnvelope} or \link[=SpatVoxel-class]{SpatVoxel}. A bare SpatRaster is
 rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[=vect_to_envelope]{vect_to_envelope()}} or
-\code{\link[=as_voxel]{as_voxel()}} first.}
+\code{\link[=as_voxel]{as_voxel()}} first. A netCDF file isn't accepted: load it as a
+\code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{...}{Arguments for the \link[=SpatVoxel-class]{SpatVoxel} method, which are an error
 for an envelope.}

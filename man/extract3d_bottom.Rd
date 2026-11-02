@@ -13,7 +13,10 @@ named list.}
 
 \item{nc}{netCDF source. Can be a file path, vector of file paths, list of
 file paths, opened \code{ncdf4} object, list of opened objects, or a data frame
-with a file column.}
+with a file column.
+Files are read directly with ncdf4, only the cells each observation
+needs. A \link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't accepted; for
+those, see \code{\link[=extract_to_area]{extract_to_area()}} and \code{\link[terra:mask]{mask()}}.}
 
 \item{var}{Name of the variable to extract from the netCDF file. If \code{NULL},
 the function tries to detect the variable automatically from each file.
