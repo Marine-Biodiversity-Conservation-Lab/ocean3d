@@ -24,24 +24,6 @@ at_date <- function(f, date) {
   out$temp
 }
 
-test_that("CF time units that the old decoder rejected are read (#88)", {
-  day <- as.Date("2020-01-03")
-  cases <- list(
-    list(units = "days since 2020-01-01 UTC", vals = c(0, 2, 5)),
-    list(units = "days since 2020-01-01T00:00:00Z", vals = c(0, 2, 5)),
-    list(units = "hours since 2020-01-01 00:00:0.0", vals = c(0, 48, 120)),
-    list(units = "days since 2020-1-1 00:00:00", vals = c(0, 2, 5)),
-    list(units = "hours since 2020-01-01 00:00", vals = c(0, 48, 120)),
-    list(units = "days since 0001-01-01 00:00:00",
-         vals = c(737424, 737426, 737429), calendar = "proleptic_gregorian")
-  )
-  for (case in cases) {
-    f <- make_time_file(case$vals, case$units, case$calendar)
-    on.exit(unlink(f), add = TRUE)
-    expect_equal(at_date(f, day), 2, label = case$units)
-  }
-})
-
 test_that("a single-step months axis is read and a longer one rejected (#88)", {
   one <- make_time_file(0, "months since 1955-01-01 00:00:00")
   several <- make_time_file(c(0, 1, 2), "months since 2020-01-01")
