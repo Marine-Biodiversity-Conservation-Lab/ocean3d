@@ -150,9 +150,11 @@ no unit conversion or direction flip added.
 **Multi-file cases (#94, #96).** Of the routes tested, none chooses between
 files in a series: `read_ncdf()`, `read_mdim()` and ncdfCF each read one file
 (ncdfCF can join files along time afterwards with `append()`). stars'
-`read_stars()`, which can stack files along a dimension, wasn't tested. The
-static-file and cadence rules from #94 and #96 stay in package code with the
-readers tested.
+`read_stars()` can stack files along a dimension, but wasn't tested: it
+reads netCDF through the same GDAL driver as terra, and stacking files
+doesn't apply the rules #94 and #96 need (choosing between a static file and
+a time series, not borrowing a time step from an unrelated tile). Those
+rules stay in package code.
 
 **#92** (a caller-opened ncdf4 connection with `readunlim = FALSE`) is
 specific to accepting ncdf4 connections; stars and ncdfCF open the file
