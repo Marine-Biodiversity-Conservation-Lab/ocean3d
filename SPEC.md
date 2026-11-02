@@ -35,14 +35,17 @@ intersect with one another.
 - **Three steps:** an analysis is build → intersect → summarise, and
   each analysis function belongs to one step ([Package
   design](#package-design-build-intersect-summarise)). The extraction
-  functions don’t follow this yet; they are planned to become wrappers
-  over the three steps.
+  functions don’t follow this yet; they will either become wrappers over
+  the three steps or be retired in favour of workflow vignettes
+  (undecided).
 - **Now:** two data models. netCDF files are used for point, buffer and
   track extraction; `SpatVoxel` / `SpatEnvelope` for everything else
   ([Data model](#data-model)).
 - **Planned (#99):** one model with time as a dimension, reading only
-  the data each step needs. A trial of the stars and ncdfCF packages
-  decides how the data are read and held.
+  the data each step needs: the package’s own core object, read with
+  ncdf4 and CFtime, terra for slices in memory, and stars only for
+  remote Zarr (agreed in \#112; trial in
+  [`dev/data-model-trial.md`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/dev/data-model-trial.md)).
 - **Planned:** one vector class, `SpatVector3D`, holding points, lines
   and polygons with depth.
 - **Planned:** CFtime for time decoding.
@@ -62,11 +65,20 @@ on its own.
 3.  **Summarise:** turn what intersect returns into results: volumes,
     overlap, and statistics per shape or group.
 
-| Step | Question | Exists now | Planned |
+| Step | Question | Exists now | Planned additions |
 |----|----|----|----|
 | Build | What is the 3D shape or grid? | [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md), [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md), [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md), [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md), [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md), data loaders ([`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)) | `as_vector3d()`, `buffer_3d()`, `vector3d_to_envelope()`, track sampling |
 | Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D`; a coverage function that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
 | Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md) | `summarise_3d()` for statistics on intersect results |
+
+The planned functions are added alongside the existing ones: every
+function in “Exists now” stays, and the existing intersect functions
+gain methods for `SpatVector3D`. Two existing functions change inside
+without changing what they are for:
+[`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
+reads with ncdf4 instead of terra, and voxels store depth in
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+rather than in layer names (see [Direction](#direction-a-hybrid)).
 
 The Getting Started vignette follows the three steps: it builds a
 species’ 3D range with
@@ -91,9 +103,26 @@ inside it and compute a statistic. The same work is written separately
 for points, buffers, tracks and areas, with different arguments for the
 same idea (#101, \#104, \#105);
 [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
-alone has about 2100 lines and 36 arguments. They are planned to become
-wrappers over the three steps, keeping their current arguments and
-results:
+alone has about 2100 lines and 36 arguments. Once the three steps exist,
+the work they do moves into the steps, and each function either stays as
+a short wrapper or is retired:
+
+- **Keep as wrappers:** each function keeps its current arguments and
+  results and calls the three steps. Existing code and teaching material
+  keep working, and a one-line call stays available; the cost is keeping
+  their many arguments in step with the steps’ arguments.
+- **Retire, with workflow vignettes:** the steps become the only way to
+  extract, and vignettes show the build → intersect → summarise code for
+  points, buffers, tracks and areas. The package has one way to do each
+  thing and a smaller set of arguments to document; the cost is that
+  existing code breaks, so the functions need a deprecation period (a
+  warning pointing to the vignette, for at least one release) and NEWS
+  entries.
+- Either way, the steps and vignettes come first, so the choice can be
+  made per function once the steps are in use, and before the rOpenSci
+  and CRAN submissions (#12).
+
+Each function maps onto the three steps as follows:
 
 | Function | Build | Intersect | Summarise |
 |----|----|----|----|
@@ -190,10 +219,13 @@ A 3D raster is a stack of 2D rasters, one per standard depth, as in
 Copernicus Marine and World Ocean Atlas (WOA) data. netCDF files store
 these stacks. In 3D graphics this is called a **voxel model**.
 
-Multi-depth rasters used by `ocean3d` must encode depth in layer names
-using the format `{variable}_depth={value}` (e.g. `t_an_depth=0`,
+Multi-depth rasters used by `ocean3d` currently encode depth in layer
+names using the format `{variable}_depth={value}` (e.g. `t_an_depth=0`,
 `t_an_depth=100` for WOA annual mean temperature, `t_an`, at 0 and 100
-m).
+m). The unified model stores depth in
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+instead and reads these names only on input (see
+[Direction](#direction-a-hybrid)).
 
 The depth range each layer covers depends on the source file. WOA, for
 instance, gives explicit depth bounds: the 0 m layer covers 0–2.5 m, the
@@ -202,7 +234,7 @@ instance, gives explicit depth bounds: the 0 m layer covers 0–2.5 m, the
 These rasters hold values across x, y and depth: e.g. temperature in °C,
 or a species’ probability of occurrence, at each coordinate and depth.
 
-Data loaders convert other formats to this naming.
+Data loaders currently convert other formats to this naming, and
 [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
 reads the depths from layer names, e.g. so
 [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
@@ -262,76 +294,234 @@ voxel tools have no time dimension.
 
 ### Planned: one model (#99)
 
-This section is the plan from \#99. None of it is implemented yet, and
-the first step (the stars and ncdfCF trial below) may change it.
+This section is the plan from \#99, decided with the stars and ncdfCF
+trial (#112). None of it is implemented yet.
 
 #### Requirements
 
 1.  **Time-aware 3D analysis.** Time is a real dimension of the core
-    object (the single object that will hold gridded data; see
+    object (the single object that will describe gridded data; see
     [Direction](#direction-a-hybrid)). Volume, overlap and profiles work
     through time (for example seasonal habitat volume, or overlap by
     month), not only on a static voxel.
 2.  **Lazy reads for data larger than memory.** Opening a dataset
     doesn’t read its values, every operation reads only the slices it
-    needs, and heavy processing runs per time step or per chunk, so peak
-    memory follows the size of one slice rather than the whole dataset.
-3.  **CF-correct metadata.** Keep the current handling of time units and
+    needs, and heavy processing runs per time step, or per tile within a
+    time step, so peak memory follows the size of one slice or tile
+    rather than the whole dataset.
+3.  **CF-correct metadata** for the grids in scope: time units and
     calendars, sub-daily steps, depth units and direction, bounds and
-    longitude conventions (#71–#75, \#88–#96).
+    longitude conventions. The current code gets this only partly right
+    (13 of the trial’s 29 cases): \#71–#75 set the behaviour to keep,
+    and \#88–#96 are the bugs to fix.
 
-None of the packages compared (terra, stars, ncdf4, ncdfCF) meets all
-three. terra stores depth and time as layer labels on a stack of 2D
-layers. stars has real dimensions and lazy `stars_proxy` objects, but
-only some operations stay lazy. ncdf4 reads exactly what is asked for
-but leaves everything above reading to the package. ncdfCF reads netCDF
-following CF (time, depth axes, bounds) and exports to terra, but it is
-marked experimental, and its docs don’t say whether its subsets are read
-lazily.
+None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all
+three on its own (see [the
+trial](#first-step-stars-and-ncdfcf-trial-112)). **Decision:** ocean3d
+builds its own core object, reads with ncdf4 and decodes time with
+CFtime; terra works on slices once they are in memory; stars is used
+only to read remote Zarr; ncdfCF is not a dependency for now. Agreed by
+Jay Matsushiba on 2 November 2026 (#112).
 
 #### Direction: a hybrid
 
-- **Core object:** one object that describes the dimensions (lon/lat
-  with cell edges, depth, time, coordinate reference system (CRS))
-  without loading values, in the style of stars. It may be a
-  `stars_proxy` itself if the trial supports that.
-- **Reads:** lazy and exact, through stars proxies, or through the
-  package’s own ncdf4 code where stars falls short. Remote Zarr stores
-  (a cloud format Copernicus Marine also serves) would be read with
-  `stars::read_mdim()`.
-- **Heavy spatial work:** per time step or per chunk. Read one slice,
-  process it with terra, and combine the results across time.
-- **`SpatVoxel` / `SpatEnvelope`:** become views of one time step of the
-  core object, so the existing terra-based tools keep working on a
-  slice.
+- **Core object:** the package’s own description of a gridded variable.
+  It holds no values.
+  - **Sources:** one netCDF file, a series of files, a remote Zarr
+    store, or a `SpatVoxel` already in memory, so voxels go through the
+    same coverage step as files.
+  - **Contents:** the variable with its packing (values stored as
+    integers with a scale factor) and chunk layout (the blocks the file
+    is stored and compressed in), and each axis in a fixed form:
+    longitude and latitude with cell edges and the longitude convention,
+    depth in metres positive down with edges and the original storage
+    order, time as a CFtime object with bounds, and the coordinate
+    reference system (CRS).
+  - **CF handling happens once, when the core object is built:** axes
+    are recognised from `axis`, `standard_name`, `units` and `positive`
+    on dimension coordinates (#93); a monotonic longitude axis is left
+    as it is (#95); explicit bounds are used before inferred edges;
+    depth is converted to metres positive down; time is decoded with
+    CFtime; files in a series are ordered and checked, and the rule for
+    choosing between them is applied here (#94, \#96). Later steps only
+    use the result.
+  - **Role:** it turns a request (features, a time step, a tile) into
+    read windows (which file, and which index ranges to read), and
+    one-time-step `SpatVoxel` views are built from it.
+  - **Not a `stars_proxy`:** the layout borrows stars’ table of
+    dimensions (values or offset and step, edges, reference system), but
+    stars’ proxy operations read far more than they needed, lost
+    metadata when sliced, and couldn’t hand real Copernicus data to
+    terra, and stars has no place for the fields above.
+- **Reads:** ncdf4 reads every netCDF file with depth or time, including
+  the slices that become voxels, and reads exactly the index windows it
+  is given (see Block reads). terra’s own netCDF reading (GDAL’s driver)
+  decodes some CF cases wrongly without warning, so it isn’t used for
+  these files.
+- **Remote Zarr:** an optional source read with `stars::read_mdim()`
+  (Suggests); ncdf4 couldn’t open the Copernicus Zarr store with the
+  netCDF-C library used in the trial (Zarr needs a build with NCZarr and
+  S3 support). The package corrects what `read_mdim()` returns:
+  coordinates shifted by half a cell, time as `Date` (or not decoded
+  without a `calendar` attribute), and Copernicus’ `elevation` axis
+  (`positive = "up"`) turned into depth.
+- **terra:** works only on 2D grids already in memory: cell areas,
+  masks, crop, rasterising polygons and sums, so
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md),
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+  `mask()` and
+  [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
+  keep their terra code. It still reads files that have no depth or
+  time, such as GEBCO bathymetry and GFW effort.
+- **ncdfCF:** not a dependency for now: its API changed in 4 of its last
+  8 releases. Its results are a reference for the reader’s tests.
+  Revisit at its 1.0 release, or if native model grids come into scope.
+- **Grids in scope:** regular lon/lat grids with fixed depth levels, as
+  Copernicus Marine, WOA and OISST distribute them. Native model grids
+  (NEMO-style curvilinear lon/lat, terrain-following sigma or
+  s-coordinate depths as in ROMS) are out of scope for now; such output
+  is regridded before use, and the package rejects it with a clear error
+  (#93). Decided by Jay Matsushiba on 2 November 2026 (#112). If native
+  output becomes an input, revisit ncdfCF, which interpolates
+  curvilinear grids and computes some ocean sigma depths.
 - **Time decoding:** [CFtime](https://cran.r-project.org/package=CFtime)
-  replaces the package’s own CF time decoder. It decodes CF time units
-  and handles every CF calendar, including ones R’s date classes can’t
-  represent (`noleap`, `360_day`). It is already imported by ncmeta and
-  tidync, which stars uses, so it fits whichever core object the trial
-  picks.
-- **Extraction:** point, buffer and track extraction keep reading only
-  the cells they touch, and accept anything that can become the core
-  object: a netCDF file, a `SpatVoxel`, or a Zarr store.
+  replaces the package’s own CF time decoder (#111). It decodes CF time
+  units, handles the calendars the CF conventions define (per its
+  documentation; the trial tested `standard`, `proleptic_gregorian`,
+  `noleap` and `360_day`), including ones R’s date classes can’t
+  represent, and matches dates to a time axis quickly. The time axis of
+  the core object is a CFtime object.
+- **Heavy spatial work:** per time step, and per tile or group of depth
+  layers when one time step is too large for memory (one day of a global
+  1/12° product over 50 levels is about 3.5 GB as doubles). Read the
+  slice through the core object, process it with terra, and combine the
+  results across tiles and time; volume and overlap add up across them.
+- **`SpatVoxel` / `SpatEnvelope`:** stay terra classes and become views
+  of one time step of the core object, so the existing terra-based tools
+  keep working on a slice.
+  - **Builder:** reads the slice with ncdf4 through the core object’s
+    read window, builds the `SpatRaster` (extent from the cell edges,
+    CRS always set, grids whose float32 coordinates are almost regular
+    treated as regular, truly irregular grids rejected on this path) and
+    calls
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
+    [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
+    is the one existing loader that moves from `terra::rast(file)` to
+    the builder; the constructors and converters
+    ([`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
+    [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md),
+    [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
+    [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md),
+    [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md))
+    don’t change.
+  - **Depth and time:** stored in terra’s own per-layer fields,
+    [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+    (metres, positive down) and
+    [`terra::time()`](https://rspatial.github.io/terra/reference/time.html)
+    (the time step the voxel shows), which terra keeps through layer
+    subsetting, `crop()`, `ifel()`, arithmetic and
+    [`c()`](https://rdrr.io/r/base/c.html). No new S4 slots: terra would
+    copy them unchanged and leave them out of date after `v[[i]]`.
+    [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+    is the only stored depth: package code no longer writes or parses
+    `{variable}_depth={value}` layer names, layer names are free, and
+    validity checks only that the depths are set, distinct, non-negative
+    and shallow to deep.
+  - **Old layer names:** on input only,
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+    still accepts a raster whose depths aren’t set but whose names
+    follow the old pattern (existing code, or a voxel written to
+    GeoTIFF), and fills
+    [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+    from the names once. Decided by Jay Matsushiba on 2 November 2026.
+  - **Saving:** with `saveRDS(terra::wrap(v))` or
+    [`terra::writeCDF()`](https://rspatial.github.io/terra/reference/writeCDF.html),
+    which keep depth and time. The docs say GeoTIFF loses depth. All
+    three save routes tested lose the class, so a reloaded voxel goes
+    back through
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
+  - **API change:** dropping the layer-name convention needs a NEWS
+    entry.
+- **Block reads:** ncdf4 reads one box of index space per call
+  (`ncvar_get()` with `start` and `count`), and compressed netCDF-4
+  decompresses whole chunks. Today the extraction functions make one
+  call per observation, or per buffer cell and time step. The coverage
+  step plans reads instead: features are grouped by file and time chunk,
+  each box is aligned to the file’s chunk edges
+  (`nc$var[[var]]$chunksizes`) and capped in size, sparse groups are
+  split, and boxes are split at the longitude seam and between files.
+  Each feature’s cells are then picked from the array in memory, so each
+  chunk is read once.
+- **Extraction:**
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
+  [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+  and
+  [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
+  either become wrappers over the three steps that keep their arguments
+  and output, or are retired in favour of workflow vignettes (see
+  [Combined functions](#package-design-build-intersect-summarise) and
+  [Extraction on the three steps](#extraction-on-the-three-steps)).
+  Either way, opening, CF handling and choosing between files happen in
+  the core object, the matching rules and weights move into the coverage
+  step, and the statistics into `summarise_3d()`. The steps accept any
+  source of the core object: a netCDF file or series, a Zarr store, or a
+  `SpatVoxel`. Area extraction becomes polygon coverage on the core
+  object, so it works on netCDF files and voxels alike, whether or not
+  [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
+  is kept.
 
-#### First step: stars and ncdfCF trial
+#### Open questions
 
-Before any code moves, compare stars and ncdfCF with the current ncdf4
-code:
+- **Dates on non-standard calendars:** how they appear in output
+  columns, and whether `360_day` voxels keep their time step in the
+  raster’s metadata tags
+  ([`terra::metags()`](https://rspatial.github.io/terra/reference/metags.html))
+  or voxels are limited to standard calendars (#111).
+- **Nearest depth with missing layers:**
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+  skips missing layers when choosing the nearest depth. Whether the
+  point rule in the coverage step keeps this (#115).
+- **Zarr layouts:** Copernicus Marine serves each product chunked by
+  time step (for maps) and by location (for time series). How the core
+  object records both and which one each step reads (#113).
+- **`SpatVector3D` polygons:** how they are stored (#114).
+- **Combined extraction functions:** keep each as a wrapper over the
+  three steps, or retire it in favour of a workflow vignette (#116; see
+  [Combined functions](#package-design-build-intersect-summarise)).
+- **ncdfCF:** revisit at its 1.0 release or if native model grids come
+  into scope.
 
-1.  On the synthetic netCDF fixtures from the tests and the \#88–#96
-    cases: do decoded time, depth, bounds and values match the package’s
-    results?
-2.  On a large real file (for example a multi-year daily global
-    Copernicus Marine product), measure peak memory and run time for
-    opening as a proxy, point extraction across time, volume and overlap
-    for one time step, and a polygon or buffer summary over a time
-    window.
-3.  Optionally, the same dataset as a remote Zarr store.
+#### First step: stars and ncdfCF trial (#112)
 
-The result decides whether stars proxies become the core object, whether
-ncdfCF can take over CF reading (if it reads lazily and is stable enough
-to depend on), or whether the package keeps its own lazy reads.
+Done. The trial
+([`dev/data-model-trial.md`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/dev/data-model-trial.md))
+compared stars (`read_ncdf()`, `read_mdim()`), ncdfCF, terra and the
+current ncdf4 code on 29 CF cases (the test fixtures and \#88–#96), on a
+two-year Copernicus Marine daily 4D download (55 GB as doubles), a 60 GB
+synthetic file and two years of NOAA OISST, and on the Copernicus Marine
+global daily product as a remote Zarr store. The evidence for the
+decisions above:
+
+- **Correctness:** stars `read_ncdf()` and ncdfCF each got 25 of the 29
+  cases right, terra (`terra::rast(file)`) 19, `read_mdim()` 12 and the
+  current code 13. Both readers that decode time with CFtime got every
+  time case right, and CFtime matched 500 dates to a 3,650-day axis in
+  0.08 s. terra’s errors were silent: `360_day` dates moved to the next
+  day, explicit bounds ignored, irregular grids read as index positions.
+  `read_mdim()` shifted coordinates by half a cell.
+- **Laziness:** every option opened files without reading values and
+  kept peak memory under 400 MB for points and series on the large
+  files. ncdfCF’s [`subset()`](https://rdrr.io/r/base/subset.html) reads
+  nothing until asked.
+- **stars proxies:** `st_extract()` took 198–243 s for 2 points
+  (`read_ncdf()`) or tried to allocate 51–56 GB (`read_mdim()`).
+  `read_ncdf(ncsub = )` kept the full time range after reading one step,
+  slicing a proxy dropped the decoded time, and stars slices of the real
+  Copernicus file couldn’t be converted to terra.
+- **Reads today:** the package’s
+  [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+  took 76–434 s for one buffer that a single box read handles in 4–7 s.
 
 #### Vector class: `SpatVector3D`
 
@@ -355,8 +545,8 @@ Compared with the raster classes:
 |----|----|----|----|
 | Holds | values of a variable | a shape | shapes, one or more features with IDs |
 | Horizontal | raster cells | raster cells (non-`NA` = footprint) | points, lines or polygons |
-| Depth | layer index, one set of depths for the grid | `[depth_min, depth_max]` per cell | per vertex (points, lines), or top and bottom (polygons) |
-| Time | none | none | per vertex (points, lines), or an interval (polygons) |
+| Depth | one per layer ([`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)), one set of depths for the grid | `[depth_min, depth_max]` per cell | per vertex (points, lines), or top and bottom (polygons) |
+| Time | the time step it shows ([`terra::time()`](https://rspatial.github.io/terra/reference/time.html)) | the time step it was built from, if any | per vertex (points, lines), or an interval (polygons) |
 
 Rules:
 
@@ -391,7 +581,7 @@ Rules:
   [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
   uses now, and convert to and from sf. sf isn’t the storage because it
   treats Z as height and most of its operations drop depth and time. How
-  polygons are stored depends on the trial.
+  polygons are stored is decided in \#114.
 - `SpatVolume` extends to
   `c("SpatVoxel", "SpatEnvelope", "SpatVector3D")`; its docs note that
   only polygons have volume.
@@ -458,9 +648,9 @@ only the cells, depths and time steps the shapes touch.
     nearest or exact matching rules for depth and time (`method`,
     `time_match`). Those rules move here from
     [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
-- Picking the source file for each shape (multi-file series, tiles) and
-  the CF handling of time, depth and bounds live in this step, on the
-  core object.
+- Reads go through the core object: its CF handling (time, depth,
+  bounds) and its choice between files and tiles were done when it was
+  built, so this step only asks it for read windows.
 - Many features are read in blocks, so each block of the source is read
   once rather than once per shape.
 
@@ -491,45 +681,77 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 
 #### Order of work
 
-Each step has its own issue, and each PR branches off `main`:
+Each step has its own issue, and each PR branches off `main`. Status as
+of 2 November 2026.
 
-1.  Document the current split: which functions take netCDF and which
-    take `SpatVoxel` (README function overview and each function’s
-    `@param`) (#109).
-2.  Move the shared CF/netCDF helpers (time decoding, depth axis,
+1.  **Document the current split:** which functions take netCDF and
+    which take `SpatVoxel` (README function overview and each function’s
+    `@param`) (#109). *Done (#118, merged 2 November 2026).* Ran in
+    parallel with step 2.
+2.  **Trial stars, ncdfCF and terra against the current reader, and
+    agree the core data model** (#112). *In review (#119); the decision
+    was agreed on 2 November 2026 and is recorded in this section.* Run
+    before steps 3 and 4, although the plan from \#99 listed it after
+    them, because its result decides what those steps build towards. It
+    also settled the grids in scope, where voxels keep depth and time,
+    and that the extraction functions may be retired.
+3.  **Move the shared CF/netCDF helpers** (time decoding, depth axis,
     bounds, dimension detection) out of `R/extract_to_points.R` into
-    their own files (#110).
-3.  Replace the internal CF time decoding with CFtime, with the time
-    tests from \#71–#75 and \#88–#91 as reference behaviour (#111).
-4.  Run the stars and ncdfCF trial and write up the results with a
-    recommendation for the core object (#112).
-5.  Agree on the core data model and update this section (#112).
-6.  Build the core object and lazy reader, then time-aware volume,
-    overlap and profiles, then `SpatVoxel` as a time-step view (#113).
-7.  Add `SpatVector3D` with `geomtype()`, `as_vector3d()` and sf
+    their own files (#110). *Not started.* They become the starting
+    point for the core object’s axis handling in step 5, so the move
+    groups them by axis rather than by the extraction function that uses
+    them.
+4.  **Replace the internal CF time decoding with CFtime** (#111), with
+    the time tests from \#71–#75 and \#88–#91 as reference behaviour.
+    *Not started.* Decides how dates on non-standard calendars appear in
+    output columns and in voxels (see [Open
+    questions](#open-questions)). Must be done before step 5, because
+    the core object’s time axis is a CFtime object.
+5.  **Build the core object** (#113). *Not started.* Sources (files,
+    series, Zarr, in-memory voxels); standard axes built at open,
+    including the axis and longitude fixes from \#93 and \#95; the lazy
+    ncdf4 reader with chunk-aligned block reads. Then the voxel builder
+    (depth in
+    [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+    with old layer names read on input, CRS always set, float32
+    tolerance,
+    [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
+    moved to it), and time-aware volume, overlap and profiles, tiled
+    when a time step is too large.
+6.  **Add `SpatVector3D`** with `geomtype()`, `as_vector3d()` and sf
     conversion: points and lines with per-vertex depth and time, and
     polygons with constant top and bottom and an optional time interval.
-    Then `buffer_3d()` and `vector3d_to_envelope()` (#114).
-8.  Add the coverage function and
+    Then `buffer_3d()` and `vector3d_to_envelope()` (#114). *Not
+    started.* Can run in parallel with step 5, because it doesn’t read
+    gridded data.
+7.  **Add the coverage function** and
     [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
     /
     [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
     / `mask()` /
     [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-    methods for `SpatVector3D` (#115).
-9.  Add `summarise_3d()`, then reimplement the extraction functions as
-    build → intersect → summarise wrappers, one function per PR (#116).
-10. Add track sampling as a build step and buffered tracks (#105); then
-    named shapes, raster and function surfaces for polygons (#117).
-    Block-wise reads for many features are part of \#115.
+    methods for `SpatVector3D` (#115), with block reads for many
+    features. *Not started.* Needs steps 5 and 6. This is where the slow
+    buffer reads measured in the trial are replaced.
+8.  **Add `summarise_3d()` and workflow vignettes** for points, buffers,
+    tracks and areas. Then, one function per PR, either reimplement each
+    extraction function as a build → intersect → summarise wrapper or
+    deprecate it in favour of its vignette (#116). *Not started.*
+9.  **Add track sampling** as a build step and buffered tracks (#105);
+    then named shapes, raster and function surfaces for polygons (#117).
+    *Not started.*
 
 The existing tests for both models, including the buffer and track
-tests, define the expected behaviour and must keep passing. New tests
-check that the same synthetic data gives the same values from a netCDF
-file, the core object and the matching `SpatVoxel`. API changes (what
+tests, define the expected behaviour. They keep passing for functions
+kept as wrappers; for a function that is retired, the same checks move
+onto the three steps (same inputs, same values) before it is deprecated.
+New tests check that the same synthetic data gives the same values from
+a netCDF file, the core object and the matching `SpatVoxel`. API changes
+(what
 [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
-and the voxel constructors return, time in volume and overlap) need NEWS
-entries and should settle before the rOpenSci and CRAN submissions
+and the voxel constructors return, depth no longer read from layer
+names, time in volume and overlap, any retired extraction function) need
+NEWS entries and should settle before the rOpenSci and CRAN submissions
 (#12).
 
 ## `ocean3d` functionality
