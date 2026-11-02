@@ -17,7 +17,7 @@ Technically, this means that `ocean3d` needs to be able to take points (0D), lin
 
 **Key design decisions**
 
-- **Three steps:** an analysis is build → intersect → summarise, and each analysis function belongs to one step ([Package design](#package-design-build-intersect-summarise)). The extraction functions don't follow this yet; they are planned to become wrappers over the three steps.
+- **Three steps:** an analysis is build → intersect → summarise, and each analysis function belongs to one step ([Package design](#package-design-build-intersect-summarise)). The extraction functions don't follow this yet; they will either become wrappers over the three steps or be retired in favour of workflow vignettes (undecided).
 - **Now:** two data models. netCDF files are used for point, buffer and track extraction; `SpatVoxel` / `SpatEnvelope` for everything else ([Data model](#data-model)).
 - **Planned (#99):** one model with time as a dimension, reading only the data each step needs: the package's own core object, read with ncdf4 and CFtime, terra for slices in memory, and stars only for remote Zarr (agreed in #112; trial in [`dev/data-model-trial.md`](dev/data-model-trial.md)).
 - **Planned:** one vector class, `SpatVector3D`, holding points, lines and polygons with depth.
@@ -47,7 +47,13 @@ Rules:
 - Arguments with the same meaning have the same name and default in every step (#101). Input checks are shared (#104).
 - New features go into one step, not into a function that combines steps. A new shape (e.g. an ellipsoid buffer) is a builder; a new statistic is an option of the summary function.
 
-**Combined functions.** The extraction functions run the steps together in one call: they turn the input into a shape, find the data cells inside it and compute a statistic. The same work is written separately for points, buffers, tracks and areas, with different arguments for the same idea (#101, #104, #105); `extract_to_buffer()` alone has about 2100 lines and 36 arguments. They are planned to become wrappers over the three steps, keeping their current arguments and results:
+**Combined functions.** The extraction functions run the steps together in one call: they turn the input into a shape, find the data cells inside it and compute a statistic. The same work is written separately for points, buffers, tracks and areas, with different arguments for the same idea (#101, #104, #105); `extract_to_buffer()` alone has about 2100 lines and 36 arguments. Once the three steps exist, the work they do moves into the steps, and each function either stays as a short wrapper or is retired:
+
+- **Keep as wrappers:** each function keeps its current arguments and results and calls the three steps. Existing code and teaching material keep working, and a one-line call stays available; the cost is keeping their many arguments in step with the steps' arguments.
+- **Retire, with workflow vignettes:** the steps become the only way to extract, and vignettes show the build → intersect → summarise code for points, buffers, tracks and areas. The package has one way to do each thing and a smaller set of arguments to document; the cost is that existing code breaks, so the functions need a deprecation period (a warning pointing to the vignette, for at least one release) and NEWS entries.
+- Either way, the steps and vignettes come first, so the choice can be made per function once the steps are in use, and before the rOpenSci and CRAN submissions (#12).
+
+Each function maps onto the three steps as follows:
 
 | Function | Build | Intersect | Summarise |
 |---|---|---|---|
@@ -170,7 +176,7 @@ None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on 
   - **Saving:** with `saveRDS(terra::wrap(v))` or `terra::writeCDF()`, which keep depth and time. The docs say GeoTIFF loses depth. All three save routes tested lose the class, so a reloaded voxel goes back through `as_voxel()`.
   - **API change:** dropping the layer-name convention needs a NEWS entry.
 - **Block reads:** ncdf4 reads one box of index space per call (`ncvar_get()` with `start` and `count`), and compressed netCDF-4 decompresses whole chunks. Today the extraction functions make one call per observation, or per buffer cell and time step. The coverage step plans reads instead: features are grouped by file and time chunk, each box is aligned to the file's chunk edges (`nc$var[[var]]$chunksizes`) and capped in size, sparse groups are split, and boxes are split at the longitude seam and between files. Each feature's cells are then picked from the array in memory, so each chunk is read once.
-- **Extraction:** `extract_to_point()`, `extract_to_buffer()` and `extract_to_track()` keep their arguments and output, and become wrappers over the three steps (see [Extraction on the three steps](#extraction-on-the-three-steps)). Opening, CF handling and choosing between files happen in the core object, the matching rules and weights move into the coverage step, and the statistics into `summarise_3d()`. They accept any source of the core object: a netCDF file or series, a Zarr store, or a `SpatVoxel`. `extract_to_area()` becomes polygon coverage on the core object, so it works on netCDF files and voxels alike.
+- **Extraction:** `extract_to_point()`, `extract_to_buffer()` and `extract_to_track()` either become wrappers over the three steps that keep their arguments and output, or are retired in favour of workflow vignettes (see [Combined functions](#package-design-build-intersect-summarise) and [Extraction on the three steps](#extraction-on-the-three-steps)). Either way, opening, CF handling and choosing between files happen in the core object, the matching rules and weights move into the coverage step, and the statistics into `summarise_3d()`. The steps accept any source of the core object: a netCDF file or series, a Zarr store, or a `SpatVoxel`. Area extraction becomes polygon coverage on the core object, so it works on netCDF files and voxels alike, whether or not `extract_to_area()` is kept.
 
 #### Open questions
 
@@ -178,6 +184,7 @@ None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on 
 - **Nearest depth with missing layers:** `extract_to_point()` skips missing layers when choosing the nearest depth. Whether the point rule in the coverage step keeps this (#115).
 - **Zarr layouts:** Copernicus Marine serves each product chunked by time step (for maps) and by location (for time series). How the core object records both and which one each step reads (#113).
 - **`SpatVector3D` polygons:** how they are stored (#114).
+- **Combined extraction functions:** keep each as a wrapper over the three steps, or retire it in favour of a workflow vignette (#116; see [Combined functions](#package-design-build-intersect-summarise)).
 - **ncdfCF:** revisit at its 1.0 release or if native model grids come into scope.
 
 #### First step: stars and ncdfCF trial (#112)
@@ -276,10 +283,10 @@ Each step has its own issue, and each PR branches off `main`:
 6. Build the core object: sources (files, series, Zarr, in-memory voxels), standard axes built at open, including the axis and longitude fixes from #93 and #95, and the lazy ncdf4 reader with chunk-aligned block reads. Then the voxel builder (depth in `terra::depth()` with old layer names read on input, CRS always set, float32 tolerance, `woa_load_nc()` moved to it), and time-aware volume, overlap and profiles, tiled when a time step is too large (#113).
 7. Add `SpatVector3D` with `geomtype()`, `as_vector3d()` and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()` (#114).
 8. Add the coverage function and `intersect_3d()` / `intersects_3d()` / `mask()` / `volume()` methods for `SpatVector3D` (#115).
-9. Add `summarise_3d()`, then reimplement the extraction functions as build → intersect → summarise wrappers, one function per PR (#116).
+9. Add `summarise_3d()` and workflow vignettes for points, buffers, tracks and areas. Then, one function per PR, either reimplement each extraction function as a build → intersect → summarise wrapper or deprecate it in favour of its vignette (#116).
 10. Add track sampling as a build step and buffered tracks (#105); then named shapes, raster and function surfaces for polygons (#117). Block-wise reads for many features are part of #115.
 
-The existing tests for both models, including the buffer and track tests, define the expected behaviour and must keep passing. New tests check that the same synthetic data gives the same values from a netCDF file, the core object and the matching `SpatVoxel`. API changes (what `woa_load_nc()` and the voxel constructors return, depth no longer read from layer names, time in volume and overlap) need NEWS entries and should settle before the rOpenSci and CRAN submissions (#12).
+The existing tests for both models, including the buffer and track tests, define the expected behaviour. They keep passing for functions kept as wrappers; for a function that is retired, the same checks move onto the three steps (same inputs, same values) before it is deprecated. New tests check that the same synthetic data gives the same values from a netCDF file, the core object and the matching `SpatVoxel`. API changes (what `woa_load_nc()` and the voxel constructors return, depth no longer read from layer names, time in volume and overlap, any retired extraction function) need NEWS entries and should settle before the rOpenSci and CRAN submissions (#12).
 
 ## `ocean3d` functionality
 
