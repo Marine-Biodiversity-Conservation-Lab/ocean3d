@@ -1284,11 +1284,6 @@
     )
     date_values <- prepared$values
     resolved_time_resolution <- prepared$resolution
-    if (any(!is.na(date_values))) {
-      .check_time_resolution(
-        time_values, resolved_time_resolution
-      )
-    }
   } else {
     date_values <- rep(
       as.POSIXct(NA_character_, tz = "UTC"),
@@ -1336,6 +1331,16 @@
   candidate_time <- rep(NA_real_, nrow(data))
   candidate_index <- rep(NA_integer_, nrow(data))
 
+  # Match every row that reaches time matching in one pass (#89).
+  time_indices <- rep(NA_integer_, nrow(data))
+  if (!is.null(time_values)) {
+    time_indices[accepted] <- .match_time_indices(
+      time_values, date_values[accepted], time_match, max_time_diff,
+      resolved_time_resolution,
+      file = basename(temporal_metadata$source_file)
+    )
+  }
+
   for (i in seq_len(nrow(data))) {
     if (isTRUE(verbose) && i %% 100 == 0) {
       message("Extracting row ", i, " of ", nrow(data))
@@ -1358,13 +1363,7 @@
         next
       }
 
-      time_idx <- .match_time_index(
-        values = time_values,
-        target = date_values[i],
-        time_match = time_match,
-        max_time_diff = max_time_diff,
-        time_resolution = resolved_time_resolution
-      )
+      time_idx <- time_indices[i]
 
       if (is.na(time_idx)) next
 
