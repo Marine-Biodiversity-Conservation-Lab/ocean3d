@@ -275,7 +275,7 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 
 Each step has its own issue, and each PR branches off `main`. Status as of 2 November 2026.
 
-1. **Document the current split:** which functions take netCDF and which take `SpatVoxel` (README function overview and each function's `@param`) (#109). *In review (#118).* Ran in parallel with step 2.
+1. **Document the current split:** which functions take netCDF and which take `SpatVoxel` (README function overview and each function's `@param`) (#109). *Done (#118, merged 2 November 2026).* Ran in parallel with step 2.
 2. **Trial stars, ncdfCF and terra against the current reader, and agree the core data model** (#112). *In review (#119); the decision was agreed on 2 November 2026 and is recorded in this section.* Run before steps 3 and 4, although the plan from #99 listed it after them, because its result decides what those steps build towards. It also settled the grids in scope, where voxels keep depth and time, and that the extraction functions may be retired.
 3. **Move the shared CF/netCDF helpers** (time decoding, depth axis, bounds, dimension detection) out of `R/extract_to_points.R` into their own files (#110). *Not started.* They become the starting point for the core object's axis handling in step 5, so the move groups them by axis rather than by the extraction function that uses them.
 4. **Replace the internal CF time decoding with CFtime** (#111), with the time tests from #71–#75 and #88–#91 as reference behaviour. *Not started.* Decides how dates on non-standard calendars appear in output columns and in voxels (see [Open questions](#open-questions)). Must be done before step 5, because the core object's time axis is a CFtime object.
