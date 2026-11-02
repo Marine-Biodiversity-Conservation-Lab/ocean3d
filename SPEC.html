@@ -230,7 +230,7 @@
 <li>
 <strong>Lazy reads for data larger than memory.</strong> Opening a dataset doesn’t read its values, every operation reads only the slices it needs, and heavy processing runs per time step, or per tile within a time step, so peak memory follows the size of one slice or tile rather than the whole dataset.</li>
 <li>
-<strong>CF-correct metadata</strong> for the grids in scope: time units and calendars, sub-daily steps, depth units and direction, bounds and longitude conventions. The current code gets this only partly right (13 of the trial’s 29 cases): #71–#75 set the behaviour to keep, and #88–#96 are the bugs to fix.</li>
+<strong>CF-correct metadata</strong> for the grids in scope: time units on the standard calendars, sub-daily steps, depth units and direction, bounds and longitude conventions. The current code gets this only partly right (13 of the trial’s 29 cases): #71–#75 set the behaviour to keep, and #88–#96 are the bugs to fix.</li>
 </ol><p>None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on its own (see <a href="#first-step-stars-and-ncdfcf-trial-112">the trial</a>). <strong>Decision:</strong> ocean3d builds its own core object, reads with ncdf4 and decodes time with CFtime; terra works on slices once they are in memory; stars is used only to read remote Zarr; ncdfCF is not a dependency for now. Agreed by Jay Matsushiba on 2 November 2026 (#112).</p>
 </div>
 <div class="section level4">
@@ -259,7 +259,12 @@
 <li>
 <strong>Grids in scope:</strong> regular lon/lat grids with fixed depth levels, as Copernicus Marine, WOA and OISST distribute them. Native model grids (NEMO-style curvilinear lon/lat, terrain-following sigma or s-coordinate depths as in ROMS) are out of scope for now; such output is regridded before use, and the package rejects it with a clear error (#93). Decided by Jay Matsushiba on 2 November 2026 (#112). If native output becomes an input, revisit ncdfCF, which interpolates curvilinear grids and computes some ocean sigma depths.</li>
 <li>
-<strong>Time decoding:</strong> <a href="https://cran.r-project.org/package=CFtime" class="external-link">CFtime</a> replaces the package’s own CF time decoder (#111). It decodes CF time units, handles the calendars the CF conventions define (per its documentation; the trial tested <code>standard</code>, <code>proleptic_gregorian</code>, <code>noleap</code> and <code>360_day</code>), including ones R’s date classes can’t represent, and matches dates to a time axis quickly. The time axis of the core object is a CFtime object.</li>
+<strong>Time decoding:</strong> <a href="https://cran.r-project.org/package=CFtime" class="external-link">CFtime</a> replaces the package’s own CF time decoder (#111). It decodes CF time units, handles the calendars the CF conventions define (per its documentation; the trial tested <code>standard</code>, <code>proleptic_gregorian</code>, <code>noleap</code> and <code>360_day</code>), and matches dates to a time axis quickly. The time axis of the core object is a CFtime object.
+<ul><li>
+<strong>Calendars supported for now:</strong> <code>standard</code>, <code>gregorian</code> and <code>proleptic_gregorian</code>, which cover the data in scope (Copernicus Marine, WOA, OISST). Files on other calendars (<code>noleap</code> or <code>365_day</code>, <code>all_leap</code> or <code>366_day</code>, <code>360_day</code>, <code>julian</code>), used mainly by climate model output, stop with a clear error that names the calendar, as they do today. So output columns stay R date-times, and every voxel’s time step fits in <code><a href="https://rspatial.github.io/terra/reference/time.html" class="external-link">terra::time()</a></code>.</li>
+<li>
+<strong>Adding support later:</strong> the calendar check is in one place, the core object’s time axis (#113), so support can be added later without breaking existing code. It needs a way to show dates R can’t hold (such as 30 February in <code>360_day</code>) in output columns and voxels, and a rule for matching real-world dates to calendars without them. Until then, such files can be converted to a standard calendar with an outside tool (for example CDO). Decided by Jay Matsushiba on 2 November 2026.</li>
+</ul></li>
 <li>
 <strong>Heavy spatial work:</strong> per time step, and per tile or group of depth layers when one time step is too large for memory (one day of a global 1/12° product over 50 levels is about 3.5 GB as doubles). Read the slice through the core object, process it with terra, and combine the results across tiles and time; volume and overlap add up across them.</li>
 <li>
@@ -283,8 +288,6 @@
 <div class="section level4">
 <h4 id="open-questions">Open questions<a class="anchor" aria-label="anchor" href="#open-questions"></a></h4>
 <ul><li>
-<strong>Dates on non-standard calendars:</strong> how they appear in output columns, and whether <code>360_day</code> voxels keep their time step in the raster’s metadata tags (<code><a href="https://rspatial.github.io/terra/reference/metags.html" class="external-link">terra::metags()</a></code>) or voxels are limited to standard calendars (#111).</li>
-<li>
 <strong>Nearest depth with missing layers:</strong> <code><a href="reference/extract_to_point.html">extract_to_point()</a></code> skips missing layers when choosing the nearest depth. Whether the point rule in the coverage step keeps this (#115).</li>
 <li>
 <strong>Zarr layouts:</strong> Copernicus Marine serves each product chunked by time step (for maps) and by location (for time series). How the core object records both and which one each step reads (#113).</li>
@@ -415,7 +418,7 @@
 <li>
 <strong>Move the shared CF/netCDF helpers</strong> for sources, dimension detection, reading, longitude and latitude, depth and bounds out of <code>R/extract_to_points.R</code> into <code>R/netcdf-sources.R</code>, <code>R/netcdf-dims.R</code>, <code>R/netcdf-read.R</code>, <code>R/netcdf-horizontal.R</code>, <code>R/netcdf-depth.R</code> and <code>R/netcdf-bounds.R</code>, unchanged (#110). <em>Done.</em> They are the starting point for the core object’s axis handling in step 5, so they are grouped by axis rather than by the extraction function that uses them. The time helpers stay in <code>R/extract_to_points.R</code> for step 4, which replaces them.</li>
 <li>
-<strong>Replace the internal CF time decoding with CFtime and fix time matching</strong> (#111), with the time tests from #71–#75 as reference behaviour, fixing #88–#91. The time helpers move out of <code>R/extract_to_points.R</code> into their own file. <em>Not started.</em> Decides how dates on non-standard calendars appear in output columns and in voxels (see <a href="#open-questions">Open questions</a>). Must be done before step 5, because the core object’s time axis is a CFtime object.</li>
+<strong>Replace the internal CF time decoding with CFtime and fix time matching</strong> (#111), with the time tests from #71–#75 as reference behaviour, fixing #88–#92. The time helpers move out of <code>R/extract_to_points.R</code> into <code>R/netcdf-time.R</code>. <em>In progress:</em> the decoder (#88, #90, #92) comes first; matching (#89, #91) follows after it merges. Non-standard calendars stay unsupported, with a clear error (see Direction, Time decoding). Must be done before step 5, because the core object’s time axis is a CFtime object.</li>
 <li>
 <strong>Build the core object</strong> (#113). <em>Not started.</em> Sources (files, series, Zarr, in-memory voxels); standard axes built at open, including the axis and longitude fixes from #93 and #95; the lazy ncdf4 reader with chunk-aligned block reads. Then the voxel builder (depth in <code><a href="https://rspatial.github.io/terra/reference/depth.html" class="external-link">terra::depth()</a></code> with old layer names read on input, CRS always set, float32 tolerance, <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> moved to it), and time-aware volume, overlap and profiles, tiled when a time step is too large.</li>
 <li>
@@ -502,7 +505,7 @@
 <li>
 <strong><code>ncdf4</code> vs <code>terra</code></strong>. Point, buffer and track extraction read netCDF directly with <code>ncdf4</code>, reading only the cells each observation needs. Large raster operations (1000s of cells), like extracting areas and volumes, use <code>terra</code>. This split is planned to become one model; see <a href="#data-model">Data model</a>. Until then, say in each function’s docs which input it takes.</li>
 <li>
-<strong>Time.</strong> Times are decoded from CF units and calendars and matched to observations in UTC. Only the netCDF model has a time dimension for now. Decoding is planned to move to CFtime; see <a href="#data-model">Data model</a>.</li>
+<strong>Time.</strong> Times are decoded from CF units on the standard calendars and matched to observations in UTC. Only the netCDF model has a time dimension for now. Decoding is planned to move to CFtime; see <a href="#data-model">Data model</a>.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="future-directions">Future directions<a class="anchor" aria-label="anchor" href="#future-directions"></a></h2>

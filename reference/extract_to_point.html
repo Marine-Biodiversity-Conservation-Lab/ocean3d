@@ -320,13 +320,14 @@ data frame for multiple points and multiple outputs.</p>
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Numeric netCDF time coordinates must provide units expressed as
 milliseconds, seconds, minutes, hours or days since a reference
-date-time. Singular and plural unit names are accepted.</p>
+date-time. Singular and plural unit names are accepted. A single time
+step in months or years since a reference date-time is also accepted;
+several are not, because their length is ambiguous.</p>
 <p>Reference date-times are interpreted in UTC. A trailing "Z" or
 "UTC" is accepted; numeric timezone offsets such as "+02:00"
 are not currently supported.</p>
 <p>Supported calendars are "standard", "gregorian" and
-"proleptic_gregorian". The first two are supported only for
-reference dates and timestamps on or after 1582-10-15.
+"proleptic_gregorian".
 Unsupported units, calendars or missing time units produce an error.</p>
 <p>Temporal resolution controls comparison of timestamp labels.
 It does not identify averaging intervals, calculate temporal means,

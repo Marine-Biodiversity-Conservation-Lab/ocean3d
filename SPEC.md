@@ -309,11 +309,11 @@ trial (#112). None of it is implemented yet.
     needs, and heavy processing runs per time step, or per tile within a
     time step, so peak memory follows the size of one slice or tile
     rather than the whole dataset.
-3.  **CF-correct metadata** for the grids in scope: time units and
-    calendars, sub-daily steps, depth units and direction, bounds and
-    longitude conventions. The current code gets this only partly right
-    (13 of the trial’s 29 cases): \#71–#75 set the behaviour to keep,
-    and \#88–#96 are the bugs to fix.
+3.  **CF-correct metadata** for the grids in scope: time units on the
+    standard calendars, sub-daily steps, depth units and direction,
+    bounds and longitude conventions. The current code gets this only
+    partly right (13 of the trial’s 29 cases): \#71–#75 set the
+    behaviour to keep, and \#88–#96 are the bugs to fix.
 
 None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all
 three on its own (see [the
@@ -389,9 +389,24 @@ Jay Matsushiba on 2 November 2026 (#112).
   replaces the package’s own CF time decoder (#111). It decodes CF time
   units, handles the calendars the CF conventions define (per its
   documentation; the trial tested `standard`, `proleptic_gregorian`,
-  `noleap` and `360_day`), including ones R’s date classes can’t
-  represent, and matches dates to a time axis quickly. The time axis of
-  the core object is a CFtime object.
+  `noleap` and `360_day`), and matches dates to a time axis quickly. The
+  time axis of the core object is a CFtime object.
+  - **Calendars supported for now:** `standard`, `gregorian` and
+    `proleptic_gregorian`, which cover the data in scope (Copernicus
+    Marine, WOA, OISST). Files on other calendars (`noleap` or
+    `365_day`, `all_leap` or `366_day`, `360_day`, `julian`), used
+    mainly by climate model output, stop with a clear error that names
+    the calendar, as they do today. So output columns stay R date-times,
+    and every voxel’s time step fits in
+    [`terra::time()`](https://rspatial.github.io/terra/reference/time.html).
+  - **Adding support later:** the calendar check is in one place, the
+    core object’s time axis (#113), so support can be added later
+    without breaking existing code. It needs a way to show dates R can’t
+    hold (such as 30 February in `360_day`) in output columns and
+    voxels, and a rule for matching real-world dates to calendars
+    without them. Until then, such files can be converted to a standard
+    calendar with an outside tool (for example CDO). Decided by Jay
+    Matsushiba on 2 November 2026.
 - **Heavy spatial work:** per time step, and per tile or group of depth
   layers when one time step is too large for memory (one day of a global
   1/12° product over 50 levels is about 3.5 GB as doubles). Read the
@@ -473,11 +488,6 @@ Jay Matsushiba on 2 November 2026 (#112).
 
 #### Open questions
 
-- **Dates on non-standard calendars:** how they appear in output
-  columns, and whether `360_day` voxels keep their time step in the
-  raster’s metadata tags
-  ([`terra::metags()`](https://rspatial.github.io/terra/reference/metags.html))
-  or voxels are limited to standard calendars (#111).
 - **Nearest depth with missing layers:**
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
   skips missing layers when choosing the nearest depth. Whether the
@@ -706,11 +716,12 @@ of 2 November 2026.
     `R/extract_to_points.R` for step 4, which replaces them.
 4.  **Replace the internal CF time decoding with CFtime and fix time
     matching** (#111), with the time tests from \#71–#75 as reference
-    behaviour, fixing \#88–#91. The time helpers move out of
-    `R/extract_to_points.R` into their own file. *Not started.* Decides
-    how dates on non-standard calendars appear in output columns and in
-    voxels (see [Open questions](#open-questions)). Must be done before
-    step 5, because the core object’s time axis is a CFtime object.
+    behaviour, fixing \#88–#92. The time helpers move out of
+    `R/extract_to_points.R` into `R/netcdf-time.R`. *In progress:* the
+    decoder (#88, \#90, \#92) comes first; matching (#89, \#91) follows
+    after it merges. Non-standard calendars stay unsupported, with a
+    clear error (see Direction, Time decoding). Must be done before step
+    5, because the core object’s time axis is a CFtime object.
 5.  **Build the core object** (#113). *Not started.* Sources (files,
     series, Zarr, in-memory voxels); standard axes built at open,
     including the axis and longitude fixes from \#93 and \#95; the lazy
@@ -941,9 +952,9 @@ marked *(planned)* aren’t implemented yet.
   volumes, use `terra`. This split is planned to become one model; see
   [Data model](#data-model). Until then, say in each function’s docs
   which input it takes.
-- **Time.** Times are decoded from CF units and calendars and matched to
-  observations in UTC. Only the netCDF model has a time dimension for
-  now. Decoding is planned to move to CFtime; see [Data
+- **Time.** Times are decoded from CF units on the standard calendars
+  and matched to observations in UTC. Only the netCDF model has a time
+  dimension for now. Decoding is planned to move to CFtime; see [Data
   model](#data-model).
 
 ## Future directions

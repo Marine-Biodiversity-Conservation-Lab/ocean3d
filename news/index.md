@@ -46,6 +46,38 @@ error:
   time report now also explains outputs that are missing because no
   observation date was supplied for a file with a time dimension.
 
+### Bug fixes
+
+- netCDF time axes are decoded with the CFtime package. Time units that
+  used to stop extraction are now read: a trailing `UTC` or `Z`
+  (`days since 2020-01-01 UTC`), origins written `2020-1-1`, `00:00:0.0`
+  or without seconds, years before 1000 with the `proleptic_gregorian`
+  calendar, and a single time step in `months since` units, as in World
+  Ocean Atlas files
+  ([\#88](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/88)).
+  A time axis of several months or years still stops with an error,
+  because their length is ambiguous.
+- Reference dates before 1582-10-15 on the `standard` and `gregorian`
+  calendars are accepted, such as `hours since 1-1-1 00:00:0.0` in older
+  NCEP reanalysis files; CFtime counts the Julian days before the
+  calendar change. Time steps before 1582-10-15 on these calendars still
+  stop with an error.
+- Time steps stored as fractional days (for example 10-minute data in
+  `days since 1970-01-01`) decode exactly, so exact time matching no
+  longer returns `NA` for observations on a file timestamp
+  ([\#90](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/90)).
+- A file passed as a connection opened with
+  `ncdf4::nc_open(readunlim = FALSE)` now gives the same result as its
+  path when the time dimension is unlimited
+  ([\#92](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/92)).
+- Files on calendars other than `standard`, `gregorian` and
+  `proleptic_gregorian` (such as `noleap` or `360_day`) still stop, now
+  with an error that names the calendar.
+
+### Dependencies
+
+- CFtime (\>= 1.7.3) is now imported, for decoding CF time units.
+
 ## ocean3d 0.1.1.9009
 
 Housekeeping release addressing `goodpractice` checks

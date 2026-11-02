@@ -58,6 +58,18 @@
 <ul><li>New arguments <code>spatial_match</code>, <code>max_distance_km</code>, <code>spatial_report</code> and <code>depth_report</code>. Longitudes match across the 0-360 and -180-180 conventions and across the antimeridian.</li>
 <li>Missing outputs are explained once, under the report for their cause (spatial, depth or time), with repeated reasons grouped by file. The time report now also explains outputs that are missing because no observation date was supplied for a file with a time dimension.</li>
 </ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
+<ul><li>netCDF time axes are decoded with the CFtime package. Time units that used to stop extraction are now read: a trailing <code>UTC</code> or <code>Z</code> (<code>days since 2020-01-01 UTC</code>), origins written <code>2020-1-1</code>, <code>00:00:0.0</code> or without seconds, years before 1000 with the <code>proleptic_gregorian</code> calendar, and a single time step in <code>months since</code> units, as in World Ocean Atlas files (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/88" class="external-link">#88</a>). A time axis of several months or years still stops with an error, because their length is ambiguous.</li>
+<li>Reference dates before 1582-10-15 on the <code>standard</code> and <code>gregorian</code> calendars are accepted, such as <code>hours since 1-1-1 00:00:0.0</code> in older NCEP reanalysis files; CFtime counts the Julian days before the calendar change. Time steps before 1582-10-15 on these calendars still stop with an error.</li>
+<li>Time steps stored as fractional days (for example 10-minute data in <code>days since 1970-01-01</code>) decode exactly, so exact time matching no longer returns <code>NA</code> for observations on a file timestamp (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/90" class="external-link">#90</a>).</li>
+<li>A file passed as a connection opened with <code>ncdf4::nc_open(readunlim = FALSE)</code> now gives the same result as its path when the time dimension is unlimited (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/92" class="external-link">#92</a>).</li>
+<li>Files on calendars other than <code>standard</code>, <code>gregorian</code> and <code>proleptic_gregorian</code> (such as <code>noleap</code> or <code>360_day</code>) still stop, now with an error that names the calendar.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="dependencies-development-version">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies-development-version"></a></h3>
+<ul><li>CFtime (&gt;= 1.7.3) is now imported, for decoding CF time units.</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.1.1.9009" id="ocean3d-0119009">ocean3d 0.1.1.9009<a class="anchor" aria-label="anchor" href="#ocean3d-0119009"></a></h2>
