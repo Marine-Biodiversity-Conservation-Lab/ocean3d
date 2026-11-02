@@ -1685,8 +1685,11 @@
 #' @param depth_dim Optional name of the depth dimension in the netCDF file.
 #' @param time_dim Optional name of the time dimension in the netCDF file.
 #' @param time_match Character. How observation dates are matched to netCDF time
-#'   values. `"nearest"` (default) selects the closest available date; `"exact"`
-#'   requires an exact date match and returns `NA` when no match exists.
+#'   values. `"nearest"` (default) selects the closest time step; an
+#'   observation exactly halfway between two steps takes the one on its own
+#'   UTC day. `"exact"` requires the same comparison value (see
+#'   `time_resolution`): the same instant for date-times, or the same day,
+#'   month or year, and returns `NA` when no step matches.
 #' @param max_time_diff Optional non-negative numeric value giving the maximum
 #'   allowed difference, in days, between an observation date and the nearest
 #'   netCDF date when `time_match = "nearest"`. If `NULL` (default), no maximum
@@ -1860,8 +1863,14 @@
 #'   date-time text. Explicit alternatives are "datetime", "daily",
 #'   "monthly", "yearly" and "custom". Calendar comparisons use UTC.
 #'   These options compare timestamp labels; they do not infer averaging
-#'   intervals or calculate temporal summaries. Multiple dataset records
-#'   mapping to the same comparison value cause an error.
+#'   intervals or calculate temporal summaries. Date-times are compared as
+#'   instants, so on a daily file stamped at 00:00 an afternoon observation
+#'   matches the next day's step; use "daily" to match by day. If an
+#'   observation selects a time step that appears more than once at its
+#'   comparison resolution (for example a daily comparison on a file with
+#'   several steps per day), extraction stops with an error naming the file
+#'   and the timestamp; repeated steps that no observation selects are
+#'   ignored.
 #'   With nearest matching, monthly and yearly comparisons use the start
 #'   of the labelled month or year. max_time_diff remains in days and
 #'   applies to these comparison values. Use exact matching to require
