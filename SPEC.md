@@ -31,11 +31,13 @@ An analysis in `ocean3d` has three steps, and each analysis function belongs to 
 2. **Intersect:** find where 3D objects meet each other or the data: the space they share, whether they share any, or the data values inside a shape.
 3. **Summarise:** turn what intersect returns into results: volumes, overlap, and statistics per shape or group.
 
-| Step | Question | Exists now | Planned |
+| Step | Question | Exists now | Planned additions |
 |---|---|---|---|
 | Build | What is the 3D shape or grid? | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `envelope_to_voxel()`, `voxel_to_envelope()`, `occupied()`, `create_study_raster()`, data loaders (`woa_load_nc()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()`) | `as_vector3d()`, `buffer_3d()`, `vector3d_to_envelope()`, track sampling |
 | Intersect | Where do they meet? | `intersect_3d()`, `intersects_3d()`, `mask()` | the same functions for `SpatVector3D`; a coverage function that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
 | Summarise | How much, and what values? | `volume()`, `calc_volume_overlap()` | `summarise_3d()` for statistics on intersect results |
+
+The planned functions are added alongside the existing ones: every function in "Exists now" stays, and the existing intersect functions gain methods for `SpatVector3D`. Two existing functions change inside without changing what they are for: `woa_load_nc()` reads with ncdf4 instead of terra, and voxels store depth in `terra::depth()` rather than in layer names (see [Direction](#direction-a-hybrid)).
 
 The Getting Started vignette follows the three steps: it builds a species' 3D range with `vect_to_envelope()`, keeps the temperatures inside it with `mask()`, and summarises them per depth with `terra::global()`.
 
