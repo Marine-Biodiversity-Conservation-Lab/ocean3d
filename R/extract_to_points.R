@@ -1873,9 +1873,7 @@
 #' are not currently supported.
 #'
 #' Supported calendars are "standard", "gregorian" and
-#' "proleptic_gregorian". With the first two, time steps before 1582-10-15
-#' can't be shown as R date-times and produce an error; reference dates
-#' before then are fine.
+#' "proleptic_gregorian".
 #' Unsupported units, calendars or missing time units produce an error.
 #'
 #' Temporal resolution controls comparison of timestamp labels.
