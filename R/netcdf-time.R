@@ -261,7 +261,14 @@
       idx <- match(requested[i], available)
     } else {
       gap_days <- abs(available - requested[i]) / 86400
-      idx <- which.min(gap_days)
+      # An observation exactly halfway between two steps takes the one on
+      # its own UTC day, so a midnight observation between noon-stamped days
+      # and a noon observation between midnight-stamped days both keep their
+      # day (#71). Otherwise the earlier step wins, as before.
+      closest <- which(gap_days == min(gap_days, na.rm = TRUE))
+      same_day <- closest[floor(as.numeric(values[closest]) / 86400) ==
+                            floor(as.numeric(targets[i]) / 86400)]
+      idx <- if (length(same_day) == 1L) same_day else closest[1L]
       if (!is.null(max_time_diff) && gap_days[idx] > max_time_diff) {
         idx <- NA_integer_
       }

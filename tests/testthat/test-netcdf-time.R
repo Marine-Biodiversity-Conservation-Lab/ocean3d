@@ -132,3 +132,13 @@ test_that("a repeated time step only stops extraction if requested (#91)", {
   expect_match(err, "2020-01-02 00:00:00 UTC appears 2 times", fixed = TRUE)
   expect_match(err, basename(f), fixed = TRUE)
 })
+
+test_that("midnight date-times keep their day on noon-stamped files (#71)", {
+  f <- make_time_file(c(613620, 613644, 613668), "hours since 1950-01-01")
+  on.exit(unlink(f), add = TRUE)
+  times <- as.POSIXct(c("2020-01-01", "2020-01-02", "2020-01-03"), tz = "UTC")
+
+  out <- extract2d(data.frame(lon = 0, lat = 40, date = times), f,
+                   var = "temp", time_report = FALSE)
+  expect_equal(out$temp, c(1, 2, 3))
+})
