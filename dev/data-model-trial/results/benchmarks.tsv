@@ -52,3 +52,31 @@ zarr	stars_mdim	open	13.86	216	0	dims 4320x2041x50x1625; time 2022-06-01 .. 2026
 zarr	stars_mdim	series	89.45	220	0	n=1625 mean=25.079 na=0	
 zarr	stars_mdim	map	78.87	532	0	n=8817120 mean=14.177 na=2681786	
 zarr	stars_mdim	volume	310.21	480	1	volume_10_20_km3=199226.9 volume_15_25_km3=242608.1 overlap_km3=85121.3	
+cmems	ocean3d	load	4.46	234	0	loaded	
+cmems	ocean3d	open	4.26	243	0	time steps: 731	
+cmems	ocean3d	points	11.23	277	0	n=500 mean=27.3465 na=2	
+cmems	ocean3d	series	6.77	280	0	n=731 mean=27.9746 na=0	
+cmems	ocean3d	volume	36.90	1415	0	volume_10_20_km3=6438.027 volume_15_25_km3=360362.1 overlap_km3=6438.027	
+cmems	stars_ncdf	load	3.20	215	0	loaded	
+cmems	stars_ncdf	open	4.09	252	0	time steps: 731	
+cmems	stars_ncdf	points	332.61	252	0	n=500 mean=27.3469 na=3	
+cmems	stars_ncdf	series	6.62	253	0	n=731 mean=27.9746 na=0	
+cmems	stars_ncdf	volume	10.14	440	0	ERROR: only regular rasters can be converted to SpatRaster objects	
+cmems	stars_mdim	load	3.92	214	0	loaded	
+cmems	stars_mdim	open	3.92	226	0	time steps: 731	
+cmems	stars_mdim	points	30.19	256	0	n=500 mean=27.3758 na=3	
+cmems	stars_mdim	series	3.81	236	0	n=731 mean=27.9746 na=0	
+cmems	stars_mdim	volume	7.34	418	0	ERROR: only regular rasters can be converted to SpatRaster objects	
+cmems	ncdfCF	load	3.46	204	0	loaded	
+cmems	ncdfCF	open	3.89	233	0	time steps: 731	
+cmems	ncdfCF	points	46.54	329	0	n=500 mean=27.3469 na=3	
+cmems	ncdfCF	series	3.95	244	0	n=731 mean=27.9746 na=0	
+cmems	ncdfCF	volume	17.09	2429	0	volume_10_20_km3=6438.028 volume_15_25_km3=360362.2 overlap_km3=6438.028	
+cmems	stars_ncdf	points_native	197.60	427	0	points=2 values=36 mean=29.2362	
+cmems	stars_mdim	points_native	4.09	231	0	ERROR: cannot allocate vector of size 51.0 Gb	
+cmems	ncdfCF	lazy_subset	3.88	233	0	subset dims 721x721x1x731	
+cmems	ncdfCF	lazy_subset_read	4.11	292	0	dims 721x721x1x2, read 1039682 values, mean=27.3421	
+cmems	ocean3d	buffer	75.62	806	0	mean=27.85381	
+cmems	stars_ncdf	buffer	5.90	288	0	mean=27.85036	
+cmems	stars_mdim	buffer	4.35	273	0	mean=27.85036	
+cmems	ncdfCF	buffer	4.29	279	0	mean=27.85036	

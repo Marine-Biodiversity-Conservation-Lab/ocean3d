@@ -13,18 +13,22 @@ object, and don't depend on ncdfCF yet. Read remote Zarr stores with
 correcting its coordinates.**
 
 - **stars proxies don't stay lazy for the operations the package needs.**
-  `st_extract()` on a proxy took 243 s and 1 GB for 2 points on the large
-  file (`read_ncdf()`), and tried to allocate 56.4 GB on a `read_mdim()`
+  `st_extract()` on a proxy took 198 s for 2 points on the real Copernicus
+  file (`read_ncdf()`), and tried to allocate 51 GB on a `read_mdim()`
   proxy. Reads through `read_ncdf(ncsub = )` return the right values but
   keep the full time axis in the dimensions, and cost about 0.5 s per call
-  (266–277 s for 500 points against 11–49 s for the package). `read_mdim()`
-  gets 17 of the 29 CF cases wrong, and its errors show up on real data: the
-  500-point means differ from every other reader on both large files.
+  (266–333 s for 500 points against 11–49 s for the package). Slices of the
+  Copernicus file can't be converted to terra for volume ("only regular
+  rasters can be converted"). `read_mdim()` gets 17 of the 29 CF cases
+  wrong, and its errors show up on real data: its 500-point means differ
+  from every other reader on all three datasets.
 - **ncdfCF reads lazily and gets 25 of the 29 CF cases right (as does stars
   `read_ncdf()`, which ignores explicit bounds), but its API is still
   moving.** `subset()` doesn't read values: subsetting 757 million cells
   (6 GB) used no more memory than opening the file. For 500 points it took
-  33 s on the large file (package 49 s) and 27 s on OISST (package 11 s).
+  47 s on the Copernicus file (package 11 s), 33 s on the synthetic file
+  (package 49 s) and 27 s on OISST (package 11 s), and its volumes matched
+  the package's.
   But it is marked experimental,
   has broken its API in 4 of its last 8 releases, has one maintainer, and has
   quirks the package would have to work around (below). It is a good
@@ -143,15 +147,43 @@ Each step ran in a new R process, so "peak" is the whole process's peak
 resident memory (GNU `time`), including R and the loaded packages (the
 "load" row). Each process had a 12 GB address-space limit.
 
-**Large file.** Synthetic, shaped like a Copernicus Marine download
-(`make_large_file.R`): 1440 × 720 at 0.25°, 10 depths, 730 daily steps,
-`short` with `scale_factor`, `_FillValue` on land, deflate, one chunk per
-depth and day. 8.7 GB on disk, 15 GB packed and **60 GB as doubles**, about
-twice the machine's RAM. No real multi-year 3D daily file could be
-downloaded without Copernicus credentials, so the real product was read as
-Zarr instead (section 3).
+Three datasets, all larger than memory or split across files:
 
-Seconds / peak MB:
+- **Copernicus Marine download (main test).**
+  `cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m` (global daily 1/12°
+  temperature), subset with the Copernicus Marine toolbox to 150°E–150°W,
+  30°S–30°N, the top 18 levels (0.5–47 m) and two years (1 June 2022 to 31
+  May 2024): 721 × 721 × 18 × 731 cells, `float`, compressed, chunks of 46 ×
+  46 cells × 2 levels × 23 days. 16.9 GB on disk and **54.7 GB as doubles**.
+  Longitudes run 150–210 across the antimeridian.
+- **Synthetic** (`make_large_file.R`): 1440 × 720 at 0.25°, 10 depths, 730
+  daily steps, `short` with `scale_factor`, `_FillValue` on land, one chunk
+  per depth and day (the layout that is slowest for point series). 8.7 GB
+  on disk, **60 GB as doubles**.
+- **NOAA OISST v2.1**, daily global 0.25° sea surface temperature, one file
+  per year (2022, 2023; 470 MB each, 2D + time), as a multi-file series.
+
+Seconds / peak MB. **Copernicus Marine download:**
+
+| Step | ocean3d | stars `read_ncdf` | stars `read_mdim` | ncdfCF |
+|---|---|---|---|---|
+| Load packages only | 4.5 / 234 | 3.2 / 215 | 3.9 / 214 | 3.5 / 204 |
+| Open without reading values | 4.3 / 243 | 4.1 / 252 | 3.9 / 226 | 3.9 / 233 |
+| 500 points (place, depth, day) | 11 / 277 | 333 / 252 | 30 / 256 ⚠ | 47 / 329 |
+| same, stars' `st_extract()` on the proxy, 2 points | | 198 / 427 | fails (51.0 GB) | |
+| One point, 731 days | 7 / 280 | 7 / 253 | 4 / 236 | 4 / 244 |
+| Volume and overlap, one day, via terra | 37 / 1,415 | fails² | fails² | 17 / 2,429 |
+| Buffer: 200 km × ±20 m × ±15 days | 76 / 806 | 6 / 288 | 4 / 273 | 4 / 279 |
+| `subset()` of 380 million cells (3 GB) | | | | 3.9 / 233 |
+| then read 2 days of it | | | | 4.1 / 292 |
+
+2. The slice reads, but stars won't convert it to terra: the file's float32
+   coordinates make stars treat the grid as irregular, and
+   `as(x, "SpatRaster")` stops with "only regular rasters can be
+   converted". The same happens with the Zarr store (section 3), where the
+   SpatRaster had to be built from the array by hand.
+
+**Synthetic file:**
 
 | Step | ocean3d | stars `read_ncdf` | stars `read_mdim` | ncdfCF |
 |---|---|---|---|---|
@@ -165,10 +197,8 @@ Seconds / peak MB:
 | `subset()` of 757 million cells (6 GB) | | | | 3.4 / 233 |
 | then read 2 days of it | | | | 3.3 / 337 |
 
-**Real files, multi-file series.** NOAA OISST v2.1, daily global 0.25° sea
-surface temperature, one file per year (2022, 2023; 470 MB each, 2D + time).
-Points and the series span both files; the buffer's ±15-day window crosses
-the year boundary.
+**OISST, two files.** Points and the series span both files; the
+buffer's ±15-day window crosses the year boundary.
 
 | Step | ocean3d | stars `read_ncdf` | stars `read_mdim` | ncdfCF |
 |---|---|---|---|---|
@@ -180,31 +210,42 @@ the year boundary.
 
 Results agree between readers except where marked:
 
-- **Points:** ocean3d, `read_ncdf()` and ncdfCF return the same 500 values
-  (mean 15.8731 on the synthetic file; 18.4863 with 115 land `NA`s on
-  OISST). ⚠ `read_mdim()` gives 16.2477 and 18.4551: its half-cell
-  coordinate shift (note 6) picks a neighbouring depth layer or cell for
-  some points.
-- **Volume:** all four give the same volumes (116,835,900 km³ at 10–20 °C,
-  111,867,900 km³ at 15–25 °C, 69,352,360 km³ overlap). Peak memory is one
-  day's 10.4 million cells plus the package's terra steps, so it follows
-  the slice size, not the file.
+- **Points:** `read_ncdf()` and ncdfCF return the same 500 values on all
+  three datasets (Copernicus mean 27.3469 with 3 `NA`s near land; synthetic
+  15.8731; OISST 18.4863 with 115 land `NA`s). The package matches them on
+  the synthetic file and OISST; on the Copernicus file it finds a value for
+  one more coastal point (27.3465, 2 `NA`s), because its nearest-depth rule
+  skips missing layers. ⚠ `read_mdim()` differs on every dataset (27.3758,
+  16.2477, 18.4551): its half-cell coordinate shift (note 6) picks a
+  neighbouring layer or cell for some points.
+- **Volume:** every reader that completed gives the same volumes
+  (Copernicus: 6,438 km³ at 10–20 °C, 360,362 km³ at 15–25 °C; synthetic:
+  116,835,900 km³, 111,867,900 km³ and 69,352,360 km³ overlap). Peak memory
+  is one day's slice plus the package's terra steps, so it follows the
+  slice size, not the file.
 - **Series and buffers:** identical series means. The package's buffer
-  (25.50317 synthetic, 24.902 OISST) differs from the plain equal-weight
-  mean of the cells inside the radius (25.50388, 24.89858) because it
-  weights cells by their overlap with the buffer.
+  (27.85381 Copernicus, 25.50317 synthetic, 24.902 OISST) differs slightly
+  from the plain equal-weight mean of the cells inside the radius (27.85036,
+  25.50388, 24.89858) because it weights cells by their overlap with the
+  buffer. With a depth window reaching below the file's deepest level it
+  returns `NA` with `insufficient_coverage` (less than 80% of the buffer has
+  data), where the plain reads silently average what is there.
 
 What this shows:
 
 - **Every option opens without reading values** and keeps peak memory near
-  the size of what each step reads (under 400 MB for points, series and
-  buffers on a 60 GB file).
-- **stars' own point extraction isn't lazy enough to use** (243 s for 2
-  points; a 56.4 GB allocation on `read_mdim()`). Reading cell by cell
+  the size of what each step reads (under 400 MB for points and series on
+  files of 55–60 GB as doubles).
+- **stars' own point extraction isn't lazy enough to use** (198–243 s for 2
+  points; allocations of 51–56 GB on `read_mdim()`). Reading cell by cell
   through `read_ncdf(ncsub = )` works but costs about 0.5 s per call.
-- **The package's `extract_to_buffer()` is slow:** 434 s for one buffer
-  that the other readers' plain reads handle in 5–7 s. This is the current
-  code, not a reader limit, and is worth its own issue.
+- **stars slices of real Copernicus data can't go to terra** without
+  rebuilding the raster by hand (note 2). Volume and overlap, which run on
+  terra, are where this matters.
+- **The package's `extract_to_buffer()` is slow:** 76 s (Copernicus), 92 s
+  (OISST) and 434 s (synthetic) for one buffer that plain block reads handle
+  in 4–7 s. This is the current code, not a reader limit, and is worth its
+  own issue.
 - **Converting a 3D stars object to terra** needs `as(x, "SpatRaster")`;
   `terra::rast()` fails on a depth dimension ("1:dd[4]: NA/NaN argument").
 

@@ -23,6 +23,13 @@ install.packages(c("stars", "ncdfCF", "CFtime"), lib = "<lib>")
 Rscript dev/data-model-trial/correctness.R <lib>
 Rscript dev/data-model-trial/make_large_file.R <data>/synthetic_4d.nc
 # OISST: https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/sst.day.mean.{2022,2023}.nc into <data>/oisst/
+# Copernicus Marine (needs a login; 16.9 GB):
+copernicusmarine subset --dataset-id cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m \
+  --variable thetao --minimum-longitude 150 --maximum-longitude -150 \
+  --minimum-latitude -30 --maximum-latitude 30 --minimum-depth 0 --maximum-depth 50 \
+  --start-datetime 2022-06-01 --end-datetime 2024-05-31 --netcdf-compression-level 1 \
+  --output-directory <data>/cmems --output-filename cmems_thetao_pacific_2022-2024.nc
+dev/data-model-trial/run_bench.sh <lib> <data> cmems "ocean3d stars_ncdf stars_mdim ncdfCF" "load open points series volume buffer"
 dev/data-model-trial/run_bench.sh <lib> <data> synthetic "ocean3d stars_ncdf stars_mdim ncdfCF" "load open points series volume buffer"
 dev/data-model-trial/run_bench.sh <lib> <data> oisst "ocean3d stars_ncdf stars_mdim ncdfCF" "load open points series buffer"
 dev/data-model-trial/run_zarr.sh <lib> "ncdf4 open series map volume"

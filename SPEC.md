@@ -158,11 +158,11 @@ None of the packages compared (terra, stars, ncdf4, ncdfCF) meets all three. ter
 
 #### First step: stars and ncdfCF trial (#112)
 
-The trial ([`dev/data-model-trial.md`](dev/data-model-trial.md)) compared stars (`read_ncdf()`, `read_mdim()`), ncdfCF and the current ncdf4 code on 29 CF cases (the test fixtures and #88–#96), on a 60 GB synthetic daily 4D file, on two years of NOAA OISST, and on the Copernicus Marine global daily product as a remote Zarr store. In short:
+The trial ([`dev/data-model-trial.md`](dev/data-model-trial.md)) compared stars (`read_ncdf()`, `read_mdim()`), ncdfCF and the current ncdf4 code on 29 CF cases (the test fixtures and #88–#96), on a two-year Copernicus Marine daily 4D download (55 GB as doubles), a 60 GB synthetic file and two years of NOAA OISST, and on the Copernicus Marine global daily product as a remote Zarr store. In short:
 
 - stars `read_ncdf()` and ncdfCF each got 25 of the 29 cases right, `read_mdim()` 12 and the current code 13. Both readers that decode time with CFtime got every time case right, which supports the CFtime step.
-- Every option opened files without reading values and kept peak memory under 400 MB for points, series and buffers on the 60 GB file. stars' own `st_extract()` on a proxy took 243 s for 2 points.
-- The package's `extract_to_buffer()` took 434 s for one buffer that a plain block read handles in 5–7 s.
+- Every option opened files without reading values and kept peak memory under 400 MB for points and series on the large files. stars' own `st_extract()` on a proxy took 198 s for 2 points on the Copernicus file, and stars slices of that file couldn't be converted to terra for volume.
+- The package's `extract_to_buffer()` took 76–434 s for one buffer that a plain block read handles in 4–7 s.
 
 #### Vector class: `SpatVector3D`
 

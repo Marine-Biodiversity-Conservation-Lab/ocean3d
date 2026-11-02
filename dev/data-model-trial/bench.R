@@ -8,9 +8,10 @@
 #     Rscript dev/data-model-trial/bench.R \
 #       <lib> <data_dir> <dataset> <reader> <step>
 #
-# dataset: "synthetic", synthetic_4d.nc from make_large_file.R (4D, 60 GB
-#          as doubles), or "oisst", NOAA OISST v2.1 sst.day.mean.2022.nc and
-#          .2023.nc (2D + time).
+# dataset: "cmems", a Copernicus Marine download (4D, 55 GB as doubles; see
+#          README), "synthetic", synthetic_4d.nc from make_large_file.R (4D,
+#          60 GB as doubles), or "oisst", NOAA OISST v2.1
+#          sst.day.mean.2022.nc and .2023.nc (2D + time).
 # reader:  ocean3d, stars_ncdf, stars_mdim or ncdfCF.
 # step:    load, open, points, series, volume or buffer; also points_native
 #          (stars), lazy_subset and lazy_subset_read (ncdfCF).
@@ -72,9 +73,35 @@ if (has_depth) series$depth <- 0
 
 day <- as.POSIXct("2022-06-15", tz = "UTC")  # volume step
 buffer_centre <- list(lon = if (dataset == "oisst") 210 else -150, lat = 20,
-                      depth = 50, radius_km = 200, days = 15,
+                      depth = 50, depth_radius = 50, radius_km = 200, days = 15,
                       date = as.POSIXct(if (dataset == "oisst") "2022-12-31"
                                         else "2022-06-15", tz = "UTC"))
+
+# Real Copernicus Marine download (see README): 150E-150W, 30S-30N, top 50 m,
+# daily from 2022-06-01 to 2024-05-31. Points, series, volume day and buffer
+# are moved inside that box and period.
+if (dataset == "cmems") {
+  files <- file.path(data_dir, "cmems", "cmems_thetao_pacific_2022-2024.nc")
+  var <- "thetao"
+  has_depth <- TRUE
+  set.seed(112)
+  lon <- runif(n_obs, 150.5, 209.5)
+  obs <- data.frame(
+    lon = ifelse(lon > 180, lon - 360, lon),
+    lat = runif(n_obs, -29.5, 29.5),
+    depth = runif(n_obs, 0, 45),
+    date = as.POSIXct("2022-06-01", tz = "UTC") +
+      86400 * sample(0:729, n_obs, replace = TRUE)
+  )
+  series <- data.frame(
+    lon = -170.1, lat = 10.1, depth = 0,
+    date = as.POSIXct("2022-06-01", tz = "UTC") + 86400 * (0:730)
+  )
+  day <- as.POSIXct("2023-06-15", tz = "UTC")
+  buffer_centre <- list(lon = -170, lat = 10, depth = 25, depth_radius = 20,
+                        radius_km = 200,
+                        days = 15, date = as.POSIXct("2023-06-15", tz = "UTC"))
+}
 
 # Shared glue for the external readers -----------------------------------------
 # What the package would still write on top of stars or ncdfCF: pick the
@@ -106,7 +133,8 @@ buffer_window <- function(lon_axis, lat_axis, depth_axis, time_axis) {
   ix <- which(abs(((lon_axis - b$lon + 180) %% 360) - 180) <= dlon)
   iy <- which(abs(lat_axis - b$lat) <= dlat)
   iz <- if (!is.null(depth_axis)) {
-    which(depth_axis >= b$depth - 50 & depth_axis <= b$depth + 50)
+    which(depth_axis >= b$depth - b$depth_radius &
+            depth_axis <= b$depth + b$depth_radius)
   }
   it <- which(abs(as.numeric(difftime(time_axis, b$date, units = "days"))) <=
                 b$days)
@@ -184,7 +212,7 @@ run$ocean3d <- list(
     if (has_depth) d$depth <- b$depth
     out <- suppressMessages(extract_to_buffer(
       d, nc = files, var = var, horizontal_radius_km = b$radius_km,
-      depth_radius_m = if (has_depth) 50 else 0,
+      depth_radius_m = if (has_depth) b$depth_radius else 0,
       time_before = b$days, time_after = b$days, statistic = "mean",
       weighting = "equal", infer_bounds = TRUE, quiet = TRUE,
       return_match_info = FALSE
