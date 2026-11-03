@@ -127,6 +127,12 @@ setValidity("SpatVector3D", function(object) {
   if (!all(needed %in% names(v))) {
     return(paste("vertices must have columns", toString(needed)))
   }
+  if (anyNA(v$feature_id) || any(!nzchar(v$feature_id))) {
+    return("feature IDs must be non-missing and non-empty")
+  }
+  if (object@type == "points" && anyDuplicated(v$feature_id)) {
+    return("each point needs its own ID; IDs repeat")
+  }
   if (any(!is.finite(v$lon)) || any(!is.finite(v$lat)) ||
         any(abs(v$lat) > 90)) {
     return(paste("longitudes and latitudes must be finite,",

@@ -67,7 +67,7 @@ test_that("invalid vertices are rejected with a clear error", {
                "Lines need `id`", class = "ocean3d_error_vector3d")
   expect_error(
     as_vector3d(transform(obs, id = c(1, 1)), id = "id"),
-    "Each point needs its own ID", class = "ocean3d_error_vector3d"
+    "each point needs its own ID", class = "ocean3d_error_vector3d"
   )
   expect_error(as_vector3d(transform(obs, time = Sys.time())),
                "time = \"time\"", fixed = TRUE)
@@ -90,6 +90,24 @@ test_that("lines and points round-trip through sf with depth as minus Z", {
   back_points <- as_vector3d(sp, id = "feature_id")
   expect_equal(as.data.frame(back_points)[c("lon", "lat", "depth")],
                as.data.frame(p)[c("lon", "lat", "depth")])
+})
+
+test_that("feature IDs must be present, and unique for sf lines", {
+  d <- dive()
+  d$tag[2] <- NA
+  expect_error(as_vector3d(d, type = "lines", id = "tag"),
+               "feature IDs must be non-missing",
+               class = "ocean3d_error_vector3d")
+
+  s <- sf::st_as_sf(as_vector3d(dive(), type = "lines", id = "tag"))
+  s$feature_id <- c("A", "A")
+  expect_error(as_vector3d(s, id = "feature_id"),
+               "separate lines would be joined",
+               class = "ocean3d_error_vector3d")
+  s$feature_id <- c("A", NA)
+  expect_error(as_vector3d(s, id = "feature_id"),
+               "its own non-missing ID",
+               class = "ocean3d_error_vector3d")
 })
 
 test_that("sf lines without Z coordinates need a depth", {

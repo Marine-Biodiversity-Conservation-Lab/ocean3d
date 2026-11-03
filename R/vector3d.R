@@ -61,12 +61,6 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   } else {
     as.character(table[[id]])
   }
-  if (anyNA(feature_id) || any(!nzchar(feature_id))) {
-    .abort_vector3d("Feature IDs must be non-missing and non-empty.")
-  }
-  if (type == "points" && anyDuplicated(feature_id)) {
-    .abort_vector3d("Each point needs its own ID; IDs repeat.")
-  }
 
   if (is.null(time)) {
     times <- .POSIXct(rep(NA_real_, n), tz = "UTC")
@@ -125,6 +119,13 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   } else {
     .check_required_cols(attributes, id, "x")
     as.character(attributes[[id]])
+  }
+  if (anyNA(feature_id) || any(!nzchar(feature_id)) ||
+        anyDuplicated(feature_id)) {
+    .abort_vector3d(glue::glue(
+      "Each sf line needs its own non-missing ID in `{id}`; otherwise ",
+      "separate lines would be joined into one."
+    ))
   }
   row <- coords[, "L1"]
   has_time <- "M" %in% colnames(coords)
