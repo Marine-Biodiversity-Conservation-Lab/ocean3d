@@ -338,10 +338,13 @@
           reason <- "cadence_exceeded"
         }
       }
-      records[[length(records) + 1L]] <- data.frame(
+      # Collect plain values and build the data frame once at the end:
+      # one data frame per row was most of the run time (#89).
+      records[[length(records) + 1L]] <- list(
         row = i, column = column, source_index = source,
         variable = selected$variable[i],
-        requested = requested[i], selected = timestamp,
+        requested = as.numeric(requested[i]),
+        selected = as.numeric(timestamp),
         difference_seconds = delta, resolution = resolution,
         cadence = cadence$type, cadence_basis = cadence$basis,
         cadence_seconds = cadence$seconds, cadence_months = cadence$months,
@@ -357,12 +360,18 @@
           info$source_file
         },
         status = if (delta == 0) "matched" else "shifted",
-        reason = reason, stringsAsFactors = FALSE
+        reason = reason
       )
     }
   }
   if (!length(records)) return(data.frame())
-  do.call(rbind, records)
+  columns <- lapply(stats::setNames(nm = names(records[[1L]])), function(name) {
+    unlist(lapply(records, `[[`, name), use.names = FALSE)
+  })
+  out <- as.data.frame(columns, stringsAsFactors = FALSE)
+  out$requested <- .POSIXct(out$requested, tz = "UTC")
+  out$selected <- .POSIXct(out$selected, tz = "UTC")
+  out
 }
 
 .validate_custom_time_interval <- function(resolution, interval) {
@@ -1284,11 +1293,6 @@
     )
     date_values <- prepared$values
     resolved_time_resolution <- prepared$resolution
-    if (any(!is.na(date_values))) {
-      .check_time_resolution(
-        time_values, resolved_time_resolution
-      )
-    }
   } else {
     date_values <- rep(
       as.POSIXct(NA_character_, tz = "UTC"),
@@ -1336,6 +1340,16 @@
   candidate_time <- rep(NA_real_, nrow(data))
   candidate_index <- rep(NA_integer_, nrow(data))
 
+  # Match every row that reaches time matching in one pass (#89).
+  time_indices <- rep(NA_integer_, nrow(data))
+  if (!is.null(time_values)) {
+    time_indices[accepted] <- .match_time_indices(
+      time_values, date_values[accepted], time_match, max_time_diff,
+      resolved_time_resolution,
+      file = basename(temporal_metadata$source_file)
+    )
+  }
+
   for (i in seq_len(nrow(data))) {
     if (isTRUE(verbose) && i %% 100 == 0) {
       message("Extracting row ", i, " of ", nrow(data))
@@ -1358,13 +1372,7 @@
         next
       }
 
-      time_idx <- .match_time_index(
-        values = time_values,
-        target = date_values[i],
-        time_match = time_match,
-        max_time_diff = max_time_diff,
-        time_resolution = resolved_time_resolution
-      )
+      time_idx <- time_indices[i]
 
       if (is.na(time_idx)) next
 
@@ -1677,8 +1685,11 @@
 #' @param depth_dim Optional name of the depth dimension in the netCDF file.
 #' @param time_dim Optional name of the time dimension in the netCDF file.
 #' @param time_match Character. How observation dates are matched to netCDF time
-#'   values. `"nearest"` (default) selects the closest available date; `"exact"`
-#'   requires an exact date match and returns `NA` when no match exists.
+#'   values. `"nearest"` (default) selects the closest time step; an
+#'   observation exactly halfway between two steps takes the one on its own
+#'   UTC day. `"exact"` requires the same comparison value (see
+#'   `time_resolution`): the same instant for date-times, or the same day,
+#'   month or year, and returns `NA` when no step matches.
 #' @param max_time_diff Optional non-negative numeric value giving the maximum
 #'   allowed difference, in days, between an observation date and the nearest
 #'   netCDF date when `time_match = "nearest"`. If `NULL` (default), no maximum
@@ -1852,8 +1863,14 @@
 #'   date-time text. Explicit alternatives are "datetime", "daily",
 #'   "monthly", "yearly" and "custom". Calendar comparisons use UTC.
 #'   These options compare timestamp labels; they do not infer averaging
-#'   intervals or calculate temporal summaries. Multiple dataset records
-#'   mapping to the same comparison value cause an error.
+#'   intervals or calculate temporal summaries. Date-times are compared as
+#'   instants, so on a daily file stamped at 00:00 an afternoon observation
+#'   matches the next day's step; use "daily" to match by day. If an
+#'   observation selects a time step that appears more than once at its
+#'   comparison resolution (for example a daily comparison on a file with
+#'   several steps per day), extraction stops with an error naming the file
+#'   and the timestamp; repeated steps that no observation selects are
+#'   ignored.
 #'   With nearest matching, monthly and yearly comparisons use the start
 #'   of the labelled month or year. max_time_diff remains in days and
 #'   applies to these comparison values. Use exact matching to require

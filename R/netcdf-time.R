@@ -220,9 +220,14 @@
   }
   if (resolution == "datetime") return(values)
 
+  if (resolution == "daily") {
+    # The start of each UTC day. Arithmetic gives the same keys as formatting
+    # to text and back, about 600 times faster (#89).
+    return(.POSIXct(floor(as.numeric(values) / 86400) * 86400, tz = "UTC"))
+  }
+
   pattern <- switch(
     resolution,
-    daily = "%Y-%m-%d",
     monthly = "%Y-%m-01",
     yearly = "%Y-01-01"
   )
@@ -232,23 +237,61 @@
   )
 }
 
-.check_time_resolution <- function(values, resolution) {
-  keys <- .time_comparison_values(values, resolution)
-  valid <- !is.na(keys)
+# Match observation times to a time axis. `targets` are already prepared
+# (.prepare_time_input()), and `resolution` is their resolved comparison
+# resolution. The keys for the axis and for the observations are each
+# computed once (#89). A time step repeated at that resolution is only an
+# error when an observation selects it (#91). Returns one index per target,
+# NA where nothing matches.
+.match_time_indices <- function(values, targets,
+                                time_match = c("nearest", "exact"),
+                                max_time_diff = NULL, resolution,
+                                file = NULL) {
+  time_match <- match.arg(time_match)
+  out <- rep(NA_integer_, length(targets))
+  if (!length(values) || all(is.na(values))) return(out)
 
-  if (anyDuplicated(keys[valid])) {
-    stop(
-      "Multiple dataset timestamps map to the same '",
-      resolution, "' comparison value. ",
-      "Selecting the first would discard information. ",
-      "Use a finer time_resolution, select the intended records, ",
-      "or aggregate the data explicitly before extraction.",
-      call. = FALSE
-    )
+  available <- as.numeric(.time_comparison_values(values, resolution))
+  requested <- as.numeric(.time_comparison_values(targets, resolution))
+  repeated <- available %in% available[duplicated(available) &
+                                         !is.na(available)]
+
+  for (i in which(!is.na(requested))) {
+    if (time_match == "exact") {
+      idx <- match(requested[i], available)
+    } else {
+      gap_days <- abs(available - requested[i]) / 86400
+      # An observation exactly halfway between two steps takes the one on
+      # its own UTC day, so a midnight observation between noon-stamped days
+      # and a noon observation between midnight-stamped days both keep their
+      # day (#71). Otherwise the earlier step wins, as before.
+      closest <- which(gap_days == min(gap_days, na.rm = TRUE))
+      same_day <- closest[floor(as.numeric(values[closest]) / 86400) ==
+                            floor(as.numeric(targets[i]) / 86400)]
+      idx <- if (length(same_day) == 1L) same_day else closest[1L]
+      if (!is.null(max_time_diff) && gap_days[idx] > max_time_diff) {
+        idx <- NA_integer_
+      }
+    }
+    if (!is.na(idx) && repeated[idx]) {
+      key <- format(.POSIXct(available[idx], tz = "UTC"),
+                    "%Y-%m-%d %H:%M:%S UTC")
+      count <- sum(available == available[idx], na.rm = TRUE)
+      where <- if (is.null(file)) "" else glue::glue(" in {file}")
+      rlang::abort(glue::glue(
+        "Multiple dataset timestamps map to the same '{resolution}' ",
+        "comparison value: {key} appears {count} times{where}.\n",
+        "Selecting the first would discard information. Use a finer ",
+        "time_resolution, select the intended records, or aggregate the ",
+        "data explicitly before extraction."
+      ), class = "ocean3d_error_repeated_time", call = NULL)
+    }
+    out[i] <- as.integer(idx)
   }
-  invisible(TRUE)
+  out
 }
 
+# One observation at a time, for callers that match row by row.
 .match_time_index <- function(
   values,
   target,
@@ -256,7 +299,8 @@
   max_time_diff = NULL,
   time_resolution = c(
     "auto", "datetime", "daily", "monthly", "yearly"
-  )) {
+  ),
+  file = NULL) {
   time_match <- match.arg(time_match)
   time_resolution <- match.arg(time_resolution)
 
@@ -267,40 +311,15 @@
   }
 
   prepared <- .prepare_time_input(target, time_resolution)
-  resolution <- prepared$resolution
-  .check_time_resolution(values, resolution)
-
-  available <- .time_comparison_values(values, resolution)
-  requested <- .time_comparison_values(
-    prepared$values, resolution
+  .match_time_indices(
+    values, prepared$values, time_match, max_time_diff, prepared$resolution,
+    file = file
   )
-
-  if (time_match == "exact") {
-    hit <- which(available == requested)
-    return(
-      if (length(hit) > 0L) as.integer(hit[1L]) else NA_integer_
-    )
-  }
-
-  differences <- abs(as.numeric(
-    difftime(available, requested, units = "days")
-  ))
-  idx <- which.min(differences)
-
-  if (!is.null(max_time_diff) &&
-        differences[idx] > max_time_diff) {
-    return(NA_integer_)
-  }
-  as.integer(idx)
 }
 
 # A source may offer a temporal candidate without implying a coverage interval.
-# Matching and tolerance are handled by .match_time_index().
+# Matching and tolerance are handled by .match_time_indices().
 .temporal_source_eligible <- function(time_values, target, resolution) {
   if (is.null(time_values)) return(TRUE)
-  if (length(time_values) == 0L || is.na(target)) return(FALSE)
-
-  available <- .time_comparison_values(time_values, resolution)
-  requested <- .time_comparison_values(target, resolution)
-  !is.na(requested) && any(!is.na(available))
+  !is.na(target) && any(!is.na(time_values))
 }

@@ -696,10 +696,6 @@
   } else {
     NULL
   }
-  if (!is.null(timestamps) && any(!is.na(prepared_time$values))) {
-    .check_time_resolution(timestamps, prepared_time$resolution)
-  }
-
   results <- vector("list", nrow(data))
   horizontal_matches <- .match_horizontal_cells(
     lon_axis, lat_axis, lon, lat,
@@ -774,7 +770,8 @@
         } else {
           .match_time_index(
             timestamps, prepared_time$values[i], time_match,
-            max_time_diff, prepared_time$resolution
+            max_time_diff, prepared_time$resolution,
+            file = basename(opened$nc$filename)
           )
         }
         if (!is.null(time_index) && is.na(time_index)) {
