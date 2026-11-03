@@ -86,6 +86,12 @@ error:
   returns for Excel dates, used to get the previous day on files stamped
   at noon
   ([\#71](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/71)).
+- Files whose time bounds are back to back (one interval ends where the
+  next starts, as in monthly means) no longer print CFtime’s “Offsets
+  not monotonically increasing” warning in point and buffer extraction.
+  Time bounds that don’t contain their time step still stop buffer
+  extraction with an error
+  ([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)).
 
 ### Dependencies
 

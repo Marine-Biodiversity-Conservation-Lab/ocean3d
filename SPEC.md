@@ -723,11 +723,13 @@ of 2 November 2026.
     Non-standard calendars stay unsupported, with a clear error (see
     Direction, Time decoding). Must be done before step 5, because the
     core object’s time axis is a CFtime object.
-5.  **Build the core object** (#113). *Not started.* Sources (files,
-    series, Zarr, in-memory voxels); standard axes built at open,
-    including the axis and longitude fixes from \#93 and \#95; the lazy
-    ncdf4 reader with chunk-aligned block reads. Then the voxel builder
-    (depth in
+5.  **Build the core object** (#113). *In progress:* the first PR
+    decodes time bounds with CFtime’s bounds support (branch
+    `fix-113-time-bounds-cftime`); the core object itself is not
+    started. Sources (files, series, Zarr, in-memory voxels); standard
+    axes built at open, including the axis and longitude fixes from \#93
+    and \#95; the lazy ncdf4 reader with chunk-aligned block reads. Then
+    the voxel builder (depth in
     [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
     with old layer names read on input, CRS always set, float32
     tolerance,
