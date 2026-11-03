@@ -203,8 +203,7 @@
           )) {
           stop("Temporal bounds use different units")
         }
-        decoded <- .decode_netcdf_time(nc, time_dim, as.vector(raw))
-        intervals <- matrix(as.numeric(decoded), nrow = 2L)
+        intervals <- .decode_netcdf_time(nc, time_dim, bounds = raw)
         if (any(intervals[1L, ] > intervals[2L, ])) {
           stop("Temporal bounds are not ordered")
         }

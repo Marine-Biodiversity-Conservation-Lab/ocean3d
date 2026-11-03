@@ -367,11 +367,8 @@
         stop("Time bounds and coordinate use different calendars.",
              call. = FALSE)
       }
-      bounds$values <- matrix(
-        as.numeric(.decode_netcdf_time(
-          nc, coordinate, offsets = as.vector(bounds$values)
-        )),
-        nrow = 2L
+      bounds$values <- .decode_netcdf_time(
+        nc, coordinate, bounds = bounds$values
       )
     }
   }

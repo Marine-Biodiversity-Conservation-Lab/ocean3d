@@ -69,6 +69,11 @@ calls that used to return a value now return `NA` or stop with an error:
   its own UTC day. Midnight date-times, as `readxl::read_excel()` returns
   for Excel dates, used to get the previous day on files stamped at noon
   (#71).
+* Files whose time bounds are back to back (one interval ends where the
+  next starts, as in monthly means) no longer print CFtime's "Offsets not
+  monotonically increasing" warning in point and buffer extraction. Time
+  bounds that don't contain their time step still stop buffer extraction
+  with an error (#113).
 
 ## Dependencies
 

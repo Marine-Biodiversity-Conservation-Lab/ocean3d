@@ -25,7 +25,14 @@
   ), class = "ocean3d_error_calendar", call = NULL)
 }
 
-.decode_netcdf_time <- function(nc, time_dim, offsets = NULL) {
+# Decodes a CF time axis to UTC date-times. With `bounds` (a 2 x n matrix of
+# offsets in the axis units, one column per time step), returns those bounds
+# instead, as a 2 x n matrix of UTC seconds since 1970. CFtime holds the
+# bounds with the axis, so shared edges of back-to-back intervals
+# (0, 31, 31, 60) aren't read as a repeated time axis, which CFtime warns
+# about (#113). Bounds must contain their time step; either edge may come
+# first, and each column keeps its order.
+.decode_netcdf_time <- function(nc, time_dim, bounds = NULL) {
   if (is.null(time_dim)) {
     return(NULL)
   }
@@ -47,13 +54,10 @@
     .read_time_attribute(nc, time_dim, "calendar"), time_dim
   )
 
-  values <- if (is.null(offsets)) {
-    as.vector(.get_dim_values(nc, time_dim))
-  } else {
-    as.vector(offsets)
-  }
+  values <- as.vector(.get_dim_values(nc, time_dim))
+  offsets <- c(values, bounds)
 
-  if (!is.numeric(values) || any(!is.finite(values))) {
+  if (!is.numeric(offsets) || any(!is.finite(offsets))) {
     stop(
       "Time coordinate `", time_dim,
       "` must contain finite numeric offsets.",
@@ -88,7 +92,7 @@
   # Months and years have no fixed length, so a series of them is ambiguous
   # (CF defines a month as 1/12 of a year; producers often mean calendar
   # months). A single step needs no conversion.
-  if (axis$unit %in% c("months", "years") && length(unique(values)) > 1L) {
+  if (axis$unit %in% c("months", "years") && length(unique(offsets)) > 1L) {
     rlang::abort(glue::glue(
       "Unsupported time units for `{time_dim}`: '{units}'.\n",
       "A time axis of several months or years is ambiguous; months, years ",
@@ -96,7 +100,35 @@
     ), class = "ocean3d_error_time_units", call = NULL)
   }
 
-  axis$as_timestamp(asPOSIX = TRUE)
+  if (is.null(bounds)) return(axis$as_timestamp(asPOSIX = TRUE))
+
+  # CFtime only warns about bounds it can't use, and then drops them.
+  reversed <- bounds[1L, ] > bounds[2L, ]
+  withCallingHandlers(
+    axis$set_bounds(rbind(
+      pmin(bounds[1L, ], bounds[2L, ]), pmax(bounds[1L, ], bounds[2L, ])
+    )),
+    warning = function(w) {
+      rlang::abort(glue::glue(
+        "Invalid bounds for `{time_dim}`: each interval must contain its ",
+        "time step ({conditionMessage(w)})."
+      ), class = "ocean3d_error_time_bounds", call = NULL)
+    }
+  )
+
+  # Bounds come back only as text: dates, or date-times with seconds that
+  # may have a fraction.
+  stamps <- axis$get_bounds(format = "timestamp")
+  format <- if (any(grepl("T", stamps, fixed = TRUE))) {
+    "%Y-%m-%dT%H:%M:%OS"
+  } else {
+    "%Y-%m-%d"
+  }
+  seconds <- matrix(
+    as.numeric(as.POSIXct(strptime(stamps, format, tz = "UTC"))), nrow = 2L
+  )
+  seconds[, reversed] <- seconds[2:1, reversed]
+  seconds
 }
 
 .prepare_time_input <- function(
