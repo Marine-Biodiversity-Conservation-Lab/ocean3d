@@ -112,7 +112,9 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #'   and any other columns from the input. Empty for polygons.
 #' @slot features Polygons: a data frame with one row per polygon:
 #'   `feature_id`, `depth_min`, `depth_max`, `time_start` and `time_end`
-#'   (POSIXct, UTC, or `NA` when the polygons have no time), `geometry` (an
+#'   (POSIXct, UTC, or `NA` when the polygons have no time; with
+#'   `time_resolution` `"daily"`, the interval includes all of the end
+#'   day), `geometry` (an
 #'   sf geometry column of POLYGON or MULTIPOLYGON, EPSG:4326), and any other
 #'   columns from the input. Empty for points and lines.
 #' @slot time_resolution `"daily"` or `"datetime"` for the precision of the

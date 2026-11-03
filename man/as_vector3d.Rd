@@ -34,8 +34,10 @@ downward. Not used for sf lines, whose depth is minus the Z coordinate
 or text, read as in \code{\link[=extract_to_point]{extract_to_point()}}. For sf lines, the M coordinate
 in seconds since 1970-01-01 UTC, if present. For polygons, one column
 (each polygon at a single time) or two (the start and end of each
-polygon's time interval); with dates, the interval runs from the start
-of the first day to the start of the last.}
+polygon's time interval). With dates, the interval covers whole UTC
+days, including the last: 1 to 15 February includes all of 15 February.
+The dates are stored as given, at midnight UTC, with \code{time_resolution}
+\code{"daily"}. With hours, the start and end are exact times.}
 
 \item{id}{Column with feature IDs. Required for lines from a table; for
 points and polygons, each row is a feature and IDs default to the row

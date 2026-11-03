@@ -62,7 +62,9 @@ and any other columns from the input. Empty for polygons.}
 
 \item{\code{features}}{Polygons: a data frame with one row per polygon:
 \code{feature_id}, \code{depth_min}, \code{depth_max}, \code{time_start} and \code{time_end}
-(POSIXct, UTC, or \code{NA} when the polygons have no time), \code{geometry} (an
+(POSIXct, UTC, or \code{NA} when the polygons have no time; with
+\code{time_resolution} \code{"daily"}, the interval includes all of the end
+day), \code{geometry} (an
 sf geometry column of POLYGON or MULTIPOLYGON, EPSG:4326), and any other
 columns from the input. Empty for points and lines.}
 
