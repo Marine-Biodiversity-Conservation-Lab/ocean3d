@@ -717,11 +717,12 @@ of 2 November 2026.
 4.  **Replace the internal CF time decoding with CFtime and fix time
     matching** (#111), with the time tests from \#71–#75 as reference
     behaviour, fixing \#88–#92. The time helpers move out of
-    `R/extract_to_points.R` into `R/netcdf-time.R`. *In progress:* the
-    decoder (#88, \#90, \#92) comes first; matching (#89, \#91) follows
-    after it merges. Non-standard calendars stay unsupported, with a
-    clear error (see Direction, Time decoding). Must be done before step
-    5, because the core object’s time axis is a CFtime object.
+    `R/extract_to_points.R` into `R/netcdf-time.R`. *Done:* the decoder
+    (#88, \#90, \#92) in \#121, then matching (#89, \#91 and the
+    midnight case of \#71) on branch `fix-111-time-matching`.
+    Non-standard calendars stay unsupported, with a clear error (see
+    Direction, Time decoding). Must be done before step 5, because the
+    core object’s time axis is a CFtime object.
 5.  **Build the core object** (#113). *Not started.* Sources (files,
     series, Zarr, in-memory voxels); standard axes built at open,
     including the axis and longitude fixes from \#93 and \#95; the lazy

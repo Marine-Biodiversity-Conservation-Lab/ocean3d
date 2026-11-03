@@ -554,7 +554,8 @@ mean.
 
 extract3d_nearest(one, nc_file, var = "thetao", time_resolution = "monthly")
 #> Error:
-#> ! Multiple dataset timestamps map to the same 'monthly' comparison value. Selecting the first would discard information. Use a finer time_resolution, select the intended records, or aggregate the data explicitly before extraction.
+#> ! Multiple dataset timestamps map to the same 'monthly' comparison value: 2026-09-01 00:00:00 UTC appears 3 times in temperature-points.nc.
+#> Selecting the first would discard information. Use a finer time_resolution, select the intended records, or aggregate the data explicitly before extraction.
 ```
 
 The yearly mode applies the same ambiguity rule. For actual summaries
