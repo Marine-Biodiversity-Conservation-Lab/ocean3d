@@ -104,6 +104,9 @@ be passed to `extract_to_area()` or `volume()`. To use a netCDF file with the
 voxel functions, load it as a `SpatRaster` (e.g. with `woa_load_nc()`) and
 wrap it with `as_voxel()`. Merging the two into one model with time is
 planned in [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
+Its first, experimental piece is `as_proxy()`, which describes one variable
+of a netCDF file as a `SpatProxy` without reading its values. No other
+function accepts a `SpatProxy` yet.
 
 ### Build: 3D objects
 

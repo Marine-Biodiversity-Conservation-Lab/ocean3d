@@ -2,6 +2,7 @@
 
 S3method(base::as.data.frame,SpatVector3D)
 export(as_envelope)
+export(as_proxy)
 export(as_vector3d)
 export(as_voxel)
 export(calc_volume_overlap)
@@ -34,6 +35,7 @@ export(woa_cache_dir)
 export(woa_download)
 export(woa_load_nc)
 exportClasses(SpatEnvelope)
+exportClasses(SpatProxy)
 exportClasses(SpatVector3D)
 exportClasses(SpatVolume)
 exportClasses(SpatVoxel)
@@ -56,6 +58,7 @@ importFrom(methods,
   setClassUnion,
   setGeneric,
   setMethod,
+  setOldClass,
   setValidity,
   show,
   validObject
