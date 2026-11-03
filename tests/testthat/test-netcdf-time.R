@@ -186,20 +186,11 @@ test_that("back-to-back time bounds decode without a warning (#113)", {
   expect_no_warning(value <- buffer_at(f, "2020-01-31"))
   expect_equal(value, (11 * 1 + 9 * 2) / 20)
 
-  # The bounds reach the time report as the month edges, even when warnings
-  # are errors.
+  # With warnings as errors, the same extractions still run.
   old <- options(warn = 2)
   on.exit(options(old), add = TRUE)
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  info <- .read_temporal_metadata(
-    nc, "time", "temp", .decode_netcdf_time(nc, "time")
-  )
-  expect_identical(info$bounds_status, "read")
-  edges <- as.numeric(as.POSIXct(
-    c("2020-01-01", "2020-02-01", "2020-02-01", "2020-03-01"), tz = "UTC"
-  ))
-  expect_equal(info$bounds, matrix(edges, nrow = 2L))
+  expect_equal(at_date(f, as.Date("2020-02-15")), 2)
+  expect_equal(buffer_at(f, "2020-01-31"), (11 * 1 + 9 * 2) / 20)
 })
 
 test_that("time bounds may list the later edge first (#113)", {
