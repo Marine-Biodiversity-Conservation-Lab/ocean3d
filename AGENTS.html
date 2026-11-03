@@ -88,7 +88,11 @@
 </ul></div>
 <div class="section level2">
 <h2 id="tests">Tests<a class="anchor" aria-label="anchor" href="#tests"></a></h2>
-<ul><li>Test behaviour through the exported functions, on synthetic data (no external files, keys or network).</li>
+<ul><li>Test through code that will last, so tests don’t need rewriting when other code is retired. Use synthetic data (no external files, keys or network).
+<ul><li>Test exported functions that are staying, such as the build, intersect and summarise steps and the constructors (<code><a href="reference/as_voxel.html">as_voxel()</a></code>, <code><a href="reference/as_envelope.html">as_envelope()</a></code>), through their exported interface.</li>
+<li>Test the shared internals the core object will reuse (#113) directly: time decoding and matching, the netCDF readers and similar helpers. Tests through the combined extraction functions (<code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, <code><a href="reference/extract2d.html">extract2d()</a></code> and the like) would need rewriting if those functions are retired (#116).</li>
+<li>Don’t flag a direct test of one of these helpers as a convention breach.</li>
+</ul></li>
 <li>Check conditions with <code>expect_error()</code> / <code>expect_warning()</code> using <code>class =</code>, plus <code>expect_match()</code> on the parts of the message that matter.</li>
 <li>Use <code>skip_if_not_installed()</code> only for packages in <code>Suggests</code> (e.g. lwgeom). Packages in <code>Imports</code>, such as ncdf4, are always installed, so a skip for them never triggers and only adds noise.</li>
 </ul></div>
