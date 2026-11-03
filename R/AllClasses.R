@@ -84,19 +84,80 @@ setClass("SpatVoxel", contains = "SpatRaster")
 #' @export
 setClass("SpatEnvelope", contains = "SpatRaster")
 
+#' 3D points and lines with depth and time
+#'
+#' A `SpatVector3D` holds features of one geometry type, reported by
+#' [geomtype()]: `"points"` (a detection at 35 m) or `"lines"` (a dive track
+#' or a vessel route). Each vertex has a longitude and latitude (WGS84), a
+#' depth in positive metres downward, and optionally a time (UTC). Build one
+#' with [as_vector3d()].
+#'
+#' It is the vector counterpart of [SpatVoxel-class] and [SpatEnvelope-class].
+#' It is not built on `terra::SpatVector` or sf: those keep attributes per
+#' feature, so a line's depth and time at each vertex would not survive their
+#' operations.
+#'
+#' @slot type `"points"` or `"lines"`.
+#' @slot vertices A data frame with one row per vertex: `feature_id`, `vertex`
+#'   (the order within the feature), `lon`, `lat`, `depth`, `time` (POSIXct,
+#'   UTC, or `NA` when the features have no time), and any other columns from
+#'   the input.
+#' @slot time_resolution `"daily"` or `"datetime"` for the precision of the
+#'   times, as for [extract_to_point()], or `NA` when there is no time.
+#'
+#' @seealso [as_vector3d()], [geomtype()]
+#' @examples
+#' obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35))
+#' pts <- as_vector3d(obs)
+#' geomtype(pts)
+#' pts
+#' @export
+setClass("SpatVector3D", slots = c(
+  type = "character",
+  vertices = "data.frame",
+  time_resolution = "character"
+))
+
+setValidity("SpatVector3D", function(object) {
+  v <- object@vertices
+  if (length(object@type) != 1L || !object@type %in% c("points", "lines")) {
+    return("type must be \"points\" or \"lines\"")
+  }
+  needed <- c("feature_id", "vertex", "lon", "lat", "depth", "time")
+  if (!all(needed %in% names(v))) {
+    return(paste("vertices must have columns", toString(needed)))
+  }
+  if (any(!is.finite(v$lon)) || any(!is.finite(v$lat)) ||
+        any(abs(v$lat) > 90)) {
+    return(paste("longitudes and latitudes must be finite,",
+                 "latitudes within [-90, 90]"))
+  }
+  if (any(!is.finite(v$depth))) return("every vertex needs a depth")
+  if (any(v$depth < 0)) return("depths are positive metres increasing downward")
+  if (!inherits(v$time, "POSIXct")) return("time must be POSIXct (UTC)")
+  if (object@type == "lines" && any(table(v$feature_id) < 2L)) {
+    return("each line needs at least two vertices")
+  }
+  TRUE
+})
+
 #' Union of the package's 3D domain representations
 #'
-#' `SpatVolume` is a class union over [SpatVoxel-class] and
-#' [SpatEnvelope-class]. It exists as a dispatch target for operations that are
-#' meaningful on either representation because both determine a **3D domain
-#' over a 2D grid**: volume, volumetric overlap, vertical extent, printing.
+#' `SpatVolume` is a class union over [SpatVoxel-class],
+#' [SpatEnvelope-class] and [SpatVector3D-class]. It exists as a dispatch
+#' target for operations that are meaningful on any 3D representation, such
+#' as volume, volumetric overlap and vertical extent. Only shapes with a
+#' depth range have volume: voxels, envelopes and (later) polygons, not
+#' points or lines.
 #'
-#' It deliberately asserts no shared structure. The two members store depth in
-#' dual roles (layer index vs. cell value), so any operation that touches the
-#' depth axis directly should dispatch on the concrete class instead.
+#' It deliberately asserts no shared structure. The raster members store depth
+#' in dual roles (layer index vs. cell value), and `SpatVector3D` stores it per
+#' vertex, so any operation that touches the depth axis directly should
+#' dispatch on the concrete class instead.
 #'
-#' @seealso [SpatVoxel-class] and [SpatEnvelope-class], the two members;
-#'   [envelope_to_voxel()] and [voxel_to_envelope()] convert between them.
+#' @seealso [SpatVoxel-class], [SpatEnvelope-class] and [SpatVector3D-class],
+#'   the members; [envelope_to_voxel()] and [voxel_to_envelope()] convert
+#'   between the raster members.
 #'
 #' @examples
 #' # The same 3D domain in both representations.
@@ -123,7 +184,7 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #' names(e)
 #' names(v)
 #' @export
-setClassUnion("SpatVolume", c("SpatVoxel", "SpatEnvelope"))
+setClassUnion("SpatVolume", c("SpatVoxel", "SpatEnvelope", "SpatVector3D"))
 
 setValidity("SpatVoxel", function(object) {
   d <- .parse_depth_layers(object, error = FALSE)

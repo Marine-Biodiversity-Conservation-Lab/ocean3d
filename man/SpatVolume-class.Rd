@@ -5,15 +5,18 @@
 \alias{SpatVolume-class}
 \title{Union of the package's 3D domain representations}
 \description{
-\code{SpatVolume} is a class union over \link[=SpatVoxel-class]{SpatVoxel} and
-\link[=SpatEnvelope-class]{SpatEnvelope}. It exists as a dispatch target for operations that are
-meaningful on either representation because both determine a \strong{3D domain
-over a 2D grid}: volume, volumetric overlap, vertical extent, printing.
+\code{SpatVolume} is a class union over \link[=SpatVoxel-class]{SpatVoxel},
+\link[=SpatEnvelope-class]{SpatEnvelope} and \link[=SpatVector3D-class]{SpatVector3D}. It exists as a dispatch
+target for operations that are meaningful on any 3D representation, such
+as volume, volumetric overlap and vertical extent. Only shapes with a
+depth range have volume: voxels, envelopes and (later) polygons, not
+points or lines.
 }
 \details{
-It deliberately asserts no shared structure. The two members store depth in
-dual roles (layer index vs. cell value), so any operation that touches the
-depth axis directly should dispatch on the concrete class instead.
+It deliberately asserts no shared structure. The raster members store depth
+in dual roles (layer index vs. cell value), and \code{SpatVector3D} stores it per
+vertex, so any operation that touches the depth axis directly should
+dispatch on the concrete class instead.
 }
 \examples{
 # The same 3D domain in both representations.
@@ -41,6 +44,7 @@ names(e)
 names(v)
 }
 \seealso{
-\link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatEnvelope-class]{SpatEnvelope}, the two members;
-\code{\link[=envelope_to_voxel]{envelope_to_voxel()}} and \code{\link[=voxel_to_envelope]{voxel_to_envelope()}} convert between them.
+\link[=SpatVoxel-class]{SpatVoxel}, \link[=SpatEnvelope-class]{SpatEnvelope} and \link[=SpatVector3D-class]{SpatVector3D},
+the members; \code{\link[=envelope_to_voxel]{envelope_to_voxel()}} and \code{\link[=voxel_to_envelope]{voxel_to_envelope()}} convert
+between the raster members.
 }
