@@ -334,23 +334,7 @@
     direction_basis <- depth$direction_basis
 
     if (!is.null(bounds)) {
-      positive <- .read_time_attribute(nc, coordinate, "positive")
-      if (is.null(positive)) {
-        positive <- if (all(raw >= 0)) "down" else "up"
-      }
-      bounds_positive <- .read_time_attribute(nc, bounds$name, "positive")
-      if (!is.null(bounds_positive) &&
-            !identical(tolower(trimws(bounds_positive)),
-                       tolower(trimws(positive)))) {
-        stop("Depth bounds and coordinate have conflicting directions.",
-             call. = FALSE)
-      }
-      # Unique endpoints avoid treating shared edges as duplicate depths.
-      endpoints <- unique(as.vector(bounds$values))
-      converted <- .prepare_depth_axis(endpoints, units, positive)$depth_m
-      bounds$values <- matrix(
-        converted[match(as.vector(bounds$values), endpoints)], nrow = 2L
-      )
+      bounds$values <- .depth_bounds_m(nc, coordinate, raw, bounds)
     }
   } else {
     if (!is.null(.read_time_attribute(nc, coordinate, "climatology"))) {
