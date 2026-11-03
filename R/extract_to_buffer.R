@@ -264,17 +264,9 @@
            "`. Supply explicit bounds; one centre has no known extent.",
            call. = FALSE)
     }
-    index <- order(centres)
-    sorted <- centres[index]
-    gaps <- diff(sorted)
-    edges <- c(
-      sorted[1L] - gaps[1L] / 2,
-      head(sorted, -1L) + gaps / 2,
-      tail(sorted, 1L) + tail(gaps, 1L) / 2
-    )
-    lower <- upper <- numeric(length(centres))
-    lower[index] <- head(edges, -1L)
-    upper[index] <- tail(edges, -1L)
+    edges <- .midpoint_edges(centres)
+    lower <- edges$lower
+    upper <- edges$upper
     if (axis == "depth") {
       clipped_at_surface <- lower < 0
       lower <- pmax(lower, 0)
@@ -334,23 +326,7 @@
     direction_basis <- depth$direction_basis
 
     if (!is.null(bounds)) {
-      positive <- .read_time_attribute(nc, coordinate, "positive")
-      if (is.null(positive)) {
-        positive <- if (all(raw >= 0)) "down" else "up"
-      }
-      bounds_positive <- .read_time_attribute(nc, bounds$name, "positive")
-      if (!is.null(bounds_positive) &&
-            !identical(tolower(trimws(bounds_positive)),
-                       tolower(trimws(positive)))) {
-        stop("Depth bounds and coordinate have conflicting directions.",
-             call. = FALSE)
-      }
-      # Unique endpoints avoid treating shared edges as duplicate depths.
-      endpoints <- unique(as.vector(bounds$values))
-      converted <- .prepare_depth_axis(endpoints, units, positive)$depth_m
-      bounds$values <- matrix(
-        converted[match(as.vector(bounds$values), endpoints)], nrow = 2L
-      )
+      bounds$values <- .depth_bounds_m(nc, coordinate, raw, bounds)
     }
   } else {
     if (!is.null(.read_time_attribute(nc, coordinate, "climatology"))) {

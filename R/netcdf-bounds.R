@@ -1,7 +1,29 @@
 # CF cell bounds: the bounds variable named by a coordinate's `bounds`
 # attribute is read and checked against the coordinate (shape, finite values,
 # matching units). Used for longitude and latitude edges in point extraction
-# and for the cell edges buffer extraction weights by.
+# and for the cell edges buffer extraction weights by. Without bounds, edges
+# are inferred halfway between neighbouring centres.
+
+# Cell edges halfway between neighbouring centres, with the outer edges half
+# a step beyond the end centres. `centres` (at least two) may be in any
+# order; `lower` and `upper` keep that order. `regular` is TRUE when the
+# steps are equal. Shared by the longitude and latitude axes, buffer
+# extraction's depth and time intervals, and the core object's depth axis.
+.midpoint_edges <- function(centres) {
+  index <- order(centres)
+  sorted <- centres[index]
+  gaps <- diff(sorted)
+  edges <- c(
+    sorted[1L] - gaps[1L] / 2,
+    head(sorted, -1L) + gaps / 2,
+    tail(sorted, 1L) + tail(gaps, 1L) / 2
+  )
+  lower <- upper <- numeric(length(centres))
+  lower[index] <- head(edges, -1L)
+  upper[index] <- tail(edges, -1L)
+  regular <- all(abs(gaps - gaps[1L]) <= max(1e-8, gaps[1L] * 1e-8))
+  list(lower = lower, upper = upper, regular = regular)
+}
 
 # Units can be spelled differently and still mean the same thing: angles
 # (degrees_east, degree_east, degrees_E, ...) and lengths (m, metres, ...).
