@@ -92,15 +92,7 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     stringsAsFactors = FALSE
   )
   extra <- table[setdiff(names(table), c(lon, lat, depth, time, id))]
-  clash <- intersect(names(extra), names(vertices))
-  if (length(clash)) {
-    .abort_vector3d(glue::glue(
-      "Column names {toString(clash)} are used by SpatVector3D. Pass the ",
-      "column as an argument if that is what it holds (for example ",
-      "`time = \"time\"` or `id = \"feature_id\"`), or rename it."
-    ))
-  }
-  vertices <- cbind(vertices, extra)
+  vertices <- .add_vertex_attributes(vertices, extra)
   # Features in order of first appearance, vertices in row order.
   vertices <- vertices[order(match(feature_id, unique(feature_id)),
                              vertices$vertex), , drop = FALSE]
@@ -159,11 +151,25 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     time = .POSIXct(if (has_time) coords[, "M"] else NA_real_, tz = "UTC"),
     stringsAsFactors = FALSE
   )
-  extra <- attributes[setdiff(names(attributes), c(id, names(vertices)))]
-  vertices <- cbind(vertices, extra[row, , drop = FALSE])
+  extra <- attributes[setdiff(names(attributes), id)]
+  vertices <- .add_vertex_attributes(vertices, extra[row, , drop = FALSE])
   rownames(vertices) <- NULL
   .new_vector3d("lines", vertices,
                 if (has_time) "datetime" else NA_character_)
+}
+
+# Adds the input's other columns to the vertex table, one value per vertex.
+# A column named like a vertex-table column would be lost, so it stops.
+.add_vertex_attributes <- function(vertices, extra) {
+  clash <- intersect(names(extra), names(vertices))
+  if (length(clash)) {
+    .abort_vector3d(glue::glue(
+      "Column names {toString(clash)} are used by SpatVector3D. Rename ",
+      "them, or for a table, pass the column as an argument if that is what ",
+      "it holds (for example `time = \"time\"` or `id = \"feature_id\"`)."
+    ))
+  }
+  cbind(vertices, extra)
 }
 
 # The class's validity rules are the only checks; this reports a failure as

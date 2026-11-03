@@ -168,6 +168,14 @@ test_that("sf lines with empty geometries are rejected, not dropped", {
                class = "ocean3d_error_vector3d", fixed = TRUE)
 })
 
+test_that("sf line attributes named like vertex columns stop, not vanish", {
+  s <- dive_sf()
+  s$time <- as.Date(c("2020-01-01", "2020-01-02"))
+  expect_error(as_vector3d(s, id = "tag"),
+               "Column names time are used by SpatVector3D",
+               class = "ocean3d_error_vector3d", fixed = TRUE)
+})
+
 test_that("points and lines have no volume but are 3D shapes", {
   tr <- as_vector3d(dive(), type = "lines", id = "tag")
   expect_true(methods::is(tr, "SpatVolume"))
