@@ -246,6 +246,25 @@ test_that("one time column gives each polygon a single time", {
                as.POSIXct(c("2020-01-01", "2020-02-01"), tz = "UTC"))
 })
 
+test_that("polygon start and end times keep their hours and one resolution", {
+  a <- areas()
+  a$from <- as.POSIXct(c("2020-01-01 06:00", "2020-02-01 18:30"), tz = "UTC")
+  a$to <- as.POSIXct(c("2020-01-01 09:15", "2020-02-02 00:00"), tz = "UTC")
+  p <- as_vector3d(a, depth_min = 0, depth_max = 50, time = c("from", "to"))
+  f <- as.data.frame(p)
+  expect_equal(f$time_start, a$from)
+  expect_equal(f$time_end, a$to)
+  expect_identical(p@time_resolution, "datetime")
+
+  # A Date start with a POSIXct end would otherwise lose the end's hours.
+  a$from <- as.Date(c("2020-01-01", "2020-02-01"))
+  expect_error(
+    as_vector3d(a, depth_min = 0, depth_max = 50, time = c("from", "to")),
+    "`from` and `to` must both be dates or both have hours",
+    class = "ocean3d_error_vector3d", fixed = TRUE
+  )
+})
+
 test_that("polygons come from SpatVector, MULTIPOLYGON and other CRSs", {
   from_sf <- as.data.frame(as_vector3d(areas(), depth_min = 0,
                                        depth_max = 50))

@@ -198,14 +198,22 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     start <- end <- .POSIXct(rep(NA_real_, n), tz = "UTC")
     resolution <- NA_character_
   } else {
-    # Start and end are read together, so they share one resolution.
-    prepared <- .prepare_time_input(
-      c(table[[time[1L]]], table[[time[length(time)]]]), "auto",
-      input_name = toString(glue::glue("`x${unique(time)}`"))
-    )
-    start <- prepared$values[seq_len(n)]
-    end <- prepared$values[n + seq_len(n)]
-    resolution <- prepared$resolution
+    # Each column is read on its own: c() on a Date and a POSIXct column
+    # would convert the second to the first's class and lose its hours.
+    prepared <- lapply(unique(time), function(column) {
+      .prepare_time_input(table[[column]], "auto",
+                          input_name = glue::glue("`x${column}`"))
+    })
+    resolution <- unique(vapply(prepared, `[[`, "", "resolution"))
+    if (length(resolution) > 1L) {
+      .abort_vector3d(glue::glue(
+        "`{time[1L]}` and `{time[2L]}` must both be dates or both have ",
+        "hours, so the interval has one resolution. Convert one of them ",
+        "first, for example with as.Date() or as.POSIXct()."
+      ))
+    }
+    start <- prepared[[1L]]$values
+    end <- prepared[[length(prepared)]]$values
   }
 
   features <- data.frame(
