@@ -13,6 +13,9 @@ extent differently:
 ``` r
 volume(x, ...)
 
+# S4 method for class 'SpatVector3D'
+volume(x, ...)
+
 # S4 method for class 'SpatEnvelope'
 volume(x, ...)
 

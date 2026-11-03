@@ -57,6 +57,7 @@
 <h3 id="new-features-development-version">New features<a class="anchor" aria-label="anchor" href="#new-features-development-version"></a></h3>
 <ul><li>New arguments <code>spatial_match</code>, <code>max_distance_km</code>, <code>spatial_report</code> and <code>depth_report</code>. Longitudes match across the 0-360 and -180-180 conventions and across the antimeridian.</li>
 <li>Missing outputs are explained once, under the report for their cause (spatial, depth or time), with repeated reasons grouped by file. The time report now also explains outputs that are missing because no observation date was supplied for a file with a time dimension.</li>
+<li>New class <code>SpatVector3D</code> for 3D points and lines, with a depth (positive metres down) and an optional time at each vertex, built with <code><a href="../reference/as_vector3d.html">as_vector3d()</a></code> from a table or sf object (for sf lines, depth is minus Z and time is M). <code><a href="https://rspatial.github.io/terra/reference/geomtype.html" class="external-link">geomtype()</a></code> reports the type. Polygons follow in a later version (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114" class="external-link">#114</a>).</li>
 </ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>

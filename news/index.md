@@ -45,6 +45,14 @@ error:
   (spatial, depth or time), with repeated reasons grouped by file. The
   time report now also explains outputs that are missing because no
   observation date was supplied for a file with a time dimension.
+- New class `SpatVector3D` for 3D points and lines, with a depth
+  (positive metres down) and an optional time at each vertex, built with
+  [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
+  from a table or sf object (for sf lines, depth is minus Z and time is
+  M).
+  [`geomtype()`](https://rspatial.github.io/terra/reference/geomtype.html)
+  reports the type. Polygons follow in a later version
+  ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
 
 ### Bug fixes
 

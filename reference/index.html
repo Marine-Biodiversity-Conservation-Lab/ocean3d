@@ -45,7 +45,7 @@
     <div class="section level2">
       <h2 id="-d-classes">3D classes<a class="anchor" aria-label="anchor" href="#-d-classes"></a></h2>
 
-      <div class="section-desc"><p>Raster-based 3D objects. A <code>SpatVoxel</code> holds values by depth level; a <code>SpatEnvelope</code> holds a depth range per cell.</p></div>
+      <div class="section-desc"><p>3D objects. A <code>SpatVoxel</code> holds values by depth level; a <code>SpatEnvelope</code> holds a depth range per cell; a <code>SpatVector3D</code> holds points or lines with a depth and time at each vertex.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -65,6 +65,13 @@
 
         </dt>
         <dd>2.5D min-max envelope: exactly depth_min, depth_max</dd>
+
+        <dt>
+
+          <code><a href="SpatVector3D-class.html">geomtype(<i>&lt;SpatVector3D&gt;</i>)</a></code> <code><a href="SpatVector3D-class.html">length(<i>&lt;SpatVector3D&gt;</i>)</a></code> <code><a href="SpatVector3D-class.html">show(<i>&lt;SpatVector3D&gt;</i>)</a></code> <code><a href="SpatVector3D-class.html">as.data.frame(<i>&lt;SpatVector3D&gt;</i>)</a></code>
+
+        </dt>
+        <dd>3D points and lines with depth and time</dd>
 
         <dt>
 
@@ -102,6 +109,13 @@
 
         </dt>
         <dd>Coerce a 2D footprint to a 2.5D min-max envelope</dd>
+
+        <dt>
+
+          <code><a href="as_vector3d.html">as_vector3d()</a></code>
+
+        </dt>
+        <dd>Build 3D points or lines</dd>
 
         <dt>
 

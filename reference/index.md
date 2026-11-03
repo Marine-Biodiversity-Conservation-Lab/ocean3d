@@ -2,13 +2,19 @@
 
 ## 3D classes
 
-Raster-based 3D objects. A `SpatVoxel` holds values by depth level; a
-`SpatEnvelope` holds a depth range per cell.
+3D objects. A `SpatVoxel` holds values by depth level; a `SpatEnvelope`
+holds a depth range per cell; a `SpatVector3D` holds points or lines
+with a depth and time at each vertex.
 
 - [`SpatVoxel-class`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
   : 3D voxel model: one layer per standard depth level
 - [`SpatEnvelope-class`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   : 2.5D min-max envelope: exactly depth_min, depth_max
+- [`geomtype(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  [`length(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  [`show(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  [`as.data.frame(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  : 3D points and lines with depth and time
 - [`SpatVolume-class`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVolume-class.md)
   : Union of the package's 3D domain representations
 - [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
@@ -22,6 +28,8 @@ Turn inputs into 3D objects, and convert between them.
   : Create a voxel object
 - [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)
   : Coerce a 2D footprint to a 2.5D min-max envelope
+- [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
+  : Build 3D points or lines
 - [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
   : Convert SpatVector or sf to SpatEnvelope
 - [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)

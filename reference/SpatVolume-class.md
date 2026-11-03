@@ -1,30 +1,33 @@
 # Union of the package's 3D domain representations
 
 `SpatVolume` is a class union over
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 and
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md).
-It exists as a dispatch target for operations that are meaningful on
-either representation because both determine a **3D domain over a 2D
-grid**: volume, volumetric overlap, vertical extent, printing.
+[SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md).
+It exists as a dispatch target for operations that are meaningful on any
+3D representation, such as volume, volumetric overlap and vertical
+extent. Only shapes with a depth range have volume: voxels, envelopes
+and (later) polygons, not points or lines.
 
 ## Details
 
-It deliberately asserts no shared structure. The two members store depth
-in dual roles (layer index vs. cell value), so any operation that
-touches the depth axis directly should dispatch on the concrete class
-instead.
+It deliberately asserts no shared structure. The raster members store
+depth in dual roles (layer index vs. cell value), and `SpatVector3D`
+stores it per vertex, so any operation that touches the depth axis
+directly should dispatch on the concrete class instead.
 
 ## See also
 
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 and
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
-the two members;
+[SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md),
+the members;
 [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 and
 [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
-convert between them.
+convert between the raster members.
 
 ## Examples
 
