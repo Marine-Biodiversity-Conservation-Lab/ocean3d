@@ -10,6 +10,8 @@ dive <- function() {
   )
 }
 
+vertex_cols <- c("feature_id", "vertex", "lon", "lat", "depth", "time")
+
 test_that("points keep one depth, time and attributes per point", {
   obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35),
                     date = as.Date(c("2020-01-01", "2020-01-02")),
@@ -69,6 +71,34 @@ test_that("invalid vertices are rejected with a clear error", {
   )
   expect_error(as_vector3d(transform(obs, time = Sys.time())),
                "time = \"time\"", fixed = TRUE)
+})
+
+test_that("lines and points round-trip through sf with depth as minus Z", {
+  tr <- as_vector3d(dive(), type = "lines", id = "tag", time = "when")
+  s <- sf::st_as_sf(tr)
+  expect_identical(as.character(unique(sf::st_geometry_type(s))), "LINESTRING")
+  expect_equal(sf::st_coordinates(s)[, "Z"], -dive()$depth)
+
+  back <- as_vector3d(s, id = "feature_id")
+  expect_equal(as.data.frame(back)[vertex_cols],
+               as.data.frame(tr)[vertex_cols])
+
+  obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35))
+  p <- as_vector3d(obs)
+  sp <- sf::st_as_sf(p)
+  expect_equal(sf::st_coordinates(sp)[, "Z"], -obs$depth)
+  back_points <- as_vector3d(sp, id = "feature_id")
+  expect_equal(as.data.frame(back_points)[c("lon", "lat", "depth")],
+               as.data.frame(p)[c("lon", "lat", "depth")])
+})
+
+test_that("sf lines without Z coordinates need a depth", {
+  flat <- sf::st_sf(geometry = sf::st_sfc(
+    sf::st_linestring(matrix(c(150, -20, 151, -21), ncol = 2, byrow = TRUE)),
+    crs = 4326
+  ))
+  expect_error(as_vector3d(flat), "Z coordinates",
+               class = "ocean3d_error_vector3d")
 })
 
 test_that("points and lines have no volume but are 3D shapes", {

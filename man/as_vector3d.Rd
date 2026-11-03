@@ -16,17 +16,20 @@ as_vector3d(
 }
 \arguments{
 \item{x}{A data frame (or tibble, matrix, named list) with one row per
-vertex, or an sf object with POINT geometries, which take their depth
-and time from columns.}
+vertex, or an sf object. sf points take their depth and time from
+columns; sf lines take them from the Z and M coordinates.}
 
 \item{type}{\code{"points"} (default) or \code{"lines"}, for tables and sf points.
-With \code{"lines"}, the rows that share an \code{id} form one line, in row order.}
+With \code{"lines"}, the rows that share an \code{id} form one line, in row order.
+sf lines are always lines.}
 
 \item{depth}{Column with the depth of each vertex, in positive metres
-downward.}
+downward. Not used for sf lines, whose depth is minus the Z coordinate
+(Z is height, as in other GIS tools).}
 
 \item{time}{Optional column with the time of each vertex: \code{Date}, \code{POSIXct}
-or text, read as in \code{\link[=extract_to_point]{extract_to_point()}}.}
+or text, read as in \code{\link[=extract_to_point]{extract_to_point()}}. For sf lines, the M coordinate
+in seconds since 1970-01-01 UTC, if present.}
 
 \item{id}{Column with feature IDs. Required for lines from a table; for
 points, each row is a feature and IDs default to the row numbers.}
@@ -39,7 +42,7 @@ time and ID are kept with each vertex.
 }
 \description{
 Builds a \link[=SpatVector3D-class]{SpatVector3D} from a table with one row per vertex, or from
-an sf object with POINT geometries.
+an sf object with POINT or LINESTRING geometries.
 }
 \examples{
 obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35),
@@ -50,7 +53,8 @@ dive <- data.frame(tag = "A", lon = c(150, 150.1, 150.2),
                    lat = -20, depth = c(0, 120, 15))
 track <- as_vector3d(dive, type = "lines", id = "tag")
 geomtype(track)
+sf::st_as_sf(track)
 }
 \seealso{
-\code{\link[terra:geomtype]{geomtype()}}
+\code{\link[terra:geomtype]{geomtype()}}, \code{sf::st_as_sf()} for converting back.
 }
