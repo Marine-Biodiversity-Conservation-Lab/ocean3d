@@ -46,9 +46,9 @@ intersect with one another.
   ncdf4 and CFtime, terra for slices in memory, and stars only for
   remote Zarr (agreed in \#112; trial in
   [`dev/data-model-trial.md`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/dev/data-model-trial.md)).
-- **Planned:** one vector class, `SpatVector3D`, holding points, lines
-  and polygons with depth.
-- **Planned:** CFtime for time decoding.
+- **In progress (#114):** one vector class, `SpatVector3D`, holding
+  points, lines and polygons with depth.
+- **Done (#111):** CFtime decodes time on the standard calendars.
 
 ## Package design: build, intersect, summarise
 
@@ -710,15 +710,15 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 #### Order of work
 
 Each step has its own issue, and each PR branches off `main`. Status as
-of 2 November 2026.
+of 3 November 2026.
 
 1.  **Document the current split:** which functions take netCDF and
     which take `SpatVoxel` (README function overview and each function’s
     `@param`) (#109). *Done (#118, merged 2 November 2026).* Ran in
     parallel with step 2.
 2.  **Trial stars, ncdfCF and terra against the current reader, and
-    agree the core data model** (#112). *In review (#119); the decision
-    was agreed on 2 November 2026 and is recorded in this section.* Run
+    agree the core data model** (#112). *Done (#119); the decision was
+    agreed on 2 November 2026 and is recorded in this section.* Run
     before steps 3 and 4, although the plan from \#99 listed it after
     them, because its result decides what those steps build towards. It
     also settled the grids in scope, where voxels keep depth and time,
@@ -737,14 +737,15 @@ of 2 November 2026.
     behaviour, fixing \#88–#92. The time helpers move out of
     `R/extract_to_points.R` into `R/netcdf-time.R`. *Done:* the decoder
     (#88, \#90, \#92) in \#121, then matching (#89, \#91 and the
-    midnight case of \#71) on branch `fix-111-time-matching`.
-    Non-standard calendars stay unsupported, with a clear error (see
-    Direction, Time decoding). Must be done before step 5, because the
-    core object’s time axis is a CFtime object.
-5.  **Build the core object** (#113). *In progress:* the first PR
-    decodes time bounds with CFtime’s bounds support (branch
-    `fix-113-time-bounds-cftime`); the core object itself is not
-    started. Sources (files, series, Zarr, in-memory voxels); standard
+    midnight case of \#71) in \#122. Non-standard calendars stay
+    unsupported, with a clear error (see Direction, Time decoding). Must
+    be done before step 5, because the core object’s time axis is a
+    CFtime object.
+5.  **Build the core object** (#113). *In progress:* time bounds are
+    decoded with CFtime’s bounds support (#123), and the time tests call
+    the shared helpers directly (#127). The core object’s first PR is
+    being designed. Its time axis must run forwards (see Direction, Time
+    decoding). Sources (files, series, Zarr, in-memory voxels); standard
     axes built at open, including the axis and longitude fixes from \#93
     and \#95; the lazy ncdf4 reader with chunk-aligned block reads. Then
     the voxel builder (depth in
@@ -757,9 +758,10 @@ of 2 November 2026.
 6.  **Add `SpatVector3D`** with `geomtype()`, `as_vector3d()` and sf
     conversion: points and lines with per-vertex depth and time, and
     polygons with constant top and bottom and an optional time interval.
-    Then `buffer_3d()` and `vector3d_to_envelope()` (#114). *Not
-    started.* Can run in parallel with step 5, because it doesn’t read
-    gridded data.
+    Then `buffer_3d()` and `vector3d_to_envelope()` (#114). *In
+    progress:* points and lines in review (#124); polygons,
+    `buffer_3d()` and `vector3d_to_envelope()` next. Can run in parallel
+    with step 5, because it doesn’t read gridded data.
 7.  **Add the coverage function** and
     [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
     /
@@ -974,8 +976,8 @@ marked *(planned)* aren’t implemented yet.
   [Data model](#data-model). Until then, say in each function’s docs
   which input it takes.
 - **Time.** Times are decoded from CF units on the standard calendars
-  and matched to observations in UTC. Only the netCDF model has a time
-  dimension for now. Decoding is planned to move to CFtime; see [Data
+  and matched to observations in UTC. Decoding uses CFtime (#111). Only
+  the netCDF model has a time dimension for now; see [Data
   model](#data-model).
 
 ## Future directions

@@ -61,9 +61,9 @@
 <li>
 <strong>Planned (#99):</strong> one model with time as a dimension, reading only the data each step needs: the package’s own core object, read with ncdf4 and CFtime, terra for slices in memory, and stars only for remote Zarr (agreed in #112; trial in <a href="dev/data-model-trial.html"><code>dev/data-model-trial.md</code></a>).</li>
 <li>
-<strong>Planned:</strong> one vector class, <code>SpatVector3D</code>, holding points, lines and polygons with depth.</li>
+<strong>In progress (#114):</strong> one vector class, <code>SpatVector3D</code>, holding points, lines and polygons with depth.</li>
 <li>
-<strong>Planned:</strong> CFtime for time decoding.</li>
+<strong>Done (#111):</strong> CFtime decodes time on the standard calendars.</li>
 </ul><div class="section level2">
 <h2 id="package-design-build-intersect-summarise">Package design: build, intersect, summarise<a class="anchor" aria-label="anchor" href="#package-design-build-intersect-summarise"></a></h2>
 <p>An analysis in <code>ocean3d</code> has three steps, and each analysis function belongs to one of them (downloads and cache utilities sit outside). The output of one step is the input to the next, and each step can be used on its own.</p>
@@ -412,19 +412,19 @@
 </ul></div>
 <div class="section level4">
 <h4 id="order-of-work">Order of work<a class="anchor" aria-label="anchor" href="#order-of-work"></a></h4>
-<p>Each step has its own issue, and each PR branches off <code>main</code>. Status as of 2 November 2026.</p>
+<p>Each step has its own issue, and each PR branches off <code>main</code>. Status as of 3 November 2026.</p>
 <ol style="list-style-type: decimal"><li>
 <strong>Document the current split:</strong> which functions take netCDF and which take <code>SpatVoxel</code> (README function overview and each function’s <code>@param</code>) (#109). <em>Done (#118, merged 2 November 2026).</em> Ran in parallel with step 2.</li>
 <li>
-<strong>Trial stars, ncdfCF and terra against the current reader, and agree the core data model</strong> (#112). <em>In review (#119); the decision was agreed on 2 November 2026 and is recorded in this section.</em> Run before steps 3 and 4, although the plan from #99 listed it after them, because its result decides what those steps build towards. It also settled the grids in scope, where voxels keep depth and time, and that the extraction functions may be retired.</li>
+<strong>Trial stars, ncdfCF and terra against the current reader, and agree the core data model</strong> (#112). <em>Done (#119); the decision was agreed on 2 November 2026 and is recorded in this section.</em> Run before steps 3 and 4, although the plan from #99 listed it after them, because its result decides what those steps build towards. It also settled the grids in scope, where voxels keep depth and time, and that the extraction functions may be retired.</li>
 <li>
 <strong>Move the shared CF/netCDF helpers</strong> for sources, dimension detection, reading, longitude and latitude, depth and bounds out of <code>R/extract_to_points.R</code> into <code>R/netcdf-sources.R</code>, <code>R/netcdf-dims.R</code>, <code>R/netcdf-read.R</code>, <code>R/netcdf-horizontal.R</code>, <code>R/netcdf-depth.R</code> and <code>R/netcdf-bounds.R</code>, unchanged (#110). <em>Done.</em> They are the starting point for the core object’s axis handling in step 5, so they are grouped by axis rather than by the extraction function that uses them. The time helpers stay in <code>R/extract_to_points.R</code> for step 4, which replaces them.</li>
 <li>
-<strong>Replace the internal CF time decoding with CFtime and fix time matching</strong> (#111), with the time tests from #71–#75 as reference behaviour, fixing #88–#92. The time helpers move out of <code>R/extract_to_points.R</code> into <code>R/netcdf-time.R</code>. <em>Done:</em> the decoder (#88, #90, #92) in #121, then matching (#89, #91 and the midnight case of #71) on branch <code>fix-111-time-matching</code>. Non-standard calendars stay unsupported, with a clear error (see Direction, Time decoding). Must be done before step 5, because the core object’s time axis is a CFtime object.</li>
+<strong>Replace the internal CF time decoding with CFtime and fix time matching</strong> (#111), with the time tests from #71–#75 as reference behaviour, fixing #88–#92. The time helpers move out of <code>R/extract_to_points.R</code> into <code>R/netcdf-time.R</code>. <em>Done:</em> the decoder (#88, #90, #92) in #121, then matching (#89, #91 and the midnight case of #71) in #122. Non-standard calendars stay unsupported, with a clear error (see Direction, Time decoding). Must be done before step 5, because the core object’s time axis is a CFtime object.</li>
 <li>
-<strong>Build the core object</strong> (#113). <em>In progress:</em> the first PR decodes time bounds with CFtime’s bounds support (branch <code>fix-113-time-bounds-cftime</code>); the core object itself is not started. Sources (files, series, Zarr, in-memory voxels); standard axes built at open, including the axis and longitude fixes from #93 and #95; the lazy ncdf4 reader with chunk-aligned block reads. Then the voxel builder (depth in <code><a href="https://rspatial.github.io/terra/reference/depth.html" class="external-link">terra::depth()</a></code> with old layer names read on input, CRS always set, float32 tolerance, <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> moved to it), and time-aware volume, overlap and profiles, tiled when a time step is too large.</li>
+<strong>Build the core object</strong> (#113). <em>In progress:</em> time bounds are decoded with CFtime’s bounds support (#123), and the time tests call the shared helpers directly (#127). The core object’s first PR is being designed. Its time axis must run forwards (see Direction, Time decoding). Sources (files, series, Zarr, in-memory voxels); standard axes built at open, including the axis and longitude fixes from #93 and #95; the lazy ncdf4 reader with chunk-aligned block reads. Then the voxel builder (depth in <code><a href="https://rspatial.github.io/terra/reference/depth.html" class="external-link">terra::depth()</a></code> with old layer names read on input, CRS always set, float32 tolerance, <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> moved to it), and time-aware volume, overlap and profiles, tiled when a time step is too large.</li>
 <li>
-<strong>Add <code>SpatVector3D</code></strong> with <code>geomtype()</code>, <code>as_vector3d()</code> and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then <code>buffer_3d()</code> and <code>vector3d_to_envelope()</code> (#114). <em>Not started.</em> Can run in parallel with step 5, because it doesn’t read gridded data.</li>
+<strong>Add <code>SpatVector3D</code></strong> with <code>geomtype()</code>, <code>as_vector3d()</code> and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then <code>buffer_3d()</code> and <code>vector3d_to_envelope()</code> (#114). <em>In progress:</em> points and lines in review (#124); polygons, <code>buffer_3d()</code> and <code>vector3d_to_envelope()</code> next. Can run in parallel with step 5, because it doesn’t read gridded data.</li>
 <li>
 <strong>Add the coverage function</strong> and <code><a href="reference/intersect_3d.html">intersect_3d()</a></code> / <code><a href="reference/intersects_3d.html">intersects_3d()</a></code> / <code>mask()</code> / <code><a href="reference/volume.html">volume()</a></code> methods for <code>SpatVector3D</code> (#115), with block reads for many features. <em>Not started.</em> Needs steps 5 and 6. This is where the slow buffer reads measured in the trial are replaced.</li>
 <li>
@@ -507,7 +507,7 @@
 <li>
 <strong><code>ncdf4</code> vs <code>terra</code></strong>. Point, buffer and track extraction read netCDF directly with <code>ncdf4</code>, reading only the cells each observation needs. Large raster operations (1000s of cells), like extracting areas and volumes, use <code>terra</code>. This split is planned to become one model; see <a href="#data-model">Data model</a>. Until then, say in each function’s docs which input it takes.</li>
 <li>
-<strong>Time.</strong> Times are decoded from CF units on the standard calendars and matched to observations in UTC. Only the netCDF model has a time dimension for now. Decoding is planned to move to CFtime; see <a href="#data-model">Data model</a>.</li>
+<strong>Time.</strong> Times are decoded from CF units on the standard calendars and matched to observations in UTC. Decoding uses CFtime (#111). Only the netCDF model has a time dimension for now; see <a href="#data-model">Data model</a>.</li>
 </ul></div>
 <div class="section level2">
 <h2 id="future-directions">Future directions<a class="anchor" aria-label="anchor" href="#future-directions"></a></h2>
