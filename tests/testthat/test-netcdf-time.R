@@ -205,3 +205,20 @@ test_that("time bounds that miss their time step are rejected (#113)", {
   expect_identical(info$bounds_status, "unavailable")
   expect_null(info$bounds)
 })
+
+test_that("the time axis builder returns a CFtime object with its bounds", {
+  f <- make_time_file(c(15, 45), "days since 2020-01-01",
+                      bounds = monthly_bounds[2:1, ])
+  on.exit(unlink(f), add = TRUE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+
+  plain <- .netcdf_time_axis(nc, "time")
+  expect_s3_class(plain, "CFTime")
+  expect_identical(plain$offsets, c(15, 45))
+  expect_null(plain$get_bounds())
+
+  # Bounds that list the later edge first are stored lower edge first.
+  bounded <- .netcdf_time_axis(nc, "time", bounds = monthly_bounds[2:1, ])
+  expect_equal(bounded$get_bounds(), monthly_bounds)
+})

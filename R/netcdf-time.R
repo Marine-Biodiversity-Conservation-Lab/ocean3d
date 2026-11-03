@@ -25,18 +25,15 @@
   ), class = "ocean3d_error_calendar", call = NULL)
 }
 
-# Decodes a CF time axis to UTC date-times. With `bounds` (a 2 x n matrix of
-# offsets in the axis units, one column per time step), returns those bounds
-# instead, as a 2 x n matrix of UTC seconds since 1970. CFtime holds the
-# bounds with the axis, so shared edges of back-to-back intervals
-# (0, 31, 31, 60) aren't read as a repeated time axis, which CFtime warns
-# about (#113). Bounds must contain their time step; either edge may come
-# first, and each column keeps its order.
-.decode_netcdf_time <- function(nc, time_dim, bounds = NULL) {
-  if (is.null(time_dim)) {
-    return(NULL)
-  }
-
+# The CF time axis of a netCDF coordinate as a checked CFtime object: usable
+# units, a supported calendar, finite offsets and a UTC reference date-time.
+# `bounds` (a 2 x n matrix of offsets in the axis units, one column per time
+# step, either edge first) are attached to the axis. CFtime holds the bounds
+# with the axis, so shared edges of back-to-back intervals (0, 31, 31, 60)
+# aren't read as a repeated time axis, which CFtime warns about (#113).
+# Bounds must contain their time step. Used by the decoder below and by the
+# core object's time axis (as_proxy()).
+.netcdf_time_axis <- function(nc, time_dim, bounds = NULL) {
   units <- .read_time_attribute(nc, time_dim, "units")
 
   if (!is.character(units) || length(units) != 1L ||
@@ -100,10 +97,9 @@
     ), class = "ocean3d_error_time_units", call = NULL)
   }
 
-  if (is.null(bounds)) return(axis$as_timestamp(asPOSIX = TRUE))
+  if (is.null(bounds)) return(axis)
 
   # CFtime only warns about bounds it can't use, and then drops them.
-  reversed <- bounds[1L, ] > bounds[2L, ]
   withCallingHandlers(
     axis$set_bounds(rbind(
       pmin(bounds[1L, ], bounds[2L, ]), pmax(bounds[1L, ], bounds[2L, ])
@@ -115,6 +111,18 @@
       ), class = "ocean3d_error_time_bounds", call = NULL)
     }
   )
+  axis
+}
+
+# Decodes a CF time axis to UTC date-times. With `bounds`, returns those
+# bounds instead, as a 2 x n matrix of UTC seconds since 1970 in which each
+# column keeps the order of its edges.
+.decode_netcdf_time <- function(nc, time_dim, bounds = NULL) {
+  if (is.null(time_dim)) {
+    return(NULL)
+  }
+  axis <- .netcdf_time_axis(nc, time_dim, bounds)
+  if (is.null(bounds)) return(axis$as_timestamp(asPOSIX = TRUE))
 
   # Bounds come back only as text: dates, or date-times with seconds that
   # may have a fraction.
@@ -127,6 +135,7 @@
   seconds <- matrix(
     as.numeric(as.POSIXct(strptime(stamps, format, tz = "UTC"))), nrow = 2L
   )
+  reversed <- bounds[1L, ] > bounds[2L, ]
   seconds[, reversed] <- seconds[2:1, reversed]
   seconds
 }
