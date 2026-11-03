@@ -17,3 +17,15 @@ test_that("depth bounds are converted to metres positive down", {
     rbind(c(0, 10), c(10, 20))
   )
 })
+
+test_that("midpoint edges keep the order of the centres", {
+  regular <- .midpoint_edges(c(30, 20, 10))
+  expect_equal(regular$lower, c(25, 15, 5))
+  expect_equal(regular$upper, c(35, 25, 15))
+  expect_true(regular$regular)
+
+  irregular <- .midpoint_edges(c(5, 15, 35))
+  expect_equal(irregular$lower, c(0, 10, 25))
+  expect_equal(irregular$upper, c(10, 25, 45))
+  expect_false(irregular$regular)
+})
