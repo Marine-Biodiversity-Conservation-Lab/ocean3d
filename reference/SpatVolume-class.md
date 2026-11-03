@@ -8,7 +8,7 @@ and
 It exists as a dispatch target for operations that are meaningful on any
 3D representation, such as volume, volumetric overlap and vertical
 extent. Only shapes with a depth range have volume: voxels, envelopes
-and (later) polygons, not points or lines.
+and polygons, not points or lines.
 
 ## Details
 
