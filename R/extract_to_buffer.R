@@ -264,17 +264,9 @@
            "`. Supply explicit bounds; one centre has no known extent.",
            call. = FALSE)
     }
-    index <- order(centres)
-    sorted <- centres[index]
-    gaps <- diff(sorted)
-    edges <- c(
-      sorted[1L] - gaps[1L] / 2,
-      head(sorted, -1L) + gaps / 2,
-      tail(sorted, 1L) + tail(gaps, 1L) / 2
-    )
-    lower <- upper <- numeric(length(centres))
-    lower[index] <- head(edges, -1L)
-    upper[index] <- tail(edges, -1L)
+    edges <- .midpoint_edges(centres)
+    lower <- edges$lower
+    upper <- edges$upper
     if (axis == "depth") {
       clipped_at_surface <- lower < 0
       lower <- pmax(lower, 0)

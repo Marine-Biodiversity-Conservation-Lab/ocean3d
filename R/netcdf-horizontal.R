@@ -228,21 +228,10 @@
     lower <- upper <- centres
     basis <- "singleton_coordinate"
   } else {
-    order <- order(centres)
-    sorted <- centres[order]
-    gaps <- diff(sorted)
-    edges <- c(
-      sorted[1L] - gaps[1L] / 2,
-      head(sorted, -1L) + gaps / 2,
-      tail(sorted, 1L) + tail(gaps, 1L) / 2
-    )
-    lower <- upper <- numeric(length(centres))
-    lower[order] <- head(edges, -1L)
-    upper[order] <- tail(edges, -1L)
-    regular <- all(
-      abs(gaps - gaps[1L]) <= max(1e-8, gaps[1L] * 1e-8)
-    )
-    basis <- if (regular) "inferred_regular" else "inferred_irregular"
+    edges <- .midpoint_edges(centres)
+    lower <- edges$lower
+    upper <- edges$upper
+    basis <- if (edges$regular) "inferred_regular" else "inferred_irregular"
   }
   if (!longitude) {
     lower <- pmax(lower, -90)
