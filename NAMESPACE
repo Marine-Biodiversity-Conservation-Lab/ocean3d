@@ -58,6 +58,7 @@ importFrom(methods,
   setGeneric,
   setMethod,
   setValidity,
+  show,
   validObject
 )
 importFrom(rlang,
