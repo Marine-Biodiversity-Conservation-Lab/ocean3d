@@ -91,7 +91,7 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #' [geomtype()]: `"points"` (a detection at 35 m) or `"lines"` (a dive track
 #' or a vessel route). Each vertex has a longitude and latitude (WGS84), a
 #' depth in positive metres downward, and optionally a time (UTC). Build one
-#' with [as_vector3d()]; convert to sf with `sf::st_as_sf()`.
+#' with [as_vector3d()] from a table or sf object.
 #'
 #' It is the vector counterpart of [SpatVoxel-class] and [SpatEnvelope-class].
 #' It is not built on `terra::SpatVector` or sf: those keep attributes per

@@ -53,8 +53,7 @@ dive <- data.frame(tag = "A", lon = c(150, 150.1, 150.2),
                    lat = -20, depth = c(0, 120, 15))
 track <- as_vector3d(dive, type = "lines", id = "tag")
 geomtype(track)
-sf::st_as_sf(track)
 }
 \seealso{
-\code{\link[terra:geomtype]{geomtype()}}, \code{sf::st_as_sf()} for converting back.
+\code{\link[terra:geomtype]{geomtype()}}
 }

@@ -35,9 +35,8 @@ calls that used to return a value now return `NA` or stop with an error:
   date was supplied for a file with a time dimension.
 * New class `SpatVector3D` for 3D points and lines, with a depth (positive
   metres down) and an optional time at each vertex, built with
-  `as_vector3d()` from a table or sf object. `geomtype()` reports the type,
-  and `sf::st_as_sf()` converts back, with depth as minus Z and time as M.
-  Polygons follow in a later version (#114).
+  `as_vector3d()` from a table or sf object (for sf lines, depth is minus
+  Z and time is M). `geomtype()` reports the type. Polygons follow in a later version (#114).
 
 ## Bug fixes
 

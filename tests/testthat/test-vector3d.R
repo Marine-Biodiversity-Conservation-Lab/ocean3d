@@ -10,6 +10,18 @@ dive <- function() {
   )
 }
 
+# The dive() tracks as sf lines: Z is height (minus depth), M is time.
+dive_sf <- function() {
+  d <- dive()
+  lines <- lapply(split(d, d$tag), function(rows) {
+    sf::st_linestring(
+      cbind(rows$lon, rows$lat, -rows$depth, as.numeric(rows$when)),
+      dim = "XYZM"
+    )
+  })
+  sf::st_sf(tag = names(lines), geometry = sf::st_sfc(lines, crs = 4326))
+}
+
 vertex_cols <- c("feature_id", "vertex", "lon", "lat", "depth", "time")
 
 test_that("points keep one depth, time and attributes per point", {
@@ -73,23 +85,21 @@ test_that("invalid vertices are rejected with a clear error", {
                "time = \"time\"", fixed = TRUE)
 })
 
-test_that("lines and points round-trip through sf with depth as minus Z", {
-  tr <- as_vector3d(dive(), type = "lines", id = "tag", time = "when")
-  s <- sf::st_as_sf(tr)
-  expect_identical(as.character(unique(sf::st_geometry_type(s))), "LINESTRING")
-  expect_equal(sf::st_coordinates(s)[, "Z"], -dive()$depth)
+test_that("sf lines take depth from minus Z and time from M", {
+  from_sf <- as_vector3d(dive_sf(), id = "tag")
+  from_table <- as_vector3d(dive(), type = "lines", id = "tag", time = "when")
+  expect_identical(geomtype(from_sf), "lines")
+  expect_equal(as.data.frame(from_sf)[vertex_cols],
+               as.data.frame(from_table)[vertex_cols],
+               ignore_attr = TRUE)
+})
 
-  back <- as_vector3d(s, id = "feature_id")
-  expect_equal(as.data.frame(back)[vertex_cols],
-               as.data.frame(tr)[vertex_cols])
-
+test_that("sf points take depth from a column", {
   obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35))
-  p <- as_vector3d(obs)
-  sp <- sf::st_as_sf(p)
-  expect_equal(sf::st_coordinates(sp)[, "Z"], -obs$depth)
-  back_points <- as_vector3d(sp, id = "feature_id")
-  expect_equal(as.data.frame(back_points)[c("lon", "lat", "depth")],
-               as.data.frame(p)[c("lon", "lat", "depth")])
+  p <- as_vector3d(sf::st_as_sf(obs, coords = c("lon", "lat"), crs = 4326))
+  expect_identical(geomtype(p), "points")
+  expect_equal(as.data.frame(p)[c("lon", "lat", "depth")], obs,
+               ignore_attr = TRUE)
 })
 
 test_that("coordinates and depths must be numeric, not factors or text", {
@@ -110,13 +120,13 @@ test_that("feature IDs must be present, and unique for sf lines", {
                "feature IDs must be non-missing",
                class = "ocean3d_error_vector3d")
 
-  s <- sf::st_as_sf(as_vector3d(dive(), type = "lines", id = "tag"))
-  s$feature_id <- c("A", "A")
-  expect_error(as_vector3d(s, id = "feature_id"),
+  s <- dive_sf()
+  s$tag <- c("A", "A")
+  expect_error(as_vector3d(s, id = "tag"),
                "separate lines would be joined",
                class = "ocean3d_error_vector3d")
-  s$feature_id <- c("A", NA)
-  expect_error(as_vector3d(s, id = "feature_id"),
+  s$tag <- c("A", NA)
+  expect_error(as_vector3d(s, id = "tag"),
                "its own non-missing ID",
                class = "ocean3d_error_vector3d")
 })

@@ -7,7 +7,6 @@
 \alias{length,SpatVector3D-method}
 \alias{show,SpatVector3D-method}
 \alias{as.data.frame.SpatVector3D}
-\alias{st_as_sf.SpatVector3D}
 \title{3D points and lines with depth and time}
 \usage{
 \S4method{geomtype}{SpatVector3D}(x, ...)
@@ -17,8 +16,6 @@
 \S4method{show}{SpatVector3D}(object)
 
 \method{as.data.frame}{SpatVector3D}(x, row.names = NULL, optional = FALSE, ...)
-
-\method{st_as_sf}{SpatVector3D}(x, ...)
 }
 \arguments{
 \item{x}{A \code{SpatVector3D}.}
@@ -34,7 +31,7 @@ A \code{SpatVector3D} holds features of one geometry type, reported by
 \code{\link[terra:geomtype]{geomtype()}}: \code{"points"} (a detection at 35 m) or \code{"lines"} (a dive track
 or a vessel route). Each vertex has a longitude and latitude (WGS84), a
 depth in positive metres downward, and optionally a time (UTC). Build one
-with \code{\link[=as_vector3d]{as_vector3d()}}; convert to sf with \code{sf::st_as_sf()}.
+with \code{\link[=as_vector3d]{as_vector3d()}} from a table or sf object.
 }
 \details{
 It is the vector counterpart of \link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatEnvelope-class]{SpatEnvelope}.

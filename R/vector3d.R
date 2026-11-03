@@ -1,7 +1,7 @@
 # 3D points and lines (SpatVector3D, #114). The class is defined in
 # R/AllClasses.R. Vertices are stored as a table, so a line's depth and time
-# at each vertex can't be lost by terra or sf operations; convert with
-# sf::st_as_sf() to use those.
+# at each vertex can't be lost by terra or sf operations. sf input is read
+# in; there is no conversion back to sf (#114).
 
 #' Build 3D points or lines
 #'
@@ -26,7 +26,7 @@
 #'
 #' @return A [SpatVector3D-class]. Columns other than the coordinates, depth,
 #'   time and ID are kept with each vertex.
-#' @seealso [geomtype()], `sf::st_as_sf()` for converting back.
+#' @seealso [geomtype()]
 #' @examples
 #' obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35),
 #'                   date = as.Date(c("2020-01-01", "2020-01-02")))
@@ -36,7 +36,6 @@
 #'                    lat = -20, depth = c(0, 120, 15))
 #' track <- as_vector3d(dive, type = "lines", id = "tag")
 #' geomtype(track)
-#' sf::st_as_sf(track)
 #' @export
 as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
                         time = NULL, id = NULL, lon = "lon", lat = "lat") {
@@ -214,31 +213,6 @@ as.data.frame.SpatVector3D <- function(x, row.names = NULL, # nolint
                                        optional = FALSE,
                                        ...) {
   x@vertices
-}
-
-#' @rdname SpatVector3D-class
-#' @export
-st_as_sf.SpatVector3D <- function(x, ...) {
-  v <- x@vertices
-  has_time <- !all(is.na(v$time))
-  if (x@type == "points") {
-    v$z <- -v$depth
-    if (has_time) v$m <- as.numeric(v$time) else v$time <- NULL
-    out <- sf::st_as_sf(
-      v, coords = c("lon", "lat", "z", if (has_time) "m"),
-      dim = if (has_time) "XYZM" else "XYZ", crs = 4326, remove = TRUE
-    )
-    out$vertex <- NULL
-    return(out)
-  }
-  ids <- unique(v$feature_id)
-  lines <- lapply(ids, function(feature) {
-    rows <- v[v$feature_id == feature, , drop = FALSE]
-    xyz <- cbind(rows$lon, rows$lat, -rows$depth,
-                 if (has_time) as.numeric(rows$time))
-    sf::st_linestring(xyz, dim = if (has_time) "XYZM" else "XYZ")
-  })
-  sf::st_sf(feature_id = ids, geometry = sf::st_sfc(lines, crs = 4326))
 }
 
 #' @rdname volume
