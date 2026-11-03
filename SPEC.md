@@ -407,6 +407,24 @@ Jay Matsushiba on 2 November 2026 (#112).
     without them. Until then, such files can be converted to a standard
     calendar with an outside tool (for example CDO). Decided by Jay
     Matsushiba on 2 November 2026.
+  - **Time runs forwards only:** the core object accepts a time axis
+    only if it is strictly increasing within each file. A time axis that
+    runs backwards (newest first, or ordered by age before present) or
+    is out of order (often files joined in the wrong order) stops with a
+    clear error when the core object is built. The error names the file
+    and points to a separate utility that writes a copy of the file with
+    its time steps in increasing order. Repeated time steps also stop
+    with an error, which the sorting utility can’t fix. The core object
+    doesn’t reorder time itself, so every later step (matching, bounds,
+    intervals, summaries) can assume forward time, and CFtime never
+    warns about the order. Depth axes are not affected: a reversed depth
+    axis is common and stays supported. The sorting utility is its own
+    exported function and PR, after the core object. Until then, files
+    can be sorted with an outside tool (for example CDO’s
+    `sorttimestamp`). The extraction functions keep today’s behaviour (a
+    fully reversed axis works with CFtime’s warning) until they are
+    rebuilt on the core object or retired (#116). Decided by Jay
+    Matsushiba on 3 November 2026.
 - **Heavy spatial work:** per time step, and per tile or group of depth
   layers when one time step is too large for memory (one day of a global
   1/12° product over 50 levels is about 3.5 GB as doubles). Read the
