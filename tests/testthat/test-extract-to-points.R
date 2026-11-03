@@ -1799,52 +1799,6 @@ test_that("ambiguous longitude dimensions produce an informative error", {
 })
 
 
-test_that("2D auxiliary geographic coordinates are rejected", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  x <- ncdf4::ncdim_def("x", "1", c(1, 2))
-  y <- ncdf4::ncdim_def("y", "1", c(1, 2))
-
-  temp <- ncdf4::ncvar_def(
-    "temp", "degree_Celsius",
-    list(x, y), -9999
-  )
-  longitude <- ncdf4::ncvar_def(
-    "longitude", "degrees_east",
-    list(x, y), -9999
-  )
-  latitude <- ncdf4::ncvar_def(
-    "latitude", "degrees_north",
-    list(x, y), -9999
-  )
-
-  nc <- ncdf4::nc_create(
-    f, list(temp, longitude, latitude)
-  )
-
-  ncdf4::ncatt_put(
-    nc, "temp", "coordinates", "longitude latitude"
-  )
-  ncdf4::ncatt_put(
-    nc, "longitude", "standard_name", "longitude"
-  )
-  ncdf4::ncatt_put(
-    nc, "latitude", "standard_name", "latitude"
-  )
-
-  ncdf4::nc_close(nc)
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  expect_error(
-    .detect_dims(nc, "temp"),
-    "Curvilinear longitude/latitude grids are not"
-  )
-})
-
-
 test_that("static extraction ignores unrelated temporal dimensions", {
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)

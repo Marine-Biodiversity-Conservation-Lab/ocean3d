@@ -74,6 +74,19 @@ calls that used to return a value now return `NA` or stop with an error:
   monotonically increasing" warning in point and buffer extraction. Time
   bounds that don't contain their time step still stop buffer extraction
   with an error (#113).
+* The `axis` and `standard_name` attributes of ordinary dimension
+  coordinates are now read when longitude, latitude, depth and time are
+  detected in point, buffer and track extraction. Files whose dimension
+  names don't say which axis is which (such as `x` labelled latitude) used
+  to be read along the wrong axes without a warning, and an `altitude`
+  dimension with `axis = "Z"` stopped with an "Unrecognised non-singleton
+  dimension" error unless `depth_dim` was given (#93).
+* Curvilinear grids, such as native NEMO output with two-dimensional
+  `nav_lon` / `nav_lat` coordinates, now stop with an error when those
+  coordinates are identified only by their units (`degrees_east`,
+  `degrees_north`). They used to be read with the grid indices as longitude
+  and latitude. Regrid such data to a regular longitude/latitude grid
+  first (#93).
 
 ## Dependencies
 
