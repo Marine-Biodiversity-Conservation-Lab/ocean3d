@@ -74,6 +74,12 @@ calls that used to return a value now return `NA` or stop with an error:
   monotonically increasing" warning in point and buffer extraction. Time
   bounds that don't contain their time step still stop buffer extraction
   with an error (#113).
+* Longitude axes with steps of more than 180 degrees between cells, such as
+  `0, 200, 300`, no longer stop extraction with "Spatial coordinates must
+  form a monotonic axis". An axis whose longitudes already increase or
+  decrease is now used as it is, whether it is ascending, descending or
+  irregular, with one file or several. An axis that crosses the 0/360 or
+  -180/180 seam once (such as `350, 10, 30`) is still read (#95).
 
 ## Dependencies
 

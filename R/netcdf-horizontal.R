@@ -171,13 +171,22 @@
   row
 }
 
+# Longitudes as one continuous monotonic axis. An axis that is already
+# monotonic is left as it is, however large its steps (#95). Otherwise the
+# axis may cross the file's longitude seam (e.g. 350, 10, 30): take every step
+# the same way around the globe, east or west, and keep the direction that
+# covers less than a full circle. At most one direction can, for three or more
+# centres. If neither does, the values are returned unchanged and the
+# monotonic check in .prepare_spatial_axis() rejects them.
 .unwrap_longitude <- function(values) {
-  if (length(values) < 2L) return(values)
-  original_steps <- diff(values)
-  steps <- (original_steps + 180) %% 360 - 180
-  ambiguous <- abs(abs(steps) - 180) < 1e-8
-  steps[ambiguous] <- original_steps[ambiguous]
-  values[1L] + c(0, cumsum(steps))
+  steps <- diff(values)
+  if (all(steps > 0) || all(steps < 0)) return(values)
+  east <- steps %% 360
+  west <- east - 360
+  if (any(east == 0)) return(values)
+  if (sum(east) < 360) return(values[1L] + c(0, cumsum(east)))
+  if (sum(west) > -360) return(values[1L] + c(0, cumsum(west)))
+  values
 }
 
 .prepare_spatial_axis <- function(nc, coordinate, values, longitude = FALSE) {
@@ -191,11 +200,16 @@
   centres <- if (longitude) .unwrap_longitude(values) else values
   steps <- diff(centres)
   if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
-    stop(
-      "Spatial coordinates must form a monotonic axis (as CF requires). ",
-      "Sort the file along this dimension before extraction.",
-      call. = FALSE
-    )
+    seam <- if (longitude) {
+      " Longitudes may cross the 0/360 or -180/180 seam once."
+    } else {
+      ""
+    }
+    rlang::abort(glue::glue(
+      "Spatial coordinates for `{coordinate}` must form a monotonic axis ",
+      "(as CF requires).{seam} ",
+      "Sort the file along this dimension before extraction."
+    ), class = "ocean3d_error_spatial_axis", call = NULL)
   }
   explicit <- .read_bounds(nc, coordinate, length(values))$values
   if (!is.null(explicit)) {
