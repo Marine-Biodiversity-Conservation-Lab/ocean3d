@@ -109,11 +109,25 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 
 # sf LINESTRING input: depth from minus Z (Z is height), time from M.
 .vector3d_from_sf_lines <- function(x, id) {
-  if (!isTRUE(sf::st_is_longlat(x))) {
+  # Any CRS other than WGS84, geographic or not, is transformed.
+  if (sf::st_crs(x) != sf::st_crs(4326)) {
     if (is.na(sf::st_crs(x))) {
       .abort_vector3d("sf input needs a coordinate reference system.")
     }
     x <- sf::st_transform(x, 4326)
+  }
+  # st_coordinates() gives no rows for an empty line, so it would vanish.
+  empty <- which(sf::st_is_empty(x))
+  if (length(empty)) {
+    rows <- if (length(empty) == 1L) {
+      "Row {empty} of `x` has an empty geometry"
+    } else {
+      "Rows {toString(empty)} of `x` have empty geometries"
+    }
+    .abort_vector3d(glue::glue(
+      rows, ". Each line ",
+      "needs at least two vertices; remove the empty rows first."
+    ))
   }
   coords <- sf::st_coordinates(x)
   if (!"Z" %in% colnames(coords)) {

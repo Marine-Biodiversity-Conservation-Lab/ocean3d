@@ -140,6 +140,34 @@ test_that("sf lines without Z coordinates need a depth", {
                class = "ocean3d_error_vector3d")
 })
 
+test_that("sf input in a geographic CRS other than WGS84 is transformed", {
+  # EPSG:4807 (NTF Paris) is longitude/latitude, but in grads from the Paris
+  # meridian, so its coordinates differ from WGS84's.
+  paris <- sf::st_transform(dive_sf(), 4807)
+  expect_true(sf::st_is_longlat(paris))
+  expect_gt(max(abs(sf::st_coordinates(paris)[, "X"] - dive()$lon)), 1)
+  lines <- as.data.frame(as_vector3d(paris, id = "tag"))
+  expect_equal(lines$lon, dive()$lon, tolerance = 1e-6)
+  expect_equal(lines$lat, dive()$lat, tolerance = 1e-6)
+
+  obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35))
+  points_paris <- sf::st_transform(
+    sf::st_as_sf(obs, coords = c("lon", "lat"), crs = 4326), 4807
+  )
+  points <- as.data.frame(as_vector3d(points_paris))
+  expect_equal(points$lon, obs$lon, tolerance = 1e-6)
+  expect_equal(points$lat, obs$lat, tolerance = 1e-6)
+})
+
+test_that("sf lines with empty geometries are rejected, not dropped", {
+  s <- dive_sf()
+  sf::st_geometry(s)[[2]] <- sf::st_linestring(matrix(numeric(0), ncol = 4),
+                                               dim = "XYZM")
+  expect_error(as_vector3d(s, id = "tag"),
+               "Row 2 of `x` has an empty geometry",
+               class = "ocean3d_error_vector3d", fixed = TRUE)
+})
+
 test_that("points and lines have no volume but are 3D shapes", {
   tr <- as_vector3d(dive(), type = "lines", id = "tag")
   expect_true(methods::is(tr, "SpatVolume"))
