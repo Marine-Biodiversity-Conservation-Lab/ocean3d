@@ -92,6 +92,17 @@ test_that("lines and points round-trip through sf with depth as minus Z", {
                as.data.frame(p)[c("lon", "lat", "depth")])
 })
 
+test_that("coordinates and depths must be numeric, not factors or text", {
+  obs <- data.frame(lon = c(150, 151), lat = c(-20, -21))
+  obs$depth <- factor(c("10", "35"))
+  expect_error(as_vector3d(obs), "`depth` must be numeric, but it is factor",
+               class = "ocean3d_error_vector3d")
+  obs$depth <- c(10, 35)
+  obs$lon <- c("150", "151")
+  expect_error(as_vector3d(obs), "`lon` must be numeric, but it is character",
+               class = "ocean3d_error_vector3d")
+})
+
 test_that("feature IDs must be present, and unique for sf lines", {
   d <- dive()
   d$tag[2] <- NA

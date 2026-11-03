@@ -49,6 +49,16 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   table <- .normalize_points_input(x, lon, lat)
   if (inherits(table, "sf")) table <- sf::st_drop_geometry(table)
   .check_required_cols(table, c(lon, lat, depth, time, id), "x")
+  # as.numeric() on a factor gives its level codes, not its values.
+  for (column in c(lon, lat, depth)) {
+    if (!is.numeric(table[[column]])) {
+      .abort_vector3d(glue::glue(
+        "`{column}` must be numeric, but it is ",
+        "{class(table[[column]])[1L]}. Convert it first, for example with ",
+        "as.numeric(as.character(x)) for a factor."
+      ))
+    }
+  }
   if (type == "lines" && is.null(id)) {
     .abort_vector3d(
       "Lines need `id`: the column that says which line each vertex is on."
