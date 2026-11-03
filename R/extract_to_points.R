@@ -44,7 +44,8 @@
 
     coords_source <- x
 
-    if (!isTRUE(sf::st_is_longlat(coords_source))) {
+    # Any CRS other than WGS84, geographic or not, is transformed.
+    if (sf::st_crs(coords_source) != sf::st_crs(4326)) {
       if (is.na(sf::st_crs(coords_source))) {
         stop(
           "`sf` input must have a geographic CRS or a CRS that can be ",
