@@ -61,6 +61,13 @@ reference:
   - gfw_effort_to_raster
   - fetch_species_assessments
   - fill_missing_depths
+- title: Core data object (experimental)
+  desc: >
+    Describe a gridded netCDF variable without reading its values. Not yet
+    accepted by other functions.
+  contents:
+  - SpatProxy-class
+  - as_proxy
 
 articles:
 - title: Environmental data extraction

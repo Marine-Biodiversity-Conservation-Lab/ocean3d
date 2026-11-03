@@ -33,6 +33,12 @@ calls that used to return a value now return `NA` or stop with an error:
   (spatial, depth or time), with repeated reasons grouped by file. The time
   report now also explains outputs that are missing because no observation
   date was supplied for a file with a time dimension.
+* New experimental class `SpatProxy`, built with `as_proxy()`: it describes
+  one variable of a netCDF file without reading its values (#113). It holds
+  the variable's packing and chunk sizes, longitude and latitude with cell
+  edges, depth in metres positive down, time as a CFtime object with its
+  bounds, and the CRS. A time axis must be strictly increasing. No other
+  function accepts a `SpatProxy` yet, and it may change without notice.
 
 ## Bug fixes
 
