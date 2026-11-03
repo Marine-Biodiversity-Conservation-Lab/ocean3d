@@ -50,9 +50,8 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   if (inherits(table, "sf")) table <- sf::st_drop_geometry(table)
   .check_required_cols(table, c(lon, lat, depth, time, id), "x")
   if (type == "lines" && is.null(id)) {
-    rlang::abort(
-      "Lines need `id`: the column that says which line each vertex is on.",
-      class = "ocean3d_error_vector3d", call = NULL
+    .abort_vector3d(
+      "Lines need `id`: the column that says which line each vertex is on."
     )
   }
 
@@ -63,12 +62,10 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     as.character(table[[id]])
   }
   if (anyNA(feature_id) || any(!nzchar(feature_id))) {
-    rlang::abort("Feature IDs must be non-missing and non-empty.",
-                 class = "ocean3d_error_vector3d", call = NULL)
+    .abort_vector3d("Feature IDs must be non-missing and non-empty.")
   }
   if (type == "points" && anyDuplicated(feature_id)) {
-    rlang::abort("Each point needs its own ID; IDs repeat.",
-                 class = "ocean3d_error_vector3d", call = NULL)
+    .abort_vector3d("Each point needs its own ID; IDs repeat.")
   }
 
   if (is.null(time)) {
@@ -94,11 +91,11 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   extra <- table[setdiff(names(table), c(lon, lat, depth, time, id))]
   clash <- intersect(names(extra), names(vertices))
   if (length(clash)) {
-    rlang::abort(glue::glue(
+    .abort_vector3d(glue::glue(
       "Column names {toString(clash)} are used by SpatVector3D. Pass the ",
       "column as an argument if that is what it holds (for example ",
       "`time = \"time\"` or `id = \"feature_id\"`), or rename it."
-    ), class = "ocean3d_error_vector3d", call = NULL)
+    ))
   }
   vertices <- cbind(vertices, extra)
   # Features in order of first appearance, vertices in row order.
@@ -111,17 +108,16 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 .vector3d_from_sf_lines <- function(x, id) {
   if (!isTRUE(sf::st_is_longlat(x))) {
     if (is.na(sf::st_crs(x))) {
-      rlang::abort("sf input needs a coordinate reference system.",
-                   class = "ocean3d_error_vector3d", call = NULL)
+      .abort_vector3d("sf input needs a coordinate reference system.")
     }
     x <- sf::st_transform(x, 4326)
   }
   coords <- sf::st_coordinates(x)
   if (!"Z" %in% colnames(coords)) {
-    rlang::abort(paste0(
+    .abort_vector3d(paste0(
       "sf lines need a depth at each vertex: give the geometry Z ",
       "coordinates (Z is height, so depth = -Z)."
-    ), class = "ocean3d_error_vector3d", call = NULL)
+    ))
   }
   attributes <- sf::st_drop_geometry(x)
   feature_id <- if (is.null(id)) {
@@ -154,12 +150,18 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     methods::new("SpatVector3D", type = type, vertices = vertices,
                  time_resolution = resolution),
     error = function(e) {
-      rlang::abort(
-        sub("^invalid class .*? object: ", "", conditionMessage(e)),
-        class = "ocean3d_error_vector3d", call = NULL
+      .abort_vector3d(
+        sub("^invalid class .*? object: ", "", conditionMessage(e))
       )
     }
   )
+}
+
+# The one producer of `ocean3d_error_vector3d`: input that can't become a
+# SpatVector3D. Every check in as_vector3d() and the class's validity
+# rules report through it.
+.abort_vector3d <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_vector3d", call = NULL)
 }
 
 #' @rdname SpatVector3D-class
