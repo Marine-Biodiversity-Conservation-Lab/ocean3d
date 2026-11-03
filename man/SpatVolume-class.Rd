@@ -9,8 +9,8 @@
 \link[=SpatEnvelope-class]{SpatEnvelope} and \link[=SpatVector3D-class]{SpatVector3D}. It exists as a dispatch
 target for operations that are meaningful on any 3D representation, such
 as volume, volumetric overlap and vertical extent. Only shapes with a
-depth range have volume: voxels, envelopes and (later) polygons, not
-points or lines.
+depth range have volume: voxels, envelopes and polygons, not points or
+lines.
 }
 \details{
 It deliberately asserts no shared structure. The raster members store depth

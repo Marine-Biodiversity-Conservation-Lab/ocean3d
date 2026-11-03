@@ -85,24 +85,38 @@ setClass("SpatVoxel", contains = "SpatRaster")
 #' @export
 setClass("SpatEnvelope", contains = "SpatRaster")
 
-#' 3D points and lines with depth and time
+#' 3D points, lines and polygons with depth and time
 #'
 #' A `SpatVector3D` holds features of one geometry type, reported by
-#' [geomtype()]: `"points"` (a detection at 35 m) or `"lines"` (a dive track
-#' or a vessel route). Each vertex has a longitude and latitude (WGS84), a
-#' depth in positive metres downward, and optionally a time (UTC). Build one
-#' with [as_vector3d()] from a table or sf object.
+#' [geomtype()]: `"points"` (a detection at 35 m), `"lines"` (a dive track or
+#' a vessel route) or `"polygons"` (a marine protected area from 0 to 200 m).
+#' Coordinates are longitude and latitude (WGS84), depths are positive metres
+#' downward, and times are UTC. Build one with [as_vector3d()] from a table,
+#' sf object or `terra::SpatVector`.
+#'
+#' Points and lines have a depth and optional time at each vertex. Polygons
+#' have one depth range (`depth_min` to `depth_max`) and an optional time
+#' interval for the whole shape.
 #'
 #' It is the vector counterpart of [SpatVoxel-class] and [SpatEnvelope-class].
-#' It is not built on `terra::SpatVector` or sf: those keep attributes per
-#' feature, so a line's depth and time at each vertex would not survive their
-#' operations.
+#' Points and lines are not stored as `terra::SpatVector` or sf objects:
+#' those keep attributes per feature, so a line's depth and time at each
+#' vertex would not survive their operations. A polygon's depth range and
+#' time are per feature, so polygons keep their outlines in an sf geometry
+#' column.
 #'
-#' @slot type `"points"` or `"lines"`.
-#' @slot vertices A data frame with one row per vertex: `feature_id`, `vertex`
-#'   (the order within the feature), `lon`, `lat`, `depth`, `time` (POSIXct,
-#'   UTC, or `NA` when the features have no time), and any other columns from
-#'   the input.
+#' @slot type `"points"`, `"lines"` or `"polygons"`.
+#' @slot vertices Points and lines: a data frame with one row per vertex:
+#'   `feature_id`, `vertex` (the order within the feature), `lon`, `lat`,
+#'   `depth`, `time` (POSIXct, UTC, or `NA` when the features have no time),
+#'   and any other columns from the input. Empty for polygons.
+#' @slot features Polygons: a data frame with one row per polygon:
+#'   `feature_id`, `depth_min`, `depth_max`, `time_start` and `time_end`
+#'   (POSIXct, UTC, or `NA` when the polygons have no time; with
+#'   `time_resolution` `"daily"`, the interval includes all of the end
+#'   day), `geometry` (an
+#'   sf geometry column of POLYGON or MULTIPOLYGON, EPSG:4326), and any other
+#'   columns from the input. Empty for points and lines.
 #' @slot time_resolution `"daily"` or `"datetime"` for the precision of the
 #'   times, as for [extract_to_point()], or `NA` when there is no time.
 #'
@@ -116,14 +130,61 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 setClass("SpatVector3D", slots = c(
   type = "character",
   vertices = "data.frame",
+  features = "data.frame",
   time_resolution = "character"
 ))
 
 setValidity("SpatVector3D", function(object) {
-  v <- object@vertices
-  if (length(object@type) != 1L || !object@type %in% c("points", "lines")) {
-    return("type must be \"points\" or \"lines\"")
+  types <- c("points", "lines", "polygons")
+  if (length(object@type) != 1L || !object@type %in% types) {
+    return("type must be \"points\", \"lines\" or \"polygons\"")
   }
+  if (object@type == "polygons") {
+    f <- object@features
+    needed <- c("feature_id", "depth_min", "depth_max", "time_start",
+                "time_end", "geometry")
+    if (!all(needed %in% names(f))) {
+      return(paste("features must have columns", toString(needed)))
+    }
+    if (anyNA(f$feature_id) || any(!nzchar(f$feature_id))) {
+      return("feature IDs must be non-missing and non-empty")
+    }
+    if (anyDuplicated(f$feature_id)) {
+      return("each polygon needs its own ID; IDs repeat")
+    }
+    if (!inherits(f$geometry, "sfc") ||
+          !all(sf::st_geometry_type(f$geometry) %in%
+                 c("POLYGON", "MULTIPOLYGON"))) {
+      return("geometry must be an sf column of POLYGON or MULTIPOLYGON")
+    }
+    if (sf::st_crs(f$geometry) != sf::st_crs(4326)) {
+      return("geometry must be in WGS84 (EPSG:4326)")
+    }
+    if (any(sf::st_is_empty(f$geometry))) {
+      return("every polygon needs an outline; some geometries are empty")
+    }
+    if (any(!is.finite(f$depth_min)) || any(!is.finite(f$depth_max))) {
+      return("every polygon needs a depth_min and depth_max")
+    }
+    if (any(f$depth_min < 0)) {
+      return("depths are positive metres increasing downward")
+    }
+    if (any(f$depth_min > f$depth_max)) {
+      return("depth_min must not be deeper than depth_max")
+    }
+    if (!inherits(f$time_start, "POSIXct") ||
+          !inherits(f$time_end, "POSIXct")) {
+      return("time_start and time_end must be POSIXct (UTC)")
+    }
+    if (any(is.na(f$time_start) != is.na(f$time_end))) {
+      return("a polygon's time needs both a start and an end, or neither")
+    }
+    if (any(f$time_start > f$time_end, na.rm = TRUE)) {
+      return("time_start must not be after time_end")
+    }
+    return(TRUE)
+  }
+  v <- object@vertices
   needed <- c("feature_id", "vertex", "lon", "lat", "depth", "time")
   if (!all(needed %in% names(v))) {
     return(paste("vertices must have columns", toString(needed)))
@@ -154,8 +215,8 @@ setValidity("SpatVector3D", function(object) {
 #' [SpatEnvelope-class] and [SpatVector3D-class]. It exists as a dispatch
 #' target for operations that are meaningful on any 3D representation, such
 #' as volume, volumetric overlap and vertical extent. Only shapes with a
-#' depth range have volume: voxels, envelopes and (later) polygons, not
-#' points or lines.
+#' depth range have volume: voxels, envelopes and polygons, not points or
+#' lines.
 #'
 #' It deliberately asserts no shared structure. The raster members store depth
 #' in dual roles (layer index vs. cell value), and `SpatVector3D` stores it per

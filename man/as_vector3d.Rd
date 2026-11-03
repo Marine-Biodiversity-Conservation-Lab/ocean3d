@@ -2,7 +2,7 @@
 % Please edit documentation in R/vector3d.R
 \name{as_vector3d}
 \alias{as_vector3d}
-\title{Build 3D points or lines}
+\title{Build 3D points, lines or polygons}
 \usage{
 as_vector3d(
   x,
@@ -11,38 +11,53 @@ as_vector3d(
   time = NULL,
   id = NULL,
   lon = "lon",
-  lat = "lat"
+  lat = "lat",
+  depth_min = NULL,
+  depth_max = NULL
 )
 }
 \arguments{
 \item{x}{A data frame (or tibble, matrix, named list) with one row per
-vertex, or an sf object. sf points take their depth and time from
-columns; sf lines take them from the Z and M coordinates.}
+vertex, or an sf object or \code{terra::SpatVector}. sf points take their
+depth and time from columns; sf lines take them from the Z and M
+coordinates; polygons take them from \code{depth_min}, \code{depth_max} and \code{time}.}
 
 \item{type}{\code{"points"} (default) or \code{"lines"}, for tables and sf points.
 With \code{"lines"}, the rows that share an \code{id} form one line, in row order.
-sf lines are always lines.}
+sf lines are always lines, and sf polygons always polygons.}
 
 \item{depth}{Column with the depth of each vertex, in positive metres
 downward. Not used for sf lines, whose depth is minus the Z coordinate
-(Z is height, as in other GIS tools).}
+(Z is height, as in other GIS tools), or for polygons.}
 
 \item{time}{Optional column with the time of each vertex: \code{Date}, \code{POSIXct}
 or text, read as in \code{\link[=extract_to_point]{extract_to_point()}}. For sf lines, the M coordinate
-in seconds since 1970-01-01 UTC, if present.}
+in seconds since 1970-01-01 UTC, if present. For polygons, one column
+(each polygon at a single time) or two (the start and end of each
+polygon's time interval). With dates, the interval covers whole UTC
+days, including the last: 1 to 15 February includes all of 15 February.
+The dates are stored as given, at midnight UTC, with \code{time_resolution}
+\code{"daily"}. With hours, the start and end are exact times.}
 
 \item{id}{Column with feature IDs. Required for lines from a table; for
-points, each row is a feature and IDs default to the row numbers.}
+points and polygons, each row is a feature and IDs default to the row
+numbers.}
 
 \item{lon, lat}{Longitude and latitude columns of a table.}
+
+\item{depth_min, depth_max}{Polygons only, and required for them: the top
+and bottom of each polygon, in positive metres downward. Each is a
+single number for all polygons (e.g. \verb{depth_min = 0, depth_max = 200})
+or the name of a column of \code{x}.}
 }
 \value{
 A \link[=SpatVector3D-class]{SpatVector3D}. Columns other than the coordinates, depth,
-time and ID are kept with each vertex.
+time and ID are kept with each vertex (points and lines) or polygon.
 }
 \description{
 Builds a \link[=SpatVector3D-class]{SpatVector3D} from a table with one row per vertex, or from
-an sf object with POINT or LINESTRING geometries.
+an sf object or \code{terra::SpatVector} with POINT, LINESTRING, POLYGON or
+MULTIPOLYGON geometries.
 }
 \examples{
 obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35),
@@ -53,6 +68,15 @@ dive <- data.frame(tag = "A", lon = c(150, 150.1, 150.2),
                    lat = -20, depth = c(0, 120, 15))
 track <- as_vector3d(dive, type = "lines", id = "tag")
 geomtype(track)
+
+# A protected area from the surface to 200 m.
+mpa <- sf::st_sf(
+  name = "reef",
+  geometry = sf::st_sfc(sf::st_polygon(list(rbind(
+    c(150, -20), c(151, -20), c(151, -21), c(150, -21), c(150, -20)
+  ))), crs = 4326)
+)
+as_vector3d(mpa, depth_min = 0, depth_max = 200)
 }
 \seealso{
 \code{\link[terra:geomtype]{geomtype()}}
