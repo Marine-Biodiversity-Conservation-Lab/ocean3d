@@ -89,8 +89,19 @@ exported function rather than deleting them.
 
 ## Tests
 
-- Test behaviour through the exported functions, on synthetic data (no
-  external files, keys or network).
+- Test through code that will last, so tests don't need rewriting when
+  other code is retired. Use synthetic data (no external files, keys or
+  network).
+  - Test exported functions that are staying, such as the build, intersect
+    and summarise steps and the constructors (`as_voxel()`,
+    `as_envelope()`), through their exported interface.
+  - Test the shared internals the core object will reuse (#113) directly:
+    time decoding and matching, the netCDF readers and similar helpers.
+    Tests through the combined extraction functions (`extract_to_point()`,
+    `extract2d()` and the like) would need rewriting if those functions are
+    retired (#116).
+  - Don't flag a direct test of one of these helpers as a convention
+    breach.
 - Check conditions with `expect_error()` / `expect_warning()` using `class =`,
   plus `expect_match()` on the parts of the message that matter.
 - Use `skip_if_not_installed()` only for packages in `Suggests` (e.g.
