@@ -1,4 +1,4 @@
-# SpatVector3D points and lines (#114).
+# SpatVector3D points, lines and polygons (#114).
 
 dive <- function() {
   data.frame(
@@ -180,5 +180,143 @@ test_that("points and lines have no volume but are 3D shapes", {
   tr <- as_vector3d(dive(), type = "lines", id = "tag")
   expect_true(methods::is(tr, "SpatVolume"))
   expect_error(volume(tr), "lines, which have no volume",
+               class = "ocean3d_error_volume_type")
+})
+
+# Polygons ------------------------------------------------------------------
+
+# Two one-degree squares off Queensland, with depth ranges and time intervals.
+areas <- function() {
+  square <- function(x0) {
+    sf::st_polygon(list(rbind(
+      c(x0, -20), c(x0 + 1, -20), c(x0 + 1, -21), c(x0, -21), c(x0, -20)
+    )))
+  }
+  sf::st_sf(
+    name = c("reef", "bank"), top = c(0, 10), bottom = c(200, 50),
+    from = as.Date(c("2020-01-01", "2020-02-01")),
+    to = as.Date(c("2020-03-01", "2020-02-15")),
+    status = c("no-take", "partial"),
+    geometry = sf::st_sfc(square(150), square(152), crs = 4326)
+  )
+}
+
+test_that("polygons take a depth range from numbers and keep attributes", {
+  p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
+  expect_s4_class(p, "SpatVector3D")
+  expect_true(methods::is(p, "SpatVolume"))
+  expect_identical(geomtype(p), "polygons")
+  expect_identical(length(p), 2L)
+  f <- as.data.frame(p)
+  expect_identical(f$feature_id, c("1", "2"))
+  expect_equal(f$depth_min, c(0, 0))
+  expect_equal(f$depth_max, c(200, 200))
+  expect_true(all(is.na(f$time_start)) && all(is.na(f$time_end)))
+  expect_identical(f$status, c("no-take", "partial"))
+  expect_s3_class(f$geometry, "sfc")
+  expect_equal(sf::st_crs(f$geometry), sf::st_crs(4326))
+  expect_identical(p@time_resolution, NA_character_)
+})
+
+test_that("polygons take depths, IDs and a time interval from columns", {
+  p <- as_vector3d(areas(), depth_min = "top", depth_max = "bottom",
+                   time = c("from", "to"), id = "name")
+  f <- as.data.frame(p)
+  expect_identical(f$feature_id, c("reef", "bank"))
+  expect_equal(f$depth_min, c(0, 10))
+  expect_equal(f$depth_max, c(200, 50))
+  expect_equal(f$time_start,
+               as.POSIXct(c("2020-01-01", "2020-02-01"), tz = "UTC"))
+  expect_equal(f$time_end,
+               as.POSIXct(c("2020-03-01", "2020-02-15"), tz = "UTC"))
+  expect_identical(p@time_resolution, "daily")
+  # Columns used as arguments aren't repeated as attributes.
+  expect_false(any(c("name", "top", "bottom", "from", "to") %in% names(f)))
+  expect_output(show(p), "polygons")
+  expect_output(show(p), "0 to 200")
+  expect_output(show(p), "2020-01-01 to 2020-03-01")
+})
+
+test_that("one time column gives each polygon a single time", {
+  f <- as.data.frame(
+    as_vector3d(areas(), depth_min = 0, depth_max = 50, time = "from")
+  )
+  expect_equal(f$time_start, f$time_end)
+  expect_equal(f$time_start,
+               as.POSIXct(c("2020-01-01", "2020-02-01"), tz = "UTC"))
+})
+
+test_that("polygons come from SpatVector, MULTIPOLYGON and other CRSs", {
+  from_sf <- as.data.frame(as_vector3d(areas(), depth_min = 0,
+                                       depth_max = 50))
+  from_terra <- as.data.frame(as_vector3d(terra::vect(areas()),
+                                          depth_min = 0, depth_max = 50))
+  expect_equal(from_terra$depth_max, from_sf$depth_max)
+  expect_equal(as.numeric(sf::st_bbox(from_terra$geometry)),
+               as.numeric(sf::st_bbox(from_sf$geometry)))
+
+  multi <- sf::st_cast(areas(), "MULTIPOLYGON")
+  expect_identical(geomtype(as_vector3d(multi, depth_min = 0,
+                                        depth_max = 50)), "polygons")
+
+  mercator <- sf::st_transform(areas(), 3857)
+  back <- as.data.frame(as_vector3d(mercator, depth_min = 0, depth_max = 50))
+  expect_equal(as.numeric(sf::st_bbox(back$geometry)),
+               as.numeric(sf::st_bbox(from_sf$geometry)), tolerance = 1e-6)
+})
+
+test_that("invalid polygon input is rejected with a clear error", {
+  a <- areas()
+  expect_error(as_vector3d(a), "Polygons need `depth_min` and `depth_max`",
+               class = "ocean3d_error_vector3d")
+  expect_error(as_vector3d(a, depth_min = 0, depth_max = c(50, 60)),
+               "must each be one number or the name of a column",
+               class = "ocean3d_error_vector3d")
+  expect_error(as_vector3d(a, depth_min = 300, depth_max = 200),
+               "depth_min must not be deeper than depth_max",
+               class = "ocean3d_error_vector3d")
+  expect_error(as_vector3d(a, depth_min = -5, depth_max = 200),
+               "positive metres", class = "ocean3d_error_vector3d")
+  a$top_text <- c("0", "10")
+  expect_error(as_vector3d(a, depth_min = "top_text", depth_max = 200),
+               "`top_text` must be numeric, but it is character",
+               class = "ocean3d_error_vector3d")
+
+  a <- areas()
+  a$name <- "reef"
+  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50, id = "name"),
+               "each polygon needs its own ID",
+               class = "ocean3d_error_vector3d")
+
+  a <- areas()
+  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50,
+                           time = c("to", "from")),
+               "time_start must not be after time_end",
+               class = "ocean3d_error_vector3d")
+  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50,
+                           time = c("from", "to", "from")),
+               "one column (a single time) or two", fixed = TRUE,
+               class = "ocean3d_error_vector3d")
+
+  a$depth_min <- 1
+  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50),
+               "Column names depth_min are used by SpatVector3D",
+               class = "ocean3d_error_vector3d", fixed = TRUE)
+
+  a <- areas()
+  sf::st_geometry(a)[[2]] <- sf::st_polygon()
+  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50),
+               "Row 2 of `x` has an empty geometry", fixed = TRUE,
+               class = "ocean3d_error_vector3d")
+})
+
+test_that("depth_min and depth_max are only for polygons", {
+  expect_error(as_vector3d(dive(), depth_min = 0, depth_max = 10),
+               "are for polygons", class = "ocean3d_error_vector3d")
+})
+
+test_that("volume() on polygons says it isn't supported yet", {
+  p <- as_vector3d(areas(), depth_min = 0, depth_max = 50)
+  expect_error(volume(p), "doesn't support SpatVector3D polygons yet",
                class = "ocean3d_error_volume_type")
 })

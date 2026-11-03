@@ -33,10 +33,13 @@ calls that used to return a value now return `NA` or stop with an error:
   (spatial, depth or time), with repeated reasons grouped by file. The time
   report now also explains outputs that are missing because no observation
   date was supplied for a file with a time dimension.
-* New class `SpatVector3D` for 3D points and lines, with a depth (positive
-  metres down) and an optional time at each vertex, built with
-  `as_vector3d()` from a table or sf object (for sf lines, depth is minus
-  Z and time is M). `geomtype()` reports the type. Polygons follow in a later version (#114).
+* New class `SpatVector3D` for 3D points, lines and polygons, built with
+  `as_vector3d()` from a table, sf object or `terra::SpatVector`. Points
+  and lines have a depth (positive metres down) and an optional time at
+  each vertex (for sf lines, depth is minus Z and time is M). Polygons have
+  a depth range, `depth_min` to `depth_max`, and an optional time interval
+  per feature, such as a protected area from 0 to 200 m. `geomtype()`
+  reports the type (#114).
 
 ## Bug fixes
 

@@ -7,7 +7,7 @@
 \alias{length,SpatVector3D-method}
 \alias{show,SpatVector3D-method}
 \alias{as.data.frame.SpatVector3D}
-\title{3D points and lines with depth and time}
+\title{3D points, lines and polygons with depth and time}
 \usage{
 \S4method{geomtype}{SpatVector3D}(x, ...)
 
@@ -26,28 +26,45 @@
 
 \item{row.names, optional}{Not used.}
 }
+\value{
+\code{as.data.frame()}: the vertex table for points and lines, or the
+polygon table, with its sf geometry column, for polygons.
+}
 \description{
 A \code{SpatVector3D} holds features of one geometry type, reported by
-\code{\link[terra:geomtype]{geomtype()}}: \code{"points"} (a detection at 35 m) or \code{"lines"} (a dive track
-or a vessel route). Each vertex has a longitude and latitude (WGS84), a
-depth in positive metres downward, and optionally a time (UTC). Build one
-with \code{\link[=as_vector3d]{as_vector3d()}} from a table or sf object.
+\code{\link[terra:geomtype]{geomtype()}}: \code{"points"} (a detection at 35 m), \code{"lines"} (a dive track or
+a vessel route) or \code{"polygons"} (a marine protected area from 0 to 200 m).
+Coordinates are longitude and latitude (WGS84), depths are positive metres
+downward, and times are UTC. Build one with \code{\link[=as_vector3d]{as_vector3d()}} from a table,
+sf object or \code{terra::SpatVector}.
 }
 \details{
+Points and lines have a depth and optional time at each vertex. Polygons
+have one depth range (\code{depth_min} to \code{depth_max}) and an optional time
+interval for the whole shape.
+
 It is the vector counterpart of \link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatEnvelope-class]{SpatEnvelope}.
-It is not built on \code{terra::SpatVector} or sf: those keep attributes per
-feature, so a line's depth and time at each vertex would not survive their
-operations.
+Points and lines are not stored as \code{terra::SpatVector} or sf objects:
+those keep attributes per feature, so a line's depth and time at each
+vertex would not survive their operations. A polygon's depth range and
+time are per feature, so polygons keep their outlines in an sf geometry
+column.
 }
 \section{Slots}{
 
 \describe{
-\item{\code{type}}{\code{"points"} or \code{"lines"}.}
+\item{\code{type}}{\code{"points"}, \code{"lines"} or \code{"polygons"}.}
 
-\item{\code{vertices}}{A data frame with one row per vertex: \code{feature_id}, \code{vertex}
-(the order within the feature), \code{lon}, \code{lat}, \code{depth}, \code{time} (POSIXct,
-UTC, or \code{NA} when the features have no time), and any other columns from
-the input.}
+\item{\code{vertices}}{Points and lines: a data frame with one row per vertex:
+\code{feature_id}, \code{vertex} (the order within the feature), \code{lon}, \code{lat},
+\code{depth}, \code{time} (POSIXct, UTC, or \code{NA} when the features have no time),
+and any other columns from the input. Empty for polygons.}
+
+\item{\code{features}}{Polygons: a data frame with one row per polygon:
+\code{feature_id}, \code{depth_min}, \code{depth_max}, \code{time_start} and \code{time_end}
+(POSIXct, UTC, or \code{NA} when the polygons have no time), \code{geometry} (an
+sf geometry column of POLYGON or MULTIPOLYGON, EPSG:4326), and any other
+columns from the input. Empty for points and lines.}
 
 \item{\code{time_resolution}}{\code{"daily"} or \code{"datetime"} for the precision of the
 times, as for \code{\link[=extract_to_point]{extract_to_point()}}, or \code{NA} when there is no time.}
