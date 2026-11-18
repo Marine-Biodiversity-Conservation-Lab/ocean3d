@@ -53,8 +53,10 @@ axes aren't supported yet.
 geographic CRS as WKT (\code{crs_wkt} or \code{spatial_ref}).
 }
 
-Regular longitude-latitude grids are supported; curvilinear and projected
-grids are rejected.
+Regular longitude-latitude grids with coordinate values are supported;
+curvilinear, projected and rotated-pole grids are rejected. Bad cell bounds
+(cells that don't contain their centre, have no width or overlap) stop with
+an error.
 }
 \section{Experimental}{
 

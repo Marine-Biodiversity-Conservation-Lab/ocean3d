@@ -23,13 +23,21 @@ calls that used to return a value now return `NA` or stop with an error:
 * With several files, a temporal tie between sources keeps input order under
   `"within"` matching, and goes to the closer cell centre under `"nearest"`
   matching.
-* Cell bounds are checked the same way in point, track and buffer
-  extraction, and bad bounds stop with an error. Longitude, latitude and
-  time bounds must have positive widths, contain their cell centres and
-  not overlap (longitude cells also not around the globe), and a `bounds`
-  attribute must name a usable bounds variable. Point and track extraction
-  used to warn and infer edges from the centres instead (spatial bounds),
-  or ignore the bounds (time bounds).
+
+Point, track and buffer extraction now check cell bounds the same way, and
+stop with an error when they are bad (#113):
+
+* Each cell must have a positive width, contain its centre and not overlap
+  another cell, and a `bounds` attribute must name a usable bounds
+  variable. This applies to longitude and latitude bounds everywhere, and
+  to depth and time bounds in buffer extraction. Horizontal buffers also
+  reject longitude cells that overlap after wrapping around 360°. The error
+  names the file.
+* Point and track extraction used to warn and infer longitude and latitude
+  edges from the centres. They don't read time bounds.
+* To read a file that now fails, fix its bounds, or remove the coordinate's
+  `bounds` attribute so edges are inferred from the centres (for example
+  with NCO: `ncatted -a bounds,lon,d,, file.nc`).
 
 ## New features
 
@@ -40,12 +48,13 @@ calls that used to return a value now return `NA` or stop with an error:
   (spatial, depth or time), with repeated reasons grouped by file. The time
   report now also explains outputs that are missing because no observation
   date was supplied for a file with a time dimension.
-* New experimental class `SpatProxy`, built with `as_proxy()`: it describes
-  one variable of a netCDF file without reading its values (#113). It holds
-  the variable's chunk sizes, longitude and latitude with cell edges, depth
-  in metres positive down, time as a CFtime object with its bounds, and the
-  CRS. A time axis must be strictly increasing. No other
-  function accepts a `SpatProxy` yet, and it may change without notice.
+* New experimental class `SpatProxy`, built with `as_proxy()`, describes one
+  variable of a netCDF file without reading its values (#113): its axes,
+  chunk sizes and coordinate reference system (CRS). Depth is in metres
+  positive down and time is a CFtime object. `as_proxy()` stops with an
+  error if the time axis isn't strictly increasing or is a climatology. No
+  other function accepts a `SpatProxy` yet, and it may change without
+  notice.
 * New class `SpatVector3D` for 3D points, lines and polygons, built with
   `as_vector3d()` from a table, sf object or `terra::SpatVector`. Points
   and lines have a depth (positive metres down) and an optional time at

@@ -287,10 +287,12 @@ Spatial matching uses the same rules for one or multiple sources.
 With spatial_match = "within", only cells containing the point are eligible.
 With spatial_match = "nearest", the requested point may be outside grid
 coverage. The nearest cell centre must be within max_distance_km of it.
-Explicit spatial cell bounds are preferred. Otherwise, or when the bounds
-variable is missing or invalid (with a warning), edges are inferred from
-adjacent centres; singleton axes without bounds require coincidence, up to
-single-precision rounding of the stored coordinate.
+Explicit spatial cell bounds are used when the file has them, and bad
+bounds (a missing bounds variable, cells that don't contain their centres
+or that overlap) stop with an error that names the file. Without bounds,
+edges are inferred from adjacent centres; singleton axes without bounds
+require coincidence, up to single-precision rounding of the stored
+coordinate.
 Longitude comparisons support equivalent coordinates across the antimeridian.
 A point on an edge shared by two cells uses the first cell in storage order.
 Among eligible sources the closest temporal candidate with a valid value

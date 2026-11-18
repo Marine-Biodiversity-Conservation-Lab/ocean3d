@@ -115,8 +115,10 @@ setValidity("SpatProxy", function(object) {
 #' * **CRS:** EPSG:4326, unless the variable's `grid_mapping` gives another
 #'   geographic CRS as WKT (`crs_wkt` or `spatial_ref`).
 #'
-#' Regular longitude-latitude grids are supported; curvilinear and projected
-#' grids are rejected.
+#' Regular longitude-latitude grids with coordinate values are supported;
+#' curvilinear, projected and rotated-pole grids are rejected. Bad cell bounds
+#' (cells that don't contain their centre, have no width or overlap) stop with
+#' an error.
 #'
 #' @inheritSection SpatProxy-class Experimental
 #'
