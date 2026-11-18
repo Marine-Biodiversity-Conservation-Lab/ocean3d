@@ -32,16 +32,13 @@ with \code{\link[base:saveRDS]{base::saveRDS()}}.}
 \item{\code{variable}}{A list: \code{name}, \code{units}, \code{long_name}, \code{dims} (the
 variable's dimension names in ncdf4 order), \code{dim_lengths}, \code{axis_dims}
 (the dimension of each axis), \code{singleton_dims} (other dimensions of
-length 1), \code{packing} (\code{storage} type, \code{scale_factor}, \code{add_offset},
-\code{fill_value} and \code{missing_value}, \code{NULL} when absent) and \code{chunksizes}
-(\code{NULL} for unchunked storage).}
+length 1) and \code{chunksizes} (\code{NULL} for unchunked storage).}
 
 \item{\code{axes}}{A list with one element per axis, \code{NULL} for an axis the
 variable doesn't have. \code{lon}, \code{lat} and \code{depth} hold \code{dim}, \code{centres}
 and cell edges \code{lower} and \code{upper}, in storage order, and \code{edges}: where
 the edges come from (\code{"bounds"}, \code{"inferred"}, or \code{"none"} for a single
-cell without bounds). \code{lon} also has \code{convention} (\code{"0_360"} or
-\code{"-180_180"}). \code{depth} is in metres positive down and also has
+cell without bounds). \code{depth} is in metres positive down and also has
 \code{storage} (\code{"shallow_first"} or \code{"deep_first"}). \code{time} holds \code{dim},
 \code{cftime} (a CFtime object, with the file's bounds attached when it has
 them) and \code{edges} (\code{"bounds"} or \code{"none"}).}

@@ -29,15 +29,12 @@ setOldClass(c("CFTime", "R6"))
 #' @slot variable A list: `name`, `units`, `long_name`, `dims` (the
 #'   variable's dimension names in ncdf4 order), `dim_lengths`, `axis_dims`
 #'   (the dimension of each axis), `singleton_dims` (other dimensions of
-#'   length 1), `packing` (`storage` type, `scale_factor`, `add_offset`,
-#'   `fill_value` and `missing_value`, `NULL` when absent) and `chunksizes`
-#'   (`NULL` for unchunked storage).
+#'   length 1) and `chunksizes` (`NULL` for unchunked storage).
 #' @slot axes A list with one element per axis, `NULL` for an axis the
 #'   variable doesn't have. `lon`, `lat` and `depth` hold `dim`, `centres`
 #'   and cell edges `lower` and `upper`, in storage order, and `edges`: where
 #'   the edges come from (`"bounds"`, `"inferred"`, or `"none"` for a single
-#'   cell without bounds). `lon` also has `convention` (`"0_360"` or
-#'   `"-180_180"`). `depth` is in metres positive down and also has
+#'   cell without bounds). `depth` is in metres positive down and also has
 #'   `storage` (`"shallow_first"` or `"deep_first"`). `time` holds `dim`,
 #'   `cftime` (a CFtime object, with the file's bounds attached when it has
 #'   them) and `edges` (`"bounds"` or `"none"`).
@@ -88,8 +85,7 @@ setValidity("SpatProxy", function(object) {
 #' form. No values of the variable are read.
 #'
 #' * **Longitude and latitude:** cell edges come from the coordinate's CF
-#'   `bounds` variable, or halfway between neighbouring centres. The
-#'   longitude convention (0 to 360 or -180 to 180) is recorded.
+#'   `bounds` variable, or halfway between neighbouring centres.
 #' * **Depth:** converted to metres positive down from the coordinate's
 #'   `units` and `positive` attributes. Edges come from the CF bounds, or
 #'   halfway between centres, cut at the surface. A depth axis stored deep to
@@ -152,13 +148,9 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     values <- as.vector(.get_dim_values(nc, dims[[axis]]))
     out <- .prepare_spatial_axis(nc, dims[[axis]], values, axis == "lon")
     c(list(dim = dims[[axis]]), out[c("centres", "lower", "upper")],
-      list(edges = edges_from(out$basis)),
-      if (axis == "lon") {
-        list(convention = if (any(values > 180)) "0_360" else "-180_180")
-      })
+      list(edges = edges_from(out$basis)))
   })
 
-  attribute <- function(name) .read_time_attribute(nc, var, name)
   path <- normalizePath(nc$filename)
   methods::new(
     "SpatProxy",
@@ -169,12 +161,6 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       dim_lengths = stats::setNames(as.integer(info$varsize), dims$var_dims),
       axis_dims = dims[c("lon", "lat", "depth", "time")],
       singleton_dims = dims$singleton_dims,
-      packing = list(
-        storage = info$prec, scale_factor = attribute("scale_factor"),
-        add_offset = attribute("add_offset"),
-        fill_value = attribute("_FillValue"),
-        missing_value = attribute("missing_value")
-      ),
       chunksizes = if (!anyNA(info$chunksizes)) {
         stats::setNames(as.integer(info$chunksizes), dims$var_dims)
       }
@@ -267,9 +253,6 @@ setMethod("show", "SpatProxy", function(object) {
   # Sizes are shown in the fixed axis order, whatever the storage order.
   dims <- unlist(variable$axis_dims)
   sizes <- function(x) paste(x[dims], collapse = " x ")
-  packing <- variable$packing
-  packed <- if (is.null(packing$scale_factor) &&
-                  is.null(packing$add_offset)) "" else ", packed"
   chunks <- if (is.null(variable$chunksizes)) "" else
     paste0(", chunks ", sizes(variable$chunksizes))
   time_bounds <- if (identical(axes$time$edges, "bounds")) "with" else "no"
@@ -277,15 +260,14 @@ setMethod("show", "SpatProxy", function(object) {
     class = "SpatProxy (experimental)",
     source = basename(object@source$path),
     variable = glue::glue(
-      "{variable$name} ({variable$units}), stored as {packing$storage}",
-      "{packed}{chunks}"
+      "{variable$name} ({variable$units}){chunks}"
     ),
     dimensions = glue::glue(
       "{sizes(variable$dim_lengths)} ({paste(names(dims), collapse = ' x ')})"
     ),
     lon = glue::glue(
       "{extent(axes$lon$centres)}, {length(axes$lon$centres)} cells, ",
-      "{sub('_', ' to ', axes$lon$convention)}, {edges(axes$lon)}"
+      "{edges(axes$lon)}"
     ),
     lat = glue::glue(
       "{extent(axes$lat$centres)}, {length(axes$lat$centres)} cells, ",

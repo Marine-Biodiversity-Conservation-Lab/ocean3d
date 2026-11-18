@@ -68,12 +68,6 @@ test_that("explicit bounds are used before inferred edges", {
   expect_null(plain@axes$time$cftime$get_bounds())
 })
 
-test_that("the longitude convention is recorded", {
-  expect_identical(proxy_of(lon = c(90, 270))@axes$lon$convention, "0_360")
-  expect_identical(proxy_of(lon = c(-90, 90))@axes$lon$convention,
-                   "-180_180")
-})
-
 test_that("depth is metres positive down in its storage order", {
   reversed <- proxy_of(depth = c(15, 5))
   expect_equal(reversed@axes$depth$centres, c(15, 5))
@@ -111,15 +105,9 @@ test_that("a grid without depth or time has no such axis", {
   expect_identical(surface@axes$depth$edges, "none")
 })
 
-test_that("packing and chunk sizes are recorded", {
+test_that("chunk sizes are recorded", {
   x <- proxy_of(prec = "short", chunksizes = c(3, 1, 1, 1),
                 scale = 0.01, offset = 20)
-  packing <- x@variable$packing
-  expect_identical(packing$storage, "short")
-  expect_equal(packing$scale_factor, 0.01)
-  expect_equal(packing$add_offset, 20)
-  expect_equal(packing$fill_value, -32767)
-  expect_null(packing$missing_value)
   expect_identical(x@variable$chunksizes,
                    c(lon = 3L, lat = 1L, depth = 1L, time = 1L))
 
@@ -226,9 +214,9 @@ test_that("the print shows each axis", {
   expect_match(printed[2L], "^source     : file.*\\.nc$")
   expect_identical(printed[-2L], c(
     "class      : SpatProxy (experimental)",
-    "variable   : temp (degC), stored as short, packed, chunks 3 x 1 x 1 x 1",
+    "variable   : temp (degC), chunks 3 x 1 x 1 x 1",
     "dimensions : 3 x 2 x 2 x 2 (lon x lat x depth x time)",
-    "lon        : 0.5 to 2.5, 3 cells, -180 to 180, edges inferred",
+    "lon        : 0.5 to 2.5, 3 cells, edges inferred",
     "lat        : 10.5 to 11.5, 2 cells, edges inferred",
     "depth      : 5 to 15 m, 2 levels, shallow first, edges inferred",
     paste("time       : 2020-01-01 to 2020-01-02, 2 steps,",
@@ -238,7 +226,7 @@ test_that("the print shows each axis", {
 
   bare <- capture.output(print(proxy_of(depth = NULL, time = NULL)))
   expect_identical(bare[3:4], c(
-    "variable   : temp (degC), stored as double",
+    "variable   : temp (degC)",
     "dimensions : 3 x 2 (lon x lat)"
   ))
   expect_identical(bare[7:8], c("depth      : none", "time       : none"))

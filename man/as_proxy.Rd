@@ -37,8 +37,7 @@ form. No values of the variable are read.
 \details{
 \itemize{
 \item \strong{Longitude and latitude:} cell edges come from the coordinate's CF
-\code{bounds} variable, or halfway between neighbouring centres. The
-longitude convention (0 to 360 or -180 to 180) is recorded.
+\code{bounds} variable, or halfway between neighbouring centres.
 \item \strong{Depth:} converted to metres positive down from the coordinate's
 \code{units} and \code{positive} attributes. Edges come from the CF bounds, or
 halfway between centres, cut at the surface. A depth axis stored deep to

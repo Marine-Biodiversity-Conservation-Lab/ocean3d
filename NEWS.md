@@ -42,9 +42,9 @@ calls that used to return a value now return `NA` or stop with an error:
   date was supplied for a file with a time dimension.
 * New experimental class `SpatProxy`, built with `as_proxy()`: it describes
   one variable of a netCDF file without reading its values (#113). It holds
-  the variable's packing and chunk sizes, longitude and latitude with cell
-  edges, depth in metres positive down, time as a CFtime object with its
-  bounds, and the CRS. A time axis must be strictly increasing. No other
+  the variable's chunk sizes, longitude and latitude with cell edges, depth
+  in metres positive down, time as a CFtime object with its bounds, and the
+  CRS. A time axis must be strictly increasing. No other
   function accepts a `SpatProxy` yet, and it may change without notice.
 * New class `SpatVector3D` for 3D points, lines and polygons, built with
   `as_vector3d()` from a table, sf object or `terra::SpatVector`. Points
