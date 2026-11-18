@@ -144,7 +144,7 @@
 .read_buffer_axis_nc <- function(path, coordinate = "depth", ...) {
   nc <- ncdf4::nc_open(path)
   on.exit(ncdf4::nc_close(nc))
-  .buffer_read_axis(nc, coordinate, ...)
+  .read_interval_axis(nc, coordinate, ...)
 }
 
 
@@ -2083,7 +2083,7 @@ test_that(
     )
     nc <- ncdf4::nc_open(path)
     on.exit(ncdf4::nc_close(nc), add = TRUE, after = FALSE)
-    support <- .buffer_read_axis(nc, "depth")
+    support <- .read_interval_axis(nc, "depth")
     expect_equal(support$centres, c(5, 20))
     values <- ncdf4::ncvar_get(nc, "value")
     expect_identical(dim(values), 2L)

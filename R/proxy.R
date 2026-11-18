@@ -143,13 +143,16 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   dims <- .detect_dims(nc, var, lon_dim, lat_dim, depth_dim, time_dim)
   info <- nc$var[[var]]
 
+  # Where an axis's edges come from, from the shared readers' `basis`.
+  edges_from <- function(basis) {
+    switch(basis, explicit_bounds = "bounds",
+           singleton_coordinate = "none", "inferred")
+  }
   horizontal <- lapply(c(lon = "lon", lat = "lat"), function(axis) {
     values <- as.vector(.get_dim_values(nc, dims[[axis]]))
     out <- .prepare_spatial_axis(nc, dims[[axis]], values, axis == "lon")
-    edges <- switch(out$basis, explicit_bounds = "bounds",
-                    singleton_coordinate = "none", "inferred")
     c(list(dim = dims[[axis]]), out[c("centres", "lower", "upper")],
-      list(edges = edges),
+      list(edges = edges_from(out$basis)),
       if (axis == "lon") {
         list(convention = if (any(values > 180)) "0_360" else "-180_180")
       })
@@ -177,43 +180,20 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       }
     ),
     axes = c(horizontal, list(
-      depth = if (!is.null(dims$depth)) .proxy_depth_axis(nc, dims$depth),
+      depth = if (!is.null(dims$depth)) {
+        out <- .read_interval_axis(nc, dims$depth, "depth",
+                                   infer_bounds = TRUE, allow_singleton = TRUE)
+        n <- length(out$centres)
+        c(list(dim = dims$depth), out[c("centres", "lower", "upper")], list(
+          edges = edges_from(out$basis),
+          storage = if (out$centres[1L] > out$centres[n]) "deep_first" else
+            "shallow_first"
+        ))
+      },
       time = if (!is.null(dims$time)) .proxy_time_axis(nc, dims$time, path)
     )),
     crs = .proxy_crs(nc, var)
   )
-}
-
-# Depth in metres positive down, in storage order, with edges from CF bounds
-# or halfway between centres (cut at the surface).
-.proxy_depth_axis <- function(nc, dim) {
-  values <- as.vector(.get_dim_values(nc, dim))
-  centres <- .read_depth_axis(nc, dim, values)$depth_m
-  steps <- diff(centres)
-  if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
-    rlang::abort(glue::glue(
-      "The depth axis `{dim}` must run shallow to deep or deep to shallow."
-    ), class = "ocean3d_error_depth_order", call = NULL)
-  }
-  bounds <- .read_bounds(nc, dim, length(values), strict = TRUE)
-  if (!is.null(bounds)) {
-    edges <- .depth_bounds_m(nc, dim, values, bounds)
-    lower <- pmin(edges[1L, ], edges[2L, ])
-    upper <- pmax(edges[1L, ], edges[2L, ])
-    source <- "bounds"
-  } else if (length(centres) > 1L) {
-    edges <- .midpoint_edges(centres)
-    lower <- pmax(edges$lower, 0)
-    upper <- edges$upper
-    source <- "inferred"
-  } else {
-    lower <- upper <- centres
-    source <- "none"
-  }
-  storage <- if (length(steps) && steps[1L] < 0) "deep_first" else
-    "shallow_first"
-  list(dim = dim, centres = centres, lower = lower, upper = upper,
-       edges = source, storage = storage)
 }
 
 # The time axis as a CFtime object, with the file's bounds attached when it

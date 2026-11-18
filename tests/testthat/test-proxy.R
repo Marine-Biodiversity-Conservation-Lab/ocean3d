@@ -90,7 +90,15 @@ test_that("depth is metres positive down in its storage order", {
 
   f <- make_grid_file(depth = c(5, 15, 10))
   on.exit(unlink(f), add = TRUE)
-  expect_error(as_proxy(f), class = "ocean3d_error_depth_order")
+  err <- expect_error(as_proxy(f), class = "ocean3d_error_axis_order")
+  expect_match(conditionMessage(err), "`depth` must be strictly increasing")
+})
+
+test_that("depth bounds that don't contain their centres are rejected", {
+  f <- make_grid_file(depth = c(5, 15),
+                      depth_bounds = rbind(c(20, 30), c(30, 40)))
+  on.exit(unlink(f), add = TRUE)
+  expect_error(as_proxy(f), "must contain their centres")
 })
 
 test_that("a grid without depth or time has no such axis", {
