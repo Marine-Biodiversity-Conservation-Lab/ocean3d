@@ -146,8 +146,6 @@ test_that("volume() returns correct value for uniform grid", {
 })
 
 test_that("volume() of a vect_to_envelope() output is positive and finite", {
-  skip_if_not_installed("sf")
-
   grid <- terra::rast(nrows = 5, ncols = 5, xmin = 0, xmax = 5,
                       ymin = 0, ymax = 5, vals = NA, crs = "EPSG:4326")
   seafloor <- grid

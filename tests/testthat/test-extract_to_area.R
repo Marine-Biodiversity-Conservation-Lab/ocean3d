@@ -27,7 +27,6 @@ make_area_polygon <- function() {
 }
 
 test_that("extract_to_area() selects the correct depth range", {
-  skip_if_not_installed("sf")
   v <- make_area_voxel()
   a <- sf::st_sf(geometry = make_area_polygon())
 
@@ -39,7 +38,6 @@ test_that("extract_to_area() selects the correct depth range", {
 })
 
 test_that("extract_to_area() returns a SpatVoxel", {
-  skip_if_not_installed("sf")
   out <- extract_to_area(sf::st_sf(geometry = make_area_polygon()),
                          make_area_voxel())
   expect_s4_class(out, "SpatVoxel")
@@ -47,7 +45,6 @@ test_that("extract_to_area() returns a SpatVoxel", {
 })
 
 test_that("extract_to_area() crops to area", {
-  skip_if_not_installed("sf")
   v <- make_area_voxel()
   a <- sf::st_sf(geometry = make_area_polygon())
 
@@ -59,7 +56,6 @@ test_that("extract_to_area() crops to area", {
 })
 
 test_that("extract_to_area() keeps every layer when depth bounds are NULL", {
-  skip_if_not_installed("sf")
   v <- make_area_voxel()
   out <- extract_to_area(sf::st_sf(geometry = make_area_polygon()), v)
 
@@ -68,7 +64,6 @@ test_that("extract_to_area() keeps every layer when depth bounds are NULL", {
 })
 
 test_that("extract_to_area() honours a single open depth bound", {
-  skip_if_not_installed("sf")
   v <- make_area_voxel()
   a <- sf::st_sf(geometry = make_area_polygon())
 
@@ -80,7 +75,6 @@ test_that("extract_to_area() honours a single open depth bound", {
 })
 
 test_that("extract_to_area() accepts sf, sfc and SpatVector areas", {
-  skip_if_not_installed("sf")
   v <- make_area_voxel()
   poly <- make_area_polygon()
 
@@ -97,7 +91,6 @@ test_that("extract_to_area() accepts sf, sfc and SpatVector areas", {
 })
 
 test_that("extract_to_area() reprojects an area in another CRS", {
-  skip_if_not_installed("sf")
   v <- make_area_voxel()
   a <- sf::st_transform(make_area_polygon(), "EPSG:3857")
 

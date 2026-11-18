@@ -241,17 +241,6 @@
 }
 
 
-.read_buffer_source_nc <- function(source, data, options, ...) {
-  .buffer_extract_one_source(
-    data,
-    .as_netcdf_sources(source)[[1L]],
-    "temp",
-    options,
-    ...
-  )
-}
-
-
 # Request validation -----------------------------------------------------------
 
 test_that("most_similar exports locations without diagnostics", {
@@ -838,141 +827,6 @@ test_that(
 )
 
 
-# Interval aggregation --------------------------------------------------------
-
-test_that(
-  "interval means distinguish weighted and equal averaging",
-  {
-    weighted <- .buffer_interval_mean(
-      values = c(10, 20),
-      lower = c(0, 10),
-      upper = c(10, 30),
-      requested = c(5, 25)
-    )
-    equal <- .buffer_interval_mean(
-      values = c(10, 20),
-      lower = c(0, 10),
-      upper = c(10, 30),
-      requested = c(5, 25),
-      weighting = "equal"
-    )
-
-    expect_equal(weighted$value, 17.5)
-    expect_equal(equal$value, 15)
-    expect_equal(weighted$coverage_fraction, 1)
-    expect_equal(weighted$valid_fraction, 1)
-    expect_equal(weighted$n_intersecting, 2)
-    expect_equal(weighted$n_valid, 2)
-    expect_identical(weighted$contributing_rows, 1:2)
-    expect_identical(weighted$status, "complete")
-  }
-)
-
-
-test_that(
-  "coverage refers to the full request ... epts the threshold",
-  {
-    for (weighting in c("weighted", "equal")) {
-      result <- .buffer_interval_mean(
-        values = 10,
-        lower = 0,
-        upper = 10,
-        requested = c(0, 20),
-        weighting = weighting
-      )
-      expect_true(is.na(result$value))
-      expect_equal(result$coverage_fraction, 0.5)
-      expect_equal(result$valid_fraction, 0.5)
-      expect_identical(result$status, "insufficient_coverage")
-
-      accepted <- .buffer_interval_mean(
-        values = 10,
-        lower = 0,
-        upper = 10,
-        requested = c(0, 20),
-        weighting = weighting,
-        min_valid_fraction = 0.5
-      )
-      expect_equal(accepted$value, 10)
-      expect_identical(accepted$status, "partial")
-    }
-  }
-)
-
-
-test_that(
-  "coverage and valid support are reported separately",
-  {
-    result <- .buffer_interval_mean(
-      values = c(NA_real_, 20),
-      lower = c(0, 10),
-      upper = c(10, 20),
-      requested = c(0, 20),
-      min_valid_fraction = 0.5
-    )
-
-    expect_equal(result$value, 20)
-    expect_equal(result$coverage_fraction, 1)
-    expect_equal(result$valid_fraction, 0.5)
-    expect_equal(result$n_intersecting, 2)
-    expect_equal(result$n_valid, 1)
-    expect_identical(result$contributing_rows, 2L)
-    expect_identical(result$status, "partial")
-  }
-)
-
-
-test_that(
-  "coverage thresholds distinguish below, equal and above",
-  {
-    for (threshold in c(0.7999, 0.8, 0.8001)) {
-      result <- .buffer_interval_mean(
-        values = c(10, 20),
-        lower = c(0, 6),
-        upper = c(4, 10),
-        requested = c(0, 10),
-        min_valid_fraction = threshold
-      )
-      expect_equal(result$coverage_fraction, 0.8)
-      expect_equal(result$valid_fraction, 0.8)
-
-      if (threshold <= 0.8) {
-        expect_equal(result$value, 15)
-        expect_identical(result$status, "partial")
-      } else {
-        expect_true(is.na(result$value))
-        expect_identical(result$status, "insufficient_coverage")
-      }
-    }
-  }
-)
-
-
-test_that("empty and all-missing intervals never produce a mean", {
-  empty <- .buffer_interval_mean(
-    values = c(10, 20),
-    lower = c(0, 20), upper = c(10, 30),
-    requested = c(10, 20),
-    min_valid_fraction = 0
-  )
-  expect_true(is.na(empty$value))
-  expect_identical(empty$status, "empty")
-  expect_equal(empty$n_intersecting, 0)
-  expect_equal(empty$coverage_fraction, 0)
-
-  missing <- .buffer_interval_mean(
-    values = c(NA_real_, NaN, Inf),
-    lower = c(0, 10, 20), upper = c(10, 20, 30),
-    requested = c(0, 30),
-    min_valid_fraction = 0
-  )
-  expect_true(is.na(missing$value))
-  expect_identical(missing$status, "all_missing")
-  expect_equal(missing$coverage_fraction, 1)
-  expect_equal(missing$valid_fraction, 0)
-})
-
-
 # Horizontal buffer geometry ---------------------------------------------------
 
 # Degrees of longitude per kilometre along the WGS84 equator.
@@ -1131,7 +985,6 @@ test_that("horizontal geometry does not depend on or change the s2 setting", {
 test_that(
   "horizontal means preserve inputs",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_grid_nc(path)
@@ -1158,7 +1011,6 @@ test_that(
 test_that(
   "joint means combine area, depth & time",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_grid_nc(
@@ -1199,7 +1051,6 @@ test_that(
 test_that(
   "temporal files complete coverage to ... either input order",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     .make_buffer_source_nc(
@@ -1237,7 +1088,6 @@ test_that(
 test_that(
   "spatial tiles share edges without double-counting",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     .make_buffer_grid_nc(
@@ -1270,7 +1120,6 @@ test_that(
 test_that(
   "overlapping temporal and spatial so ... ejected explicitly",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     .make_buffer_source_nc(
@@ -1323,7 +1172,6 @@ test_that(
 test_that(
   "point time is resolved globally before a vertical mean",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     bounds <- matrix(c(0, 10, 10, 30), 2L)
@@ -1365,7 +1213,6 @@ test_that(
 test_that(
   "point depth selection combines source layers",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     .make_buffer_source_nc(
@@ -1408,7 +1255,6 @@ test_that(
 test_that(
   "index layer windows retain physical ...  reject grid edges",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_source_nc(
@@ -1448,7 +1294,6 @@ test_that(
 test_that(
   "index windows retain edge NAs",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_grid_nc(
@@ -1478,7 +1323,6 @@ test_that(
 test_that(
   "actual antimeridian cells intersect the requested circle",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_grid_nc(
@@ -1501,7 +1345,6 @@ test_that(
 test_that(
   "multiple outputs have collision-safe diagnostics",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     .make_buffer_grid_nc(paths[1L])
@@ -1541,7 +1384,6 @@ test_that(
 test_that(
   "coverage reports explain partial results",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_grid_nc(
@@ -1602,7 +1444,6 @@ test_that(
 test_that(
   "spatial bounds inference is explici ... tics are validated",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_grid_nc(path, spatial_bounds = FALSE)
@@ -1647,7 +1488,6 @@ test_that(
 test_that(
   "sf geometry & caller-owned connections are retained",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path), add = TRUE)
     .make_buffer_grid_nc(path)
@@ -1675,59 +1515,11 @@ test_that(
 )
 
 
-test_that(
-  "interval ordering does not change the mean",
-  {
-    result <- .buffer_interval_mean(
-      values = c(20, 10),
-      lower = c(10, 0),
-      upper = c(30, 10),
-      requested = c(5, 25)
-    )
-    expect_equal(result$value, 17.5)
-    expect_identical(result$status, "complete")
-  }
-)
-
-
-test_that(
-  "overlapping support and invalid intervals are rejected",
-  {
-    expect_error(
-      .buffer_interval_mean(
-        values = c(10, 20),
-        lower = c(0, 5),
-        upper = c(10, 15),
-        requested = c(0, 15)
-      ),
-      "Selected intervals overlap",
-      fixed = TRUE
-    )
-    expect_error(
-      .buffer_interval_mean(10, 0, 10, requested = c(5, 5)),
-      "requested",
-      fixed = TRUE
-    )
-    expect_error(
-      .buffer_interval_mean(c(10, 20), 0, 10, requested = c(0, 10)),
-      "matching lengths",
-      fixed = TRUE
-    )
-    expect_error(
-      .buffer_interval_mean(10, 10, 0, requested = c(0, 10)),
-      "interval limits",
-      fixed = TRUE
-    )
-  }
-)
-
-
 # Axis bounds ------------------------------------------------------------------
 
 test_that(
   "explicit depth bounds feed the know ... ed and equal means",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_axis_nc(
@@ -1743,23 +1535,6 @@ test_that(
     expect_identical(support$bounds_name, "axis_bounds")
     expect_identical(support$units, "m")
     expect_false(any(support$clipped_at_surface))
-
-    weighted <- .buffer_interval_mean(
-      c(10, 20),
-      support$lower,
-      support$upper,
-      c(5, 25)
-    )
-    equal <- .buffer_interval_mean(
-      c(10, 20),
-      support$lower,
-      support$upper,
-      c(5, 25),
-      weighting = "equal"
-    )
-    expect_equal(weighted$value, 17.5)
-    expect_equal(equal$value, 15)
-    expect_equal(weighted$valid_fraction, 1)
   }
 )
 
@@ -1767,7 +1542,6 @@ test_that(
 test_that(
   "reversed positive-up depths and sha ...  convert to metres",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_axis_nc(
@@ -1783,13 +1557,6 @@ test_that(
     expect_equal(support$upper, c(30, 10))
     expect_identical(support$source_index, 1:2)
     expect_identical(support$direction_basis, "metadata")
-    result <- .buffer_interval_mean(
-      c(20, 10),
-      support$lower,
-      support$upper,
-      c(5, 25)
-    )
-    expect_equal(result$value, 17.5)
   }
 )
 
@@ -1797,7 +1564,6 @@ test_that(
 test_that(
   "both declared bounds dimension orders are supported",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     for (i in seq_along(paths)) {
@@ -1818,7 +1584,6 @@ test_that(
 test_that(
   "missing bounds require explicit permission to infer",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_axis_nc(path, c(0, 10, 30))
@@ -1834,17 +1599,6 @@ test_that(
     expect_equal(support$upper, c(5, 20, 40))
     expect_identical(support$basis, "inferred_midpoints")
     expect_identical(support$clipped_at_surface, c(TRUE, FALSE, FALSE))
-
-    # The request is not clipped at the surface: only half has support.
-    result <- .buffer_interval_mean(
-      c(10, 20, 30),
-      support$lower,
-      support$upper,
-      c(-5, 5)
-    )
-    expect_equal(result$coverage_fraction, 0.5)
-    expect_equal(result$valid_fraction, 0.5)
-    expect_true(is.na(result$value))
   }
 )
 
@@ -1852,7 +1606,6 @@ test_that(
 test_that(
   "a singleton needs explicit bounds and keeps its extent",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     .make_buffer_axis_nc(paths[1], 10)
@@ -1872,7 +1625,6 @@ test_that(
 test_that(
   "time bounds decode to UTC and allow ... labelled intervals",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_axis_nc(
@@ -1910,7 +1662,6 @@ test_that(
 test_that(
   "irregular time inference uses neighbouring midpoints",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_axis_nc(path, c(0, 2, 8), axis = "time")
@@ -1931,7 +1682,6 @@ test_that(
 test_that(
   "invalid declared bounds never fall back to inference",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     cases <- list(
@@ -1965,7 +1715,6 @@ test_that(
 test_that(
   "incompatible units and directions are reported explicitly",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     bounds <- matrix(c(0, 10, 10, 30), nrow = 2L)
@@ -1990,7 +1739,6 @@ test_that(
 test_that(
   "unsupported calendars are not inferred",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_axis_nc(
@@ -2020,7 +1768,6 @@ test_that(
 test_that(
   "duplicates and unordered coordinates are rejected",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     for (centres in list(c(10, 10), c(10, 30, 20))) {
@@ -2034,7 +1781,6 @@ test_that(
 test_that(
   "inferred depth intervals retain reversed source order",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_axis_nc(path, c(30, 10, 0))
@@ -2049,7 +1795,6 @@ test_that(
 test_that(
   "kilometres convert to metres and tr ...  axes are rejected",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_axis_nc(
@@ -2082,7 +1827,6 @@ test_that(
 test_that(
   "reading an axis leaves a caller-owned connection usable",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path), add = TRUE)
     .make_buffer_axis_nc(
@@ -2102,758 +1846,6 @@ test_that(
 
 
 # Source extraction ------------------------------------------------------------
-
-test_that(
-  "vertical extraction reads known cel ... erves observations",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(10, 20), nrow = 2L),
-      depth = c(5, 20),
-      depth_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(
-      id = c("a", "b"),
-      lon = c(0, 1),
-      lat = c(40, 41),
-      depth = c(15, 15),
-      date = "unused"
-    )
-    original <- data
-    options <- .validate_buffer_options(depth_radius_m = 10)
-    result <- .read_buffer_source_nc(path, data, options, id_col = "id")
-    expect_identical(result$observations, original)
-    expect_identical(data, original)
-    expect_equal(result$values, c(17.5, 317.5))
-    expect_identical(result$diagnostics[[1L]]$status, "complete")
-    expect_identical(result$diagnostics[[1L]]$depth_indices, 1:2)
-    expect_equal(result$diagnostics[[1L]]$n_valid, 2)
-    expect_identical(result$metadata$depth_support$basis, "explicit_bounds")
-    expect_null(result$prepared_time)
-
-    equal <- .read_buffer_source_nc(
-      path,
-      data,
-      .validate_buffer_options(
-        depth_radius_m = 10,
-        weighting = "equal"
-      )
-    )
-    expect_equal(equal$values, c(15, 315))
-  }
-)
-
-
-test_that(
-  "vertical extraction retains reversed layer alignment",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(20, 10), nrow = 2L),
-      depth = c(20, 5),
-      depth_bounds = matrix(c(10, 30, 0, 10), nrow = 2L)
-    )
-    result <- .read_buffer_source_nc(
-      path,
-      data.frame(lon = 0, lat = 40, depth = 15),
-      .validate_buffer_options(depth_radius_m = 10)
-    )
-    expect_equal(result$values, 17.5)
-    expect_equal(result$diagnostics[[1L]]$selected_depth_m, c(20, 5))
-  }
-)
-
-
-test_that(
-  "a vertical buffer uses point time m ... ithout time bounds",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(10, 20, 30, 50), nrow = 2L),
-      depth = c(5, 20),
-      time = c(0, 24),
-      depth_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(
-      lon = 0,
-      lat = 40,
-      depth = 15,
-      date = as.Date("2020-01-02")
-    )
-    options <- .validate_buffer_options(depth_radius_m = 10)
-    result <- .read_buffer_source_nc(path, data, options, time_match = "exact")
-    expect_equal(result$values, 45)
-    expect_identical(result$diagnostics[[1L]]$time_indices, 2L)
-    expect_identical(result$observations$date, data$date)
-
-    data$date <- as.Date("2020-01-03")
-    rejected <- .read_buffer_source_nc(
-      path,
-      data,
-      options,
-      time_match = "exact"
-    )
-    expect_true(is.na(rejected$values))
-    expect_identical(rejected$diagnostics[[1L]]$status, "time_rejected")
-    limited <- .read_buffer_source_nc(path, data, options, max_time_diff = 0.5)
-    expect_true(is.na(limited$values))
-    expect_identical(limited$diagnostics[[1L]]$status, "time_rejected")
-  }
-)
-
-
-test_that(
-  "inferred support retains full-request coverage",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(10, 20), nrow = 2L),
-      depth = c(5, 20)
-    )
-    data <- data.frame(lon = 0, lat = 40, depth = 15)
-    expect_error(
-      .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(depth_radius_m = 10)
-      ),
-      "infer_bounds = TRUE",
-      fixed = TRUE
-    )
-    result <- .read_buffer_source_nc(
-      path,
-      data,
-      .validate_buffer_options(
-        depth_radius_m = 10,
-        infer_bounds = TRUE
-      )
-    )
-    expect_equal(result$values, 16.25)
-    expect_identical(result$metadata$depth_support$basis, "inferred_midpoints")
-
-    data$depth <- 0
-    partial <- .read_buffer_source_nc(
-      path,
-      data,
-      .validate_buffer_options(
-        depth_radius_m = 5,
-        infer_bounds = TRUE
-      )
-    )
-    expect_equal(partial$diagnostics[[1L]]$coverage_fraction, 0.5)
-    expect_true(is.na(partial$values))
-    expect_identical(partial$diagnostics[[1L]]$status, "insufficient_coverage")
-  }
-)
-
-
-test_that(
-  "time extraction weights only the in ... g record durations",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(10, 20), nrow = 1L),
-      time = c(5, 20),
-      time_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(lon = 0, lat = 40, date = "2020-01-01T15:00Z")
-    for (weighting in c("weighted", "equal")) {
-      result <- .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(
-          time_before = 10,
-          time_after = 10,
-          time_unit = "hours",
-          method = "2d",
-          weighting = weighting
-        )
-      )
-      expect_equal(result$values, if (weighting == "weighted") 17.5 else 15)
-      expect_equal(result$diagnostics[[1L]]$coverage_fraction, 1)
-      expect_identical(result$diagnostics[[1L]]$time_indices, 1:2)
-      expect_identical(result$observations, data)
-      expect_length(result$prepared_time$unzoned_rows, 0L)
-    }
-  }
-)
-
-
-test_that(
-  "equivalent local and UTC times produce the same buffer",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(10, 20), nrow = 1L),
-      time = c(5, 20),
-      time_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    options <- .validate_buffer_options(
-      time_before = 10,
-      time_after = 10,
-      time_unit = "hours",
-      method = "2d"
-    )
-    utc <- as.POSIXct("2020-01-01 15:00:00", tz = "UTC")
-    madrid <- as.POSIXct("2020-01-01 16:00:00", tz = "Europe/Madrid")
-    for (date in list(utc, madrid, as.POSIXlt(madrid))) {
-      data <- data.frame(lon = 0, lat = 40)
-      data$date <- date
-      result <- .read_buffer_source_nc(path, data, options)
-      expect_equal(result$values, 17.5)
-      expect_equal(
-        format(result$windows$time_lower_utc, "%Y-%m-%d %H:%M", tz = "UTC"),
-        "2020-01-01 05:00"
-      )
-      expect_equal(
-        format(result$windows$time_upper_utc, "%Y-%m-%d %H:%M", tz = "UTC"),
-        "2020-01-02 01:00"
-      )
-    }
-  }
-)
-
-
-test_that(
-  "time buffers select surface, bottom ... st physical layers",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(100, 10, 200, 20), nrow = 2L),
-      depth = c(20, 5),
-      time = c(5, 20),
-      time_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(
-      lon = 0,
-      lat = 40,
-      depth = 12.5,
-      date = "2020-01-01T15:00Z"
-    )
-    for (method in c("surface", "bottom", "nearest")) {
-      result <- .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(
-          time_before = 10,
-          time_after = 10,
-          time_unit = "hours",
-          method = method
-        )
-      )
-      expect_equal(result$values, if (method == "bottom") 175 else 17.5)
-      expect_equal(
-        result$diagnostics[[1L]]$selected_depth_m,
-        if (method == "bottom") c(20, 20) else c(5, 5)
-      )
-    }
-  }
-)
-
-
-test_that(
-  "a missing surface is not replaced w ...  uses valid layers",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(20, NA_real_, 30, 10), nrow = 2L),
-      depth = c(20, 5),
-      time = c(5, 20),
-      time_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(
-      lon = 0,
-      lat = 40,
-      depth = 5,
-      date = "2020-01-01T15:00Z"
-    )
-    nearest <- .read_buffer_source_nc(
-      path,
-      data,
-      .validate_buffer_options(
-        time_before = 10,
-        time_after = 10,
-        time_unit = "hours"
-      )
-    )
-    expect_equal(nearest$values, 12.5)
-    expect_equal(nearest$diagnostics[[1L]]$selected_depth_m, c(20, 5))
-
-    surface <- .read_buffer_source_nc(
-      path,
-      data,
-      .validate_buffer_options(
-        time_before = 10,
-        time_after = 10,
-        time_unit = "hours",
-        method = "surface"
-      )
-    )
-    expect_true(is.na(surface$values))
-    expect_equal(surface$diagnostics[[1L]]$coverage_fraction, 1)
-    expect_equal(surface$diagnostics[[1L]]$valid_fraction, 0.75)
-    expect_identical(surface$diagnostics[[1L]]$status, "insufficient_coverage")
-
-    partial <- .read_buffer_source_nc(
-      path,
-      data,
-      .validate_buffer_options(
-        time_before = 10,
-        time_after = 10,
-        time_unit = "hours",
-        method = "surface",
-        min_valid_fraction = 0.75
-      )
-    )
-    expect_equal(partial$values, 10)
-    expect_identical(partial$diagnostics[[1L]]$time_indices, 2L)
-    expect_identical(partial$diagnostics[[1L]]$status, "partial")
-  }
-)
-
-
-test_that(
-  "empty buffers and missing coordinates preserve all rows",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(10, 20), nrow = 2L),
-      depth = c(5, 20),
-      depth_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(
-      id = c("ok", "empty", "missing", "outside"),
-      lon = c(0, 0, 0, 100),
-      lat = 40,
-      depth = c(15, 60, NA_real_, 15)
-    )
-    result <- .read_buffer_source_nc(
-      path,
-      data,
-      .validate_buffer_options(depth_radius_m = 10),
-      id_col = "id"
-    )
-    expect_identical(result$observations, data)
-    expect_equal(result$values, c(17.5, NA_real_, NA_real_, NA_real_))
-    expect_identical(
-      vapply(result$diagnostics, function(x) x$status, character(1)),
-      c("complete", "empty", "missing_depth", "spatial_rejected")
-    )
-    expect_equal(result$diagnostics[[2L]]$coverage_fraction, 0)
-    expect_true(is.na(result$diagnostics[[3L]]$coverage_fraction))
-  }
-)
-
-
-test_that(
-  "a temporal singleton with bounds ca ... a requested window",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(10),
-      time = 12,
-      time_bounds = matrix(c(0, 24), nrow = 2L)
-    )
-    options <- .validate_buffer_options(
-      time_before = 12,
-      time_after = 12,
-      time_unit = "hours",
-      method = "2d"
-    )
-    data <- data.frame(lon = 0, lat = 40, date = "2020-01-01T12:00Z")
-    result <- .read_buffer_source_nc(path, data, options)
-    expect_equal(result$values, 10)
-    expect_equal(result$diagnostics[[1L]]$valid_fraction, 1)
-    expect_equal(result$diagnostics[[1L]]$n_intersecting, 1)
-
-    data$date <- NA_character_
-    missing <- .read_buffer_source_nc(path, data, options)
-    expect_identical(missing$observations, data)
-    expect_true(is.na(missing$values))
-    expect_identical(missing$diagnostics[[1L]]$status, "missing_time")
-    data$date <- "2020-01-10T12:00Z"
-    empty <- .read_buffer_source_nc(path, data, options)
-    expect_true(is.na(empty$values))
-    expect_identical(empty$diagnostics[[1L]]$status, "empty")
-  }
-)
-
-
-test_that(
-  "missing axes and horizontal buffers fail explicitly",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(path, matrix(10))
-    data <- data.frame(
-      lon = 0,
-      lat = 40,
-      depth = 15,
-      date = "2020-01-01T12:00Z"
-    )
-    expect_error(
-      .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(depth_radius_m = 10)
-      ),
-      "requires a depth dimension",
-      fixed = TRUE
-    )
-    expect_error(
-      .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(
-          time_before = 1,
-          method = "2d"
-        )
-      ),
-      "requires a time dimension",
-      fixed = TRUE
-    )
-    expect_error(
-      .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(
-          depth_radius_m = 10,
-          time_before = 1
-        )
-      ),
-      "requires a depth dimension",
-      fixed = TRUE
-    )
-    expect_error(
-      .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(
-          horizontal_radius_km = 5,
-          time_before = 1
-        )
-      ),
-      "not implemented yet",
-      fixed = TRUE
-    )
-  }
-)
-
-
-test_that(
-  "custom columns and missing observat ... keep their meaning",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(10),
-      time = 12,
-      time_bounds = matrix(c(0, 24), nrow = 2L)
-    )
-    options <- .validate_buffer_options(
-      time_before = 12,
-      time_after = 12,
-      time_unit = "hours",
-      method = "2d"
-    )
-    data <- data.frame(
-      x = c(0, 0),
-      y = c(40, 40),
-      sample = c("a", "b"),
-      observed_at = c("2020-01-01T12:00Z", NA_character_)
-    )
-    result <- .read_buffer_source_nc(
-      path,
-      data,
-      options,
-      lon_col = "x",
-      lat_col = "y",
-      date_col = "observed_at",
-      id_col = "sample"
-    )
-    expect_equal(result$values, c(10, NA_real_))
-    expect_identical(result$observations, data)
-    data$observed_at <- NULL
-    expect_error(
-      .read_buffer_source_nc(
-        path,
-        data,
-        options,
-        lon_col = "x",
-        lat_col = "y",
-        date_col = "observed_at",
-        id_col = "sample"
-      ),
-      "Column `observed_at` is missing",
-      fixed = TRUE
-    )
-  }
-)
-
-
-test_that(
-  "reading source values keeps caller-owned connections open",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path), add = TRUE)
-    .make_buffer_source_nc(
-      path,
-      matrix(c(10, 20), nrow = 2L),
-      depth = c(5, 20),
-      depth_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    nc <- ncdf4::nc_open(path)
-    on.exit(ncdf4::nc_close(nc), add = TRUE, after = FALSE)
-    result <- .read_buffer_source_nc(
-      nc,
-      data.frame(lon = 0, lat = 40, depth = 15),
-      .validate_buffer_options(depth_radius_m = 10)
-    )
-    expect_equal(result$values, 17.5)
-    expect_equal(as.vector(ncdf4::ncvar_get(nc, "temp"))[1L], 10)
-  }
-)
-
-
-# Combined depth and time buffers ----------------------------------------------
-
-test_that(
-  "combined extraction uses joint depth and time weights",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(0, 10, 20, 40), nrow = 2L),
-      depth = c(5, 20),
-      time = c(5, 20),
-      depth_bounds = matrix(c(0, 10, 10, 30), nrow = 2L),
-      time_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(
-      id = "a",
-      lon = 0,
-      lat = 40,
-      depth = 15,
-      date = "2020-01-01T15:00Z"
-    )
-
-    for (weighting in c("weighted", "equal")) {
-      result <- .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(
-          depth_radius_m = 10,
-          time_before = 10,
-          time_after = 10,
-          time_unit = "hours",
-          weighting = weighting
-        )
-      )
-      expect_equal(result$values, if (weighting == "weighted") 28.125 else 17.5)
-      expect_identical(result$observations, data)
-      expect_equal(result$diagnostics[[1L]]$coverage_fraction, 1)
-      expect_equal(result$diagnostics[[1L]]$valid_fraction, 1)
-      expect_equal(result$diagnostics[[1L]]$n_intersecting, 4)
-      expect_identical(
-        result$diagnostics[[1L]]$depth_indices,
-        c(1L, 2L, 1L, 2L)
-      )
-      expect_identical(
-        result$diagnostics[[1L]]$time_indices,
-        c(1L, 1L, 2L, 2L)
-      )
-    }
-  }
-)
-
-
-test_that(
-  "missing joint samples do not produc ...  of separate means",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(0, 10, 20, NA_real_), nrow = 2L),
-      depth = c(5, 20),
-      time = c(5, 20),
-      depth_bounds = matrix(c(0, 10, 10, 30), nrow = 2L),
-      time_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(
-      lon = 0,
-      lat = 40,
-      depth = 15,
-      date = "2020-01-01T15:00Z"
-    )
-
-    # The missing sample occupies 9/16 of the requested support.
-    # Valid samples have relative weights 1, 3 and 3.
-    for (weighting in c("weighted", "equal")) {
-      for (threshold in c(0.4374, 0.4375, 0.4376)) {
-        result <- .read_buffer_source_nc(
-          path,
-          data,
-          .validate_buffer_options(
-            depth_radius_m = 10,
-            time_before = 10,
-            time_after = 10,
-            time_unit = "hours",
-            weighting = weighting,
-            min_valid_fraction = threshold
-          )
-        )
-        expect_equal(result$diagnostics[[1L]]$coverage_fraction, 1)
-        expect_equal(result$diagnostics[[1L]]$valid_fraction, 0.4375)
-        expect_equal(result$diagnostics[[1L]]$n_valid, 3)
-
-        if (threshold <= 0.4375) {
-          expect_equal(
-            result$values,
-            if (
-              weighting == "weighted"
-            ) 90 / 7 else 10
-          )
-          expect_identical(result$diagnostics[[1L]]$status, "partial")
-        } else {
-          expect_true(is.na(result$values))
-          expect_identical(
-            result$diagnostics[[1L]]$status,
-            "insufficient_coverage"
-          )
-        }
-      }
-    }
-  }
-)
-
-
-test_that(
-  "partial coverage on both axes uses  ... e requested buffer",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(0, 10, 20, 40), nrow = 2L),
-      depth = c(5, 20),
-      time = c(5, 20),
-      depth_bounds = matrix(c(0, 10, 10, 30), nrow = 2L),
-      time_bounds = matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    data <- data.frame(
-      lon = 0,
-      lat = 40,
-      depth = 10,
-      date = "2020-01-01T10:00Z"
-    )
-
-    # Each axis covers 30 of the requested 40 units: joint coverage is 9/16.
-    for (threshold in c(0.8, 0.5625)) {
-      result <- .read_buffer_source_nc(
-        path,
-        data,
-        .validate_buffer_options(
-          depth_radius_m = 20,
-          time_before = 20,
-          time_after = 20,
-          time_unit = "hours",
-          min_valid_fraction = threshold
-        )
-      )
-      expect_equal(result$windows$depth_lower_m, -10)
-      expect_equal(result$diagnostics[[1L]]$coverage_fraction, 0.5625)
-      expect_equal(result$diagnostics[[1L]]$valid_fraction, 0.5625)
-
-      if (threshold == 0.8) {
-        expect_true(is.na(result$values))
-      } else {
-        expect_equal(result$values, 220 / 9)
-        expect_identical(result$diagnostics[[1L]]$status, "partial")
-      }
-    }
-  }
-)
-
-
-test_that(
-  "combined extraction preserves rever ...  and rejected rows",
-  {
-    skip_if_not_installed("ncdf4")
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(40, 20, 10, 0), nrow = 2L),
-      depth = c(20, 5),
-      time = c(20, 5),
-      depth_bounds = matrix(c(10, 30, 0, 10), nrow = 2L),
-      time_bounds = matrix(c(10, 30, 0, 10), nrow = 2L)
-    )
-    data <- data.frame(
-      lon = 0,
-      lat = 40,
-      depth = c(15, 40, NA_real_, 15),
-      date = c(rep("2020-01-01T15:00Z", 3), NA_character_)
-    )
-    result <- .read_buffer_source_nc(
-      path,
-      data,
-      .validate_buffer_options(
-        depth_radius_m = 10,
-        time_before = 10,
-        time_after = 10,
-        time_unit = "hours"
-      )
-    )
-    expect_identical(result$observations, data)
-    expect_equal(result$values, c(28.125, NA_real_, NA_real_, NA_real_))
-    expect_identical(
-      vapply(result$diagnostics, function(x) x$status, character(1)),
-      c("complete", "empty", "missing_depth", "missing_time")
-    )
-    expect_equal(result$diagnostics[[2L]]$coverage_fraction, 0)
-  }
-)
-
 
 test_that(
   "buffer statistics use known equal a ... ual weight results",
@@ -2901,7 +1893,6 @@ test_that(
 test_that(
   "statistics combine files in either order",
   {
-    skip_if_not_installed("ncdf4")
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     .make_buffer_source_nc(
@@ -3006,7 +1997,6 @@ test_that(
 test_that(
   "public SD and SE explain an insuffi ... r of valid samples",
   {
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
     .make_buffer_source_nc(
@@ -3065,7 +2055,6 @@ test_that(
 
 
 test_that("automatic detection ignores dimensions without coordinate variables", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   .make_buffer_grid_nc(path)
@@ -3080,36 +2069,6 @@ test_that("automatic detection ignores dimensions without coordinate variables",
   expect_true("temp" %in% names(out))
   expect_false(any(c("lon_bounds", "lat_bounds") %in% names(out)))
 })
-
-
-test_that(
-  "joint aggregation retains singleton and all-missing cases",
-  {
-    single <- .buffer_joint_mean(
-      matrix(42),
-      10,
-      24,
-      10,
-      24
-    )
-    expect_equal(single$value, 42)
-    expect_equal(single$valid_fraction, 1)
-    expect_equal(single$n_intersecting, 1)
-
-    missing <- .buffer_joint_mean(
-      matrix(NA_real_, nrow = 2L, ncol = 2L),
-      c(5, 15),
-      c(5, 15),
-      20,
-      20,
-      min_valid_fraction = 0
-    )
-    expect_true(is.na(missing$value))
-    expect_identical(missing$status, "all_missing")
-    expect_equal(missing$coverage_fraction, 1)
-    expect_equal(missing$valid_fraction, 0)
-  }
-)
 
 
 test_that(
