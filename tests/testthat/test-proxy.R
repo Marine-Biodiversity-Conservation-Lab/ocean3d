@@ -155,24 +155,33 @@ test_that("unsupported calendars and climatologies stop", {
 })
 
 test_that("the CRS comes from a geographic grid mapping", {
-  add_mapping <- function(f, wkt) {
+  add_mapping <- function(f, wkt, grid_mapping = "crs") {
     nc <- ncdf4::nc_open(f, write = TRUE)
     nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def("crs", "", list(),
                                                 prec = "integer"))
     ncdf4::ncatt_put(nc, "crs", "crs_wkt", wkt)
-    ncdf4::ncatt_put(nc, "temp", "grid_mapping", "crs")
+    ncdf4::ncatt_put(nc, "temp", "grid_mapping", grid_mapping)
     ncdf4::nc_close(nc)
   }
   f <- make_grid_file()
   g <- make_grid_file()
-  on.exit(unlink(c(f, g)), add = TRUE)
+  h <- make_grid_file(depth = NULL, time = NULL)
+  on.exit(unlink(c(f, g, h)), add = TRUE)
 
+  # The grid-mapping variable isn't data, so `var` is detected.
   etrs89 <- terra::crs("EPSG:4258")
   add_mapping(f, etrs89)
-  expect_identical(as_proxy(f, var = "temp")@crs, etrs89)
+  expect_identical(as_proxy(f)@crs, etrs89)
 
   add_mapping(g, terra::crs("EPSG:3857"))
-  expect_error(as_proxy(g, var = "temp"), class = "ocean3d_error_grid_mapping")
+  expect_error(as_proxy(g), class = "ocean3d_error_grid_mapping")
+
+  # Point extraction detects the variable the same way, also with CF's
+  # extended form of the attribute.
+  add_mapping(h, etrs89, grid_mapping = "crs: lat lon")
+  expect_equal(
+    extract_to_point(nc = h, lon = 1.5, lat = 10.5, method = "2d"), 2
+  )
 })
 
 test_that("an open connection is read and left open", {
