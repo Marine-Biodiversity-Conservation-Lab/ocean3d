@@ -2465,15 +2465,28 @@ test_that("metadata keeps bounds separate from sampling cadence", {
   nc <- ncdf4::nc_open(path, write = TRUE)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   ncdf4::ncatt_put(nc, "temp", "cell_methods", "time: mean")
-  ncdf4::ncatt_put(nc, "time", "bounds", "missing_bounds")
   info <- .read_temporal_metadata(
     nc, "time", "temp", .decode_netcdf_time(nc, "time")
   )
   expect_identical(info$cell_methods, "time: mean")
-  expect_identical(info$bounds_status, "unavailable")
+  expect_null(info$bounds)
   expect_identical(info$cadence$type, "unknown")
   expect_identical(info$calendar, "standard")
   expect_match(info$units, "days since")
+})
+
+test_that("a missing time bounds variable stops the time metadata", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_a2_temporal_nc(path, 0, 1)
+  nc <- ncdf4::nc_open(path, write = TRUE)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  ncdf4::ncatt_put(nc, "time", "bounds", "missing_bounds")
+  expect_error(
+    .read_temporal_metadata(nc, "time", "temp",
+                            .decode_netcdf_time(nc, "time")),
+    "Bounds for `time` were not found", fixed = TRUE
+  )
 })
 
 test_that("explicit bounds describe intervals without inventing cadence", {
@@ -2482,7 +2495,6 @@ test_that("explicit bounds describe intervals without inventing cadence", {
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 1)
   nc <- ncdf4::nc_open(path, write = TRUE)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
   vertex <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
   bounds <- ncdf4::ncvar_def(
     "time_bounds", "days since 2020-01-01",
@@ -2491,10 +2503,13 @@ test_that("explicit bounds describe intervals without inventing cadence", {
   nc <- ncdf4::ncvar_add(nc, bounds)
   ncdf4::ncvar_put(nc, "time_bounds", matrix(c(-0.5, 0.5), nrow = 2L))
   ncdf4::ncatt_put(nc, "time", "bounds", "time_bounds")
+  # Reopen, so the added bounds variable is listed as in any file read.
+  ncdf4::nc_close(nc)
+  nc <- ncdf4::nc_open(path)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
   info <- .read_temporal_metadata(
     nc, "time", "temp", .decode_netcdf_time(nc, "time")
   )
-  expect_identical(info$bounds_status, "read")
   expect_equal(info$bounds[2, 1] - info$bounds[1, 1], 86400)
   expect_identical(info$cadence$type, "unknown")
 })
@@ -4355,8 +4370,7 @@ test_that("single-precision station coordinates match their own station", {
   expect_length(.containing_axis_indices(lon, -122.401), 0L)
 })
 
-test_that("unusable spatial bounds fall back to inferred edges", {
-  skip_if_not_installed("ncdf4")
+test_that("unusable spatial bounds stop extraction", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
@@ -4364,13 +4378,10 @@ test_that("unusable spatial bounds fall back to inferred edges", {
   ncdf4::ncatt_put(nc, "lon", "bounds", "lon_bnds")
   ncdf4::nc_close(nc)
   x <- data.frame(lon = c(0, 1, 5), lat = 40)
-  expect_warning(
-    out <- without_selection_reports(extract2d(
-      x, path, var = "temp", date_col = NULL
-    )),
-    "were not found"
+  expect_error(
+    extract2d(x, path, var = "temp", date_col = NULL),
+    "Bounds for `lon` were not found", fixed = TRUE
   )
-  expect_equal(out$temp, c(1, 2, NA))
   expect_true(.same_units("degree_east", "degrees_east"))
   expect_true(.same_units("degrees_E", "degrees"))
   expect_false(.same_units("degrees_east", "radians"))
@@ -4495,4 +4506,22 @@ test_that("point provenance describes the actual selected record", {
     ),
     "overwrite"
   )
+})
+
+test_that("bad spatial bounds stop point extraction and the core object", {
+  check <- function(lon_bounds, pattern) {
+    f <- make_grid_file(depth = NULL, time = NULL, lon_bounds = lon_bounds)
+    on.exit(unlink(f))
+    err <- expect_error(
+      extract_to_point(nc = f, lon = 1.5, lat = 10.5, var = "temp",
+                       method = "2d"),
+      class = "ocean3d_error_bounds"
+    )
+    expect_match(conditionMessage(err), pattern)
+    expect_error(as_proxy(f), class = "ocean3d_error_bounds")
+  }
+  # Centres 0.5, 1.5, 2.5: the first cell's bounds miss its centre.
+  check(rbind(c(1, 1, 2), c(1.2, 2, 3)), "must contain their centres")
+  # The first two cells overlap between 0.8 and 1.
+  check(rbind(c(0, 0.8, 2), c(1, 2, 3)), "Bounds overlap in `lon`")
 })

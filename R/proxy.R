@@ -219,7 +219,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       "example with CDO: `cdo sorttimestamp {file} sorted.nc`."
     ), class = "ocean3d_error_time_order", call = NULL)
   }
-  bounds <- .read_bounds(nc, dim, length(offsets), strict = TRUE)
+  bounds <- .read_bounds(nc, dim, length(offsets))
+  if (!is.null(bounds)) .axis_intervals(offsets, bounds$values, "time", dim)
   list(
     dim = dim, cftime = .netcdf_time_axis(nc, dim, bounds$values),
     edges = if (is.null(bounds)) "none" else "bounds"

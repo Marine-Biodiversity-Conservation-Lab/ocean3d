@@ -1007,11 +1007,12 @@ test_that("longitude cells that overlap modulo 360 are rejected", {
     lon_bounds = matrix(c(-15, 15, 105, 135, 225, 255, 340, 360), 2L),
     lat_bounds = matrix(c(-1, 1), 2L)
   )
-  expect_error(
+  err <- expect_error(
     extract_to_buffer(data.frame(lon = 0, lat = 0), path,
                       horizontal_radius_km = 1, quiet = TRUE),
-    "overlapping periodic support", fixed = TRUE
+    class = "ocean3d_error_bounds"
   )
+  expect_match(conditionMessage(err), "overlap around the globe")
 })
 
 

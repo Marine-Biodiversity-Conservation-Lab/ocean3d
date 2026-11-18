@@ -11,7 +11,7 @@ test_that("depth bounds are converted to metres positive down", {
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
 
-  bounds <- .read_bounds(nc, "depth", 2L, strict = TRUE)
+  bounds <- .read_bounds(nc, "depth", 2L)
   expect_equal(
     .depth_bounds_m(nc, "depth", c(-500, -1500), bounds),
     rbind(c(0, 10), c(10, 20))

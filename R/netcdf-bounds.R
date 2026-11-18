@@ -38,28 +38,16 @@
   isTRUE(.length_unit_factor(a) == .length_unit_factor(b))
 }
 
-# Reads the CF bounds variable of a coordinate, for point and buffer
-# extraction. Returns list(name, values), where values is a 2 x n matrix of
-# cell edges, or NULL when the coordinate declares no bounds.
-#
-# Unusable bounds (missing variable, wrong shape, non-finite values) are an
-# error when `strict = TRUE`. Buffer extraction uses that, because its weights
-# depend on the declared edges. Otherwise they give a warning and NULL, and
-# point extraction infers cell edges from the centres. Bounds in different
-# units from their coordinate are always an error.
-.read_bounds <- function(nc, coordinate, n, strict = FALSE) {
+# Reads the CF bounds variable of a coordinate. Returns list(name, values),
+# where values is a 2 x n matrix of cell edges, or NULL when the coordinate
+# declares no bounds. Unusable bounds (missing variable, wrong shape,
+# non-finite values, different units from the coordinate) are an error:
+# declared edges are used as given, never replaced by inferred ones.
+.read_bounds <- function(nc, coordinate, n) {
   name <- .read_time_attribute(nc, coordinate, "bounds")
   if (is.null(name)) return(NULL)
   unusable <- function(problem) {
-    if (strict) {
-      stop("Bounds for `", coordinate, "` ", problem, ".", call. = FALSE)
-    }
-    warning(
-      "Bounds for `", coordinate, "` ", problem,
-      "; inferring cell edges from the coordinate centres instead.",
-      call. = FALSE
-    )
-    NULL
+    stop("Bounds for `", coordinate, "` ", problem, ".", call. = FALSE)
   }
   if (!is.character(name) || length(name) != 1L || is.na(name) ||
         !nzchar(name)) {
@@ -112,13 +100,16 @@
 # Cell intervals of one axis: `centres` with `bounds` (a 2 x n matrix of
 # edges, or NULL to infer them halfway between centres, cut at the surface for
 # depth). Checks that the centres run one way without duplicates and that the
-# intervals have positive widths, contain their centres and don't overlap.
-# A single centre without bounds is an error, unless `allow_singleton`, when
-# it becomes a zero-width cell. Values keep their storage order. Shared by
-# buffer extraction (depth, time, and as a check on longitude and latitude)
+# intervals have positive widths, contain their centres and don't overlap
+# (also modulo 360 when `periodic`, for longitude). Bad bounds stop with
+# `ocean3d_error_bounds`. A single centre without bounds is an error, unless
+# `allow_singleton`, when it becomes a zero-width cell. Values keep their
+# storage order. Shared by every axis reader: longitude and latitude
+# (.prepare_spatial_axis()), buffer extraction's depth and time, and the core
+# object's depth and time
 # and the core object's depth axis (as_proxy()).
 .axis_intervals <- function(centres, bounds, axis, coordinate,
-                            allow_singleton = FALSE) {
+                            allow_singleton = FALSE, periodic = FALSE) {
   if (!length(centres) || any(!is.finite(centres))) {
     stop("Coordinates must contain finite values.", call. = FALSE)
   }
@@ -158,18 +149,32 @@
   if (any(!is.finite(lower)) || any(!is.finite(upper)) ||
         (basis != "singleton_coordinate" && any(upper <= lower)) ||
         any(!is.finite(upper - lower)) ||
-        any(centres < lower | centres > upper)) {
-    stop("Invalid bounds for `", coordinate,
-         paste0("`: intervals need positive widths and must contain ",
-                "their centres."),
-         call. = FALSE)
+        any(centres < lower - 1e-8 | centres > upper + 1e-8)) {
+    rlang::abort(glue::glue(
+      "Invalid bounds for `{coordinate}`: intervals need positive widths ",
+      "and must contain their centres."
+    ), class = "ocean3d_error_bounds", call = NULL)
   }
   index <- order(lower)
   if (length(index) > 1L &&
         any(tail(lower[index], -1L) < head(cummax(upper[index]), -1L))) {
-    stop("Bounds overlap in `", coordinate,
-         "`. Resolve overlapping cells first.",
-         call. = FALSE)
+    rlang::abort(glue::glue(
+      "Bounds overlap in `{coordinate}`. Resolve overlapping cells first."
+    ), class = "ocean3d_error_bounds", call = NULL)
+  }
+  if (periodic && length(index) > 1L) {
+    # Longitude cells must not overlap modulo 360 either (e.g. 350 to 370
+    # and 0 to 20), or a cell would be counted twice.
+    start <- lower %% 360
+    end <- start + upper - lower
+    sorted <- order(start)
+    if (any(start[sorted][-1L] < head(cummax(end[sorted]), -1L) - 1e-8) ||
+          max(end) - 360 > min(start) + 1e-8) {
+      rlang::abort(glue::glue(
+        "Longitude cells in `{coordinate}` overlap around the globe. ",
+        "Resolve overlapping cells first."
+      ), class = "ocean3d_error_bounds", call = NULL)
+    }
   }
 
   # Keep original record order so values and intervals retain their alignment.
@@ -198,7 +203,7 @@
     stop("`infer_bounds` must be TRUE or FALSE.", call. = FALSE)
   }
   raw <- as.vector(.get_dim_values(nc, coordinate))
-  bounds <- .read_bounds(nc, coordinate, length(raw), strict = TRUE)
+  bounds <- .read_bounds(nc, coordinate, length(raw))
   units <- .read_time_attribute(nc, coordinate, "units")
   calendar <- NULL
   direction_basis <- NULL

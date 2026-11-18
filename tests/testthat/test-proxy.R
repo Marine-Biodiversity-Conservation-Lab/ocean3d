@@ -143,6 +143,14 @@ test_that("a time axis that isn't increasing stops and names the file", {
   expect_match(conditionMessage(repeated$error), "repeats a time step")
 })
 
+test_that("overlapping time bounds stop", {
+  f <- make_grid_file(time = c(0.5, 1.5),
+                      time_bounds = rbind(c(0, 0.8), c(1.2, 2)))
+  on.exit(unlink(f), add = TRUE)
+  err <- expect_error(as_proxy(f), class = "ocean3d_error_bounds")
+  expect_match(conditionMessage(err), "Bounds overlap in `time`")
+})
+
 test_that("unsupported calendars and climatologies stop", {
   calendar <- proxy_error(calendar = "noleap")
   expect_s3_class(calendar$error, "ocean3d_error_calendar")

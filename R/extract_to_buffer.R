@@ -858,21 +858,6 @@
     stop("A singleton spatial coordinate needs explicit cell bounds.",
          call. = FALSE)
   }
-  .axis_intervals(
-    axis$centres, rbind(axis$lower, axis$upper),
-    if (longitude) "lon" else "lat", coordinate
-  )
-  if (longitude) {
-    # Cells must not overlap modulo 360, or a buffer would count area twice.
-    start <- axis$lower %% 360
-    end <- start + axis$upper - axis$lower
-    sorted <- order(start)
-    if (any(start[sorted][-1L] < head(cummax(end[sorted]), -1L) - 1e-8) ||
-          max(end) - 360 > min(start) + 1e-8) {
-      stop("Longitude cells contain duplicate or overlapping periodic support.",
-           call. = FALSE)
-    }
-  }
   axis
 }
 

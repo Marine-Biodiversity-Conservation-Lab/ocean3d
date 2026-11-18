@@ -23,6 +23,13 @@ calls that used to return a value now return `NA` or stop with an error:
 * With several files, a temporal tie between sources keeps input order under
   `"within"` matching, and goes to the closer cell centre under `"nearest"`
   matching.
+* Cell bounds are checked the same way in point, track and buffer
+  extraction, and bad bounds stop with an error. Longitude, latitude and
+  time bounds must have positive widths, contain their cell centres and
+  not overlap (longitude cells also not around the globe), and a `bounds`
+  attribute must name a usable bounds variable. Point and track extraction
+  used to warn and infer edges from the centres instead (spatial bounds),
+  or ignore the bounds (time bounds).
 
 ## New features
 

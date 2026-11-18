@@ -174,44 +174,11 @@
   if (is.null(time_dim)) return(list(static = TRUE, variable = var))
   bounds_name <- .read_time_attribute(nc, time_dim, "bounds")
   climatology <- .read_time_attribute(nc, time_dim, "climatology")
-  bounds_variable <- which(vapply(nc$var, function(x) {
-    identical(x$name, bounds_name)
-  }, logical(1)))
-  bounds <- NULL
-  bounds_status <- "absent"
-  if (!is.null(bounds_name)) {
-    bounds_status <- "unavailable"
-    if (is.character(bounds_name) && length(bounds_name) == 1L &&
-          !is.na(bounds_name) && length(bounds_variable) == 1L) {
-      bounds <- tryCatch({
-        raw <- ncdf4::ncvar_get(nc, bounds_name, collapse_degen = FALSE)
-        axes <- vapply(
-          nc$var[[bounds_variable]]$dim,
-          function(x) x$name, character(1)
-        )
-        time_axis <- which(axes == time_dim)
-        if (length(dim(raw)) != 2L || length(time_axis) != 1L) {
-          stop("Unrecognised temporal bounds axes")
-        }
-        if (time_axis == 1L) raw <- t(raw)
-        if (!identical(dim(raw), c(2L, length(timestamps)))) {
-          stop("Unrecognised temporal bounds shape")
-        }
-        bound_units <- .read_time_attribute(nc, bounds_name, "units")
-        if (!is.null(bound_units) &&
-          !identical(
-            bound_units, .read_time_attribute(nc, time_dim, "units")
-          )) {
-          stop("Temporal bounds use different units")
-        }
-        intervals <- .decode_netcdf_time(nc, time_dim, bounds = raw)
-        if (any(intervals[1L, ] > intervals[2L, ])) {
-          stop("Temporal bounds are not ordered")
-        }
-        intervals
-      }, error = function(e) NULL)
-      if (!is.null(bounds)) bounds_status <- "read"
-    }
+  # Bad bounds stop here, as for every other axis.
+  bounds <- .read_bounds(nc, time_dim, length(timestamps))
+  if (!is.null(bounds)) {
+    bounds <- .decode_netcdf_time(nc, time_dim, bounds = bounds$values)
+    .axis_intervals(as.numeric(timestamps), bounds, "time", time_dim)
   }
   calendar <- .read_time_attribute(nc, time_dim, "calendar")
   if (is.null(calendar)) calendar <- "standard"
@@ -222,7 +189,7 @@
     variable_units = .read_time_attribute(nc, var, "units"),
     cell_methods = .read_time_attribute(nc, var, "cell_methods"),
     bounds_name = bounds_name, bounds = bounds,
-    bounds_status = bounds_status, climatology = climatology,
+    climatology = climatology,
     timestamps = timestamps,
     cadence = .infer_temporal_cadence(timestamps)
   )

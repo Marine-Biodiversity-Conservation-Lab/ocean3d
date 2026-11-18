@@ -174,7 +174,6 @@ test_that("back-to-back time bounds decode without a warning (#113)", {
   old <- options(warn = 2)
   on.exit(options(old), add = TRUE)
   info <- read_metadata(f)
-  expect_identical(info$bounds_status, "read")
   expect_equal(info$bounds, month_edges)
 })
 
@@ -199,11 +198,10 @@ test_that("time bounds that miss their time step are rejected (#113)", {
   expect_match(err, "Invalid bounds for `time`", fixed = TRUE)
   expect_match(err, "must contain its time step", fixed = TRUE)
 
-  # The time metadata marks them unavailable rather than stopping, as decided
-  # on 3 November 2026 (#123).
-  info <- read_metadata(f)
-  expect_identical(info$bounds_status, "unavailable")
-  expect_null(info$bounds)
+  # Point extraction's time metadata stops too: bad bounds stop every
+  # function that reads them (this replaces the 3 November 2026 decision in
+  # #123 to mark them unavailable).
+  expect_error(read_metadata(f), class = "ocean3d_error_time_bounds")
 })
 
 test_that("the time axis builder returns a CFtime object with its bounds", {
