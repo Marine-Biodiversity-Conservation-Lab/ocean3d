@@ -163,8 +163,6 @@ inputs, **intersect** them with each other or with the data, and
 **summarise** the result as volumes, overlaps or statistics. The functions
 below are grouped by step (see the [package design in SPEC.md](SPEC.md#package-design-build-intersect-summarise)).
 
-![The three steps of an analysis. Build turns 2D inputs (a polygon or points, with depths) into 3D objects. Intersect finds the space a species range and a fishing layer share, whether they share any, and the temperatures inside the range. Summarise reports the volume of the range, the share of it that is fished, and temperature by depth. Each panel lists the functions that exist now and those that are planned.](vignettes/figures/Build_Intersect_Summarise.png)
-
 ### Which input each function takes
 
 `ocean3d` currently has two data models for gridded data, and each function
