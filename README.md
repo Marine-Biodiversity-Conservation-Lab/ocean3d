@@ -71,74 +71,36 @@ This package includes utilities for working with commonly used datasets in
 marine habitat spatial analyses, including IUCN Red List, World Ocean Atlas, 
 GEBCO, Copernicus Marine, and Global Fishing Watch. 
 
-## How ocean3d relates to other packages
+## Existing spatial analysis packages and their limitations
 
-Several R packages and other tools already handle depth or 3D data.
-`ocean3d` builds on some of them and adds 3D spatial queries for gridded
-marine data: which cells and depths a species, fishery or other layer
-occupies, where two of them overlap in 3D, and what environmental values
-fall inside.
+Several R packages and other tools handle depth or 3D data, and `ocean3d`
+builds on terra, sf, ncdf4 and CFtime. None of the tools below answers 3D
+spatial queries on gridded marine data on its own: which cells and depths a
+species, fishery or other layer occupies above the seafloor, where two of them
+overlap in 3D, and what environmental values fall inside. This list is from
+the packages we checked and those named in the rOpenSci editor's comments;
+tell us if we've missed one.
 
-| Tool | What it does | How `ocean3d` relates |
+| Tool | What it does | Limitations for 3D spatial analysis |
 |---|---|---|
-| [terra](https://rspatial.github.io/terra/) | Raster and vector analysis. A multi-layer `SpatRaster` can record one depth per layer with `terra::depth()`. | `SpatVoxel` and `SpatEnvelope` are `SpatRaster`s, so terra functions still work on them. `ocean3d` adds the depth-aware operations terra doesn't have (see below). |
-| [sf](https://r-spatial.github.io/sf/) | 2D vector geometry and spatial queries (buffers, clips, intersections). | Polygons such as species ranges enter `ocean3d` as `sf` or terra objects and are given a depth range with `vect_to_envelope()`. |
-| [stars](https://r-spatial.github.io/stars/) | Arrays with any number of dimensions (data cubes), including depth and time. | Compared with terra, ncdf4 and ncdfCF in a trial ([#112](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/112); [`dev/data-model-trial.md`](dev/data-model-trial.md)). The planned data model ([#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99)) uses stars only to read remote Zarr stores. stars has no class for a per-cell depth range, and no 3D intersect or volume. |
-| [ncdf4](https://cran.r-project.org/package=ncdf4), [CFtime](https://cran.r-project.org/package=CFtime) | Read netCDF files and decode CF time. | Used by the netCDF extraction functions, which read only the cells each observation needs. |
-| [rgl](https://dmurdoch.github.io/rgl/), [rayshader](https://www.rayshader.com/) | 3D visualisation. | `ocean3d` doesn't draw in 3D. Its outputs are rasters and tables that these packages can plot. |
-| [lidR](https://r-lidar.github.io/lidRbook/), [rTLS](https://github.com/Antguz/rTLS) | 3D point clouds from LiDAR and terrestrial laser scanning. | Built for dense point clouds of land surfaces and vegetation, not for gridded ocean data with depth levels and a seafloor. |
-| [PostGIS](https://postgis.net/docs/PostGIS_Special_Functions_Index.html#PostGIS_3D_Functions) | 3D functions on vector geometry in a PostgreSQL database. | Works outside R on vector geometry in a database. `ocean3d` works in R on gridded data with depth levels. |
+| [terra](https://rspatial.github.io/terra/) | Raster and vector analysis. A multi-layer `SpatRaster` can record one depth per layer with `terra::depth()`. | Functions such as `mask()`, `extract()` and `zonal()` treat layers as a stack and don't use their depths. A raster can't store a depth range per cell, and there is no 3D intersect, overlap or volume. In our trial, terra read 19 of 29 netCDF test cases correctly, and its errors were silent. |
+| [sf](https://r-spatial.github.io/sf/) | Vector geometry and spatial queries (buffers, clips, intersections). | Geometries can carry Z coordinates, but operations such as `st_intersection()`, `st_buffer()` and `st_area()` work in 2D and ignore them. No raster data. |
+| [stars](https://r-spatial.github.io/stars/) | Arrays with any number of dimensions (data cubes), including depth and time. | No class for a depth range per cell, and no 3D intersect or volume. In our trial, extracting 2 points from a large file through a stars proxy took 198–243 s or tried to allocate 51–56 GB, and slicing a proxy dropped the decoded time. |
+| [rgl](https://dmurdoch.github.io/rgl/), [rayshader](https://www.rayshader.com/) | 3D visualisation. | They draw 3D scenes. They don't do spatial queries or calculate volumes. |
+| [lidR](https://r-lidar.github.io/lidRbook/), [rTLS](https://github.com/Antguz/rTLS) | 3D point clouds from LiDAR and terrestrial laser scanning. | Built for dense point clouds of land surfaces and vegetation. They don't work on gridded ocean data with depth levels, a seafloor and time. |
+| [PostGIS](https://postgis.net/docs/PostGIS_Special_Functions_Index.html#PostGIS_3D_Functions) | 3D functions on vector geometry in a PostgreSQL database. | Its 3D functions are for vector geometry, and its rasters have bands but no depth. Using it means running a database outside R. |
 
-### What terra doesn't do on its own
+The trial compared stars, ncdfCF, terra and the package's own ncdf4 reader
+([#112](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/112);
+[`dev/data-model-trial.md`](dev/data-model-trial.md)). Its results set the
+planned data model
+([#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99)):
+ocean3d reads netCDF with ncdf4, uses terra for the spatial work on data in
+memory, and uses stars only to read remote Zarr stores.
 
-terra can record the depth of each layer, but its functions treat the
-layers as a stack: they don't use the depth to decide which cells a shape
-covers, and a raster has no way to store a depth range per cell. In this
-example, a species lives between the surface and 150 m, or the seafloor
-where it is shallower, in three of four cells:
-
-``` r
-library(terra)
-library(ocean3d)
-
-# Temperature at 0, 100 and 200 m on a 2 x 2 grid
-temp <- rast(nrows = 2, ncols = 2, nlyrs = 3,
-             xmin = 0, xmax = 2, ymin = 0, ymax = 2)
-values(temp) <- rep(c(20, 15, 8), each = 4)
-depth(temp) <- c(0, 100, 200)
-
-seafloor <- setValues(rast(temp, nlyrs = 1), c(50, 150, 250, 250))
-range_2d <- setValues(rast(temp, nlyrs = 1), c(1, 1, 1, NA))
-
-# terra: mask() applies the 2D range to every layer, whatever its depth.
-# Excluding the layers below 150 m or below the seafloor in each cell
-# has to be done by hand.
-values(mask(temp, range_2d))
-#>      lyr.1 lyr.2 lyr.3
-#> [1,]    20    15     8
-#> [2,]    20    15     8
-#> [3,]    20    15     8
-#> [4,]    NA    NA    NA
-
-# ocean3d: the range becomes a 3D envelope, and mask() keeps only the
-# depth levels inside it in each cell.
-voxel <- as_voxel(temp, depths = c(0, 100, 200), varname = "temp")
-habitat <- as_envelope(range_2d, depth_min = 0,
-                       depth_max = min(seafloor, 150))
-values(mask(voxel, habitat))
-#>      temp_depth=0 temp_depth=100 temp_depth=200
-#> [1,]           20             NA             NA
-#> [2,]           20             15             NA
-#> [3,]           20             15             NA
-#> [4,]           NA             NA             NA
-
-volume(habitat) # km³
-#> [1] 4307.343
-```
-
-`ocean3d` stores depth in layer names (`{variable}_depth={value}`) for now.
-The planned data model ([#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99)) moves it to `terra::depth()`, so voxels will use
-terra's own depth field.
+For a worked example of what `ocean3d` adds to terra, see
+[What ocean3d adds to terra](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/ocean3d-and-terra.html)
+(`vignette("ocean3d-and-terra")`).
 
 ## Installation
 
