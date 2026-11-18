@@ -3,7 +3,6 @@
 # ---------------------------------------------------------------------------
 
 test_that("fetch_species_assessments errors when no input provided", {
-  skip_if_not_installed("rredlist")
   expect_error(
     fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY")),
     "Exactly one"
@@ -11,7 +10,6 @@ test_that("fetch_species_assessments errors when no input provided", {
 })
 
 test_that("fetch_species_assessments errors when multiple inputs provided", {
-  skip_if_not_installed("rredlist")
   expect_error(
     fetch_species_assessments(
       api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
@@ -23,7 +21,6 @@ test_that("fetch_species_assessments errors when multiple inputs provided", {
 })
 
 test_that("fetch_species_assessments errors when all three inputs provided", {
-  skip_if_not_installed("rredlist")
   expect_error(
     fetch_species_assessments(
       api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
@@ -41,7 +38,6 @@ test_that("fetch_species_assessments errors when all three inputs provided", {
 
 # Time consuming test, skip usually
 test_that("fetch_species_assessments returns data frame via group_code", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   skip()
   skip_on_ci()
@@ -56,7 +52,6 @@ test_that("fetch_species_assessments returns data frame via group_code", {
 })
 
 test_that("fetch_species_assessments result has expected columns", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("expected_columns")
   out <- fetch_species_assessments(
@@ -77,7 +72,6 @@ test_that("fetch_species_assessments result has expected columns", {
 # ---------------------------------------------------------------------------
 
 test_that("fetch_species_assessments resolves sis_ids to assessments", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("sis_ids")
   out <- fetch_species_assessments(
@@ -88,7 +82,6 @@ test_that("fetch_species_assessments resolves sis_ids to assessments", {
 })
 
 test_that("fetch_species_assessments warns and skips bad SIS ID", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("bad_sis_ids")
   expect_warning(
@@ -102,7 +95,6 @@ test_that("fetch_species_assessments warns and skips bad SIS ID", {
 })
 
 test_that("fetch_species_assessments errors when all SIS IDs fail", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("all_sis_ids_fail")
   expect_warning(
@@ -121,7 +113,6 @@ test_that("fetch_species_assessments errors when all SIS IDs fail", {
 # ---------------------------------------------------------------------------
 
 test_that("fetch_species_assessments resolves species names to assessments", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("species_names")
   out <- fetch_species_assessments(
@@ -133,7 +124,6 @@ test_that("fetch_species_assessments resolves species names to assessments", {
 })
 
 test_that("fetch_species_assessments warns on unparseable species name", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("unparseable_species_name")
   expect_warning(
@@ -147,7 +137,6 @@ test_that("fetch_species_assessments warns on unparseable species name", {
 })
 
 test_that("fetch_species_assessments warns and skips species name not in API", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("species_not_in_api")
   expect_warning(
@@ -165,7 +154,6 @@ test_that("fetch_species_assessments warns and skips species name not in API", {
 # ---------------------------------------------------------------------------
 
 test_that("fetch_species_assessments populates depth limits from assessment", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("depth_limits")
   out <- fetch_species_assessments(
@@ -178,7 +166,6 @@ test_that("fetch_species_assessments populates depth limits from assessment", {
 })
 
 test_that("fetch_species_assessments populates systems_code from assessment", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("systems_code")
   out <- fetch_species_assessments(
@@ -190,7 +177,6 @@ test_that("fetch_species_assessments populates systems_code from assessment", {
 })
 
 test_that("fetch_species_assessments depth fields are numeric or NA", {
-  skip_if_not_installed("rredlist")
   skip_if_not_installed("vcr")
   vcr::local_cassette("depth_fields_type")
   out <- fetch_species_assessments(

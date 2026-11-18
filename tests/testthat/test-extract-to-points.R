@@ -79,7 +79,6 @@ make_obs <- function(date = as.Date("2020-01-03"), depth = 60) {
 # Generic extraction -----------------------------------------------------------
 
 test_that("extract_to_point extracts from a 2D netCDF variable", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
@@ -96,7 +95,6 @@ test_that("extract_to_point extracts from a 2D netCDF variable", {
 })
 
 test_that("extract_to_point detects a single variable automatically", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, var = "oxygen")
@@ -110,7 +108,6 @@ test_that("extract_to_point detects a single variable automatically", {
 
 test_that("extract_to_point() errors when var = NULL matches two variables", {
   # automatic variable detection is ambiguous with more than one candidate
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
 
@@ -172,7 +169,6 @@ test_that("extract_to_point() ignores bounds variables when var = NULL", {
 # Depth methods ----------------------------------------------------------------
 
 test_that("3D wrappers return surface, nearest, bottom and all summaries", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, bottom_na = TRUE)
@@ -198,7 +194,6 @@ test_that("3D wrappers return surface, nearest, bottom and all summaries", {
 })
 
 test_that("nearest depth ignores missing layers below the valid water column", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, bottom_na = TRUE)
@@ -213,7 +208,6 @@ test_that("nearest depth ignores missing layers below the valid water column", {
 # Time matching ----------------------------------------------------------------
 
 test_that("time_match = nearest uses the closest available netCDF date", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f)
@@ -228,7 +222,6 @@ test_that("time_match = nearest uses the closest available netCDF date", {
 })
 
 test_that("time_match = exact returns NA when the date is absent", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f)
@@ -243,7 +236,6 @@ test_that("time_match = exact returns NA when the date is absent", {
 })
 
 test_that("max_time_diff limits nearest temporal matching", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f)
@@ -278,7 +270,6 @@ test_that("max_time_diff rejects invalid values", {
 })
 
 test_that("multiple netCDF files add one output column per detected variable", {
-  skip_if_not_installed("ncdf4")
   f1 <- tempfile(fileext = ".nc")
   f2 <- tempfile(fileext = ".nc")
   on.exit(unlink(c(f1, f2)), add = TRUE)
@@ -293,7 +284,6 @@ test_that("multiple netCDF files add one output column per detected variable", {
 })
 
 test_that("netCDF input can be a list, opened connection, or data frame", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f)
@@ -327,7 +317,6 @@ test_that("nested netCDF lists keep every source, in order", {
 })
 
 test_that("extract_to_point reports missing required observation columns", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f)
@@ -345,7 +334,6 @@ test_that("extract_to_point reports missing required observation columns", {
 # Direct point extraction ------------------------------------------------------
 
 test_that("extract_to_point extracts a single value from coordinates", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -394,7 +382,6 @@ test_that("extract_to_point requires a valid latitude", {
 })
 
 test_that("extract_to_point requires depth for nearest extraction", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -413,7 +400,6 @@ test_that("extract_to_point requires depth for nearest extraction", {
 })
 
 test_that("extract_to_point rejects invalid dates", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f)
@@ -434,7 +420,6 @@ test_that("extract_to_point rejects invalid dates", {
 })
 
 test_that("extract_to_point extracts 2d values without depth", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_depth = FALSE, with_time = FALSE)
@@ -456,7 +441,6 @@ test_that("extract_to_point extracts 2d values without depth", {
 
 # Input formats ---------------------------------------------------------------
 test_that("extract_to_point accepts a matrix", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -480,7 +464,6 @@ test_that("extract_to_point accepts a matrix", {
 })
 
 test_that("extract_to_point accepts a named list", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -504,9 +487,6 @@ test_that("extract_to_point accepts a named list", {
 })
 
 test_that("extract_to_point accepts sf point geometries", {
-  skip_if_not_installed("ncdf4")
-  skip_if_not_installed("sf")
-
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -529,9 +509,6 @@ test_that("extract_to_point accepts sf point geometries", {
 })
 
 test_that("extract_to_point transforms projected sf coordinates", {
-  skip_if_not_installed("ncdf4")
-  skip_if_not_installed("sf")
-
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -556,7 +533,6 @@ test_that("extract_to_point transforms projected sf coordinates", {
 })
 
 test_that("extract_to_point accepts tibbles", {
-  skip_if_not_installed("ncdf4")
   skip_if_not_installed("tibble")
 
   f <- tempfile(fileext = ".nc")
@@ -583,7 +559,6 @@ test_that("extract_to_point accepts tibbles", {
 })
 
 test_that("extract_to_point accepts coordinate vectors", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -617,7 +592,6 @@ test_that("direct coordinate vectors must have compatible lengths", {
 })
 
 test_that("extract_to_point preserves data frame input behaviour", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -643,7 +617,6 @@ test_that("extract_to_point preserves data frame input behaviour", {
 })
 
 test_that("direct inputs recycle scalar values", {
-  skip_if_not_installed("ncdf4")
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f, with_time = FALSE)
@@ -665,8 +638,6 @@ test_that("direct inputs recycle scalar values", {
 # Input validation -------------------------------------------------------------
 
 test_that("extract_to_point rejects sf geometries other than POINT", {
-  skip_if_not_installed("sf")
-
   x <- sf::st_sf(
     depth = 60,
     geometry = sf::st_sfc(
@@ -688,8 +659,6 @@ test_that("extract_to_point rejects sf geometries other than POINT", {
 })
 
 test_that("extract_to_point rejects projected sf input without a CRS", {
-  skip_if_not_installed("sf")
-
   x <- sf::st_sf(
     depth = 60,
     geometry = sf::st_sfc(sf::st_point(c(0, 40)))
@@ -1478,8 +1447,6 @@ test_that("every depth wrapper forwards output naming arguments", {
 # Issue #72: variable-scoped netCDF dimensions -------------------------------
 
 test_that("dimension detection uses only the selected variable", {
-  skip_if_not_installed("ncdf4")
-
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
 
@@ -1519,8 +1486,6 @@ test_that("dimension detection uses only the selected variable", {
 
 
 test_that("valid_time is recognised as a time dimension", {
-  skip_if_not_installed("ncdf4")
-
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
 
@@ -1548,8 +1513,6 @@ test_that("valid_time is recognised as a time dimension", {
 
 
 test_that("unknown non-singleton dimensions are rejected", {
-  skip_if_not_installed("ncdf4")
-
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
 
@@ -1575,8 +1538,6 @@ test_that("unknown non-singleton dimensions are rejected", {
 
 
 test_that("unknown singleton dimensions are identified", {
-  skip_if_not_installed("ncdf4")
-
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
 
@@ -1613,8 +1574,6 @@ test_that("unknown singleton dimensions are identified", {
 
 
 test_that("explicit dimensions are validated", {
-  skip_if_not_installed("ncdf4")
-
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
 
@@ -1638,8 +1597,6 @@ test_that("explicit dimensions are validated", {
 
 
 test_that("projected coordinates are rejected", {
-  skip_if_not_installed("ncdf4")
-
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
 
@@ -2091,7 +2048,6 @@ make_a2_temporal_nc <- function(path, days, values, with_depth = FALSE) {
 }
 
 test_that("nearest compares singleton and multi-record files in either order", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_a2_temporal_nc(paths[1], c(0, 4), c(1, 5))
@@ -2141,7 +2097,6 @@ test_that("nearest compares singleton and multi-record files in either order", {
 })
 
 test_that("singleton candidates respect exact matching and temporal ties", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_a2_temporal_nc(paths[1], 0, 1)
@@ -2182,7 +2137,6 @@ test_that("singleton candidates respect exact matching and temporal ties", {
 
 test_that("missing nearest values fall back within matching tolerance", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     paths <- replicate(2, tempfile(fileext = ".nc"))
     on.exit(unlink(paths), add = TRUE)
     make_a2_temporal_nc(paths[1], 8, NA_real_)
@@ -2206,7 +2160,6 @@ test_that("missing nearest values fall back within matching tolerance", {
 })
 
 test_that("3D wrappers preserve vertical summaries across files", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_a2_temporal_nc(paths[1], 0, c(1, 2, 3), with_depth = TRUE)
@@ -2381,7 +2334,6 @@ test_that("unknown and irregular cadences do not invent thresholds", {
 })
 
 test_that("single source provenance supports warnings and missing results", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 1, 11)
@@ -2410,7 +2362,6 @@ test_that("single source provenance supports warnings and missing results", {
 })
 
 test_that("singleton collections infer cadence for selected values", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(3, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   for (j in seq_along(paths)) make_a2_temporal_nc(paths[j], j - 1, j)
@@ -2441,7 +2392,6 @@ test_that("singleton collections infer cadence for selected values", {
 })
 
 test_that("all summaries share one warning without duplicating examples", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 1, c(11, 12, 13), with_depth = TRUE)
@@ -2458,7 +2408,6 @@ test_that("all summaries share one warning without duplicating examples", {
 })
 
 test_that("metadata keeps bounds separate from sampling cadence", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 1)
@@ -2487,7 +2436,6 @@ test_that("point extraction ignores time bounds", {
 })
 
 test_that("explicit bounds describe intervals without inventing cadence", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 1)
@@ -2508,7 +2456,6 @@ test_that("explicit bounds describe intervals without inventing cadence", {
 })
 
 test_that("static variables do not produce temporal diagnostics", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
@@ -2545,7 +2492,6 @@ test_that("custom intervals require explicit positive durations", {
 })
 
 test_that("custom warns above its interval without rejecting values", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 11)
@@ -2575,7 +2521,6 @@ test_that("custom warns above its interval without rejecting values", {
 })
 
 test_that("custom exact matching still requires the same timestamp", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 11)
@@ -2590,7 +2535,6 @@ test_that("custom exact matching still requires the same timestamp", {
 })
 
 test_that("time reports are visible without changing results", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 11)
@@ -2619,7 +2563,6 @@ test_that("time reports are visible without changing results", {
 })
 
 test_that("hiding the report preserves temporal warnings", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 11)
@@ -2635,7 +2578,6 @@ test_that("hiding the report preserves temporal warnings", {
 
 # C2: explicit output columns and preflight variable validation.
 test_that("existing output columns are replaced across all sources", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_a2_temporal_nc(paths[1], 0, 11)
@@ -2660,7 +2602,6 @@ test_that("existing output columns are replaced across all sources", {
 })
 
 test_that("different variables cannot share an output name", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_test_netcdf(
@@ -2680,7 +2621,6 @@ test_that("different variables cannot share an output name", {
 })
 
 test_that("outputs cannot overwrite extraction input columns", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
@@ -2723,7 +2663,6 @@ test_that("singleton axes do not invent spatial coverage", {
 
 test_that("spatial eligibility selects the correct tile in either order", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     paths <- replicate(2, tempfile(fileext = ".nc"))
     on.exit(unlink(paths), add = TRUE)
     make_test_netcdf(
@@ -2776,7 +2715,6 @@ make_spatial_axis_nc <- function(path, centres, bounds = NULL) {
 }
 
 test_that("explicit spatial bounds override inferred edges", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_spatial_axis_nc(
@@ -2792,7 +2730,6 @@ test_that("explicit spatial bounds override inferred edges", {
 })
 
 test_that("irregular descending axes preserve original indices", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_spatial_axis_nc(path, centres = c(5, 2, 0))
@@ -2838,7 +2775,6 @@ test_that("daily datetime warnings explain day changes below 24 hours", {
 })
 
 test_that("explanatory warnings keep full paths internally", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, c(0, 1, 2), c(11, 12, 13))
@@ -2863,7 +2799,6 @@ test_that("explanatory warnings keep full paths internally", {
 })
 
 test_that("missing output reports explain what is unavailable", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 11)
@@ -2924,7 +2859,6 @@ test_that("nearest spatial matching requires an explicit valid distance", {
 
 test_that("within rejects distant coordinates with one or several files", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     paths <- replicate(2, tempfile(fileext = ".nc"))
     on.exit(unlink(paths), add = TRUE)
     for (path in paths) make_horizontal_test_nc(path, c(0, 1), c(40, 41), 11)
@@ -2938,7 +2872,6 @@ test_that("within rejects distant coordinates with one or several files", {
 
 test_that("nearest accepts nearby points outside the grid up to its limit", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path), add = TRUE)
     make_horizontal_test_nc(path, 0, 0, 11)
@@ -2962,7 +2895,6 @@ test_that("nearest accepts nearby points outside the grid up to its limit", {
 
 test_that("a cell exactly at the kilometre limit is accepted", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path), add = TRUE)
     make_horizontal_test_nc(path, 0, 0, 11)
@@ -2991,7 +2923,6 @@ test_that("geographic proximity is not independent degree subtraction", {
 })
 
 test_that("longitudes use both conventions and wrap around the antimeridian", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_horizontal_test_nc(paths[1], c(-160, 170), 40, c(11, 22))
@@ -3015,7 +2946,6 @@ test_that("longitudes use both conventions and wrap around the antimeridian", {
 
 test_that("equal temporal candidates prefer the spatially closer source", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     paths <- replicate(2, tempfile(fileext = ".nc"))
     on.exit(unlink(paths), add = TRUE)
     make_horizontal_test_nc(paths[1], 0, 0, 11, days = 0)
@@ -3033,7 +2963,6 @@ test_that("equal temporal candidates prefer the spatially closer source", {
 
 test_that("temporal proximity remains the first selection criterion", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     paths <- replicate(2, tempfile(fileext = ".nc"))
     on.exit(unlink(paths), add = TRUE)
     make_horizontal_test_nc(paths[1], 0, 0, 11, days = 0)
@@ -3049,7 +2978,6 @@ test_that("temporal proximity remains the first selection criterion", {
 })
 
 test_that("input order breaks ties in both time and geographic distance", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_horizontal_test_nc(paths[1], 0, 0, 11, days = 0)
@@ -3061,7 +2989,6 @@ test_that("input order breaks ties in both time and geographic distance", {
 
 test_that("nearest does not search past a missing cell within the same file", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     paths <- replicate(2, tempfile(fileext = ".nc"))
     on.exit(unlink(paths), add = TRUE)
     make_horizontal_test_nc(paths[1], c(0, 0.02), 0, c(NA_real_, 22))
@@ -3124,7 +3051,6 @@ test_that("horizontal selection records accepted and rejected candidates", {
 
 test_that("nearest horizontal selection also works through 3D wrappers", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path), add = TRUE)
     make_test_netcdf(path, with_time = FALSE)
@@ -3205,7 +3131,6 @@ test_that("ambiguous or unsupported depth coordinates are rejected", {
 })
 
 test_that("depth methods select physical layers for every storage order", {
-  skip_if_not_installed("ncdf4")
   cases <- list(
     list(depth = c(0, 50, 100), values = c(11, 22, 33), positive = "down"),
     list(depth = c(100, 50, 0), values = c(33, 22, 11), positive = "down"),
@@ -3239,7 +3164,6 @@ test_that("depth methods select physical layers for every storage order", {
 })
 
 test_that("file depth units convert to observation metres", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_depth_axis_test_nc(paths[1], c(0.1, 0.05, 0), c(33, 22, 11), "km")
@@ -3254,7 +3178,6 @@ test_that("file depth units convert to observation metres", {
 })
 
 test_that("nearest depth ties choose the shallower layer in both orders", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_depth_axis_test_nc(paths[1], c(0, 50, 100), c(11, 22, 33))
@@ -3269,7 +3192,6 @@ test_that("nearest depth ties choose the shallower layer in both orders", {
 
 test_that("surface preserves a missing shallowest layer in descending files", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path), add = TRUE)
     make_depth_axis_test_nc(path, c(100, 50, 0), c(33, 22, NA_real_))
@@ -3285,7 +3207,6 @@ test_that("surface preserves a missing shallowest layer in descending files", {
 })
 
 test_that("bottom and nearest ignore missing layers by physical depth", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(100, 50, 0), c(NA_real_, 22, 11))
@@ -3298,7 +3219,6 @@ test_that("bottom and nearest ignore missing layers by physical depth", {
 
 test_that("missing requested depths preserve the other physical summaries", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path), add = TRUE)
     make_depth_axis_test_nc(path, c(100, 50, 0), c(33, 22, 11))
@@ -3317,7 +3237,6 @@ test_that("missing requested depths preserve the other physical summaries", {
 })
 
 test_that("depth metadata are read from the dimension coordinate variable", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(0, -50, -100), c(11, 22, 33), positive = "up")
@@ -3329,7 +3248,6 @@ test_that("depth metadata are read from the dimension coordinate variable", {
 })
 
 test_that("formula-based and pressure axes require explicit conversion", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(3, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_depth_axis_test_nc(
@@ -3352,7 +3270,6 @@ test_that("formula-based and pressure axes require explicit conversion", {
 })
 
 test_that("invalid file depth metadata fail before vertical extraction", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(4, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_depth_axis_test_nc(paths[1], c(-50, 0, 50), c(11, 22, 33))
@@ -3370,7 +3287,6 @@ test_that("invalid file depth metadata fail before vertical extraction", {
 })
 
 test_that("physical depth summaries also support direct point input", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(-100, -50, 0), c(33, 22, 11), positive = "up")
@@ -3395,7 +3311,6 @@ capture_selection_reports <- function(expr) {
 }
 
 test_that("spatial reports explain centres and explicit distance limits", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
@@ -3426,7 +3341,6 @@ test_that("spatial reports explain centres and explicit distance limits", {
 })
 
 test_that("depth reports describe physical layers without interpolation", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(100, 50, 0), c(33, 22, 11))
@@ -3448,7 +3362,6 @@ test_that("depth reports describe physical layers without interpolation", {
 })
 
 test_that("missing layer reports retain rejected sources without a winner", {
-  skip_if_not_installed("ncdf4")
   paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   for (path in paths) {
@@ -3465,7 +3378,6 @@ test_that("missing layer reports retain rejected sources without a winner", {
 })
 
 test_that("reports follow the winning source separately for each summary", {
-  skip_if_not_installed("ncdf4")
   paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_depth_axis_test_nc(paths[1], c(0, 50, 100), c(NA, 22, 33))
@@ -3489,7 +3401,6 @@ test_that("selection report switches require scalar logical values", {
 })
 
 test_that("missing reports follow their cause and are never repeated", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 11)
@@ -3513,7 +3424,6 @@ test_that("missing reports follow their cause and are never repeated", {
 })
 
 test_that("missing requested depths obey only the depth report switch", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(0, 50, 100), c(11, 22, 33))
@@ -3531,7 +3441,6 @@ test_that("missing requested depths obey only the depth report switch", {
 })
 
 test_that("automatic reports stay silent for normal selections", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
@@ -3558,7 +3467,6 @@ test_that("automatic reports stay silent for normal selections", {
 })
 
 test_that("automatic depth reports distinguish normal and different layers", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(100, 50, 0), c(33, 22, 11))
@@ -3587,7 +3495,6 @@ test_that("automatic depth reports distinguish normal and different layers", {
 })
 
 test_that("automatic spatial reports explain accepted external selections", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
@@ -3634,7 +3541,6 @@ test_that("report numbers are short without hiding small differences", {
 })
 
 test_that("large reports count observations and prioritise missing results", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(0, 50, 100), c(11, 22, 33))
@@ -3694,7 +3600,6 @@ test_that("spacing outside the range uses edge layers and a strict threshold", {
 })
 
 test_that("normal nearest layers are silent unless a report is requested", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(50, 61.52, 75), c(11, 22, 33))
@@ -3715,7 +3620,6 @@ test_that("normal nearest layers are silent unless a report is requested", {
 })
 
 test_that("distant layers explain spacing and proven missing neighbours", {
-  skip_if_not_installed("ncdf4")
   paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_depth_axis_test_nc(paths[1], c(55, 67, 150), c(NA, NA, 33))
@@ -3746,7 +3650,6 @@ test_that("distant layers explain spacing and proven missing neighbours", {
 })
 
 test_that("out of range and singleton reports do not invent missing layers", {
-  skip_if_not_installed("ncdf4")
   paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_depth_axis_test_nc(paths[1], c(0, 50, 100), c(11, 22, 33))
@@ -3768,7 +3671,6 @@ test_that("out of range and singleton reports do not invent missing layers", {
 })
 
 test_that("depth reference follows the source that supplies the value", {
-  skip_if_not_installed("ncdf4")
   paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_depth_axis_test_nc(paths[1], c(0, 50, 100), rep(NA_real_, 3))
@@ -3811,7 +3713,6 @@ test_that("great-circle distances match sf under s2", {
 })
 
 test_that("matching does not depend on the sf s2 setting", {
-  skip_if_not_installed("ncdf4")
   original <- sf::sf_use_s2()
   on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
   suppressMessages(sf::sf_use_s2(FALSE))
@@ -3908,7 +3809,6 @@ test_that("comparison precision distinguishes close values", {
 })
 
 test_that("spatial rejection text explains nearly identical distances", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, 0, 0, 11)
@@ -3927,7 +3827,6 @@ test_that("spatial rejection text explains nearly identical distances", {
 })
 
 test_that("depth threshold text distinguishes a small excess", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(0, 50, 100.001), c(NA, NA, 33))
@@ -4278,7 +4177,6 @@ test_that("explicit zones and date-only inputs need no timezone warning", {
 # PR #81 review fixes ----------------------------------------------------------
 
 test_that("observation depths must be metres, positive downward", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(0, -50, -100), c(10, 20, 30),
@@ -4300,7 +4198,6 @@ test_that("observation depths must be metres, positive downward", {
 })
 
 test_that("full spellings of km and cm depth units are converted", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   for (units in c("centimeters", "centimetres", "Centimeter")) {
@@ -4318,7 +4215,6 @@ test_that("full spellings of km and cm depth units are converted", {
 })
 
 test_that("height axes without a positive attribute are not depths", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_depth_axis_test_nc(path, c(2, 10, 20), c(11, 22, 33),
@@ -4331,7 +4227,6 @@ test_that("height axes without a positive attribute are not depths", {
 })
 
 test_that("a depth dimension without coordinate variable fails clearly", {
-  skip_if_not_installed("ncdf4")
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   lon <- ncdf4::ncdim_def("lon", "degrees_east", 0)
@@ -4388,7 +4283,6 @@ test_that("unusable spatial bounds stop extraction", {
 
 test_that("within matching keeps input order between overlapping sources", {
   without_selection_reports({
-    skip_if_not_installed("ncdf4")
     paths <- replicate(2, tempfile(fileext = ".nc"))
     on.exit(unlink(paths), add = TRUE)
     fine <- seq(0.05, 0.95, by = 0.1)
@@ -4409,7 +4303,6 @@ test_that("within matching keeps input order between overlapping sources", {
 })
 
 test_that("off-site tiles do not turn a temporal miss into a spatial one", {
-  skip_if_not_installed("ncdf4")
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
   make_horizontal_test_nc(paths[1], c(10, 11), c(40, 41), 1:8, days = c(0, 4))
@@ -4428,7 +4321,6 @@ test_that("off-site tiles do not turn a temporal miss into a spatial one", {
 })
 
 test_that("repeated missing reasons are grouped across many files", {
-  skip_if_not_installed("ncdf4")
   paths <- vapply(1:8, function(k) tempfile(fileext = ".nc"), character(1))
   on.exit(unlink(paths), add = TRUE)
   for (k in seq_along(paths)) {
