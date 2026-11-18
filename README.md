@@ -44,22 +44,28 @@ example, which temperatures occur within a species' 3D distribution.
 
 In order to represent the 3D space in the ocean, we use a stacked-raster approach built on `terra`. We call this the Spatial Voxel Model, with the class `SpatVoxel`. Using this `SpatVoxel`, we can represent any number of spatial phenomena in the ocean, including species distributions, fishing effort, and oceanographic variables. 
 
-`ocean3d` uses two representations for 3D geometry: A `SpatEnvelope` stores one 
-continuous `[depth_min, depth_max]` interval per cell; a `SpatVoxel` stores a 
-value at each of a set of depth levels, so it can hold a variable and interior gaps.
-`SpatEnvelope` is useful for representing discrete 3D geometry (ex. species ranges 
-with defined boundaries for area and depth). In contrast, `SpatVoxel` is ideal for 
-representing continuous values (ex. species distribution models with probabilities 
-of occurrence, rather than presence and absences). `SpatVoxel` can also represent 
-overhangs, holes, etc. in 3D space since it contains a value for every depth, rather than a depth range. 
+`ocean3d` has three representations for 3D geometry:
 
-![A SpatEnvelope (A), storing a depth_min and depth_max per cell above the seafloor, converted with envelope_to_voxel() into a SpatVoxel (B), storing presence at each depth level (0, 50, 100, 200 and 500 m).](vignettes/figures/Comparison_SpatEnvelope_SpatVoxel.png)
+- A `SpatVector3D` holds points, lines and polygons with depth and time, such
+  as tag detections, dive tracks or a protected area from 0 to 200 m. Each
+  polygon has a top and a bottom depth. Build one with `as_vector3d()`.
+- A `SpatEnvelope` stores one continuous `[depth_min, depth_max]` interval per
+  grid cell, bounded by the seafloor. It suits ranges with defined limits in
+  area and depth, such as IUCN species ranges and fishery footprints.
+- A `SpatVoxel` stores a value at each of a set of depth levels in every cell.
+  It suits continuous values, such as temperature or the modelled probability
+  of occurrence, and can hold interior gaps and overhangs, because it has a
+  value at every depth rather than one depth range.
 
-This package includes functions for converting common vector representations
-to these 3D representations. For example, `vect_to_envelope()` turns a
-species range polygon and its observed depth range into a `SpatEnvelope`
+![The same example as a SpatVector3D, a polygon with a top and bottom surface (A); a SpatEnvelope, its depth_min and depth_max on a grid above the seafloor (B); and a SpatVoxel, presence at depth levels from 50 to 500 m (C). The curved top and bottom surfaces and vector3d_to_envelope() are planned: a SpatVector3D polygon currently has one depth range.](vignettes/figures/Comparison_SpatVector3D_SpatEnvelope_SpatVoxel.png)
+
+*`vector3d_to_envelope()` and the curved top and bottom surfaces in panel A
+are planned. Today each `SpatVector3D` polygon has one depth range.*
+
+Functions convert between these representations. `vect_to_envelope()` turns
+a species range polygon and its observed depth range into a `SpatEnvelope`
 bounded by the seafloor, and `envelope_to_voxel()` places it on the depth
-levels of a `SpatVoxel`, as in the figure above.
+levels of a `SpatVoxel`, as in panels B and C above.
 
 This package includes utilities for working with commonly used datasets in
 marine habitat spatial analyses, including IUCN Red List, World Ocean Atlas, 
@@ -157,6 +163,8 @@ inputs, **intersect** them with each other or with the data, and
 **summarise** the result as volumes, overlaps or statistics. The functions
 below are grouped by step (see the [package design in SPEC.md](SPEC.md#package-design-build-intersect-summarise)).
 
+![The three steps of an analysis. Build turns 2D inputs (a polygon or points, with depths) into 3D objects. Intersect finds the space a species range and a fishing layer share, whether they share any, and the temperatures inside the range. Summarise reports the volume of the range, the share of it that is fished, and temperature by depth. Each panel lists the functions that exist now and those that are planned.](vignettes/figures/Build_Intersect_Summarise.png)
+
 ### Which input each function takes
 
 `ocean3d` currently has two data models for gridded data, and each function
@@ -176,8 +184,8 @@ planned in [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d
 
 ### Build: 3D objects
 
-Input: `SpatRaster` layers and polygons (`sf`, `SpatVector`). Output:
-`SpatVoxel` or `SpatEnvelope`.
+Input: `SpatRaster` layers, tables of points or lines, and polygons (`sf`,
+`SpatVector`). Output: `SpatVoxel`, `SpatEnvelope` or `SpatVector3D`.
 
 - `create_study_raster()` — build an empty study-area `SpatRaster`
   covering the combined extent of one or more spatial inputs.
@@ -188,6 +196,9 @@ Input: `SpatRaster` layers and polygons (`sf`, `SpatVector`). Output:
 - `as_envelope()` — define a 3D envelope with two rasters, with `depth_min` 
   and `depth_max` corresponding to the minimum and maximum depths present in 
   given cell. 
+- `as_vector3d()` — build a `SpatVector3D` of points, lines or polygons
+  with depth and time, from a table with one row per vertex or from `sf` or
+  `SpatVector` geometry.
 - `vect_to_envelope()` — rasterize a single species range or fishery
   footprint onto the study grid and attach per-cell `depth_min` /
   `depth_max`, returning a `SpatEnvelope`. 
