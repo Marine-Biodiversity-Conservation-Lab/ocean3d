@@ -1,35 +1,8 @@
 # CF time decoding and matching (#88-#92, #71, #111, #113), tested on the
 # shared helpers directly: the core object (#113) reuses them, while the
 # extraction functions that call them may be retired (#116; AGENTS.md,
-# "Tests"). Each file has a time axis and an optional 2 x n matrix of time
-# bounds in the axis units.
-
-make_time_file <- function(time_vals, units, calendar = NULL, unlim = FALSE,
-                           bounds = NULL) {
-  f <- tempfile(fileext = ".nc")
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
-  tm <- ncdf4::ncdim_def("time", units, time_vals, unlim = unlim)
-  vars <- list(ncdf4::ncvar_def(
-    "temp", "1", list(lon, lat, tm), -9999, prec = "double"
-  ))
-  if (!is.null(bounds)) {
-    nv <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
-    vars <- c(vars, list(ncdf4::ncvar_def(
-      "time_bounds", units, list(nv, tm), prec = "double"
-    )))
-  }
-  nc <- ncdf4::nc_create(f, vars)
-  nt <- length(time_vals)
-  ncdf4::ncvar_put(nc, "temp", array(0, c(2, 2, nt)), count = c(2, 2, nt))
-  if (!is.null(calendar)) ncdf4::ncatt_put(nc, "time", "calendar", calendar)
-  if (!is.null(bounds)) {
-    ncdf4::ncvar_put(nc, "time_bounds", bounds)
-    ncdf4::ncatt_put(nc, "time", "bounds", "time_bounds")
-  }
-  ncdf4::nc_close(nc)
-  f
-}
+# "Tests"). Each file is built with make_grid_file() (helper-netcdf-grid.R)
+# without a depth axis; time bounds are 2 x n matrices in the axis units.
 
 decode_time <- function(f, bounds = NULL, readunlim = TRUE) {
   nc <- ncdf4::nc_open(f, readunlim = readunlim)
@@ -47,8 +20,10 @@ match_times <- function(axis, times, ...) {
 utc <- function(x) as.POSIXct(x, tz = "UTC")
 
 test_that("a single-step months axis is read and a longer one rejected (#88)", {
-  one <- make_time_file(0, "months since 1955-01-01 00:00:00")
-  several <- make_time_file(c(0, 1, 2), "months since 2020-01-01")
+  one <- make_grid_file(depth = NULL, time = 0,
+                        time_units = "months since 1955-01-01 00:00:00")
+  several <- make_grid_file(depth = NULL, time = c(0, 1, 2),
+                            time_units = "months since 2020-01-01")
   on.exit(unlink(c(one, several)), add = TRUE)
 
   expect_equal(decode_time(one), utc("1955-01-01"))
@@ -59,7 +34,8 @@ test_that("a single-step months axis is read and a longer one rejected (#88)", {
 })
 
 test_that("reference times with a numeric time zone offset are rejected", {
-  f <- make_time_file(c(0, 24), "hours since 2020-01-01 05:00:00+05:00")
+  f <- make_grid_file(depth = NULL, time = c(0, 24),
+                      time_units = "hours since 2020-01-01 05:00:00+05:00")
   on.exit(unlink(f), add = TRUE)
 
   expect_error(decode_time(f), class = "ocean3d_error_time_units")
@@ -69,7 +45,8 @@ test_that("reference times with a numeric time zone offset are rejected", {
 
 test_that("fractional-day timestamps decode and match exactly (#90)", {
   base <- as.numeric(as.Date("2020-06-15"))
-  f <- make_time_file(base + (0:143) / 144, "days since 1970-01-01")
+  f <- make_grid_file(depth = NULL, time = base + (0:143) / 144,
+                      time_units = "days since 1970-01-01")
   on.exit(unlink(f), add = TRUE)
   times <- utc("2020-06-15") + (0:143) * 600
 
@@ -80,7 +57,9 @@ test_that("fractional-day timestamps decode and match exactly (#90)", {
 
 test_that("calendars other than the standard ones stop with a clear error", {
   for (calendar in c("noleap", "360_day", "all_leap", "julian")) {
-    f <- make_time_file(c(0, 1), "days since 2000-01-01", calendar)
+    f <- make_grid_file(depth = NULL, time = c(0, 1),
+                        time_units = "days since 2000-01-01",
+                        calendar = calendar)
     on.exit(unlink(f), add = TRUE)
     expect_error(decode_time(f), class = "ocean3d_error_calendar",
                  label = calendar)
@@ -93,14 +72,14 @@ test_that("the standard calendars are accepted under each name", {
   expected <- utc(c("2020-01-01", "2020-01-03", "2020-01-06"))
   for (calendar in c("standard", "gregorian", "proleptic_gregorian",
                      "Gregorian")) {
-    f <- make_time_file(c(0, 2, 5), "days since 2020-01-01", calendar)
+    f <- make_grid_file(depth = NULL, time = c(0, 2, 5), calendar = calendar)
     on.exit(unlink(f), add = TRUE)
     expect_equal(decode_time(f), expected, label = calendar)
   }
 })
 
 test_that("a readunlim = FALSE connection reads the time axis (#92)", {
-  f <- make_time_file(c(0, 2, 5), "days since 2020-01-01", unlim = TRUE)
+  f <- make_grid_file(depth = NULL, time = c(0, 2, 5), time_unlim = TRUE)
   on.exit(unlink(f), add = TRUE)
 
   expect_equal(decode_time(f, readunlim = FALSE),
@@ -108,7 +87,8 @@ test_that("a readunlim = FALSE connection reads the time axis (#92)", {
 })
 
 test_that("many dates match a long daily axis in one pass (#89)", {
-  f <- make_time_file(0:3649, "days since 2010-01-01")
+  f <- make_grid_file(depth = NULL, time = 0:3649,
+                      time_units = "days since 2010-01-01")
   on.exit(unlink(f), add = TRUE)
   set.seed(1)
   dates <- as.Date("2010-01-01") + sample(0:3649, 500, replace = TRUE)
@@ -118,7 +98,7 @@ test_that("many dates match a long daily axis in one pass (#89)", {
 })
 
 test_that("a repeated time step is only an error if it is selected (#91)", {
-  f <- make_time_file(c(0, 1, 1, 2), "days since 2020-01-01")
+  f <- make_grid_file(depth = NULL, time = c(0, 1, 1, 2))
   on.exit(unlink(f), add = TRUE)
 
   # CFtime warns about the repeated offset; that warning is not silenced.
@@ -139,7 +119,8 @@ test_that("a repeated time step is only an error if it is selected (#91)", {
 })
 
 test_that("midnight date-times keep their day on noon-stamped files (#71)", {
-  f <- make_time_file(c(613620, 613644, 613668), "hours since 1950-01-01")
+  f <- make_grid_file(depth = NULL, time = c(613620, 613644, 613668),
+                      time_units = "hours since 1950-01-01")
   on.exit(unlink(f), add = TRUE)
   times <- utc(c("2020-01-01", "2020-01-02", "2020-01-03"))
 
@@ -162,8 +143,8 @@ read_metadata <- function(f) {
 }
 
 test_that("back-to-back time bounds decode without a warning (#113)", {
-  f <- make_time_file(c(15, 45), "days since 2020-01-01",
-                      bounds = monthly_bounds)
+  f <- make_grid_file(depth = NULL, time = c(15, 45),
+                      time_bounds = monthly_bounds)
   on.exit(unlink(f), add = TRUE)
 
   expect_no_warning(edges <- decode_time(f, bounds = monthly_bounds))
@@ -177,8 +158,8 @@ test_that("back-to-back time bounds decode without a warning (#113)", {
 })
 
 test_that("time bounds may list the later edge first (#113)", {
-  f <- make_time_file(c(15, 45), "days since 2020-01-01",
-                      bounds = monthly_bounds[2:1, ])
+  f <- make_grid_file(depth = NULL, time = c(15, 45),
+                      time_bounds = monthly_bounds[2:1, ])
   on.exit(unlink(f), add = TRUE)
 
   expect_no_warning(edges <- decode_time(f, bounds = monthly_bounds[2:1, ]))
@@ -188,7 +169,7 @@ test_that("time bounds may list the later edge first (#113)", {
 test_that("time bounds that miss their time step are rejected (#113)", {
   # January's bounds end on 10 January, before its 16 January time step.
   bad <- matrix(c(0, 10, 31, 60), nrow = 2L)
-  f <- make_time_file(c(15, 45), "days since 2020-01-01", bounds = bad)
+  f <- make_grid_file(depth = NULL, time = c(15, 45), time_bounds = bad)
   on.exit(unlink(f), add = TRUE)
 
   expect_error(decode_time(f, bounds = bad),
@@ -202,8 +183,8 @@ test_that("time bounds that miss their time step are rejected (#113)", {
 })
 
 test_that("the time axis builder returns a CFtime object with its bounds", {
-  f <- make_time_file(c(15, 45), "days since 2020-01-01",
-                      bounds = monthly_bounds[2:1, ])
+  f <- make_grid_file(depth = NULL, time = c(15, 45),
+                      time_bounds = monthly_bounds[2:1, ])
   on.exit(unlink(f), add = TRUE)
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
@@ -220,27 +201,30 @@ test_that("the time axis builder returns a CFtime object with its bounds", {
 
 
 test_that("climatological time axes are recognised by attribute or year 0", {
-  check <- function(f, atts = list()) {
-    nc <- ncdf4::nc_open(f, write = TRUE)
+  check <- function(f) {
+    nc <- ncdf4::nc_open(f)
     on.exit(ncdf4::nc_close(nc))
-    for (name in names(atts)) ncdf4::ncatt_put(nc, "time", name, atts[[name]])
     .check_climatology(nc, "time", basename(f))
   }
-  dated <- make_time_file(c(0, 1), "days since 2020-01-01")
-  woa <- make_time_file(c(0.5, 1.5), "months since 0000-01-01 00:00:00")
-  flagged <- make_time_file(c(0, 1), "days since 2020-01-01")
+  dated <- make_grid_file(depth = NULL, time = c(0, 1))
+  woa <- make_grid_file(depth = NULL, time = c(0.5, 1.5),
+                        time_units = "months since 0000-01-01 00:00:00")
+  flagged <- make_grid_file(depth = NULL, time = c(0, 1), time_atts = list(
+    climatology = "climatology_bounds"
+  ))
   on.exit(unlink(c(dated, woa, flagged)), add = TRUE)
 
   expect_null(check(dated))
   # Days since year 0 (MATLAB datenums) are dates, not a climatology.
-  datenum <- make_time_file(c(737791, 737792), "days since 0000-01-01 00:00:00",
+  datenum <- make_grid_file(depth = NULL, time = c(737791, 737792),
+                            time_units = "days since 0000-01-01 00:00:00",
                             calendar = "proleptic_gregorian")
   on.exit(unlink(datenum), add = TRUE)
   expect_null(check(datenum))
   err <- expect_error(check(woa), class = "ocean3d_error_time_climatology")
   expect_match(conditionMessage(err), basename(woa), fixed = TRUE)
   expect_match(conditionMessage(err), "months since 0000-01-01", fixed = TRUE)
-  expect_error(check(flagged, list(climatology = "climatology_bounds")),
+  expect_error(check(flagged),
                class = "ocean3d_error_time_climatology")
 })
 

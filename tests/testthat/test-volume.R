@@ -1,34 +1,3 @@
-# Helpers are defined locally so this does not depend on definitions that live
-# in another test file. The LAEA projection makes every cell 1 km x 1 km, so the
-# expected volumes below are hand-computable.
-make_grid <- function(ncol = 3, nrow = 3) {
-  terra::rast(nrows = nrow, ncols = ncol,
-              xmin = 0, xmax = ncol * 1000,
-              ymin = 0, ymax = nrow * 1000,
-              crs = "+proj=laea +lat_0=0 +lon_0=0 +datum=WGS84 +units=m")
-}
-
-# Helper: a SpatEnvelope with per-cell depth limits (NA marks absence).
-make_range_rast <- function(depth_min_vals, depth_max_vals,
-                            ncol = 3, nrow = 3) {
-  dmin <- make_grid(ncol, nrow)
-  terra::values(dmin) <- depth_min_vals
-  names(dmin) <- "depth_min"
-
-  dmax <- terra::rast(dmin)
-  terra::values(dmax) <- depth_max_vals
-  names(dmax) <- "depth_max"
-
-  as_envelope(c(dmin, dmax))
-}
-
-# Helper: a SpatVoxel from a cells x depths matrix of values (NA = unoccupied).
-make_voxel <- function(vals, depths, ncol = 3, nrow = 3) {
-  r <- terra::rast(make_grid(ncol, nrow), nlyrs = length(depths))
-  terra::values(r) <- vals
-  as_voxel(r, depths = depths, varname = "presence")
-}
-
 test_that("calc_volume_overlap() overlap never exceeds either range volume", {
   # Range A: covers all 9 cells, 0-100m depth
   a <- make_range_rast(

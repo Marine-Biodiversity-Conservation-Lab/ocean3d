@@ -1117,43 +1117,10 @@ test_that("nested data frames use a custom file column", {
   )
 })
 
-make_time_decoder_fixture <- function(
-  path,
-  values,
-  units = "hours since 2020-01-01 00:00:00",
-  calendar = "standard") {
-  time <- ncdf4::ncdim_def(
-    "time",
-    units,
-    vals = values
-  )
-
-  variable <- ncdf4::ncvar_def(
-    "example",
-    "1",
-    dim = list(time),
-    prec = "double"
-  )
-
-  nc <- ncdf4::nc_create(path, variable)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  ncdf4::ncatt_put(nc, "time", "calendar", calendar)
-  ncdf4::ncvar_put(nc, "example", seq_along(values))
-
-  invisible(path)
-}
-
-
 test_that("time decoding rejects empty units instead of inventing an origin", {
-  f <- tempfile(fileext = ".nc")
+  f <- make_grid_file(depth = NULL, time = c(0, 2, 5), time_units = "",
+                      calendar = "standard")
   on.exit(unlink(f), add = TRUE)
-
-  make_time_decoder_fixture(
-    f,
-    values = c(0, 2, 5),
-    units = ""
-  )
 
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
@@ -2693,34 +2660,12 @@ test_that("spatial eligibility selects the correct tile in either order", {
   })
 })
 
-make_spatial_axis_nc <- function(path, centres, bounds = NULL) {
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", centres)
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", 40)
-  variables <- list(ncdf4::ncvar_def(
-    "temp", "degree_Celsius", list(lon, lat), -9999
-  ))
-  if (!is.null(bounds)) {
-    vertex <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
-    variables[[2L]] <- ncdf4::ncvar_def(
-      "lon_bounds", "degrees_east", list(vertex, lon), prec = "double"
-    )
-  }
-  nc <- ncdf4::nc_create(path, variables)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  ncdf4::ncvar_put(nc, "temp", matrix(1, length(centres), 1))
-  if (!is.null(bounds)) {
-    ncdf4::ncvar_put(nc, "lon_bounds", bounds)
-    ncdf4::ncatt_put(nc, "lon", "bounds", "lon_bounds")
-  }
-}
-
 test_that("explicit spatial bounds override inferred edges", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
-  make_spatial_axis_nc(
-    path, centres = c(0, 2),
-    bounds = matrix(c(-0.2, 0.2, 1.8, 2.2), nrow = 2L)
-  )
+  make_grid_file(lon = c(0, 2), lat = 40, depth = NULL, time = NULL,
+                 lon_bounds = matrix(c(-0.2, 0.2, 1.8, 2.2), nrow = 2L),
+                 path = path)
   nc <- ncdf4::nc_open(path)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   axis <- .prepare_spatial_axis(nc, "lon", c(0, 2), longitude = TRUE)
@@ -2732,7 +2677,8 @@ test_that("explicit spatial bounds override inferred edges", {
 test_that("irregular descending axes preserve original indices", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
-  make_spatial_axis_nc(path, centres = c(5, 2, 0))
+  make_grid_file(lon = c(5, 2, 0), lat = 40, depth = NULL, time = NULL,
+                 path = path)
   nc <- ncdf4::nc_open(path)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   axis <- .prepare_spatial_axis(nc, "lon", c(5, 2, 0), longitude = TRUE)

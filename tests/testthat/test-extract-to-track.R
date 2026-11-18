@@ -601,7 +601,7 @@ test_that(
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
-    .make_track_nc(path, time = 0:2, extra_static = TRUE)
+    .make_track_nc(path, time = 0:2, extra_vars = list(static = 7))
     vertices <- data.frame(lon = c(0, 2), lat = 0)
     static <- extract_to_track(
       vertices,
@@ -1250,12 +1250,7 @@ test_that("variation states distinguish requests, coverage and sample counts", {
 test_that("non-finite variation results are not marked available", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
-  .make_track_nc(path)
-  nc <- ncdf4::nc_open(path, write = TRUE)
-  tryCatch(
-    ncdf4::ncvar_put(nc, "temp", matrix(rep(c(-1e200, 1e200, 0), 2), 3)),
-    finally = ncdf4::nc_close(nc)
-  )
+  .make_track_nc(path, values = rep(c(-1e200, 1e200, 0), 2))
   out <- extract_to_track(
     data.frame(lon = 0:1, lat = 0), path, var = "temp", weighting = "equal",
     statistics = c("mean", "sd", "se"), quiet = TRUE
@@ -1886,10 +1881,8 @@ test_that(
 test_that("tracks accept climatological time axes like point extraction", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
-  .make_track_nc(path, time = c(0, 24))
-  handle <- ncdf4::nc_open(path, write = TRUE)
-  ncdf4::ncatt_put(handle, "time", "climatology", "climatology_bounds")
-  ncdf4::nc_close(handle)
+  .make_track_nc(path, time = c(0, 24),
+                 time_atts = list(climatology = "climatology_bounds"))
   route <- data.frame(
     lon = c(0, 2), lat = 0,
     date = as.POSIXct(c("2020-01-01", "2020-01-01"), tz = "UTC")

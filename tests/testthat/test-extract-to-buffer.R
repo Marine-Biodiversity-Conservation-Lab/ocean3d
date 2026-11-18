@@ -1,5 +1,9 @@
 # Helpers ----------------------------------------------------------------------
 
+# make_grid_file() with the buffer tests' defaults: each cell holds its
+# `cell_values` entry (lon x lat) plus `field` (depth x time). Dimensions are
+# stored in a different order from lon, lat, depth, time on purpose. Other
+# arguments, such as depth_bounds, time_bounds and var, go to make_grid_file().
 .make_buffer_grid_nc <- function(
   path,
   cell_values = matrix(c(0, 10, 20, 30), 2L),
@@ -7,75 +11,26 @@
   lat = c(-0.01, 0.01),
   lon_bounds = matrix(c(-0.02, 0, 0, 0.02), 2L),
   lat_bounds = matrix(c(-0.02, 0, 0, 0.02), 2L),
-  var = "temp",
   spatial_bounds = TRUE,
   field = matrix(0),
   depth = NULL,
   time = NULL,
-  depth_bounds = NULL,
-  time_bounds = NULL
+  ...
 ) {
-  x <- ncdf4::ncdim_def("lon", "degrees_east", lon)
-  y <- ncdf4::ncdim_def("lat", "degrees_north", lat)
-  nv <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
-  z <- if (is.null(depth)) NULL else ncdf4::ncdim_def("depth", "m", depth)
-  t <- if (is.null(time)) NULL else ncdf4::ncdim_def(
-    "time",
-    "hours since 2020-01-01 00:00:00",
-    time
+  stopifnot(identical(dim(field), c(max(length(depth), 1L),
+                                    max(length(time), 1L))))
+  make_grid_file( # nolint: object_usage_linter.
+    lon, lat, depth, time, path = path, values = outer(cell_values, field, "+"),
+    lon_bounds = if (spatial_bounds) lon_bounds,
+    lat_bounds = if (spatial_bounds) lat_bounds,
+    positive = if (!is.null(depth)) "down", var_units = "degree_Celsius",
+    time_units = "hours since 2020-01-01 00:00:00",
+    dim_order = c("time", "lat", "depth", "lon"), ...
   )
-  dims <- list()
-  if (!is.null(t)) dims <- c(dims, list(t))
-  dims <- c(dims, list(y))
-  if (!is.null(z)) dims <- c(dims, list(z))
-  dims <- c(dims, list(x))
-  variables <- list(
-    ncdf4::ncvar_def(
-      var,
-      "degree_Celsius",
-      dims,
-      -9999,
-      prec = "double"
-    )
-  )
-  bounds <- list()
-  if (spatial_bounds) bounds <- list(lon = lon_bounds, lat = lat_bounds)
-  if (!is.null(depth_bounds)) bounds$depth <- depth_bounds
-  if (!is.null(time_bounds)) bounds$time <- time_bounds
-  dimensions <- list(lon = x, lat = y, depth = z, time = t)
-  for (name in names(bounds)) {
-    variables <- c(
-      variables,
-      list(
-        ncdf4::ncvar_def(
-          paste0(name, "_bounds"),
-          dimensions[[name]]$units,
-          list(nv, dimensions[[name]]),
-          prec = "double"
-        )
-      )
-    )
-  }
-  handle <- ncdf4::nc_create(path, variables)
-  on.exit(ncdf4::nc_close(handle))
-  nz <- if (is.null(z)) 1L else length(depth)
-  nt <- if (is.null(t)) 1L else length(time)
-  stopifnot(identical(dim(field), c(nz, nt)))
-  values <- array(NA_real_, c(nt, length(lat), nz, length(lon)))
-  for (i in seq_along(lon)) for (j in seq_along(lat)) {
-    for (k in seq_len(nz)) for (l in seq_len(nt)) {
-      values[l, j, k, i] <- field[k, l] + cell_values[i, j]
-    }
-  }
-  shape <- vapply(dims, function(d) length(d$vals), integer(1))
-  ncdf4::ncvar_put(handle, var, array(values, shape))
-  for (name in names(bounds)) {
-    ncdf4::ncvar_put(handle, paste0(name, "_bounds"), bounds[[name]])
-    ncdf4::ncatt_put(handle, name, "bounds", paste0(name, "_bounds"))
-  }
-  if (!is.null(z)) ncdf4::ncatt_put(handle, "depth", "positive", "down")
-  invisible(path)
 }
+
+# The cell values of the source files that cover lon 0 to 1 and lat 40 to 41.
+.buffer_source_cells <- matrix(c(0, 100, 200, 300), 2L)
 
 
 .make_buffer_axis_nc <- function(
@@ -148,99 +103,6 @@
 }
 
 
-.make_buffer_source_nc <- function(
-  path,
-  field,
-  depth = NULL,
-  time = NULL,
-  depth_bounds = NULL,
-  time_bounds = NULL
-) {
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
-  vertices <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
-  depth_dim <- if (is.null(depth)) {
-    NULL
-  } else {
-    ncdf4::ncdim_def("depth", "m", depth)
-  }
-  time_dim <- if (is.null(time)) {
-    NULL
-  } else {
-    ncdf4::ncdim_def("time", "hours since 2020-01-01 00:00:00", time)
-  }
-  n_depth <- if (is.null(depth)) 1L else length(depth)
-  n_time <- if (is.null(time)) 1L else length(time)
-  stopifnot(is.matrix(field), identical(dim(field), c(n_depth, n_time)))
-
-  # Deliberately use a different order from lon/lat/depth/time.
-  dims <- list()
-  if (!is.null(time_dim)) dims <- c(dims, list(time_dim))
-  dims <- c(dims, list(lat))
-  if (!is.null(depth_dim)) dims <- c(dims, list(depth_dim))
-  dims <- c(dims, list(lon))
-  value <- ncdf4::ncvar_def(
-    "temp",
-    "degree_Celsius",
-    dims,
-    missval = -9999,
-    prec = "double"
-  )
-  variables <- list(value)
-  if (!is.null(depth_bounds)) {
-    variables <- c(
-      variables,
-      list(
-        ncdf4::ncvar_def(
-          "depth_bounds",
-          "m",
-          list(vertices, depth_dim),
-          prec = "double"
-        )
-      )
-    )
-  }
-  if (!is.null(time_bounds)) {
-    variables <- c(
-      variables,
-      list(
-        ncdf4::ncvar_def(
-          "time_bounds",
-          "hours since 2020-01-01 00:00:00",
-          list(vertices, time_dim),
-          prec = "double"
-        )
-      )
-    )
-  }
-  nc <- ncdf4::nc_create(path, variables)
-  on.exit(ncdf4::nc_close(nc))
-  values <- array(NA_real_, c(n_time, 2L, n_depth, 2L))
-  for (x in 1:2) {
-    for (y in 1:2) {
-      for (z in seq_len(n_depth)) {
-        for (t in seq_len(n_time)) {
-          values[t, y, z, x] <- field[z, t] +
-            c(0, 100)[x] + c(0, 200)[y]
-        }
-      }
-    }
-  }
-  shape <- vapply(dims, function(x) length(x$vals), integer(1))
-  ncdf4::ncvar_put(nc, "temp", array(values, shape))
-  if (!is.null(depth_dim)) ncdf4::ncatt_put(nc, "depth", "positive", "down")
-  if (!is.null(depth_bounds)) {
-    ncdf4::ncvar_put(nc, "depth_bounds", depth_bounds)
-    ncdf4::ncatt_put(nc, "depth", "bounds", "depth_bounds")
-  }
-  if (!is.null(time_bounds)) {
-    ncdf4::ncvar_put(nc, "time_bounds", time_bounds)
-    ncdf4::ncatt_put(nc, "time", "bounds", "time_bounds")
-  }
-  invisible(path)
-}
-
-
 # Request validation -----------------------------------------------------------
 
 test_that("most_similar exports locations without diagnostics", {
@@ -277,10 +139,8 @@ test_that("most_similar exports locations without diagnostics", {
 test_that("buffer extraction stops on a climatological time axis", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
-  .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
-  handle <- ncdf4::nc_open(path, write = TRUE)
-  ncdf4::ncatt_put(handle, "time", "climatology", "climatology_bounds")
-  ncdf4::nc_close(handle)
+  .make_track_nc(path, depth = c(0, 20), time = c(0, 24),
+                 time_atts = list(climatology = "climatology_bounds"))
   data <- data.frame(lon = 1, lat = 0, depth = 20,
                      date = as.Date("2020-01-01"))
   # Without a time buffer too: the file's time axis can't be decoded as dates.
@@ -296,10 +156,7 @@ test_that("buffer extraction stops on a climatological time axis", {
 test_that("identical winners expose ambiguity in only nonunique axes", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
-  .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
-  handle <- ncdf4::nc_open(path, write = TRUE)
-  ncdf4::ncvar_put(handle, "temp", array(10, c(3, 2, 2, 2)))
-  ncdf4::nc_close(handle)
+  .make_track_nc(path, depth = c(0, 20), time = c(0, 24), values = 10)
   data <- data.frame(
     lon = 1, lat = 0, depth = 20, date = as.Date("2020-01-01"), target = 10
   )
@@ -322,10 +179,7 @@ test_that("identical winners expose ambiguity in only nonunique axes", {
 test_that("location warnings are bounded and independent of quiet or reports", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
-  .make_track_nc(path)
-  handle <- ncdf4::nc_open(path, write = TRUE)
-  ncdf4::ncvar_put(handle, "temp", matrix(10, 3, 2))
-  ncdf4::nc_close(handle)
+  .make_track_nc(path, values = 10)
   data <- data.frame(lon = rep(1, 12), lat = 0, target = 10)
   captured <- list()
   out <- withCallingHandlers(extract_to_buffer(
@@ -353,7 +207,7 @@ test_that("location warnings are bounded and independent of quiet or reports", {
 test_that("location columns protect input names and retain sf geometry", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
-  .make_track_nc(path, extra_static = TRUE)
+  .make_track_nc(path, extra_vars = list(static = 7))
   data <- data.frame(lon = 1, lat = 0, target = 12, static_target = 7)
   for (suffix in c("_match_lon", "_match_lat", "_match_depth", "_match_time")) {
     collision <- data
@@ -1053,15 +907,17 @@ test_that(
   {
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
-    .make_buffer_source_nc(
-      paths[1L],
-      matrix(10),
+    .make_buffer_grid_nc(
+      paths[1L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(10),
       time = 5,
       time_bounds = matrix(c(0, 10), 2L)
     )
-    .make_buffer_source_nc(
-      paths[2L],
-      matrix(20),
+    .make_buffer_grid_nc(
+      paths[2L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(20),
       time = 20,
       time_bounds = matrix(c(10, 30), 2L)
     )
@@ -1122,15 +978,17 @@ test_that(
   {
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
-    .make_buffer_source_nc(
-      paths[1L],
-      matrix(10),
+    .make_buffer_grid_nc(
+      paths[1L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(10),
       time = 5,
       time_bounds = matrix(c(0, 20), 2L)
     )
-    .make_buffer_source_nc(
-      paths[2L],
-      matrix(20),
+    .make_buffer_grid_nc(
+      paths[2L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(20),
       time = 20,
       time_bounds = matrix(c(10, 30), 2L)
     )
@@ -1175,16 +1033,18 @@ test_that(
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
     bounds <- matrix(c(0, 10, 10, 30), 2L)
-    .make_buffer_source_nc(
-      paths[1L],
-      matrix(c(10, 20, 50, 60), 2L),
+    .make_buffer_grid_nc(
+      paths[1L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(c(10, 20, 50, 60), 2L),
       depth = c(5, 20),
       time = c(0, 48),
       depth_bounds = bounds
     )
-    .make_buffer_source_nc(
-      paths[2L],
-      matrix(c(30, 40), 2L),
+    .make_buffer_grid_nc(
+      paths[2L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(c(30, 40), 2L),
       depth = c(5, 20),
       time = 24,
       depth_bounds = bounds
@@ -1215,16 +1075,18 @@ test_that(
   {
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
-    .make_buffer_source_nc(
-      paths[1L],
-      matrix(10),
+    .make_buffer_grid_nc(
+      paths[1L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(10),
       depth = 5,
       time = 12,
       time_bounds = matrix(c(0, 24), 2L)
     )
-    .make_buffer_source_nc(
-      paths[2L],
-      matrix(20),
+    .make_buffer_grid_nc(
+      paths[2L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(20),
       depth = 20,
       time = 12,
       time_bounds = matrix(c(0, 24), 2L)
@@ -1257,9 +1119,10 @@ test_that(
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(c(30, 20, 10), 3L),
+    .make_buffer_grid_nc(
+      path, .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(c(30, 20, 10), 3L),
       depth = c(35, 15, 5),
       depth_bounds = matrix(c(20, 50, 10, 20, 0, 10), 2L)
     )
@@ -1419,9 +1282,10 @@ test_that(
     )
     expect_true(is.na(rejected$temp))
 
-    .make_buffer_source_nc(
-      path,
-      matrix(10),
+    .make_buffer_grid_nc(
+      path, .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(10),
       time = 12,
       time_bounds = matrix(c(0, 24), 2L)
     )
@@ -1895,15 +1759,17 @@ test_that(
   {
     paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
     on.exit(unlink(paths))
-    .make_buffer_source_nc(
-      paths[1L],
-      matrix(10),
+    .make_buffer_grid_nc(
+      paths[1L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(10),
       time = 5,
       time_bounds = matrix(c(0, 10), 2L)
     )
-    .make_buffer_source_nc(
-      paths[2L],
-      matrix(20),
+    .make_buffer_grid_nc(
+      paths[2L], .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(20),
       time = 20,
       time_bounds = matrix(c(10, 30), 2L)
     )
@@ -1999,9 +1865,10 @@ test_that(
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
-    .make_buffer_source_nc(
-      path,
-      matrix(10),
+    .make_buffer_grid_nc(
+      path, .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(10),
       time = 5,
       time_bounds = matrix(c(0, 10), 2L)
     )
@@ -2067,7 +1934,7 @@ test_that("automatic detection ignores dimensions without coordinate variables",
     NA
   )
   expect_true("temp" %in% names(out))
-  expect_false(any(c("lon_bounds", "lat_bounds") %in% names(out)))
+  expect_false(any(c("lon_bnds", "lat_bnds") %in% names(out)))
 })
 
 
@@ -2248,10 +2115,7 @@ test_that(
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
-    .make_track_nc(path)
-    handle <- ncdf4::nc_open(path, write = TRUE)
-    ncdf4::ncvar_put(handle, "temp", matrix(10, 3, 2))
-    ncdf4::nc_close(handle)
+    .make_track_nc(path, values = 10)
     data <- data.frame(lon = 1, lat = 0, target = 10)
     args <- list(
       data = data,
@@ -2286,7 +2150,7 @@ test_that(
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
-    .make_track_nc(path, extra_static = TRUE)
+    .make_track_nc(path, extra_vars = list(static = 7))
     data <- data.frame(
       lon = 1,
       lat = 0,
