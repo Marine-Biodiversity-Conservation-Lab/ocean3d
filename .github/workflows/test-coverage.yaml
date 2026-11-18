@@ -20,11 +20,15 @@ jobs:
 
       # Some ubuntu-latest runners default to the EC2 Ubuntu mirror, which can
       # take 10-30 minutes to download the system libraries setup-r installs.
+      # The runner image points apt at a mirror list (mirror+file:) that puts
+      # the EC2 mirror first, so replace it as well as any direct mirror URL.
       - name: Use the Azure Ubuntu mirror
         if: runner.os == 'Linux'
         run: |
           sudo find /etc/apt -type f \( -name '*.sources' -o -name '*.list' \) \
-            -exec sed -i -E 's#https?://[a-z0-9.-]*archive\.ubuntu\.com#http://azure.archive.ubuntu.com#g' {} +
+            -exec sed -i -E \
+              -e 's#mirror\+file:/etc/apt/apt-mirrors\.txt#http://azure.archive.ubuntu.com/ubuntu/#g' \
+              -e 's#https?://[a-z0-9.-]*archive\.ubuntu\.com#http://azure.archive.ubuntu.com#g' {} +
           grep -rh '^URIs:\|^deb ' /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null || true
 
       - uses: r-lib/actions/setup-r@v2
