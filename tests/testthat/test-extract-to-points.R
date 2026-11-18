@@ -2492,6 +2492,7 @@ test_that("explicit bounds describe intervals without inventing cadence", {
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 1)
   nc <- ncdf4::nc_open(path, write = TRUE)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
   vertex <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
   bounds <- ncdf4::ncvar_def(
     "time_bounds", "days since 2020-01-01",
@@ -2500,10 +2501,6 @@ test_that("explicit bounds describe intervals without inventing cadence", {
   nc <- ncdf4::ncvar_add(nc, bounds)
   ncdf4::ncvar_put(nc, "time_bounds", matrix(c(-0.5, 0.5), nrow = 2L))
   ncdf4::ncatt_put(nc, "time", "bounds", "time_bounds")
-  # Reopen, so the added bounds variable is listed as in any file read.
-  ncdf4::nc_close(nc)
-  nc <- ncdf4::nc_open(path)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
   info <- .read_temporal_metadata(
     nc, "time", "temp", .decode_netcdf_time(nc, "time")
   )
