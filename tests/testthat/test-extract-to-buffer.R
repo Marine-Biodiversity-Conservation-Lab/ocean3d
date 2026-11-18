@@ -1013,6 +1013,12 @@ test_that("longitude cells that overlap modulo 360 are rejected", {
     class = "ocean3d_error_bounds"
   )
   expect_match(conditionMessage(err), "overlap around the globe")
+  # Point extraction picks one cell, so it can't count a cell twice.
+  expect_equal(
+    extract_to_point(nc = path, lon = 120, lat = 0, var = "temp",
+                     method = "2d"),
+    2
+  )
 })
 
 

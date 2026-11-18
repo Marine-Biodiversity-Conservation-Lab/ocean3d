@@ -101,7 +101,8 @@
 # edges, or NULL to infer them halfway between centres, cut at the surface for
 # depth). Checks that the centres run one way without duplicates and that the
 # intervals have positive widths, contain their centres and don't overlap
-# (also modulo 360 when `periodic`, for longitude). Bad bounds stop with
+# (also modulo 360 when `periodic`, for longitude cells a horizontal buffer
+# could count twice), allowing for float32 rounding. Bad bounds stop with
 # `ocean3d_error_bounds`. A single centre without bounds is an error, unless
 # `allow_singleton`, when it becomes a zero-width cell. Values keep their
 # storage order. Shared by every axis reader: longitude and latitude
@@ -146,10 +147,13 @@
     basis <- "explicit_bounds"
   }
 
+  # Shared edges and outer edges can differ by rounding, up to single
+  # precision for values stored as float32.
+  tol <- max(1e-8, max(abs(c(lower, upper)), na.rm = TRUE) * 2^-23)
   if (any(!is.finite(lower)) || any(!is.finite(upper)) ||
         (basis != "singleton_coordinate" && any(upper <= lower)) ||
         any(!is.finite(upper - lower)) ||
-        any(centres < lower - 1e-8 | centres > upper + 1e-8)) {
+        any(centres < lower - tol | centres > upper + tol)) {
     rlang::abort(glue::glue(
       "Invalid bounds for `{coordinate}`: intervals need positive widths ",
       "and must contain their centres."
@@ -157,7 +161,7 @@
   }
   index <- order(lower)
   if (length(index) > 1L &&
-        any(tail(lower[index], -1L) < head(cummax(upper[index]), -1L))) {
+        any(tail(lower[index], -1L) < head(cummax(upper[index]), -1L) - tol)) {
     rlang::abort(glue::glue(
       "Bounds overlap in `{coordinate}`. Resolve overlapping cells first."
     ), class = "ocean3d_error_bounds", call = NULL)
@@ -168,8 +172,8 @@
     start <- lower %% 360
     end <- start + upper - lower
     sorted <- order(start)
-    if (any(start[sorted][-1L] < head(cummax(end[sorted]), -1L) - 1e-8) ||
-          max(end) - 360 > min(start) + 1e-8) {
+    if (any(start[sorted][-1L] < head(cummax(end[sorted]), -1L) - tol) ||
+          max(end) - 360 > min(start) + tol) {
       rlang::abort(glue::glue(
         "Longitude cells in `{coordinate}` overlap around the globe. ",
         "Resolve overlapping cells first."

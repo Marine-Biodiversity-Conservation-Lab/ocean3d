@@ -29,3 +29,27 @@ test_that("midpoint edges keep the order of the centres", {
   expect_equal(irregular$upper, c(10, 25, 45))
   expect_false(irregular$regular)
 })
+
+test_that("bounds checks allow float32 rounding on global grids", {
+  as_float32 <- function(x) {
+    readBin(writeBin(x, raw(), size = 4L), "double", length(x), size = 4L)
+  }
+  # GLORYS-style 1/12 degree global longitudes stored as float32: the
+  # inferred outer edges span slightly more than 360 degrees.
+  lon <- as_float32(-180 + (0:4319) / 12)
+  f <- make_grid_file(lon = lon, depth = NULL, time = NULL)
+  on.exit(unlink(f), add = TRUE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  expect_no_error(.prepare_spatial_axis(nc, "lon", lon, TRUE, periodic = TRUE))
+})
+
+test_that("a repeated first meridian is only rejected around the globe", {
+  f <- make_grid_file(lon = 0:360, depth = NULL, time = NULL)
+  on.exit(unlink(f), add = TRUE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  expect_no_error(.prepare_spatial_axis(nc, "lon", 0:360, TRUE))
+  expect_error(.prepare_spatial_axis(nc, "lon", 0:360, TRUE, periodic = TRUE),
+               class = "ocean3d_error_bounds")
+})

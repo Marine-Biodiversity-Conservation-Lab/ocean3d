@@ -4525,3 +4525,17 @@ test_that("bad spatial bounds stop point extraction and the core object", {
   # The first two cells overlap between 0.8 and 1.
   check(rbind(c(0, 0.8, 2), c(1, 2, 3)), "Bounds overlap in `lon`")
 })
+
+test_that("shared bounds edges that differ by rounding are accepted", {
+  # 0.1 degree cells whose shared edges are stored once each.
+  lon <- seq(100, 140, by = 0.1)
+  edges <- seq(99.95, 140.05, by = 0.1)
+  f <- make_grid_file(lon = lon, depth = NULL, time = NULL,
+                      lon_bounds = rbind(head(edges, -1L), tail(edges, -1L)))
+  on.exit(unlink(f))
+  expect_equal(
+    extract_to_point(nc = f, lon = 120, lat = 10.5, var = "temp",
+                     method = "2d"),
+    201
+  )
+})

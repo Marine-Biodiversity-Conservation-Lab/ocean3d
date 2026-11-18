@@ -180,7 +180,8 @@
   values[1L] + c(0, cumsum(steps))
 }
 
-.prepare_spatial_axis <- function(nc, coordinate, values, longitude = FALSE) {
+.prepare_spatial_axis <- function(nc, coordinate, values, longitude = FALSE,
+                                  periodic = FALSE) {
   if (!is.numeric(values) || !length(values) ||
         any(!is.finite(values))) {
     stop("Spatial coordinates must be finite numbers.", call. = FALSE)
@@ -229,7 +230,7 @@
   if (basis != "singleton_coordinate") {
     .axis_intervals(centres, rbind(lower, upper),
                     if (longitude) "lon" else "lat", coordinate,
-                    periodic = longitude)
+                    periodic = longitude && periodic)
   }
   if (!longitude) {
     lower <- pmax(lower, -90)

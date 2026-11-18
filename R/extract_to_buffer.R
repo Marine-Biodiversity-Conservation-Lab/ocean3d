@@ -846,8 +846,11 @@
 
 
 .buffer_spatial_axis <- function(nc, coordinate, longitude, infer_bounds) {
+  # Horizontal buffers could count a cell twice around the globe, so they
+  # also check longitude cells modulo 360.
   axis <- .prepare_spatial_axis(
-    nc, coordinate, .get_dim_values(nc, coordinate), longitude
+    nc, coordinate, .get_dim_values(nc, coordinate), longitude,
+    periodic = TRUE
   )
   if (axis$basis != "explicit_bounds" && !infer_bounds) {
     stop("Coordinate `", coordinate, "` needs cell bounds for aggregation. ",
@@ -1025,7 +1028,7 @@
     if (!match$accepted) return(list(status = "spatial_rejected"))
     x_radius <- if (is.null(options$lon_cell_radius)) 0 else options$lon_cell_radius
     y_radius <- if (is.null(options$lat_cell_radius)) 0 else options$lat_cell_radius
-    periodic <- abs(sum(x$upper - x$lower) - 360) < 1e-8
+    periodic <- abs(sum(x$upper - x$lower) - 360) < 360 * 2^-23
     lon_indices <- .buffer_index_neighbours(
       order(x$centres), match$lon_idx, x_radius, periodic
     )
