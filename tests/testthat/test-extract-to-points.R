@@ -2469,24 +2469,21 @@ test_that("metadata keeps bounds separate from sampling cadence", {
     nc, "time", "temp", .decode_netcdf_time(nc, "time")
   )
   expect_identical(info$cell_methods, "time: mean")
-  expect_null(info$bounds)
   expect_identical(info$cadence$type, "unknown")
   expect_identical(info$calendar, "standard")
   expect_match(info$units, "days since")
 })
 
-test_that("a missing time bounds variable stops the time metadata", {
+test_that("point extraction ignores time bounds", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_a2_temporal_nc(path, 0, 1)
   nc <- ncdf4::nc_open(path, write = TRUE)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   ncdf4::ncatt_put(nc, "time", "bounds", "missing_bounds")
-  expect_error(
-    .read_temporal_metadata(nc, "time", "temp",
-                            .decode_netcdf_time(nc, "time")),
-    "Bounds for `time` were not found", fixed = TRUE
-  )
+  info <- .read_temporal_metadata(nc, "time", "temp",
+                                  .decode_netcdf_time(nc, "time"))
+  expect_false("bounds" %in% names(info))
 })
 
 test_that("explicit bounds describe intervals without inventing cadence", {
@@ -2510,7 +2507,6 @@ test_that("explicit bounds describe intervals without inventing cadence", {
   info <- .read_temporal_metadata(
     nc, "time", "temp", .decode_netcdf_time(nc, "time")
   )
-  expect_equal(info$bounds[2, 1] - info$bounds[1, 1], 86400)
   expect_identical(info$cadence$type, "unknown")
 })
 

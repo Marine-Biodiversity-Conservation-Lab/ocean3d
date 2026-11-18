@@ -189,17 +189,23 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   file <- basename(path)
   .check_climatology(nc, dim, file)
   offsets <- as.vector(.get_dim_values(nc, dim))
+  units <- .read_time_attribute(nc, dim, "units")
+  usable <- is.numeric(offsets) && all(is.finite(offsets)) &&
+    is.character(units) && length(units) == 1L && nzchar(trimws(units))
+  # Without usable units or offsets, the axis builder gives the error.
+  if (!usable) .netcdf_time_axis(nc, dim)
   steps <- diff(offsets)
-  if (any(steps == 0, na.rm = TRUE)) {
+  if (any(steps == 0)) {
     value <- offsets[which(steps == 0)[1L] + 1L]
-    units <- .read_time_attribute(nc, dim, "units")
     .abort_repeated_time(
-      glue::glue("{value} ({units})"), sum(offsets == value, na.rm = TRUE),
-      file, paste("ocean3d needs each time step once; remove or combine",
-                  "the repeated steps first.")
+      glue::glue("Time step {value} ({units}) appears ",
+                 "{sum(offsets == value)} times"),
+      file,
+      paste("ocean3d needs each time step once; remove or combine",
+            "the repeated steps first.")
     )
   }
-  if (any(steps < 0, na.rm = TRUE)) {
+  if (any(steps < 0)) {
     order <- if (all(steps < 0)) "runs backwards" else "is out of order"
     rlang::abort(glue::glue(
       "The time axis `{dim}` in {file} {order}. ocean3d needs time steps ",
@@ -208,11 +214,18 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     ), class = "ocean3d_error_time_order", call = NULL)
   }
   bounds <- .read_bounds(nc, dim, length(offsets))
-  if (!is.null(bounds)) .axis_intervals(offsets, bounds$values, "time", dim)
-  list(
-    dim = dim, cftime = .netcdf_time_axis(nc, dim, bounds$values),
-    edges = if (is.null(bounds)) "none" else "bounds"
-  )
+  if (is.null(bounds)) {
+    return(list(dim = dim, cftime = .netcdf_time_axis(nc, dim),
+                edges = "none"))
+  }
+  # Checked as buffer extraction checks them: the bounds calendar, each
+  # interval containing its step (in the axis builder), then positive widths
+  # and no overlaps. In the file's units, as CFtime can't date every step
+  # (e.g. half a month).
+  .check_time_bounds_calendar(nc, dim, bounds)
+  cftime <- .netcdf_time_axis(nc, dim, bounds$values)
+  .axis_intervals(offsets, bounds$values, "time", dim)
+  list(dim = dim, cftime = cftime, edges = "bounds")
 }
 
 # EPSG:4326, or the geographic CRS the variable's grid mapping gives as WKT.

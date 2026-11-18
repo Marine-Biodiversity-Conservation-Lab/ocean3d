@@ -225,12 +225,7 @@
     calendar <- .read_time_attribute(nc, coordinate, "calendar")
     if (is.null(calendar)) calendar <- "standard"
     if (!is.null(bounds)) {
-      bounds_calendar <- .read_time_attribute(nc, bounds$name, "calendar")
-      if (!is.null(bounds_calendar) &&
-            !identical(tolower(bounds_calendar), tolower(calendar))) {
-        stop("Time bounds and coordinate use different calendars.",
-             call. = FALSE)
-      }
+      .check_time_bounds_calendar(nc, coordinate, bounds)
       bounds$values <- .decode_netcdf_time(
         nc, coordinate, bounds = bounds$values
       )

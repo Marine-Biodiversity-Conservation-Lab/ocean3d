@@ -25,15 +25,32 @@
   ), class = "ocean3d_error_calendar", call = NULL)
 }
 
+# Time bounds (from .read_bounds()) must use the coordinate's calendar.
+# Shared by buffer extraction and the core object, which read time bounds.
+.check_time_bounds_calendar <- function(nc, time_dim, bounds) {
+  calendar <- .read_time_attribute(nc, time_dim, "calendar")
+  if (is.null(calendar)) calendar <- "standard"
+  bounds_calendar <- .read_time_attribute(nc, bounds$name, "calendar")
+  if (!is.null(bounds_calendar) &&
+        !identical(tolower(bounds_calendar), tolower(calendar))) {
+    stop("Time bounds and coordinate use different calendars.",
+         call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 # Stops on a climatological time axis: one with a CF `climatology`
-# attribute, or units counting from year 0 (WOA's `months since 0000-01-01`,
-# which CFtime can't decode). Buffer extraction and the core object stop here;
-# point and track extraction accept climatologies and report them instead.
+# attribute, or months or years counted from year 0 (WOA's `months since
+# 0000-01-01`, which CFtime can't decode). Days or hours since year 0 (as in
+# MATLAB datenums) are ordinary dates. Buffer extraction and the core object
+# stop here; point and track extraction accept climatologies and report them
+# instead.
 # `file` names the file in the message.
 .check_climatology <- function(nc, time_dim, file = NULL) {
   units <- .read_time_attribute(nc, time_dim, "units")
   units_ok <- is.character(units) && length(units) == 1L && !is.na(units)
-  year_zero <- units_ok && grepl("since\\s+0+-", units)
+  year_zero <- units_ok &&
+    grepl("^\\s*(months?|years?)\\s+since\\s+0+-", units, ignore.case = TRUE)
   flagged <- !is.null(.read_time_attribute(nc, time_dim, "climatology"))
   if (!flagged && !year_zero) return(invisible(NULL))
   where <- if (is.null(file)) "" else glue::glue(" in {file}")
@@ -108,8 +125,8 @@
 
   # Months and years have no fixed length, so a series of them is ambiguous
   # (CF defines a month as 1/12 of a year; producers often mean calendar
-  # months). A single step needs no conversion.
-  if (axis$unit %in% c("months", "years") && length(unique(offsets)) > 1L) {
+  # months). A single step needs no conversion, even with bounds.
+  if (axis$unit %in% c("months", "years") && length(unique(values)) > 1L) {
     rlang::abort(glue::glue(
       "Unsupported time units for `{time_dim}`: '{units}'.\n",
       "A time axis of several months or years is ambiguous; months, years ",
@@ -298,15 +315,15 @@
   )
 }
 
-# A time step that appears `count` times, in `file` when given (#91, #113).
-# Time matching raises it when an observation selects a step repeated at the
-# comparison resolution; the core object when the file stores a step more
-# than once. `advice` says what to do in each case.
-.abort_repeated_time <- function(key, count, file, advice) {
+# A repeated time step, in `file` when given (#91, #113). Time matching
+# raises it when an observation selects a step repeated at the comparison
+# resolution; the core object when the file stores a step more than once.
+# `problem` is the first sentence (without the file) and `advice` says what
+# to do, so each caller describes its own case.
+.abort_repeated_time <- function(problem, file, advice) {
   where <- if (is.null(file)) "" else glue::glue(" in {file}")
-  rlang::abort(glue::glue(
-    "Time step {key} appears {count} times{where}.\n{advice}"
-  ), class = "ocean3d_error_repeated_time", call = NULL)
+  rlang::abort(glue::glue("{problem}{where}.\n{advice}"),
+               class = "ocean3d_error_repeated_time", call = NULL)
 }
 
 # Match observation times to a time axis. `targets` are already prepared
@@ -349,12 +366,16 @@
       key <- format(.POSIXct(available[idx], tz = "UTC"),
                     "%Y-%m-%d %H:%M:%S UTC")
       count <- sum(available == available[idx], na.rm = TRUE)
-      .abort_repeated_time(key, count, file, glue::glue(
-        "Multiple dataset timestamps map to the same '{resolution}' ",
-        "comparison value, so selecting the first would discard ",
-        "information. Use a finer time_resolution, select the intended ",
-        "records, or aggregate the data explicitly before extraction."
-      ))
+      .abort_repeated_time(
+        glue::glue(
+          "Multiple dataset timestamps map to the same '{resolution}' ",
+          "comparison value: {key} appears {count} times"
+        ),
+        file,
+        paste("Selecting the first would discard information. Use a finer",
+              "time_resolution, select the intended records, or aggregate",
+              "the data explicitly before extraction.")
+      )
     }
     out[i] <- as.integer(idx)
   }

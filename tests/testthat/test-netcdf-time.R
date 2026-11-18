@@ -173,8 +173,7 @@ test_that("back-to-back time bounds decode without a warning (#113)", {
   # are errors.
   old <- options(warn = 2)
   on.exit(options(old), add = TRUE)
-  info <- read_metadata(f)
-  expect_equal(info$bounds, month_edges)
+  expect_no_error(read_metadata(f))
 })
 
 test_that("time bounds may list the later edge first (#113)", {
@@ -198,10 +197,8 @@ test_that("time bounds that miss their time step are rejected (#113)", {
   expect_match(err, "Invalid bounds for `time`", fixed = TRUE)
   expect_match(err, "must contain its time step", fixed = TRUE)
 
-  # Point extraction's time metadata stops too: bad bounds stop every
-  # function that reads them (this replaces the 3 November 2026 decision in
-  # #123 to mark them unavailable).
-  expect_error(read_metadata(f), class = "ocean3d_error_time_bounds")
+  # Point extraction doesn't read time bounds, so they don't stop it.
+  expect_no_error(read_metadata(f))
 })
 
 test_that("the time axis builder returns a CFtime object with its bounds", {
@@ -235,9 +232,28 @@ test_that("climatological time axes are recognised by attribute or year 0", {
   on.exit(unlink(c(dated, woa, flagged)), add = TRUE)
 
   expect_null(check(dated))
+  # Days since year 0 (MATLAB datenums) are dates, not a climatology.
+  datenum <- make_time_file(c(737791, 737792), "days since 0000-01-01 00:00:00",
+                            calendar = "proleptic_gregorian")
+  on.exit(unlink(datenum), add = TRUE)
+  expect_null(check(datenum))
   err <- expect_error(check(woa), class = "ocean3d_error_time_climatology")
   expect_match(conditionMessage(err), basename(woa), fixed = TRUE)
   expect_match(conditionMessage(err), "months since 0000-01-01", fixed = TRUE)
   expect_error(check(flagged, list(climatology = "climatology_bounds")),
                class = "ocean3d_error_time_climatology")
+})
+
+test_that("a single monthly step with bounds is read", {
+  # A one-month mean: the two bound edges aren't extra time steps.
+  f <- make_grid_file(depth = NULL, time = 0,
+                      time_units = "months since 2020-01-01",
+                      time_bounds = rbind(0, 1))
+  on.exit(unlink(f), add = TRUE)
+  expect_equal(
+    extract_to_point(nc = f, lon = 1.5, lat = 10.5, var = "temp",
+                     date = as.Date("2020-01-15"), method = "2d"),
+    2
+  )
+  expect_identical(as_proxy(f)@axes$time$edges, "bounds")
 })

@@ -168,18 +168,12 @@
 
 
 
-# Read temporal metadata while the connection is open. Bounds describe
-# represented intervals; their widths are not sampling cadences.
+# Read temporal metadata while the connection is open. Point extraction
+# matches observations to time steps, so it doesn't read time bounds: buffer
+# extraction and the core object, which use them, read and check them.
 .read_temporal_metadata <- function(nc, time_dim, var, timestamps) {
   if (is.null(time_dim)) return(list(static = TRUE, variable = var))
-  bounds_name <- .read_time_attribute(nc, time_dim, "bounds")
   climatology <- .read_time_attribute(nc, time_dim, "climatology")
-  # Bad bounds stop here, as for every other axis.
-  bounds <- .read_bounds(nc, time_dim, length(timestamps))
-  if (!is.null(bounds)) {
-    bounds <- .decode_netcdf_time(nc, time_dim, bounds = bounds$values)
-    .axis_intervals(as.numeric(timestamps), bounds, "time", time_dim)
-  }
   calendar <- .read_time_attribute(nc, time_dim, "calendar")
   if (is.null(calendar)) calendar <- "standard"
   list(
@@ -188,7 +182,6 @@
     calendar = tolower(calendar),
     variable_units = .read_time_attribute(nc, var, "units"),
     cell_methods = .read_time_attribute(nc, var, "cell_methods"),
-    bounds_name = bounds_name, bounds = bounds,
     climatology = climatology,
     timestamps = timestamps,
     cadence = .infer_temporal_cadence(timestamps)

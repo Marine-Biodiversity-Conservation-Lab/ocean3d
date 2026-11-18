@@ -133,6 +133,29 @@ test_that("a time axis that isn't increasing stops and names the file", {
                fixed = TRUE)
 })
 
+test_that("bad time units, offsets or bounds calendars get their own error", {
+  no_units <- make_grid_file(time = c(0, 1, 1), time_units = "")
+  non_finite <- make_grid_file(time = c(3, 2, NaN, 1))
+  calendars <- make_grid_file(time = c(0.5, 1.5),
+                              time_bounds = rbind(c(0, 1), c(1, 2)))
+  on.exit(unlink(c(no_units, non_finite, calendars)), add = TRUE)
+  expect_error(as_proxy(no_units), "has no usable `units` attribute")
+  expect_error(as_proxy(non_finite), "must contain finite numeric offsets")
+  nc <- ncdf4::nc_open(calendars, write = TRUE)
+  ncdf4::ncatt_put(nc, "time_bnds", "calendar", "noleap")
+  ncdf4::nc_close(nc)
+  expect_error(as_proxy(calendars), "use different calendars")
+})
+
+test_that("days since year 0 are dates, not a climatology", {
+  f <- make_grid_file(time = c(737791, 737792),
+                      time_units = "days since 0000-01-01 00:00:00",
+                      calendar = "proleptic_gregorian")
+  on.exit(unlink(f), add = TRUE)
+  expect_identical(as_proxy(f)@axes$time$cftime$cal$name,
+                   "proleptic_gregorian")
+})
+
 test_that("overlapping time bounds stop", {
   f <- make_grid_file(time = c(0.5, 1.5),
                       time_bounds = rbind(c(0, 0.8), c(1.2, 2)))
