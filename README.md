@@ -5,7 +5,7 @@
 [![pkgcheck](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/workflows/pkgcheck/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions?query=workflow%3Apkgcheck)
 [![R-CMD-check](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml)
 [![Codecov test coverage](https://codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d/graph/badge.svg)](https://app.codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d)
-[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 <!-- badges: end -->
 
 **ocean3d** is an R package for three-dimensional marine spatial
@@ -64,6 +64,75 @@ levels of a `SpatVoxel`, as in the figure above.
 This package includes utilities for working with commonly used datasets in
 marine habitat spatial analyses, including IUCN Red List, World Ocean Atlas, 
 GEBCO, Copernicus Marine, and Global Fishing Watch. 
+
+## How ocean3d relates to other packages
+
+Several R packages and other tools already handle depth or 3D data.
+`ocean3d` builds on some of them and adds 3D spatial queries for gridded
+marine data: which cells and depths a species, fishery or other layer
+occupies, where two of them overlap in 3D, and what environmental values
+fall inside.
+
+| Tool | What it does | How `ocean3d` relates |
+|---|---|---|
+| [terra](https://rspatial.github.io/terra/) | Raster and vector analysis. A multi-layer `SpatRaster` can record one depth per layer with `terra::depth()`. | `SpatVoxel` and `SpatEnvelope` are `SpatRaster`s, so terra functions still work on them. `ocean3d` adds the depth-aware operations terra doesn't have (see below). |
+| [sf](https://r-spatial.github.io/sf/) | 2D vector geometry and spatial queries (buffers, clips, intersections). | Polygons such as species ranges enter `ocean3d` as `sf` or terra objects and are given a depth range with `vect_to_envelope()`. |
+| [stars](https://r-spatial.github.io/stars/) | Arrays with any number of dimensions (data cubes), including depth and time. | Compared with terra, ncdf4 and ncdfCF in a trial ([#112](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/112); [`dev/data-model-trial.md`](dev/data-model-trial.md)). The planned data model ([#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99)) uses stars only to read remote Zarr stores. stars has no class for a per-cell depth range, and no 3D intersect or volume. |
+| [ncdf4](https://cran.r-project.org/package=ncdf4), [CFtime](https://cran.r-project.org/package=CFtime) | Read netCDF files and decode CF time. | Used by the netCDF extraction functions, which read only the cells each observation needs. |
+| [rgl](https://dmurdoch.github.io/rgl/), [rayshader](https://www.rayshader.com/) | 3D visualisation. | `ocean3d` doesn't draw in 3D. Its outputs are rasters and tables that these packages can plot. |
+| [lidR](https://r-lidar.github.io/lidRbook/), [rTLS](https://github.com/Antguz/rTLS) | 3D point clouds from LiDAR and terrestrial laser scanning. | Built for dense point clouds of land surfaces and vegetation, not for gridded ocean data with depth levels and a seafloor. |
+| [PostGIS](https://postgis.net/docs/PostGIS_Special_Functions_Index.html#PostGIS_3D_Functions) | 3D functions on vector geometry in a PostgreSQL database. | Works outside R on vector geometry in a database. `ocean3d` works in R on gridded data with depth levels. |
+
+### What terra doesn't do on its own
+
+terra can record the depth of each layer, but its functions treat the
+layers as a stack: they don't use the depth to decide which cells a shape
+covers, and a raster has no way to store a depth range per cell. In this
+example, a species lives between the surface and 150 m, or the seafloor
+where it is shallower, in three of four cells:
+
+``` r
+library(terra)
+library(ocean3d)
+
+# Temperature at 0, 100 and 200 m on a 2 x 2 grid
+temp <- rast(nrows = 2, ncols = 2, nlyrs = 3,
+             xmin = 0, xmax = 2, ymin = 0, ymax = 2)
+values(temp) <- rep(c(20, 15, 8), each = 4)
+depth(temp) <- c(0, 100, 200)
+
+seafloor <- setValues(rast(temp, nlyrs = 1), c(50, 150, 250, 250))
+range_2d <- setValues(rast(temp, nlyrs = 1), c(1, 1, 1, NA))
+
+# terra: mask() applies the 2D range to every layer, whatever its depth.
+# Excluding the layers below 150 m or below the seafloor in each cell
+# has to be done by hand.
+values(mask(temp, range_2d))
+#>      lyr.1 lyr.2 lyr.3
+#> [1,]    20    15     8
+#> [2,]    20    15     8
+#> [3,]    20    15     8
+#> [4,]    NA    NA    NA
+
+# ocean3d: the range becomes a 3D envelope, and mask() keeps only the
+# depth levels inside it in each cell.
+voxel <- as_voxel(temp, depths = c(0, 100, 200), varname = "temp")
+habitat <- as_envelope(range_2d, depth_min = 0,
+                       depth_max = min(seafloor, 150))
+values(mask(voxel, habitat))
+#>      temp_depth=0 temp_depth=100 temp_depth=200
+#> [1,]           20             NA             NA
+#> [2,]           20             15             NA
+#> [3,]           20             15             NA
+#> [4,]           NA             NA             NA
+
+volume(habitat) # km³
+#> [1] 4307.343
+```
+
+`ocean3d` stores depth in layer names (`{variable}_depth={value}`) for now.
+The planned data model ([#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99)) moves it to `terra::depth()`, so voxels will use
+terra's own depth field.
 
 ## Installation
 
@@ -243,6 +312,32 @@ usethis::edit_r_environ()
   `envelope_to_voxel()` — driven by a gear-to-depth-band lookup. Those
   operating-depth priors are analysis assumptions rather than package data,
   so they live in the `gfw-fishing-effort-3d` article.
+
+## Use of generative AI
+
+Generative AI tools were used to write much of this package. This section
+says how, following [rOpenSci's AI policy](https://ropensci.org/blog/2026/02/26/ropensci-ai-policy/).
+
+- **Without AI:** the package grew out of analysis scripts written over
+  about three years without AI, for a study of 3D overlap between species
+  and fisheries in Bangladesh
+  ([thesis](https://ora.ox.ac.uk/objects/uuid:b425c41e-deb4-4bed-917e-dfdaf7b59f78))
+  and for extracting environmental variables per species
+  ([preprint](https://www.biorxiv.org/content/10.64898/2026.07.16.739000v1)).
+  The first version of the package, including the first `SPEC.md`, tests
+  and documentation, was written by hand from those scripts.
+- **With AI:** since then, most of the code, tests and documentation have
+  been written with generative AI tools, mainly Claude Opus 5.5 and OpenAI GPT
+  6.1 Sol. AI is also used to review code and to draw some of the figures in
+  the documentation.
+- **What the authors do:** decide the package design (for example the
+  `SpatVoxel` and `SpatEnvelope` classes, the build, intersect and summarise
+  steps, and the data model decisions in [SPEC.md](SPEC.md)), decide what
+  each issue should do, and review every pull request before it is merged.
+- **How contributions are made:** [CONTRIBUTING.md](CONTRIBUTING.md) and
+  [AGENTS.md](AGENTS.md) set the rules AI agents follow. Commits and pull
+  requests written with an agent name the model in a `Co-Authored-By:`
+  trailer.
 
 ## Contributing
 
