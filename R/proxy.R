@@ -191,11 +191,13 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   offsets <- as.vector(.get_dim_values(nc, dim))
   steps <- diff(offsets)
   if (any(steps == 0, na.rm = TRUE)) {
-    rlang::abort(glue::glue(
-      "The time axis `{dim}` in {file} repeats a time step ",
-      "(step {which(steps == 0)[1L] + 1L}). ocean3d needs each time step ",
-      "once; remove or combine the repeated steps first."
-    ), class = "ocean3d_error_time_repeated", call = NULL)
+    value <- offsets[which(steps == 0)[1L] + 1L]
+    units <- .read_time_attribute(nc, dim, "units")
+    .abort_repeated_time(
+      glue::glue("{value} ({units})"), sum(offsets == value, na.rm = TRUE),
+      file, paste("ocean3d needs each time step once; remove or combine",
+                  "the repeated steps first.")
+    )
   }
   if (any(steps < 0, na.rm = TRUE)) {
     order <- if (all(steps < 0)) "runs backwards" else "is out of order"

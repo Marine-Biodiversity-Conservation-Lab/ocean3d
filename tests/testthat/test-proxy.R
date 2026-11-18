@@ -126,9 +126,11 @@ test_that("a time axis that isn't increasing stops and names the file", {
 
   # Sorting can't fix repeated time steps, so they have their own error.
   repeated <- proxy_error(time = c(0, 1, 1))
-  expect_s3_class(repeated$error, "ocean3d_error_time_repeated")
+  expect_s3_class(repeated$error, "ocean3d_error_repeated_time")
   expect_match(conditionMessage(repeated$error), repeated$file, fixed = TRUE)
-  expect_match(conditionMessage(repeated$error), "repeats a time step")
+  expect_match(conditionMessage(repeated$error),
+               "Time step 1 (days since 2020-01-01) appears 2 times",
+               fixed = TRUE)
 })
 
 test_that("overlapping time bounds stop", {

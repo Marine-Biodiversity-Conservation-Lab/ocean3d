@@ -298,6 +298,17 @@
   )
 }
 
+# A time step that appears `count` times, in `file` when given (#91, #113).
+# Time matching raises it when an observation selects a step repeated at the
+# comparison resolution; the core object when the file stores a step more
+# than once. `advice` says what to do in each case.
+.abort_repeated_time <- function(key, count, file, advice) {
+  where <- if (is.null(file)) "" else glue::glue(" in {file}")
+  rlang::abort(glue::glue(
+    "Time step {key} appears {count} times{where}.\n{advice}"
+  ), class = "ocean3d_error_repeated_time", call = NULL)
+}
+
 # Match observation times to a time axis. `targets` are already prepared
 # (.prepare_time_input()), and `resolution` is their resolved comparison
 # resolution. The keys for the axis and for the observations are each
@@ -338,14 +349,12 @@
       key <- format(.POSIXct(available[idx], tz = "UTC"),
                     "%Y-%m-%d %H:%M:%S UTC")
       count <- sum(available == available[idx], na.rm = TRUE)
-      where <- if (is.null(file)) "" else glue::glue(" in {file}")
-      rlang::abort(glue::glue(
+      .abort_repeated_time(key, count, file, glue::glue(
         "Multiple dataset timestamps map to the same '{resolution}' ",
-        "comparison value: {key} appears {count} times{where}.\n",
-        "Selecting the first would discard information. Use a finer ",
-        "time_resolution, select the intended records, or aggregate the ",
-        "data explicitly before extraction."
-      ), class = "ocean3d_error_repeated_time", call = NULL)
+        "comparison value, so selecting the first would discard ",
+        "information. Use a finer time_resolution, select the intended ",
+        "records, or aggregate the data explicitly before extraction."
+      ))
     }
     out[i] <- as.integer(idx)
   }
