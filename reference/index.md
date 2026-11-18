@@ -114,3 +114,14 @@ Download, cache and load public datasets.
   : Fetch species assessment data from IUCN Red List API
 - [`fill_missing_depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fill_missing_depths.md)
   : Fill missing depth values
+
+## Core data object (experimental)
+
+Describe a gridded netCDF variable without reading its values. Not yet
+accepted by other functions.
+
+- [`show(`*`<SpatProxy>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+  : A gridded dataset described but not loaded (experimental)
+- [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+  : Describe a gridded netCDF variable without reading its values
+  (experimental)

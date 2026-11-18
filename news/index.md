@@ -36,6 +36,22 @@ error:
   under `"within"` matching, and goes to the closer cell centre under
   `"nearest"` matching.
 
+Point, track and buffer extraction now check cell bounds the same way,
+and stop with an error when they are bad
+([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)):
+
+- Each cell must have a positive width, contain its centre and not
+  overlap another cell, and a `bounds` attribute must name a usable
+  bounds variable. This applies to longitude and latitude bounds
+  everywhere, and to depth and time bounds in buffer extraction.
+  Horizontal buffers also reject longitude cells that overlap after
+  wrapping around 360°. The error names the file.
+- Point and track extraction used to warn and infer longitude and
+  latitude edges from the centres. They don’t read time bounds.
+- To read a file that now fails, fix its bounds, or remove the
+  coordinate’s `bounds` attribute so edges are inferred from the centres
+  (for example with NCO: `ncatted -a bounds,lon,d,, file.nc`).
+
 ### New features
 
 - New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
@@ -45,6 +61,16 @@ error:
   (spatial, depth or time), with repeated reasons grouped by file. The
   time report now also explains outputs that are missing because no
   observation date was supplied for a file with a time dimension.
+- New experimental class `SpatProxy`, built with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+  describes one variable of a netCDF file without reading its values
+  ([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)):
+  its axes, chunk sizes and coordinate reference system (CRS). Depth is
+  in metres positive down and time is a CFtime object.
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+  stops with an error if the time axis isn’t strictly increasing or is a
+  climatology. No other function accepts a `SpatProxy` yet, and it may
+  change without notice.
 - New class `SpatVector3D` for 3D points, lines and polygons, built with
   [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
   from a table, sf object or

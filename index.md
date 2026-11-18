@@ -138,6 +138,10 @@ and wrap it with
 [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 Merging the two into one model with time is planned in
 [\#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
+The first, experimental part of that model is
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
+It describes one variable of a netCDF file as a `SpatProxy` without
+reading its values. No other function accepts a `SpatProxy` yet.
 
 ### Build: 3D objects
 

@@ -295,7 +295,9 @@ voxel tools have no time dimension.
 ### Planned: one model (#99)
 
 This section is the plan from \#99, decided with the stars and ncdfCF
-trial (#112). None of it is implemented yet.
+trial (#112). Only the first part of the core object (`SpatProxy`,
+experimental) is implemented so far (see [Order of
+work](#order-of-work), step 5).
 
 #### Requirements
 
@@ -325,26 +327,42 @@ Jay Matsushiba on 2 November 2026 (#112).
 
 #### Direction: a hybrid
 
-- **Core object:** the package’s own description of a gridded variable.
+- **Core object (`SpatProxy`):** the package’s own description of a
+  gridded variable, built with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
   It holds no values.
+  - **Name:** in terra, “proxy” means described but not loaded, as in
+    `SpatVectorProxy`. A `SpatVoxel` will be one time step of a
+    `SpatProxy` loaded into memory. Named by Jay Matsushiba on 3
+    November 2026.
   - **Sources:** one netCDF file, a series of files, a remote Zarr
     store, or a `SpatVoxel` already in memory, so voxels go through the
     same coverage step as files.
-  - **Contents:** the variable with its packing (values stored as
-    integers with a scale factor) and chunk layout (the blocks the file
-    is stored and compressed in), and each axis in a fixed form:
-    longitude and latitude with cell edges and the longitude convention,
-    depth in metres positive down with edges and the original storage
-    order, time as a CFtime object with bounds, and the coordinate
-    reference system (CRS).
+  - **Contents:** the variable with its chunk layout (the blocks the
+    file is stored and compressed in), and each axis in a fixed form:
+    longitude and latitude with cell edges, depth in metres positive
+    down with edges and the original storage order, time as a CFtime
+    object with bounds, and the coordinate reference system (CRS). It
+    doesn’t store packing (values stored as integers with a scale
+    factor), because ncdf4 unpacks values when it reads, or a longitude
+    convention label, because longitudes can be matched without one
+    (#131).
   - **CF handling happens once, when the core object is built:** axes
     are recognised from `axis`, `standard_name`, `units` and `positive`
-    on dimension coordinates (#93); a monotonic longitude axis is left
-    as it is (#95); explicit bounds are used before inferred edges;
-    depth is converted to metres positive down; time is decoded with
-    CFtime; files in a series are ordered and checked, and the rule for
-    choosing between them is applied here (#94, \#96). Later steps only
-    use the result.
+    on dimension coordinates (#93); longitude axes with steps over 180°
+    aren’t supported (#95, closed); explicit bounds are used before
+    inferred edges; depth is converted to metres positive down; time is
+    decoded with CFtime; files in a series are ordered and checked, and
+    the rule for choosing between them is applied here (#94, \#96).
+    Later steps only use the result.
+  - **Bad cell bounds stop:** every reader that uses cell bounds checks
+    them the same way (positive widths, each cell contains its centre,
+    no overlaps, and for horizontal buffers no overlaps around the
+    globe), and stops with an error that names the file. Point
+    extraction doesn’t read time bounds, since it matches observations
+    to time steps. Agreed by Jay Matsushiba on 18 November 2026 (#131),
+    replacing the 3 November 2026 decision in \#123 to mark bad time
+    bounds unavailable.
   - **Role:** it turns a request (features, a time step, a tile) into
     read windows (which file, and which index ranges to read), and
     one-time-step `SpatVoxel` views are built from it.
@@ -421,10 +439,10 @@ Jay Matsushiba on 2 November 2026 (#112).
     axis is common and stays supported. The sorting utility is its own
     exported function and PR, after the core object. Until then, files
     can be sorted with an outside tool (for example CDO’s
-    `sorttimestamp`). The extraction functions keep today’s behaviour (a
-    fully reversed axis works with CFtime’s warning) until they are
-    rebuilt on the core object or retired (#116). Decided by Jay
-    Matsushiba on 3 November 2026.
+    `sorttimestamp`). The extraction functions keep today’s time-order
+    behaviour (a fully reversed axis works with CFtime’s warning) until
+    they are rebuilt on the core object or retired (#116). Decided by
+    Jay Matsushiba on 3 November 2026.
 - **Heavy spatial work:** per time step, and per tile or group of depth
   layers when one time step is too large for memory (one day of a global
   1/12° product over 50 levels is about 3.5 GB as doubles). Read the
@@ -711,7 +729,7 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 #### Order of work
 
 Each step has its own issue, and each PR branches off `main`. Status as
-of 3 November 2026.
+of 18 November 2026.
 
 1.  **Document the current split:** which functions take netCDF and
     which take `SpatVoxel` (README function overview and each function’s
@@ -744,12 +762,16 @@ of 3 November 2026.
     CFtime object.
 5.  **Build the core object** (#113). *In progress:* time bounds are
     decoded with CFtime’s bounds support (#123), and the time tests call
-    the shared helpers directly (#127). The core object’s first PR is
-    being designed. Its time axis must run forwards (see Direction, Time
-    decoding). Sources (files, series, Zarr, in-memory voxels); standard
-    axes built at open, including the axis and longitude fixes from \#93
-    and \#95; the lazy ncdf4 reader with chunk-aligned block reads. Then
-    the voxel builder (depth in
+    the shared helpers directly (#127). The first PR (#131) adds the
+    experimental `SpatProxy` class and
+    [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
+    It describes one variable of one netCDF file without reading values:
+    its chunk sizes, the axes in fixed form, time running forwards only
+    (see Direction, Time decoding) and the CRS. The internal reader for
+    index windows comes in the next PR. Still to do: the other sources
+    (series of files, Zarr, in-memory voxels), with their axes built at
+    open; the lazy ncdf4 reader with chunk-aligned block reads. Then the
+    voxel builder (depth in
     [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
     with old layer names read on input, CRS always set, float32
     tolerance,
@@ -761,7 +783,7 @@ of 3 November 2026.
     and sf conversion: points and lines with per-vertex depth and time,
     and polygons with constant top and bottom and an optional time
     interval. Then `buffer_3d()` and `vector3d_to_envelope()` (#114).
-    *In progress:* points and lines in review (#124); polygons,
+    *In progress:* points and lines (#124) and polygons (#132) merged;
     `buffer_3d()` and `vector3d_to_envelope()` next. Can run in parallel
     with step 5, because it doesn’t read gridded data.
 7.  **Add the coverage function** and
