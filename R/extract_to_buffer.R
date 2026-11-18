@@ -245,157 +245,6 @@
 }
 
 
-.buffer_axis_intervals <- function(centres, bounds, axis, coordinate) {
-  if (!length(centres) || any(!is.finite(centres))) {
-    stop("Buffer coordinates must contain finite values.", call. = FALSE)
-  }
-  steps <- diff(centres)
-  if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
-    stop("Coordinate `", coordinate,
-         paste0("` must be strictly increasing or decreasing, without ",
-                "duplicates."),
-         call. = FALSE)
-  }
-
-  clipped_at_surface <- rep(FALSE, length(centres))
-  if (is.null(bounds)) {
-    if (length(centres) < 2L) {
-      stop("Cannot infer bounds from a single coordinate in `", coordinate,
-           "`. Supply explicit bounds; one centre has no known extent.",
-           call. = FALSE)
-    }
-    index <- order(centres)
-    sorted <- centres[index]
-    gaps <- diff(sorted)
-    edges <- c(
-      sorted[1L] - gaps[1L] / 2,
-      head(sorted, -1L) + gaps / 2,
-      tail(sorted, 1L) + tail(gaps, 1L) / 2
-    )
-    lower <- upper <- numeric(length(centres))
-    lower[index] <- head(edges, -1L)
-    upper[index] <- tail(edges, -1L)
-    if (axis == "depth") {
-      clipped_at_surface <- lower < 0
-      lower <- pmax(lower, 0)
-    }
-    basis <- "inferred_midpoints"
-  } else {
-    lower <- pmin(bounds[1L, ], bounds[2L, ])
-    upper <- pmax(bounds[1L, ], bounds[2L, ])
-    basis <- "explicit_bounds"
-  }
-
-  if (any(!is.finite(lower)) || any(!is.finite(upper)) ||
-        any(upper <= lower) || any(!is.finite(upper - lower)) ||
-        any(centres < lower | centres > upper)) {
-    stop("Invalid bounds for `", coordinate,
-         paste0("`: intervals need positive widths and must contain ",
-                "their centres."),
-         call. = FALSE)
-  }
-  index <- order(lower)
-  if (length(index) > 1L &&
-        any(tail(lower[index], -1L) < head(cummax(upper[index]), -1L))) {
-    stop("Bounds overlap in `", coordinate,
-         "`. Resolve overlapping support before buffer aggregation.",
-         call. = FALSE)
-  }
-
-  # Keep original record order so values and intervals retain their alignment.
-  list(
-    centres = centres, lower = lower, upper = upper,
-    source_index = seq_along(centres), basis = basis,
-    clipped_at_surface = clipped_at_surface
-  )
-}
-
-
-.buffer_read_axis <- function(
-  nc,
-  coordinate,
-  axis = c("depth", "time"),
-  infer_bounds = FALSE
-) {
-  axis <- match.arg(axis)
-  if (!is.logical(infer_bounds) || length(infer_bounds) != 1L ||
-        is.na(infer_bounds)) {
-    stop("`infer_bounds` must be TRUE or FALSE.", call. = FALSE)
-  }
-  raw <- as.vector(.get_dim_values(nc, coordinate))
-  bounds <- .read_bounds(nc, coordinate, length(raw), strict = TRUE)
-  units <- .read_time_attribute(nc, coordinate, "units")
-  calendar <- NULL
-  direction_basis <- NULL
-
-  if (axis == "depth") {
-    depth <- .read_depth_axis(nc, coordinate, raw)
-    centres <- depth$depth_m
-    direction_basis <- depth$direction_basis
-
-    if (!is.null(bounds)) {
-      positive <- .read_time_attribute(nc, coordinate, "positive")
-      if (is.null(positive)) {
-        positive <- if (all(raw >= 0)) "down" else "up"
-      }
-      bounds_positive <- .read_time_attribute(nc, bounds$name, "positive")
-      if (!is.null(bounds_positive) &&
-            !identical(tolower(trimws(bounds_positive)),
-                       tolower(trimws(positive)))) {
-        stop("Depth bounds and coordinate have conflicting directions.",
-             call. = FALSE)
-      }
-      # Unique endpoints avoid treating shared edges as duplicate depths.
-      endpoints <- unique(as.vector(bounds$values))
-      converted <- .prepare_depth_axis(endpoints, units, positive)$depth_m
-      bounds$values <- matrix(
-        converted[match(as.vector(bounds$values), endpoints)], nrow = 2L
-      )
-    }
-  } else {
-    if (!is.null(.read_time_attribute(nc, coordinate, "climatology"))) {
-      stop("Climatological coordinates require separate buffer handling. ",
-           "Supply an ordinary dated time axis instead.", call. = FALSE)
-    }
-    centres <- as.numeric(.decode_netcdf_time(nc, coordinate))
-    calendar <- .read_time_attribute(nc, coordinate, "calendar")
-    if (is.null(calendar)) calendar <- "standard"
-    if (!is.null(bounds)) {
-      bounds_calendar <- .read_time_attribute(nc, bounds$name, "calendar")
-      if (!is.null(bounds_calendar) &&
-            !identical(tolower(bounds_calendar), tolower(calendar))) {
-        stop("Time bounds and coordinate use different calendars.",
-             call. = FALSE)
-      }
-      bounds$values <- .decode_netcdf_time(
-        nc, coordinate, bounds = bounds$values
-      )
-    }
-  }
-
-  if (is.null(bounds) && !infer_bounds) {
-    stop("Coordinate `", coordinate, "` has no explicit bounds. ",
-         paste0("Use a dataset with bounds or explicitly set ",
-                "`infer_bounds = TRUE` "),
-         "to estimate midpoint intervals.", call. = FALSE)
-  }
-
-  result <- .buffer_axis_intervals(
-    centres,
-    if (is.null(bounds)) NULL else bounds$values,
-    axis,
-    coordinate
-  )
-  c(result, list(
-    coordinate = coordinate, axis = axis,
-    units = if (axis == "depth") "m" else "UTC seconds since 1970-01-01",
-    source_units = units,
-    bounds_name = if (is.null(bounds)) NULL else bounds$name,
-    calendar = calendar, direction_basis = direction_basis
-  ))
-}
-
-
 # Summarise non-overlapping depth or time intervals.
 # Time coordinates are supplied as UTC seconds; depth coordinates as metres.
 .buffer_interval_mean <- function(
@@ -674,12 +523,12 @@
   lon_axis <- .prepare_spatial_axis(nc, dims$lon, lon, longitude = TRUE)
   lat_axis <- .prepare_spatial_axis(nc, dims$lat, lat)
   depth_support <- if (depth_buffer) {
-    .buffer_read_axis(nc, dims$depth, "depth", options$infer_bounds)
+    .read_interval_axis(nc, dims$depth, "depth", options$infer_bounds)
   } else {
     NULL
   }
   time_support <- if (time_buffer) {
-    .buffer_read_axis(nc, dims$time, "time", options$infer_bounds)
+    .read_interval_axis(nc, dims$time, "time", options$infer_bounds)
   } else {
     NULL
   }
@@ -997,8 +846,11 @@
 
 
 .buffer_spatial_axis <- function(nc, coordinate, longitude, infer_bounds) {
+  # Horizontal buffers could count a cell twice around the globe, so they
+  # also check longitude cells modulo 360.
   axis <- .prepare_spatial_axis(
-    nc, coordinate, .get_dim_values(nc, coordinate), longitude
+    nc, coordinate, .get_dim_values(nc, coordinate), longitude,
+    periodic = TRUE
   )
   if (axis$basis != "explicit_bounds" && !infer_bounds) {
     stop("Coordinate `", coordinate, "` needs cell bounds for aggregation. ",
@@ -1008,20 +860,6 @@
   if (any(axis$upper <= axis$lower)) {
     stop("A singleton spatial coordinate needs explicit cell bounds.",
          call. = FALSE)
-  }
-  .buffer_axis_intervals(
-    axis$centres, rbind(axis$lower, axis$upper), "time", coordinate
-  )
-  if (longitude) {
-    # Cells must not overlap modulo 360, or a buffer would count area twice.
-    start <- axis$lower %% 360
-    end <- start + axis$upper - axis$lower
-    sorted <- order(start)
-    if (any(start[sorted][-1L] < head(cummax(end[sorted]), -1L) - 1e-8) ||
-          max(end) - 360 > min(start) + 1e-8) {
-      stop("Longitude cells contain duplicate or overlapping periodic support.",
-           call. = FALSE)
-    }
   }
   axis
 }
@@ -1139,10 +977,8 @@
   } else {
     .prepare_spatial_axis(nc, dims$lat, lat)
   }
-  if (!is.null(dims$time) &&
-        !is.null(.read_time_attribute(nc, dims$time, "climatology"))) {
-    stop("Climatological coordinates require separate buffer handling.",
-         call. = FALSE)
+  if (!is.null(dims$time)) {
+    .check_climatology(nc, dims$time, basename(nc$filename))
   }
   list(
     nc = nc, var = var, source_index = source_index, dims = dims,
@@ -1156,13 +992,13 @@
       NULL
     },
     depth_support = if (vertical) {
-      .buffer_read_axis(nc, dims$depth, "depth", options$infer_bounds)
+      .read_interval_axis(nc, dims$depth, "depth", options$infer_bounds)
     } else {
       NULL
     },
     time_values = as.numeric(.decode_netcdf_time(nc, dims$time)),
     time_support = if (temporal) {
-      .buffer_read_axis(nc, dims$time, "time", options$infer_bounds)
+      .read_interval_axis(nc, dims$time, "time", options$infer_bounds)
     } else {
       NULL
     }
@@ -1192,7 +1028,7 @@
     if (!match$accepted) return(list(status = "spatial_rejected"))
     x_radius <- if (is.null(options$lon_cell_radius)) 0 else options$lon_cell_radius
     y_radius <- if (is.null(options$lat_cell_radius)) 0 else options$lat_cell_radius
-    periodic <- abs(sum(x$upper - x$lower) - 360) < 1e-8
+    periodic <- abs(sum(x$upper - x$lower) - 360) < 360 * 2^-23
     lon_indices <- .buffer_index_neighbours(
       order(x$centres), match$lon_idx, x_radius, periodic
     )
@@ -2050,7 +1886,6 @@
   ))
   list(columns = locations, diagnostics = diagnostics)
 }
-
 
 
 #' Summarise environmental values around observations

@@ -144,7 +144,7 @@
 .read_buffer_axis_nc <- function(path, coordinate = "depth", ...) {
   nc <- ncdf4::nc_open(path)
   on.exit(ncdf4::nc_close(nc))
-  .buffer_read_axis(nc, coordinate, ...)
+  .read_interval_axis(nc, coordinate, ...)
 }
 
 
@@ -282,6 +282,25 @@ test_that("most_similar exports locations without diagnostics", {
   expect_true(all(is.na(missing[grep("picked", names(missing))])))
   rejected <- run(transform(data, target = 24031), max_target_difference = 0)
   expect_true(all(is.na(rejected[grep("picked", names(rejected))])))
+})
+
+
+test_that("buffer extraction stops on a climatological time axis", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
+  handle <- ncdf4::nc_open(path, write = TRUE)
+  ncdf4::ncatt_put(handle, "time", "climatology", "climatology_bounds")
+  ncdf4::nc_close(handle)
+  data <- data.frame(lon = 1, lat = 0, depth = 20,
+                     date = as.Date("2020-01-01"))
+  # Without a time buffer too: the file's time axis can't be decoded as dates.
+  err <- expect_error(
+    extract_to_buffer(data, path, var = "temp", depth_radius_m = 20,
+                      infer_bounds = TRUE, quiet = TRUE),
+    class = "ocean3d_error_time_climatology"
+  )
+  expect_match(conditionMessage(err), basename(path), fixed = TRUE)
 })
 
 
@@ -988,10 +1007,17 @@ test_that("longitude cells that overlap modulo 360 are rejected", {
     lon_bounds = matrix(c(-15, 15, 105, 135, 225, 255, 340, 360), 2L),
     lat_bounds = matrix(c(-1, 1), 2L)
   )
-  expect_error(
+  err <- expect_error(
     extract_to_buffer(data.frame(lon = 0, lat = 0), path,
                       horizontal_radius_km = 1, quiet = TRUE),
-    "overlapping periodic support", fixed = TRUE
+    class = "ocean3d_error_bounds"
+  )
+  expect_match(conditionMessage(err), "overlap around the globe")
+  # Point extraction picks one cell, so it can't count a cell twice.
+  expect_equal(
+    extract_to_point(nc = path, lon = 120, lat = 0, var = "temp",
+                     method = "2d"),
+    2
   )
 })
 
@@ -1962,36 +1988,19 @@ test_that(
 
 
 test_that(
-  "unsupported calendars and climatologies are not inferred",
+  "unsupported calendars are not inferred",
   {
     skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
-    for (
-      attributes in list(
-        list(calendar = "360_day"),
-        list(climatology = "climatology_bounds")
-      )
-    ) {
-      .make_buffer_axis_nc(
-        path,
-        c(
-          0,
-          24
-        ),
-        axis = "time",
-        attributes = attributes
-      )
-      expect_error(
-        .read_buffer_axis_nc(path, "time", axis = "time", infer_bounds = TRUE),
-        if (is.null(attributes$calendar)) {
-          "Climatological"
-        } else {
-          "unsupported calendar"
-        },
-        fixed = TRUE
-      )
-    }
+    .make_buffer_axis_nc(
+      path, c(0, 24), axis = "time", attributes = list(calendar = "360_day")
+    )
+    expect_error(
+      .read_buffer_axis_nc(path, "time", axis = "time", infer_bounds = TRUE),
+      "unsupported calendar",
+      fixed = TRUE
+    )
     .make_buffer_axis_nc(
       path,
       c(0, 24),
@@ -2083,7 +2092,7 @@ test_that(
     )
     nc <- ncdf4::nc_open(path)
     on.exit(ncdf4::nc_close(nc), add = TRUE, after = FALSE)
-    support <- .buffer_read_axis(nc, "depth")
+    support <- .read_interval_axis(nc, "depth")
     expect_equal(support$centres, c(5, 20))
     values <- ncdf4::ncvar_get(nc, "value")
     expect_identical(dim(values), 2L)

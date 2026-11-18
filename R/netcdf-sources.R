@@ -77,10 +77,12 @@
   # salinity. Used by extract_to_point() and extract_to_buffer().
   #
   # Coordinate variables and the variables that CF metadata attaches to them
-  # (`bounds`, `climatology` and `coordinates` attributes, e.g. `lat_bnds`)
-  # are not data, so they are excluded. The detection is deliberately
-  # conservative: unless exactly one data variable remains, it stops and asks
-  # the user to provide `var` manually, to avoid extracting the wrong variable.
+  # (`bounds`, `climatology`, `coordinates` and `grid_mapping` attributes,
+  # e.g. `lat_bnds` or a `crs` variable) are not data, so they are excluded.
+  # A grid mapping may use CF's extended form, `"crs: lat lon"`. The
+  # detection is deliberately conservative: unless exactly one data variable
+  # remains, it stops and asks the user to provide `var` manually, to avoid
+  # extracting the wrong variable.
 
   coordinates <- names(Filter(
     function(x) isTRUE(x$dimvarid$id >= 0), nc$dim
@@ -88,9 +90,12 @@
   metadata <- unlist(lapply(
     unique(c(coordinates, names(nc$var))),
     function(name) {
-      unlist(lapply(c("bounds", "climatology", "coordinates"), function(att) {
+      atts <- c("bounds", "climatology", "coordinates", "grid_mapping")
+      unlist(lapply(atts, function(att) {
         value <- .read_time_attribute(nc, name, att)
-        if (is.character(value)) unlist(strsplit(value, "[[:space:]]+"))
+        if (is.character(value)) {
+          sub(":$", "", unlist(strsplit(value, "[[:space:]]+")))
+        }
       }))
     }
   ))

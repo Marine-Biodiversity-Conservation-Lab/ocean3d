@@ -2465,15 +2465,25 @@ test_that("metadata keeps bounds separate from sampling cadence", {
   nc <- ncdf4::nc_open(path, write = TRUE)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   ncdf4::ncatt_put(nc, "temp", "cell_methods", "time: mean")
-  ncdf4::ncatt_put(nc, "time", "bounds", "missing_bounds")
   info <- .read_temporal_metadata(
     nc, "time", "temp", .decode_netcdf_time(nc, "time")
   )
   expect_identical(info$cell_methods, "time: mean")
-  expect_identical(info$bounds_status, "unavailable")
   expect_identical(info$cadence$type, "unknown")
   expect_identical(info$calendar, "standard")
   expect_match(info$units, "days since")
+})
+
+test_that("point extraction ignores time bounds", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  make_a2_temporal_nc(path, 0, 1)
+  nc <- ncdf4::nc_open(path, write = TRUE)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  ncdf4::ncatt_put(nc, "time", "bounds", "missing_bounds")
+  info <- .read_temporal_metadata(nc, "time", "temp",
+                                  .decode_netcdf_time(nc, "time"))
+  expect_false("bounds" %in% names(info))
 })
 
 test_that("explicit bounds describe intervals without inventing cadence", {
@@ -2494,8 +2504,6 @@ test_that("explicit bounds describe intervals without inventing cadence", {
   info <- .read_temporal_metadata(
     nc, "time", "temp", .decode_netcdf_time(nc, "time")
   )
-  expect_identical(info$bounds_status, "read")
-  expect_equal(info$bounds[2, 1] - info$bounds[1, 1], 86400)
   expect_identical(info$cadence$type, "unknown")
 })
 
@@ -4355,8 +4363,7 @@ test_that("single-precision station coordinates match their own station", {
   expect_length(.containing_axis_indices(lon, -122.401), 0L)
 })
 
-test_that("unusable spatial bounds fall back to inferred edges", {
-  skip_if_not_installed("ncdf4")
+test_that("unusable spatial bounds stop extraction", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
@@ -4364,13 +4371,13 @@ test_that("unusable spatial bounds fall back to inferred edges", {
   ncdf4::ncatt_put(nc, "lon", "bounds", "lon_bnds")
   ncdf4::nc_close(nc)
   x <- data.frame(lon = c(0, 1, 5), lat = 40)
-  expect_warning(
-    out <- without_selection_reports(extract2d(
-      x, path, var = "temp", date_col = NULL
-    )),
-    "were not found"
+  err <- expect_error(
+    extract2d(x, path, var = "temp", date_col = NULL),
+    class = "ocean3d_error_bounds"
   )
-  expect_equal(out$temp, c(1, 2, NA))
+  # The message names the file, to find it in a multi-file call.
+  expected <- paste0("Bounds for `lon` in ", basename(path), " were not found")
+  expect_match(conditionMessage(err), expected, fixed = TRUE)
   expect_true(.same_units("degree_east", "degrees_east"))
   expect_true(.same_units("degrees_E", "degrees"))
   expect_false(.same_units("degrees_east", "radians"))
@@ -4495,4 +4502,59 @@ test_that("point provenance describes the actual selected record", {
     ),
     "overwrite"
   )
+})
+
+test_that("bad spatial bounds stop point extraction and the core object", {
+  check <- function(lon_bounds, pattern) {
+    f <- make_grid_file(depth = NULL, time = NULL, lon_bounds = lon_bounds)
+    on.exit(unlink(f))
+    err <- expect_error(
+      extract_to_point(nc = f, lon = 1.5, lat = 10.5, var = "temp",
+                       method = "2d"),
+      class = "ocean3d_error_bounds"
+    )
+    expect_match(conditionMessage(err), pattern)
+    expect_error(as_proxy(f), class = "ocean3d_error_bounds")
+  }
+  # Centres 0.5, 1.5, 2.5: the first cell's bounds miss its centre.
+  check(rbind(c(1, 1, 2), c(1.2, 2, 3)), "must contain their centres")
+  # The first two cells overlap between 0.8 and 1.
+  check(rbind(c(0, 0.8, 2), c(1, 2, 3)), "Bounds for `lon` in .* overlap\\.")
+})
+
+test_that("shared bounds edges that differ by rounding are accepted", {
+  # 0.1 degree cells whose shared edges are stored once each.
+  lon <- seq(100, 140, by = 0.1)
+  edges <- seq(99.95, 140.05, by = 0.1)
+  f <- make_grid_file(lon = lon, depth = NULL, time = NULL,
+                      lon_bounds = rbind(head(edges, -1L), tail(edges, -1L)))
+  on.exit(unlink(f))
+  expect_equal(
+    extract_to_point(nc = f, lon = 120, lat = 10.5, var = "temp",
+                     method = "2d"),
+    201
+  )
+})
+
+test_that("bounds names inside a netCDF-4 group are relative to the group", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  lon <- ncdf4::ncdim_def("grp/lon", "degrees_east", c(0.5, 1.5))
+  lat <- ncdf4::ncdim_def("grp/lat", "degrees_north", c(10.5, 11.5))
+  nv <- ncdf4::ncdim_def("grp/nv", "", 1:2, create_dimvar = FALSE)
+  nc <- ncdf4::nc_create(f, list(
+    ncdf4::ncvar_def("grp/temp", "degC", list(lon, lat), -9999),
+    ncdf4::ncvar_def("grp/lon_bnds", "degrees_east", list(nv, lon))
+  ), force_v4 = TRUE)
+  ncdf4::ncvar_put(nc, "grp/temp", matrix(1:4, 2))
+  ncdf4::ncvar_put(nc, "grp/lon_bnds", rbind(c(0, 1), c(1, 2)))
+  ncdf4::ncatt_put(nc, "grp/lon", "bounds", "lon_bnds")
+  ncdf4::nc_close(nc)
+
+  expect_equal(
+    extract_to_point(nc = f, var = "grp/temp", lon = 1.5, lat = 10.5,
+                     method = "2d"),
+    2
+  )
+  expect_identical(as_proxy(f, var = "grp/temp")@axes$lon$edges, "bounds")
 })

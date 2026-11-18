@@ -168,51 +168,12 @@
 
 
 
-# Read temporal metadata while the connection is open. Bounds describe
-# represented intervals; their widths are not sampling cadences.
+# Read temporal metadata while the connection is open. Point extraction
+# matches observations to time steps, so it doesn't read time bounds: buffer
+# extraction and the core object, which use them, read and check them.
 .read_temporal_metadata <- function(nc, time_dim, var, timestamps) {
   if (is.null(time_dim)) return(list(static = TRUE, variable = var))
-  bounds_name <- .read_time_attribute(nc, time_dim, "bounds")
   climatology <- .read_time_attribute(nc, time_dim, "climatology")
-  bounds_variable <- which(vapply(nc$var, function(x) {
-    identical(x$name, bounds_name)
-  }, logical(1)))
-  bounds <- NULL
-  bounds_status <- "absent"
-  if (!is.null(bounds_name)) {
-    bounds_status <- "unavailable"
-    if (is.character(bounds_name) && length(bounds_name) == 1L &&
-          !is.na(bounds_name) && length(bounds_variable) == 1L) {
-      bounds <- tryCatch({
-        raw <- ncdf4::ncvar_get(nc, bounds_name, collapse_degen = FALSE)
-        axes <- vapply(
-          nc$var[[bounds_variable]]$dim,
-          function(x) x$name, character(1)
-        )
-        time_axis <- which(axes == time_dim)
-        if (length(dim(raw)) != 2L || length(time_axis) != 1L) {
-          stop("Unrecognised temporal bounds axes")
-        }
-        if (time_axis == 1L) raw <- t(raw)
-        if (!identical(dim(raw), c(2L, length(timestamps)))) {
-          stop("Unrecognised temporal bounds shape")
-        }
-        bound_units <- .read_time_attribute(nc, bounds_name, "units")
-        if (!is.null(bound_units) &&
-          !identical(
-            bound_units, .read_time_attribute(nc, time_dim, "units")
-          )) {
-          stop("Temporal bounds use different units")
-        }
-        intervals <- .decode_netcdf_time(nc, time_dim, bounds = raw)
-        if (any(intervals[1L, ] > intervals[2L, ])) {
-          stop("Temporal bounds are not ordered")
-        }
-        intervals
-      }, error = function(e) NULL)
-      if (!is.null(bounds)) bounds_status <- "read"
-    }
-  }
   calendar <- .read_time_attribute(nc, time_dim, "calendar")
   if (is.null(calendar)) calendar <- "standard"
   list(
@@ -221,8 +182,7 @@
     calendar = tolower(calendar),
     variable_units = .read_time_attribute(nc, var, "units"),
     cell_methods = .read_time_attribute(nc, var, "cell_methods"),
-    bounds_name = bounds_name, bounds = bounds,
-    bounds_status = bounds_status, climatology = climatology,
+    climatology = climatology,
     timestamps = timestamps,
     cadence = .infer_temporal_cadence(timestamps)
   )
@@ -1754,10 +1714,12 @@
 #' With spatial_match = "within", only cells containing the point are eligible.
 #' With spatial_match = "nearest", the requested point may be outside grid
 #' coverage. The nearest cell centre must be within max_distance_km of it.
-#' Explicit spatial cell bounds are preferred. Otherwise, or when the bounds
-#' variable is missing or invalid (with a warning), edges are inferred from
-#' adjacent centres; singleton axes without bounds require coincidence, up to
-#' single-precision rounding of the stored coordinate.
+#' Explicit spatial cell bounds are used when the file has them, and bad
+#' bounds (a missing bounds variable, cells that don't contain their centres
+#' or that overlap) stop with an error that names the file. Without bounds,
+#' edges are inferred from adjacent centres; singleton axes without bounds
+#' require coincidence, up to single-precision rounding of the stored
+#' coordinate.
 #' Longitude comparisons support equivalent coordinates across the antimeridian.
 #' A point on an edge shared by two cells uses the first cell in storage order.
 #' Among eligible sources the closest temporal candidate with a valid value

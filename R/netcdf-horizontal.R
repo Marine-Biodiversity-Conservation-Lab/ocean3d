@@ -180,7 +180,8 @@
   values[1L] + c(0, cumsum(steps))
 }
 
-.prepare_spatial_axis <- function(nc, coordinate, values, longitude = FALSE) {
+.prepare_spatial_axis <- function(nc, coordinate, values, longitude = FALSE,
+                                  periodic = FALSE) {
   if (!is.numeric(values) || !length(values) ||
         any(!is.finite(values))) {
     stop("Spatial coordinates must be finite numbers.", call. = FALSE)
@@ -213,14 +214,6 @@
     }
     lower <- apply(intervals, 2L, min)
     upper <- apply(intervals, 2L, max)
-    if (any(centres < lower - 1e-8 | centres > upper + 1e-8)) {
-      warning(
-        "Spatial bounds for `", coordinate, "` do not contain their cell ",
-        "centres; inferring cell edges from the coordinate centres instead.",
-        call. = FALSE
-      )
-      explicit <- NULL
-    }
   }
   if (!is.null(explicit)) {
     basis <- "explicit_bounds"
@@ -228,21 +221,17 @@
     lower <- upper <- centres
     basis <- "singleton_coordinate"
   } else {
-    order <- order(centres)
-    sorted <- centres[order]
-    gaps <- diff(sorted)
-    edges <- c(
-      sorted[1L] - gaps[1L] / 2,
-      head(sorted, -1L) + gaps / 2,
-      tail(sorted, 1L) + tail(gaps, 1L) / 2
-    )
-    lower <- upper <- numeric(length(centres))
-    lower[order] <- head(edges, -1L)
-    upper[order] <- tail(edges, -1L)
-    regular <- all(
-      abs(gaps - gaps[1L]) <= max(1e-8, gaps[1L] * 1e-8)
-    )
-    basis <- if (regular) "inferred_regular" else "inferred_irregular"
+    edges <- .midpoint_edges(centres)
+    lower <- edges$lower
+    upper <- edges$upper
+    basis <- if (edges$regular) "inferred_regular" else "inferred_irregular"
+  }
+  # Bad bounds stop here, for every function that reads a spatial axis.
+  if (basis != "singleton_coordinate") {
+    .axis_intervals(centres, rbind(lower, upper),
+                    if (longitude) "lon" else "lat", coordinate,
+                    periodic = longitude && periodic,
+                    file = basename(nc$filename))
   }
   if (!longitude) {
     lower <- pmax(lower, -90)

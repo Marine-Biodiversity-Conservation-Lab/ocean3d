@@ -25,18 +25,52 @@
   ), class = "ocean3d_error_calendar", call = NULL)
 }
 
-# Decodes a CF time axis to UTC date-times. With `bounds` (a 2 x n matrix of
-# offsets in the axis units, one column per time step), returns those bounds
-# instead, as a 2 x n matrix of UTC seconds since 1970. CFtime holds the
-# bounds with the axis, so shared edges of back-to-back intervals
-# (0, 31, 31, 60) aren't read as a repeated time axis, which CFtime warns
-# about (#113). Bounds must contain their time step; either edge may come
-# first, and each column keeps its order.
-.decode_netcdf_time <- function(nc, time_dim, bounds = NULL) {
-  if (is.null(time_dim)) {
-    return(NULL)
+# Time bounds (from .read_bounds()) must use the coordinate's calendar.
+# Shared by buffer extraction and the core object, which read time bounds.
+.check_time_bounds_calendar <- function(nc, time_dim, bounds) {
+  calendar <- .read_time_attribute(nc, time_dim, "calendar")
+  if (is.null(calendar)) calendar <- "standard"
+  bounds_calendar <- .read_time_attribute(nc, bounds$name, "calendar")
+  if (!is.null(bounds_calendar) &&
+        !identical(tolower(bounds_calendar), tolower(calendar))) {
+    stop("Time bounds and coordinate use different calendars.",
+         call. = FALSE)
   }
+  invisible(NULL)
+}
 
+# Stops on a climatological time axis: one with a CF `climatology`
+# attribute, or months or years counted from year 0 (WOA's `months since
+# 0000-01-01`, which CFtime can't decode). Days or hours since year 0 (as in
+# MATLAB datenums) are ordinary dates. Buffer extraction and the core object
+# stop here; point and track extraction accept climatologies and report them
+# instead.
+# `file` names the file in the message.
+.check_climatology <- function(nc, time_dim, file = NULL) {
+  units <- .read_time_attribute(nc, time_dim, "units")
+  units_ok <- is.character(units) && length(units) == 1L && !is.na(units)
+  year_zero <- units_ok &&
+    grepl("^\\s*(months?|years?)\\s+since\\s+0+-", units, ignore.case = TRUE)
+  flagged <- !is.null(.read_time_attribute(nc, time_dim, "climatology"))
+  if (!flagged && !year_zero) return(invisible(NULL))
+  where <- if (is.null(file)) "" else glue::glue(" in {file}")
+  shown <- if (units_ok) glue::glue(" (units '{units}')") else ""
+  rlang::abort(glue::glue(
+    "The time axis `{time_dim}`{where} is a climatology{shown}. ",
+    "Climatological time axes aren't supported here yet; use a dataset ",
+    "with an ordinary dated time axis."
+  ), class = "ocean3d_error_time_climatology", call = NULL)
+}
+
+# The CF time axis of a netCDF coordinate as a checked CFtime object: usable
+# units, a supported calendar, finite offsets and a UTC reference date-time.
+# `bounds` (a 2 x n matrix of offsets in the axis units, one column per time
+# step, either edge first) are attached to the axis. CFtime holds the bounds
+# with the axis, so shared edges of back-to-back intervals (0, 31, 31, 60)
+# aren't read as a repeated time axis, which CFtime warns about (#113).
+# Bounds must contain their time step. Used by the decoder below and by the
+# core object's time axis (as_proxy()).
+.netcdf_time_axis <- function(nc, time_dim, bounds = NULL) {
   units <- .read_time_attribute(nc, time_dim, "units")
 
   if (!is.character(units) || length(units) != 1L ||
@@ -91,8 +125,8 @@
 
   # Months and years have no fixed length, so a series of them is ambiguous
   # (CF defines a month as 1/12 of a year; producers often mean calendar
-  # months). A single step needs no conversion.
-  if (axis$unit %in% c("months", "years") && length(unique(offsets)) > 1L) {
+  # months). A single step needs no conversion, even with bounds.
+  if (axis$unit %in% c("months", "years") && length(unique(values)) > 1L) {
     rlang::abort(glue::glue(
       "Unsupported time units for `{time_dim}`: '{units}'.\n",
       "A time axis of several months or years is ambiguous; months, years ",
@@ -100,21 +134,32 @@
     ), class = "ocean3d_error_time_units", call = NULL)
   }
 
-  if (is.null(bounds)) return(axis$as_timestamp(asPOSIX = TRUE))
+  if (is.null(bounds)) return(axis)
 
   # CFtime only warns about bounds it can't use, and then drops them.
-  reversed <- bounds[1L, ] > bounds[2L, ]
   withCallingHandlers(
     axis$set_bounds(rbind(
       pmin(bounds[1L, ], bounds[2L, ]), pmax(bounds[1L, ], bounds[2L, ])
     )),
     warning = function(w) {
       rlang::abort(glue::glue(
-        "Invalid bounds for `{time_dim}`: each interval must contain its ",
-        "time step ({conditionMessage(w)})."
+        "Invalid bounds for `{time_dim}` in {basename(nc$filename)}: each ",
+        "interval must contain its time step ({conditionMessage(w)})."
       ), class = "ocean3d_error_time_bounds", call = NULL)
     }
   )
+  axis
+}
+
+# Decodes a CF time axis to UTC date-times. With `bounds`, returns those
+# bounds instead, as a 2 x n matrix of UTC seconds since 1970 in which each
+# column keeps the order of its edges.
+.decode_netcdf_time <- function(nc, time_dim, bounds = NULL) {
+  if (is.null(time_dim)) {
+    return(NULL)
+  }
+  axis <- .netcdf_time_axis(nc, time_dim, bounds)
+  if (is.null(bounds)) return(axis$as_timestamp(asPOSIX = TRUE))
 
   # Bounds come back only as text: dates, or date-times with seconds that
   # may have a fraction.
@@ -127,6 +172,7 @@
   seconds <- matrix(
     as.numeric(as.POSIXct(strptime(stamps, format, tz = "UTC"))), nrow = 2L
   )
+  reversed <- bounds[1L, ] > bounds[2L, ]
   seconds[, reversed] <- seconds[2:1, reversed]
   seconds
 }
@@ -269,6 +315,17 @@
   )
 }
 
+# A repeated time step, in `file` when given (#91, #113). Time matching
+# raises it when an observation selects a step repeated at the comparison
+# resolution; the core object when the file stores a step more than once.
+# `problem` is the first sentence (without the file) and `advice` says what
+# to do, so each caller describes its own case.
+.abort_repeated_time <- function(problem, file, advice) {
+  where <- if (is.null(file)) "" else glue::glue(" in {file}")
+  rlang::abort(glue::glue("{problem}{where}.\n{advice}"),
+               class = "ocean3d_error_repeated_time", call = NULL)
+}
+
 # Match observation times to a time axis. `targets` are already prepared
 # (.prepare_time_input()), and `resolution` is their resolved comparison
 # resolution. The keys for the axis and for the observations are each
@@ -309,14 +366,16 @@
       key <- format(.POSIXct(available[idx], tz = "UTC"),
                     "%Y-%m-%d %H:%M:%S UTC")
       count <- sum(available == available[idx], na.rm = TRUE)
-      where <- if (is.null(file)) "" else glue::glue(" in {file}")
-      rlang::abort(glue::glue(
-        "Multiple dataset timestamps map to the same '{resolution}' ",
-        "comparison value: {key} appears {count} times{where}.\n",
-        "Selecting the first would discard information. Use a finer ",
-        "time_resolution, select the intended records, or aggregate the ",
-        "data explicitly before extraction."
-      ), class = "ocean3d_error_repeated_time", call = NULL)
+      .abort_repeated_time(
+        glue::glue(
+          "Multiple dataset timestamps map to the same '{resolution}' ",
+          "comparison value: {key} appears {count} times"
+        ),
+        file,
+        paste("Selecting the first would discard information. Use a finer",
+              "time_resolution, select the intended records, or aggregate",
+              "the data explicitly before extraction.")
+      )
     }
     out[i] <- as.integer(idx)
   }

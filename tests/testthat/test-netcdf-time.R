@@ -173,9 +173,7 @@ test_that("back-to-back time bounds decode without a warning (#113)", {
   # are errors.
   old <- options(warn = 2)
   on.exit(options(old), add = TRUE)
-  info <- read_metadata(f)
-  expect_identical(info$bounds_status, "read")
-  expect_equal(info$bounds, month_edges)
+  expect_no_error(read_metadata(f))
 })
 
 test_that("time bounds may list the later edge first (#113)", {
@@ -199,9 +197,63 @@ test_that("time bounds that miss their time step are rejected (#113)", {
   expect_match(err, "Invalid bounds for `time`", fixed = TRUE)
   expect_match(err, "must contain its time step", fixed = TRUE)
 
-  # The time metadata marks them unavailable rather than stopping, as decided
-  # on 3 November 2026 (#123).
-  info <- read_metadata(f)
-  expect_identical(info$bounds_status, "unavailable")
-  expect_null(info$bounds)
+  # Point extraction doesn't read time bounds, so they don't stop it.
+  expect_no_error(read_metadata(f))
+})
+
+test_that("the time axis builder returns a CFtime object with its bounds", {
+  f <- make_time_file(c(15, 45), "days since 2020-01-01",
+                      bounds = monthly_bounds[2:1, ])
+  on.exit(unlink(f), add = TRUE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+
+  plain <- .netcdf_time_axis(nc, "time")
+  expect_s3_class(plain, "CFTime")
+  expect_identical(plain$offsets, c(15, 45))
+  expect_null(plain$get_bounds())
+
+  # Bounds that list the later edge first are stored lower edge first.
+  bounded <- .netcdf_time_axis(nc, "time", bounds = monthly_bounds[2:1, ])
+  expect_equal(bounded$get_bounds(), monthly_bounds)
+})
+
+
+test_that("climatological time axes are recognised by attribute or year 0", {
+  check <- function(f, atts = list()) {
+    nc <- ncdf4::nc_open(f, write = TRUE)
+    on.exit(ncdf4::nc_close(nc))
+    for (name in names(atts)) ncdf4::ncatt_put(nc, "time", name, atts[[name]])
+    .check_climatology(nc, "time", basename(f))
+  }
+  dated <- make_time_file(c(0, 1), "days since 2020-01-01")
+  woa <- make_time_file(c(0.5, 1.5), "months since 0000-01-01 00:00:00")
+  flagged <- make_time_file(c(0, 1), "days since 2020-01-01")
+  on.exit(unlink(c(dated, woa, flagged)), add = TRUE)
+
+  expect_null(check(dated))
+  # Days since year 0 (MATLAB datenums) are dates, not a climatology.
+  datenum <- make_time_file(c(737791, 737792), "days since 0000-01-01 00:00:00",
+                            calendar = "proleptic_gregorian")
+  on.exit(unlink(datenum), add = TRUE)
+  expect_null(check(datenum))
+  err <- expect_error(check(woa), class = "ocean3d_error_time_climatology")
+  expect_match(conditionMessage(err), basename(woa), fixed = TRUE)
+  expect_match(conditionMessage(err), "months since 0000-01-01", fixed = TRUE)
+  expect_error(check(flagged, list(climatology = "climatology_bounds")),
+               class = "ocean3d_error_time_climatology")
+})
+
+test_that("a single monthly step with bounds is read", {
+  # A one-month mean: the two bound edges aren't extra time steps.
+  f <- make_grid_file(depth = NULL, time = 0,
+                      time_units = "months since 2020-01-01",
+                      time_bounds = rbind(0, 1))
+  on.exit(unlink(f), add = TRUE)
+  expect_equal(
+    extract_to_point(nc = f, lon = 1.5, lat = 10.5, var = "temp",
+                     date = as.Date("2020-01-15"), method = "2d"),
+    2
+  )
+  expect_identical(as_proxy(f)@axes$time$edges, "bounds")
 })
