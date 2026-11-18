@@ -111,9 +111,20 @@ seafloor = np.round(seafloor_depth(xc, yc), -1)
 depth_min = np.where(inside, np.round(top_depth(xc, yc)), np.nan)
 depth_max = np.where(inside, np.minimum(np.round(bottom_depth(xc, yc)), seafloor),
                      np.nan)
-# envelope_to_voxel(): presence at each standard depth
+# envelope_to_voxel() with its default bounds = "top": each level stands for
+# the slab from it down to the next level, and a cell occupies the level when
+# its envelope shares some water with that slab. The deepest level has no
+# next level, so it counts only when the envelope reaches below it.
 STD_DEPTHS = [50, 150, 250, 350, 500]
-presence = {z: inside & (depth_min <= z) & (depth_max >= z) for z in STD_DEPTHS}
+slab_lower = STD_DEPTHS
+slab_upper = STD_DEPTHS[1:] + STD_DEPTHS[-1:]
+presence = {}
+for i, z in enumerate(STD_DEPTHS):
+    if i == len(STD_DEPTHS) - 1:
+        overlap = (depth_min <= slab_upper[i]) & (depth_max > slab_lower[i])
+    else:
+        overlap = (depth_min < slab_upper[i]) & (depth_max > slab_lower[i])
+    presence[z] = inside & overlap
 
 # ---- figure layout ---------------------------------------------------------------
 PW, H = 7.9, 8.87  # panel slot width and figure height, inches
