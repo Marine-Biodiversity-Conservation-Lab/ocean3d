@@ -183,6 +183,40 @@ test_that("a connection whose relative path can't be found stops", {
   expect_error(as_proxy(nc), class = "ocean3d_error_proxy_source")
 })
 
+test_that("longitude and latitude need coordinate variables", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  lon <- ncdf4::ncdim_def("lon", "", 1:3, create_dimvar = FALSE)
+  lat <- ncdf4::ncdim_def("lat", "", 1:2, create_dimvar = FALSE)
+  nc <- ncdf4::nc_create(f, ncdf4::ncvar_def("temp", "degC", list(lon, lat)))
+  ncdf4::nc_close(nc)
+  err <- expect_error(as_proxy(f), class = "ocean3d_error_coordinate_variable")
+  expect_match(conditionMessage(err), "`lon` has no coordinate variable")
+})
+
+test_that("rotated-pole grid mappings are rejected", {
+  add_mapping <- function(f, name = NULL, wkt = NULL) {
+    nc <- ncdf4::nc_open(f, write = TRUE)
+    nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def("crs", "", list(),
+                                                prec = "integer"))
+    if (!is.null(name)) ncdf4::ncatt_put(nc, "crs", "grid_mapping_name", name)
+    if (!is.null(wkt)) ncdf4::ncatt_put(nc, "crs", "crs_wkt", wkt)
+    ncdf4::ncatt_put(nc, "temp", "grid_mapping", "crs")
+    ncdf4::nc_close(nc)
+  }
+  named <- make_grid_file()
+  derived <- make_grid_file()
+  on.exit(unlink(c(named, derived)), add = TRUE)
+  # A rotated mapping name, even with a geographic WKT.
+  add_mapping(named, "rotated_latitude_longitude", terra::crs("EPSG:4326"))
+  expect_error(as_proxy(named), class = "ocean3d_error_grid_mapping")
+  # A rotated-pole WKT, which terra::is.lonlat() calls lon/lat.
+  rotated <- terra::crs(paste("+proj=ob_tran +o_proj=longlat +o_lon_p=0",
+                              "+o_lat_p=37.5 +lon_0=357.5 +datum=WGS84"))
+  add_mapping(derived, wkt = rotated)
+  expect_error(as_proxy(derived), class = "ocean3d_error_grid_mapping")
+})
+
 test_that("overlapping time bounds stop", {
   f <- make_grid_file(time = c(0.5, 1.5),
                       time_bounds = rbind(c(0, 0.8), c(1.2, 2)))
@@ -262,8 +296,17 @@ test_that("a SpatProxy survives saveRDS() and checks its axes", {
                x@axes$time$cftime$get_bounds())
   expect_true(methods::validObject(y))
 
-  y@axes$lon$lower <- y@axes$lon$lower[-1L]
-  expect_error(methods::validObject(y), "lon axis needs one centre")
+  bad <- y
+  bad@axes$lon$lower <- bad@axes$lon$lower[-1L]
+  expect_error(methods::validObject(bad), "lon axis needs a dimension")
+
+  # Problems give a message, not an R error from inside the check.
+  bad <- y
+  bad@axes$lat$dim <- "nope"
+  expect_error(methods::validObject(bad), "lat axis needs a dimension")
+  bad <- y
+  bad@variable$dim_lengths[["time"]] <- 3L
+  expect_error(methods::validObject(bad), "one offset per time step")
 })
 
 test_that("the print shows each axis", {

@@ -52,26 +52,41 @@ setValidity("SpatProxy", function(object) {
   if (is.null(axes$lon) || is.null(axes$lat)) {
     return("a SpatProxy needs a longitude and a latitude axis")
   }
+  # The length of an axis's dimension, or NA when it isn't one of the
+  # variable's dimensions.
+  size <- function(axis) {
+    dim <- axis$dim
+    if (is.character(dim) && length(dim) == 1L && dim %in% names(lengths)) {
+      lengths[[dim]]
+    } else {
+      NA_integer_
+    }
+  }
   gridded <- Filter(Negate(is.null), axes[c("lon", "lat", "depth")])
   for (name in names(gridded)) {
     axis <- gridded[[name]]
-    n <- lengths[[axis$dim]]
-    if (length(axis$centres) != n || length(axis$lower) != n ||
-          length(axis$upper) != n || any(axis$lower > axis$upper)) {
+    n <- size(axis)
+    if (is.na(n) || length(axis$centres) != n || length(axis$lower) != n ||
+          length(axis$upper) != n ||
+          !isTRUE(all(axis$lower <= axis$upper))) {
       return(glue::glue(
-        "the {name} axis needs one centre, lower and upper edge per cell, ",
-        "with lower <= upper"
+        "the {name} axis needs a dimension of the variable and one centre, ",
+        "lower and upper edge per cell, with lower <= upper"
       ))
     }
   }
   depth <- axes$depth$centres
-  if (any(depth < 0) || anyDuplicated(depth)) {
+  if (!is.null(depth) && (anyNA(depth) || any(depth < 0) ||
+                            anyDuplicated(depth))) {
     return("depths must be distinct metres, positive down")
   }
-  time <- axes$time$cftime
-  if (!is.null(axes$time) &&
-        (!inherits(time, "CFTime") || any(diff(time$offsets) <= 0))) {
-    return("the time axis must be a strictly increasing CFtime object")
+  if (!is.null(axes$time)) {
+    time <- axes$time$cftime
+    if (!inherits(time, "CFTime") || !isTRUE(all(diff(time$offsets) > 0)) ||
+          !identical(length(time$offsets), as.integer(size(axes$time)))) {
+      return(paste("the time axis must be a strictly increasing CFtime",
+                   "object with one offset per time step"))
+    }
   }
   TRUE
 })
@@ -145,6 +160,15 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
            singleton_coordinate = "none", "inferred")
   }
   horizontal <- lapply(c(lon = "lon", lat = "lat"), function(axis) {
+    # Without a coordinate variable, ncdf4 gives the indices 1 to n, which
+    # aren't degrees (depth stops the same way in .read_depth_axis()).
+    if (!.has_coordinate_variable(nc, dims[[axis]])) {
+      rlang::abort(glue::glue(
+        "The {axis} dimension `{dims[[axis]]}` has no coordinate variable, ",
+        "so its values aren't known. Only regular longitude-latitude grids ",
+        "with coordinate values are supported."
+      ), class = "ocean3d_error_coordinate_variable", call = NULL)
+    }
     values <- as.vector(.get_dim_values(nc, dims[[axis]]))
     out <- .prepare_spatial_axis(nc, dims[[axis]], values, axis == "lon")
     c(list(dim = dims[[axis]]), out[c("centres", "lower", "upper")],
@@ -252,10 +276,14 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   wkt <- read("crs_wkt")
   if (is.null(wkt)) wkt <- read("spatial_ref")
   name <- read("grid_mapping_name")
-  geographic <- if (is.null(wkt)) {
+  geographic <- if (!is.null(name) && !identical(name, "latitude_longitude")) {
+    FALSE # e.g. rotated_latitude_longitude, even with a WKT
+  } else if (is.null(wkt)) {
     identical(name, "latitude_longitude")
   } else {
-    isTRUE(tryCatch(terra::is.lonlat(wkt), error = function(e) FALSE))
+    # A rotated pole is a derived geographic CRS, which terra calls lon/lat.
+    !grepl("DERIVINGCONVERSION", wkt, fixed = TRUE) &&
+      isTRUE(tryCatch(terra::is.lonlat(wkt), error = function(e) FALSE))
   }
   if (!geographic) {
     rlang::abort(glue::glue(
