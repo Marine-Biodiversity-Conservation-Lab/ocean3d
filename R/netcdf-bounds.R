@@ -38,6 +38,15 @@
   isTRUE(.length_unit_factor(a) == .length_unit_factor(b))
 }
 
+# Unusable or inconsistent cell bounds (#131): the only producer of
+# `ocean3d_error_bounds`, for .read_bounds() and .axis_intervals(). The
+# message names the file, so a bad file can be found in a multi-file call.
+.abort_bounds <- function(coordinate, file, problem) {
+  where <- if (is.null(file)) "" else glue::glue(" in {file}")
+  rlang::abort(glue::glue("Bounds for `{coordinate}`{where} {problem}."),
+               class = "ocean3d_error_bounds", call = NULL)
+}
+
 # Reads the CF bounds variable of a coordinate. Returns list(name, values),
 # where values is a 2 x n matrix of cell edges, or NULL when the coordinate
 # declares no bounds. Unusable bounds (missing variable, wrong shape,
@@ -47,11 +56,16 @@
   name <- .read_time_attribute(nc, coordinate, "bounds")
   if (is.null(name)) return(NULL)
   unusable <- function(problem) {
-    stop("Bounds for `", coordinate, "` ", problem, ".", call. = FALSE)
+    .abort_bounds(coordinate, basename(nc$filename), problem)
   }
   if (!is.character(name) || length(name) != 1L || is.na(name) ||
         !nzchar(name)) {
     return(unusable("have an invalid bounds reference"))
+  }
+  # In a netCDF-4 group, CF names are relative to the coordinate's group.
+  if (!name %in% names(nc$var) && grepl("/", coordinate, fixed = TRUE)) {
+    grouped <- file.path(dirname(coordinate), name)
+    if (grouped %in% names(nc$var)) name <- grouped
   }
   if (!name %in% names(nc$var)) {
     return(unusable(paste0(
@@ -87,12 +101,11 @@
   bounds_units <- .read_time_attribute(nc, name, "units")
   if (!is.null(bounds_units) && !is.null(coordinate_units) &&
         !.same_units(bounds_units, coordinate_units)) {
-    stop(
-      "Bounds for `", coordinate, "` and the coordinate use different ",
-      "units (`", bounds_units, "` and `", coordinate_units, "`). ",
-      "Convert bounds and coordinate to the same units first.",
-      call. = FALSE
-    )
+    unusable(glue::glue(
+      "and the coordinate use different units (`{bounds_units}` and ",
+      "`{coordinate_units}`). Convert bounds and coordinate to the same ",
+      "units first"
+    ))
   }
   list(name = name, values = raw)
 }
@@ -110,7 +123,8 @@
 # object's depth and time
 # and the core object's depth axis (as_proxy()).
 .axis_intervals <- function(centres, bounds, axis, coordinate,
-                            allow_singleton = FALSE, periodic = FALSE) {
+                            allow_singleton = FALSE, periodic = FALSE,
+                            file = NULL) {
   if (!length(centres) || any(!is.finite(centres))) {
     stop("Coordinates must contain finite values.", call. = FALSE)
   }
@@ -154,17 +168,14 @@
         (basis != "singleton_coordinate" && any(upper <= lower)) ||
         any(!is.finite(upper - lower)) ||
         any(centres < lower - tol | centres > upper + tol)) {
-    rlang::abort(glue::glue(
-      "Invalid bounds for `{coordinate}`: intervals need positive widths ",
-      "and must contain their centres."
-    ), class = "ocean3d_error_bounds", call = NULL)
+    .abort_bounds(coordinate, file,
+                  "need positive widths and must contain their centres")
   }
   index <- order(lower)
   if (length(index) > 1L &&
         any(tail(lower[index], -1L) < head(cummax(upper[index]), -1L) - tol)) {
-    rlang::abort(glue::glue(
-      "Bounds overlap in `{coordinate}`. Resolve overlapping cells first."
-    ), class = "ocean3d_error_bounds", call = NULL)
+    .abort_bounds(coordinate, file,
+                  "overlap. Resolve overlapping cells first")
   }
   if (periodic && length(index) > 1L) {
     # Longitude cells must not overlap modulo 360 either (e.g. 350 to 370
@@ -174,10 +185,10 @@
     sorted <- order(start)
     if (any(start[sorted][-1L] < head(cummax(end[sorted]), -1L) - tol) ||
           max(end) - 360 > min(start) + tol) {
-      rlang::abort(glue::glue(
-        "Longitude cells in `{coordinate}` overlap around the globe. ",
-        "Resolve overlapping cells first."
-      ), class = "ocean3d_error_bounds", call = NULL)
+      .abort_bounds(coordinate, file, paste(
+        "overlap around the globe (longitude cells modulo 360).",
+        "Resolve overlapping cells first"
+      ))
     }
   }
 
@@ -244,7 +255,8 @@
     if (is.null(bounds)) NULL else bounds$values,
     axis,
     coordinate,
-    allow_singleton
+    allow_singleton,
+    file = basename(nc$filename)
   )
   c(result, list(
     coordinate = coordinate, axis = axis,

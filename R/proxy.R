@@ -151,7 +151,19 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       list(edges = edges_from(out$basis)))
   })
 
-  path <- normalizePath(nc$filename)
+  # The file's full path, or a URL (e.g. OPeNDAP) as it is. A connection's
+  # relative path resolves against the working directory, so stop if no such
+  # file is there rather than record a wrong path.
+  path <- nc$filename
+  if (!grepl("^[A-Za-z][A-Za-z0-9+.-]*://", path)) {
+    if (!file.exists(path)) {
+      rlang::abort(glue::glue(
+        "Can't find the file `{path}` that this connection was opened ",
+        "from. Open it with its full path, or pass the path to as_proxy()."
+      ), class = "ocean3d_error_proxy_source", call = NULL)
+    }
+    path <- normalizePath(path)
+  }
   methods::new(
     "SpatProxy",
     source = list(type = "netcdf", path = path),
@@ -161,7 +173,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       dim_lengths = stats::setNames(as.integer(info$varsize), dims$var_dims),
       axis_dims = dims[c("lon", "lat", "depth", "time")],
       singleton_dims = dims$singleton_dims,
-      chunksizes = if (!anyNA(info$chunksizes)) {
+      # ncdf4 leaves `chunksizes` unset for contiguous storage (storage 1).
+      chunksizes = if (identical(as.integer(info$storage), 2L)) {
         stats::setNames(as.integer(info$chunksizes), dims$var_dims)
       }
     ),
@@ -224,7 +237,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   # (e.g. half a month).
   .check_time_bounds_calendar(nc, dim, bounds)
   cftime <- .netcdf_time_axis(nc, dim, bounds$values)
-  .axis_intervals(offsets, bounds$values, "time", dim)
+  .axis_intervals(offsets, bounds$values, "time", dim, file = file)
   list(dim = dim, cftime = cftime, edges = "bounds")
 }
 

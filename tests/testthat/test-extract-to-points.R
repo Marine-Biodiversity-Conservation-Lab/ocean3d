@@ -4374,10 +4374,13 @@ test_that("unusable spatial bounds stop extraction", {
   ncdf4::ncatt_put(nc, "lon", "bounds", "lon_bnds")
   ncdf4::nc_close(nc)
   x <- data.frame(lon = c(0, 1, 5), lat = 40)
-  expect_error(
+  err <- expect_error(
     extract2d(x, path, var = "temp", date_col = NULL),
-    "Bounds for `lon` were not found", fixed = TRUE
+    class = "ocean3d_error_bounds"
   )
+  # The message names the file, to find it in a multi-file call.
+  expected <- paste0("Bounds for `lon` in ", basename(path), " were not found")
+  expect_match(conditionMessage(err), expected, fixed = TRUE)
   expect_true(.same_units("degree_east", "degrees_east"))
   expect_true(.same_units("degrees_E", "degrees"))
   expect_false(.same_units("degrees_east", "radians"))
@@ -4519,7 +4522,7 @@ test_that("bad spatial bounds stop point extraction and the core object", {
   # Centres 0.5, 1.5, 2.5: the first cell's bounds miss its centre.
   check(rbind(c(1, 1, 2), c(1.2, 2, 3)), "must contain their centres")
   # The first two cells overlap between 0.8 and 1.
-  check(rbind(c(0, 0.8, 2), c(1, 2, 3)), "Bounds overlap in `lon`")
+  check(rbind(c(0, 0.8, 2), c(1, 2, 3)), "Bounds for `lon` in .* overlap\\.")
 })
 
 test_that("shared bounds edges that differ by rounding are accepted", {
@@ -4534,4 +4537,27 @@ test_that("shared bounds edges that differ by rounding are accepted", {
                      method = "2d"),
     201
   )
+})
+
+test_that("bounds names inside a netCDF-4 group are relative to the group", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  lon <- ncdf4::ncdim_def("grp/lon", "degrees_east", c(0.5, 1.5))
+  lat <- ncdf4::ncdim_def("grp/lat", "degrees_north", c(10.5, 11.5))
+  nv <- ncdf4::ncdim_def("grp/nv", "", 1:2, create_dimvar = FALSE)
+  nc <- ncdf4::nc_create(f, list(
+    ncdf4::ncvar_def("grp/temp", "degC", list(lon, lat), -9999),
+    ncdf4::ncvar_def("grp/lon_bnds", "degrees_east", list(nv, lon))
+  ), force_v4 = TRUE)
+  ncdf4::ncvar_put(nc, "grp/temp", matrix(1:4, 2))
+  ncdf4::ncvar_put(nc, "grp/lon_bnds", rbind(c(0, 1), c(1, 2)))
+  ncdf4::ncatt_put(nc, "grp/lon", "bounds", "lon_bnds")
+  ncdf4::nc_close(nc)
+
+  expect_equal(
+    extract_to_point(nc = f, var = "grp/temp", lon = 1.5, lat = 10.5,
+                     method = "2d"),
+    2
+  )
+  expect_identical(as_proxy(f, var = "grp/temp")@axes$lon$edges, "bounds")
 })

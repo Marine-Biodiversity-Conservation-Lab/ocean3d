@@ -230,7 +230,8 @@
   if (basis != "singleton_coordinate") {
     .axis_intervals(centres, rbind(lower, upper),
                     if (longitude) "lon" else "lat", coordinate,
-                    periodic = longitude && periodic)
+                    periodic = longitude && periodic,
+                    file = basename(nc$filename))
   }
   if (!longitude) {
     lower <- pmax(lower, -90)

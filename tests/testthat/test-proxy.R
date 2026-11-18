@@ -156,12 +156,39 @@ test_that("days since year 0 are dates, not a climatology", {
                    "proleptic_gregorian")
 })
 
+test_that("contiguous netCDF-4 storage has no chunk sizes", {
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0.5, 1.5))
+  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(10.5, 11.5))
+  nc <- ncdf4::nc_create(f, ncdf4::ncvar_def("temp", "degC", list(lon, lat)),
+                         force_v4 = TRUE)
+  ncdf4::nc_close(nc)
+  expect_null(as_proxy(f)@variable$chunksizes)
+})
+
+test_that("a connection whose relative path can't be found stops", {
+  dir <- tempfile("proxy-")
+  dir.create(dir)
+  on.exit(unlink(dir, recursive = TRUE), add = TRUE)
+  file.copy(make_grid_file(), file.path(dir, "grid.nc"))
+  old <- setwd(dir)
+  on.exit(setwd(old), add = TRUE)
+  nc <- ncdf4::nc_open("grid.nc")
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  expect_identical(as_proxy(nc)@source$path,
+                   normalizePath(file.path(dir, "grid.nc")))
+  # After the working directory changes, the relative path is ambiguous.
+  setwd(old)
+  expect_error(as_proxy(nc), class = "ocean3d_error_proxy_source")
+})
+
 test_that("overlapping time bounds stop", {
   f <- make_grid_file(time = c(0.5, 1.5),
                       time_bounds = rbind(c(0, 0.8), c(1.2, 2)))
   on.exit(unlink(f), add = TRUE)
   err <- expect_error(as_proxy(f), class = "ocean3d_error_bounds")
-  expect_match(conditionMessage(err), "Bounds overlap in `time`")
+  expect_match(conditionMessage(err), "Bounds for `time` in .* overlap\\.")
 })
 
 test_that("unsupported calendars and climatologies stop", {

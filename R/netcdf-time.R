@@ -143,8 +143,8 @@
     )),
     warning = function(w) {
       rlang::abort(glue::glue(
-        "Invalid bounds for `{time_dim}`: each interval must contain its ",
-        "time step ({conditionMessage(w)})."
+        "Invalid bounds for `{time_dim}` in {basename(nc$filename)}: each ",
+        "interval must contain its time step ({conditionMessage(w)})."
       ), class = "ocean3d_error_time_bounds", call = NULL)
     }
   )
