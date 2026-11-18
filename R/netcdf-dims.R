@@ -38,6 +38,11 @@
   coordinate %in% names(nc$var)
 }
 
+# Read one attribute of a variable or coordinate variable, or NULL when it is
+# missing. Ordinary dimension coordinates (made by ncdim_def()) are listed in
+# `nc$dim`, not `nc$var`, and ncatt_get() reads their attributes by name too,
+# including group-qualified names such as "grp/lon" (#93). Used for axis,
+# depth, bounds and time metadata alike.
 .read_time_attribute <- function(nc, coordinate, attribute) {
   # ncdf4 prints warnings to stdout for dimensions without a coordinate
   # variable, so return early instead of asking it for their attributes.
@@ -51,18 +56,6 @@
   att$value
 }
 
-# Read a coordinate attribute, including dimension metadata.
-.axis_attribute <- function(nc, dim_name, attribute) {
-  if (dim_name %in% names(nc$var)) {
-    att <- ncdf4::ncatt_get(nc, dim_name, attribute)
-    if (isTRUE(att$hasatt)) return(att$value)
-  }
-  if (dim_name %in% names(nc$dim) && attribute == "units") {
-    return(nc$dim[[dim_name]]$units)
-  }
-  NULL
-}
-
 .normalise_axis_attribute <- function(x) {
   if (!is.character(x) || length(x) != 1L ||
         is.na(x)) {
@@ -74,13 +67,13 @@
 # Detect CF axis metadata associated with a dimension.
 .axis_from_metadata <- function(nc, dim_name) {
   axis <- toupper(.normalise_axis_attribute(
-    .axis_attribute(nc, dim_name, "axis")
+    .read_time_attribute(nc, dim_name, "axis")
   ))
   standard_name <- .normalise_axis_attribute(
-    .axis_attribute(nc, dim_name, "standard_name")
+    .read_time_attribute(nc, dim_name, "standard_name")
   )
   units <- .normalise_axis_attribute(
-    .axis_attribute(nc, dim_name, "units")
+    .read_time_attribute(nc, dim_name, "units")
   )
   lon_units <- c(
                  "degrees_east", "degree_east",
@@ -195,9 +188,14 @@
   NULL
 }
 
-# Reject grids that need unsupported 2D coordinate lookup.
+# Reject curvilinear grids: a variable whose `coordinates` attribute names a
+# longitude or latitude spanning two or more of its dimensions. As for
+# dimension coordinates, CF identifies these by `standard_name` or by units
+# alone (NEMO's `nav_lon` / `nav_lat` often have only units). Native model
+# grids are out of scope (SPEC.md, "Grids in scope"), so this runs before any
+# axis is resolved by name (#93).
 .check_auxiliary_coordinates <- function(nc, var, var_dims) {
-  coordinates <- .axis_attribute(nc, var, "coordinates")
+  coordinates <- .read_time_attribute(nc, var, "coordinates")
 
   if (is.null(coordinates)) return(invisible(TRUE))
 
@@ -205,15 +203,16 @@
     trimws(as.character(coordinates)[1]),
     "\\s+"
   )[[1]]
+  # Names in the attribute are relative to the variable's group.
+  if (grepl("/", var, fixed = TRUE)) {
+    coordinates <- c(coordinates, file.path(dirname(var), coordinates))
+  }
 
   for (coordinate in coordinates) {
     if (!coordinate %in% names(nc$var)) next
-
-    standard_name <- .normalise_axis_attribute(
-      .axis_attribute(nc, coordinate, "standard_name")
-    )
-
-    if (!standard_name %in% c("longitude", "latitude")) next
+    if (!isTRUE(.axis_from_metadata(nc, coordinate) %in% c("lon", "lat"))) {
+      next
+    }
 
     coord_dims <- vapply(
       nc$var[[coordinate]]$dim,
@@ -223,13 +222,12 @@
 
     if (length(coord_dims) > 1L &&
           all(coord_dims %in% var_dims)) {
-      stop(
-        "Variable `", var, "` uses a two-dimensional ",
-        "geographic coordinate `", coordinate, "`. ",
-        "Curvilinear longitude/latitude grids are not ",
-        "yet supported by extract_to_point().",
-        call. = FALSE
-      )
+      rlang::abort(glue::glue(
+        "Variable `{var}` uses a two-dimensional geographic coordinate ",
+        "`{coordinate}`, so its grid is curvilinear (as in native NEMO ",
+        "output). Only regular longitude/latitude grids are supported: ",
+        "regrid the data to a regular longitude/latitude grid first."
+      ), class = "ocean3d_error_curvilinear_grid", call = NULL)
     }
   }
 
@@ -337,7 +335,7 @@
     list(name = lat_name, axis = "latitude")
   )) {
     units <- .normalise_axis_attribute(
-      .axis_attribute(nc, axis_info$name, "units")
+      .read_time_attribute(nc, axis_info$name, "units")
     )
 
     if (units %in% projected_units) {
