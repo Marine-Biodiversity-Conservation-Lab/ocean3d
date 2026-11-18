@@ -201,14 +201,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # only"); the core object doesn't reorder it.
 .proxy_time_axis <- function(nc, dim, path) {
   file <- basename(path)
-  units <- .read_time_attribute(nc, dim, "units")
-  if (!is.null(.read_time_attribute(nc, dim, "climatology")) ||
-        (is.character(units) && grepl("since\\s+0+-", units))) {
-    rlang::abort(glue::glue(
-      "The time axis `{dim}` in {file} is a climatology ",
-      "(units '{units}'). Climatological time axes aren't supported yet."
-    ), class = "ocean3d_error_time_climatology", call = NULL)
-  }
+  .check_climatology(nc, dim, file)
   offsets <- as.vector(.get_dim_values(nc, dim))
   steps <- diff(offsets)
   if (any(steps == 0, na.rm = TRUE)) {

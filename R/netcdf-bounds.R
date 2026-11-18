@@ -212,10 +212,6 @@
       bounds$values <- .depth_bounds_m(nc, coordinate, raw, bounds)
     }
   } else {
-    if (!is.null(.read_time_attribute(nc, coordinate, "climatology"))) {
-      stop("Climatological coordinates require separate buffer handling. ",
-           "Supply an ordinary dated time axis instead.", call. = FALSE)
-    }
     centres <- as.numeric(.decode_netcdf_time(nc, coordinate))
     calendar <- .read_time_attribute(nc, coordinate, "calendar")
     if (is.null(calendar)) calendar <- "standard"

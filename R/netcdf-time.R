@@ -25,6 +25,26 @@
   ), class = "ocean3d_error_calendar", call = NULL)
 }
 
+# Stops on a climatological time axis: one with a CF `climatology`
+# attribute, or units counting from year 0 (WOA's `months since 0000-01-01`,
+# which CFtime can't decode). Buffer extraction and the core object stop here;
+# point and track extraction accept climatologies and report them instead.
+# `file` names the file in the message.
+.check_climatology <- function(nc, time_dim, file = NULL) {
+  units <- .read_time_attribute(nc, time_dim, "units")
+  units_ok <- is.character(units) && length(units) == 1L && !is.na(units)
+  year_zero <- units_ok && grepl("since\\s+0+-", units)
+  flagged <- !is.null(.read_time_attribute(nc, time_dim, "climatology"))
+  if (!flagged && !year_zero) return(invisible(NULL))
+  where <- if (is.null(file)) "" else glue::glue(" in {file}")
+  shown <- if (units_ok) glue::glue(" (units '{units}')") else ""
+  rlang::abort(glue::glue(
+    "The time axis `{time_dim}`{where} is a climatology{shown}. ",
+    "Climatological time axes aren't supported here yet; use a dataset ",
+    "with an ordinary dated time axis."
+  ), class = "ocean3d_error_time_climatology", call = NULL)
+}
+
 # The CF time axis of a netCDF coordinate as a checked CFtime object: usable
 # units, a supported calendar, finite offsets and a UTC reference date-time.
 # `bounds` (a 2 x n matrix of offsets in the axis units, one column per time

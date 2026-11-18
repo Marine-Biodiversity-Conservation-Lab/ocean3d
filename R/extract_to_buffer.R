@@ -989,10 +989,8 @@
   } else {
     .prepare_spatial_axis(nc, dims$lat, lat)
   }
-  if (!is.null(dims$time) &&
-        !is.null(.read_time_attribute(nc, dims$time, "climatology"))) {
-    stop("Climatological coordinates require separate buffer handling.",
-         call. = FALSE)
+  if (!is.null(dims$time)) {
+    .check_climatology(nc, dims$time, basename(nc$filename))
   }
   list(
     nc = nc, var = var, source_index = source_index, dims = dims,

@@ -285,6 +285,25 @@ test_that("most_similar exports locations without diagnostics", {
 })
 
 
+test_that("buffer extraction stops on a climatological time axis", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, depth = c(0, 20), time = c(0, 24))
+  handle <- ncdf4::nc_open(path, write = TRUE)
+  ncdf4::ncatt_put(handle, "time", "climatology", "climatology_bounds")
+  ncdf4::nc_close(handle)
+  data <- data.frame(lon = 1, lat = 0, depth = 20,
+                     date = as.Date("2020-01-01"))
+  # Without a time buffer too: the file's time axis can't be decoded as dates.
+  err <- expect_error(
+    extract_to_buffer(data, path, var = "temp", depth_radius_m = 20,
+                      infer_bounds = TRUE, quiet = TRUE),
+    class = "ocean3d_error_time_climatology"
+  )
+  expect_match(conditionMessage(err), basename(path), fixed = TRUE)
+})
+
+
 test_that("identical winners expose ambiguity in only nonunique axes", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
@@ -1962,36 +1981,19 @@ test_that(
 
 
 test_that(
-  "unsupported calendars and climatologies are not inferred",
+  "unsupported calendars are not inferred",
   {
     skip_if_not_installed("ncdf4")
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
-    for (
-      attributes in list(
-        list(calendar = "360_day"),
-        list(climatology = "climatology_bounds")
-      )
-    ) {
-      .make_buffer_axis_nc(
-        path,
-        c(
-          0,
-          24
-        ),
-        axis = "time",
-        attributes = attributes
-      )
-      expect_error(
-        .read_buffer_axis_nc(path, "time", axis = "time", infer_bounds = TRUE),
-        if (is.null(attributes$calendar)) {
-          "Climatological"
-        } else {
-          "unsupported calendar"
-        },
-        fixed = TRUE
-      )
-    }
+    .make_buffer_axis_nc(
+      path, c(0, 24), axis = "time", attributes = list(calendar = "360_day")
+    )
+    expect_error(
+      .read_buffer_axis_nc(path, "time", axis = "time", infer_bounds = TRUE),
+      "unsupported calendar",
+      fixed = TRUE
+    )
     .make_buffer_axis_nc(
       path,
       c(0, 24),

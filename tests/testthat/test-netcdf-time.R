@@ -222,3 +222,24 @@ test_that("the time axis builder returns a CFtime object with its bounds", {
   bounded <- .netcdf_time_axis(nc, "time", bounds = monthly_bounds[2:1, ])
   expect_equal(bounded$get_bounds(), monthly_bounds)
 })
+
+
+test_that("climatological time axes are recognised by attribute or year 0", {
+  check <- function(f, atts = list()) {
+    nc <- ncdf4::nc_open(f, write = TRUE)
+    on.exit(ncdf4::nc_close(nc))
+    for (name in names(atts)) ncdf4::ncatt_put(nc, "time", name, atts[[name]])
+    .check_climatology(nc, "time", basename(f))
+  }
+  dated <- make_time_file(c(0, 1), "days since 2020-01-01")
+  woa <- make_time_file(c(0.5, 1.5), "months since 0000-01-01 00:00:00")
+  flagged <- make_time_file(c(0, 1), "days since 2020-01-01")
+  on.exit(unlink(c(dated, woa, flagged)), add = TRUE)
+
+  expect_null(check(dated))
+  err <- expect_error(check(woa), class = "ocean3d_error_time_climatology")
+  expect_match(conditionMessage(err), basename(woa), fixed = TRUE)
+  expect_match(conditionMessage(err), "months since 0000-01-01", fixed = TRUE)
+  expect_error(check(flagged, list(climatology = "climatology_bounds")),
+               class = "ocean3d_error_time_climatology")
+})
