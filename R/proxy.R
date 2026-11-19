@@ -118,7 +118,8 @@ setValidity("SpatProxy", function(object) {
 #' Regular longitude-latitude grids with coordinate values are supported;
 #' curvilinear, projected and rotated-pole grids are rejected. Bad cell bounds
 #' (cells that don't contain their centre, have no width or overlap) stop with
-#' an error.
+#' an error, and so does a variable with no values along a dimension (for
+#' example an unlimited time dimension with no records).
 #'
 #' @inheritSection SpatProxy-class Experimental
 #'
@@ -152,9 +153,18 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   opened <- .open_source(list(source = x, type = type))
   on.exit(.close_source(opened), add = TRUE)
   nc <- opened$nc
+  # The reader reopens the file by its path, so write pending changes to it.
+  if (isTRUE(nc$writable)) ncdf4::nc_sync(nc)
   if (is.null(var)) var <- .detect_netcdf_var(nc)
   dims <- .detect_dims(nc, var, lon_dim, lat_dim, depth_dim, time_dim)
   info <- nc$var[[var]]
+  empty <- dims$var_dims[as.integer(info$varsize) == 0L]
+  if (length(empty)) {
+    rlang::abort(glue::glue(
+      "Variable `{var}` has no values along {toString(empty)}, so there is ",
+      "nothing to read."
+    ), class = "ocean3d_error_empty_dimension", call = NULL)
+  }
 
   # Where an axis's edges come from, from the shared readers' `basis`.
   edges_from <- function(basis) {
@@ -181,7 +191,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   # relative path resolves against the working directory, so stop if no such
   # file is there rather than record a wrong path.
   path <- nc$filename
-  if (!grepl("^[A-Za-z][A-Za-z0-9+.-]*://", path)) {
+  if (!.is_url(path)) {
     if (!file.exists(path)) {
       rlang::abort(glue::glue(
         "Can't find the file `{path}` that this connection was opened ",
@@ -199,8 +209,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       dim_lengths = stats::setNames(as.integer(info$varsize), dims$var_dims),
       axis_dims = dims[c("lon", "lat", "depth", "time")],
       singleton_dims = dims$singleton_dims,
-      # ncdf4 leaves `chunksizes` unset for contiguous storage (storage 1).
-      chunksizes = if (identical(as.integer(info$storage), 2L)) {
+      # ncdf4 leaves `chunksizes` unset for contiguous storage (storage 1),
+      # and NA for a classic-format variable with an unlimited dimension.
+      chunksizes = if (identical(as.integer(info$storage), 2L) &&
+                         !anyNA(info$chunksizes)) {
         stats::setNames(as.integer(info$chunksizes), dims$var_dims)
       }
     ),
@@ -296,6 +308,91 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   }
   if (is.null(wkt)) "EPSG:4326" else wkt
 }
+
+# Reads one index window of a SpatProxy's variable with a single ncdf4 call.
+# `window` is a named list with up to one element per axis (`lon`, `lat`,
+# `depth`, `time`): the first and last index to read, in storage order (so for
+# a deep-first depth axis, index 1 is the deepest level). An axis left out is
+# read whole; an axis the variable doesn't have counts as one of length 1.
+# Returns the values as a 4D array in the fixed order lon, lat, depth, time,
+# with length 1 for an axis the variable doesn't have. ncdf4 applies the scale
+# and offset, and sets cells equal to `missing_value` (or `_FillValue` when
+# there is no `missing_value`) to NA.
+.read_proxy_window <- function(x, window = list()) {
+  variable <- x@variable
+  axes <- c("lon", "lat", "depth", "time")
+  if (!is.list(window) || (length(window) && (
+    is.null(names(window)) || !all(names(window) %in% axes) ||
+      anyDuplicated(names(window))
+  ))) {
+    rlang::abort(glue::glue(
+      "The read window must be a list naming each axis at most once, from ",
+      "lon, lat, depth and time."
+    ), class = "ocean3d_error_read_window", call = NULL)
+  }
+  index_list <- list()
+  shape <- stats::setNames(rep(1L, 4L), axes)
+  for (axis in axes) {
+    dim <- variable$axis_dims[[axis]]
+    n <- if (is.null(dim)) 1L else variable$dim_lengths[[dim]]
+    span <- if (is.null(window[[axis]])) c(1L, n) else window[[axis]]
+    if (!is.numeric(span) || length(span) != 2L || anyNA(span) ||
+          any(span != round(span)) || span[1L] < 1L || span[2L] > n ||
+          span[1L] > span[2L]) {
+      rlang::abort(glue::glue(
+        "The read window for `{axis}` must be a first and last index, ",
+        "whole numbers from 1 to {n}, with first <= last."
+      ), class = "ocean3d_error_read_window", call = NULL)
+    }
+    if (is.null(dim)) next
+    shape[[axis]] <- as.integer(span[2L] - span[1L] + 1L)
+    index_list[[dim]] <- list(start = as.integer(span[1L]),
+                              count = shape[[axis]])
+  }
+  sc <- .build_start_count(variable$dims, index_list, variable$singleton_dims)
+
+  # The indices are only right for the file the proxy described: the same
+  # variable with the same dimensions in the same order.
+  path <- x@source$path
+  file <- basename(path)
+  nc <- if (.is_url(path) || file.exists(path)) ncdf4::nc_open(path)
+  if (!is.null(nc)) on.exit(ncdf4::nc_close(nc), add = TRUE)
+  info <- if (!is.null(nc)) nc$var[[variable$name]]
+  changed <- if (is.null(nc)) {
+    glue::glue("Can't find {path}")
+  } else if (is.null(info)) {
+    glue::glue("{file} no longer has the variable `{variable$name}`")
+  } else if (!identical(vapply(info$dim, `[[`, "", "name"), variable$dims) ||
+               !identical(as.integer(info$varsize),
+                          unname(variable$dim_lengths))) {
+    glue::glue(
+      "Variable `{variable$name}` in {file} no longer has the dimensions ",
+      "this SpatProxy describes"
+    )
+  }
+  if (!is.null(changed)) {
+    rlang::abort(glue::glue(
+      "{changed}. Build the SpatProxy again with as_proxy()."
+    ), class = "ocean3d_error_proxy_changed", call = NULL)
+  }
+  values <- ncdf4::ncvar_get(nc, variable$name, start = sc$start,
+                             count = sc$count, collapse_degen = FALSE)
+  # Put the axes in fixed order, then the other (length 1) dimensions, and
+  # add length 1 for missing axes, which doesn't move any values. Each step
+  # copies the window, so skip the ones that change nothing.
+  present <- unlist(variable$axis_dims[axes])
+  order <- c(match(present, variable$dims), which(!variable$dims %in% present))
+  if (!identical(order, seq_along(variable$dims))) {
+    if (!identical(dim(values), sc$count)) dim(values) <- sc$count
+    values <- aperm(values, order)
+  }
+  if (!identical(dim(values), unname(shape))) dim(values) <- unname(shape)
+  values
+}
+
+# TRUE for a URL such as an OPeNDAP or NCZarr address, which ncdf4 opens
+# without a local file.
+.is_url <- function(path) grepl("^[A-Za-z][A-Za-z0-9+.-]*://", path)
 
 #' @rdname SpatProxy-class
 #' @param object A `SpatProxy`.

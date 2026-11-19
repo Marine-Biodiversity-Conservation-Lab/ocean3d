@@ -286,6 +286,41 @@ test_that("an open connection is read and left open", {
   expect_error(as_proxy(c(f, f)), class = "ocean3d_error_proxy_input")
 })
 
+test_that("unlimited, empty and unsaved time axes", {
+  unlimited_file <- function(times) {
+    f <- tempfile(fileext = ".nc")
+    dims <- list(
+      ncdf4::ncdim_def("lon", "degrees_east", c(0.5, 1.5, 2.5)),
+      ncdf4::ncdim_def("lat", "degrees_north", c(10.5, 11.5)),
+      ncdf4::ncdim_def("time", "days since 2020-01-01", times, unlim = TRUE)
+    )
+    nc <- ncdf4::nc_create(f, ncdf4::ncvar_def("temp", "degC", dims, -9999))
+    if (length(times)) ncdf4::ncvar_put(nc, "temp", seq_len(6 * length(times)))
+    ncdf4::nc_close(nc)
+    f
+  }
+  f <- unlimited_file(c(0, 1))
+  empty <- unlimited_file(numeric(0))
+  on.exit(unlink(c(f, empty)), add = TRUE)
+
+  # A classic file with an unlimited dimension has no chunk sizes.
+  x <- as_proxy(f)
+  expect_null(x@variable$chunksizes)
+  expect_identical(dim(.read_proxy_window(x)), c(3L, 2L, 1L, 2L))
+
+  err <- expect_error(as_proxy(empty), class = "ocean3d_error_empty_dimension")
+  expect_match(conditionMessage(err), "no values along time")
+
+  # Values written through a connection but not yet saved are read.
+  nc <- ncdf4::nc_open(f, write = TRUE)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  ncdf4::ncvar_put(nc, "temp", rep(100, 6), start = c(1, 1, 1),
+                   count = c(3, 2, 1))
+  y <- as_proxy(nc)
+  expect_identical(as.vector(.read_proxy_window(y, list(time = c(1, 1)))),
+                   rep(100, 6))
+})
+
 test_that("a SpatProxy survives saveRDS() and checks its axes", {
   x <- proxy_of(time_bounds = rbind(c(-0.5, 0.5), c(0.5, 1.5)))
   path <- tempfile(fileext = ".rds")
@@ -334,4 +369,179 @@ test_that("the print shows each axis", {
     "dimensions : 3 x 2 (lon x lat)"
   ))
   expect_identical(bare[7:8], c("depth      : none", "time       : none"))
+})
+
+# The index-window reader. The file must outlive the proxy, so each test
+# removes it at the end.
+proxy_and_file <- function(...) {
+  f <- make_grid_file(...)
+  list(proxy = as_proxy(f, var = "temp"), file = f)
+}
+
+stored_values <- function(f) {
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc))
+  ncdf4::ncvar_get(nc, "temp", collapse_degen = FALSE)
+}
+
+test_that("a window reads the same values as the whole variable", {
+  g <- proxy_and_file()
+  on.exit(unlink(g$file), add = TRUE)
+  full <- stored_values(g$file)
+
+  expect_identical(.read_proxy_window(g$proxy), full)
+  window <- .read_proxy_window(
+    g$proxy, list(lon = c(2, 3), depth = c(2, 2), time = c(1, 1))
+  )
+  expect_identical(window, full[2:3, , 2, 1, drop = FALSE])
+})
+
+test_that("values come back in lon, lat, depth, time order", {
+  # A storage order whose reordering isn't its own inverse.
+  g <- proxy_and_file(dim_order = c("depth", "lon", "time", "lat"))
+  on.exit(unlink(g$file), add = TRUE)
+  fixed <- aperm(stored_values(g$file), c(2, 4, 1, 3))
+
+  expect_identical(dim(.read_proxy_window(g$proxy)), c(3L, 2L, 2L, 2L))
+  expect_identical(.read_proxy_window(g$proxy), fixed)
+  expect_identical(
+    .read_proxy_window(g$proxy, list(lat = c(2, 2), time = c(2, 2))),
+    fixed[, 2, , 2, drop = FALSE]
+  )
+
+  # A deep-first depth axis is read in storage order: index 1 is deepest.
+  deep <- proxy_and_file(depth = c(15, 5))
+  on.exit(unlink(deep$file), add = TRUE)
+  expect_identical(
+    .read_proxy_window(deep$proxy, list(depth = c(1, 1))),
+    stored_values(deep$file)[, , 1, , drop = FALSE]
+  )
+})
+
+test_that("missing axes and other length-1 dimensions have length 1", {
+  flat <- proxy_and_file(depth = NULL, time = NULL)
+  on.exit(unlink(flat$file), add = TRUE)
+  expect_identical(dim(.read_proxy_window(flat$proxy)), c(3L, 2L, 1L, 1L))
+  no_depth <- proxy_and_file(depth = NULL)
+  on.exit(unlink(no_depth$file), add = TRUE)
+  expect_identical(dim(.read_proxy_window(no_depth$proxy)), c(3L, 2L, 1L, 2L))
+
+  # A length-1 `band` dimension between lon and lat.
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  dims <- list(
+    ncdf4::ncdim_def("lon", "degrees_east", c(0.5, 1.5, 2.5)),
+    ncdf4::ncdim_def("band", "", 1L, create_dimvar = FALSE),
+    ncdf4::ncdim_def("lat", "degrees_north", c(10.5, 11.5))
+  )
+  nc <- ncdf4::nc_create(f, ncdf4::ncvar_def("temp", "degC", dims, -9999))
+  ncdf4::ncvar_put(nc, "temp", array(1:6, c(3, 1, 2)))
+  ncdf4::nc_close(nc)
+  expect_identical(
+    .read_proxy_window(as_proxy(f), list(lat = c(2, 2))),
+    array(c(4, 5, 6), c(3, 1, 1, 1))
+  )
+})
+
+test_that("packed values are unpacked and fill values are NA", {
+  g <- proxy_and_file(prec = "short", chunksizes = c(1, 1, 1, 1))
+  on.exit(unlink(g$file), add = TRUE)
+  nc <- ncdf4::nc_open(g$file, write = TRUE)
+  ncdf4::ncvar_put(nc, "temp", NA, start = c(2, 1, 1, 1),
+                   count = c(1, 1, 1, 1))
+  ncdf4::nc_close(nc)
+
+  values <- .read_proxy_window(g$proxy, list(depth = c(1, 1), time = c(1, 1)))
+  expect_equal(as.vector(values), c(1, NA, 3, 4, 5, 6) * 0.1)
+})
+
+test_that("bad read windows and changed files stop", {
+  g <- proxy_and_file()
+  on.exit(unlink(g$file), add = TRUE)
+  bad <- list(
+    list(lon = c(0, 2)), list(lon = c(2, 4)), list(lon = c(3, 2)),
+    list(lon = 2), list(lon = c(1.5, 2)), list(lon = c(NA, 2)),
+    list(lon = c("1", "2"))
+  )
+  for (window in bad) {
+    err <- expect_error(.read_proxy_window(g$proxy, window),
+                        class = "ocean3d_error_read_window")
+    expect_match(conditionMessage(err), "`lon` must be .* from 1 to 3")
+  }
+  # Not a list of named axes, or an axis named twice.
+  unnamed <- list(
+    list(x = c(1, 1)), list(c(1, 1)), c(lon = 2),
+    list(lon = c(1, 1), lon = c(2, 3))
+  )
+  for (window in unnamed) {
+    err <- expect_error(.read_proxy_window(g$proxy, window),
+                        class = "ocean3d_error_read_window")
+    expect_match(conditionMessage(err), "list naming each axis at most once")
+  }
+
+  # An axis the variable doesn't have has length 1.
+  flat <- proxy_and_file(depth = NULL, time = NULL)
+  on.exit(unlink(flat$file), add = TRUE)
+  expect_identical(dim(.read_proxy_window(flat$proxy, list(depth = c(1, 1)))),
+                   c(3L, 2L, 1L, 1L))
+  err <- expect_error(.read_proxy_window(flat$proxy, list(depth = c(2, 5))),
+                      class = "ocean3d_error_read_window")
+  expect_match(conditionMessage(err), "`depth` must be .* from 1 to 1")
+})
+
+test_that("a file that no longer matches the proxy stops", {
+  changed <- function(g, msg) {
+    err <- expect_error(.read_proxy_window(g$proxy),
+                        class = "ocean3d_error_proxy_changed")
+    expect_match(conditionMessage(err), msg)
+    expect_match(conditionMessage(err), "Build the SpatProxy again")
+  }
+  rewrite <- function(g, ...) {
+    other <- make_grid_file(...)
+    file.copy(other, g$file, overwrite = TRUE)
+    unlink(other)
+  }
+  g <- proxy_and_file()
+  on.exit(unlink(g$file), add = TRUE)
+
+  # Another grid, or the same sizes with depth and time swapped.
+  rewrite(g, lon = c(0.5, 1.5))
+  changed(g, "no longer has the dimensions")
+  rewrite(g)
+  expect_no_error(.read_proxy_window(g$proxy))
+  rewrite(g, dim_order = c("lon", "lat", "time", "depth"))
+  changed(g, "no longer has the dimensions")
+
+  # The variable or the file is gone.
+  renamed <- g
+  renamed$proxy@variable$name <- "salt"
+  changed(renamed, "no longer has the variable `salt`")
+  unlink(g$file)
+  changed(g, "Can't find")
+})
+
+test_that("a proxy of a URL source is read", {
+  store <- file.path(tempfile(), "grid.zarr")
+  dir.create(dirname(store))
+  on.exit(unlink(dirname(store), recursive = TRUE), add = TRUE)
+  url <- paste0("file://", store, "#mode=nczarr,file")
+  dims <- list(
+    ncdf4::ncdim_def("lon", "degrees_east", c(0.5, 1.5, 2.5)),
+    ncdf4::ncdim_def("lat", "degrees_north", c(10.5, 11.5))
+  )
+  made <- tryCatch({
+    nc <- ncdf4::nc_create(url, ncdf4::ncvar_def("temp", "degC", dims, -9999),
+                           force_v4 = TRUE)
+    ncdf4::ncvar_put(nc, "temp", array(1:6, c(3, 2)))
+    ncdf4::nc_close(nc)
+    TRUE
+  }, error = function(e) FALSE)
+  skip_if_not(made, "the netCDF library can't write NCZarr stores")
+
+  nc <- ncdf4::nc_open(url)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  x <- as_proxy(nc)
+  expect_identical(x@source$path, url)
+  expect_identical(.read_proxy_window(x, list(lat = c(2, 2))),
+                   array(c(4, 5, 6), c(3, 1, 1, 1)))
 })
