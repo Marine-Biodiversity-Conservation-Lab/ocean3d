@@ -5,7 +5,7 @@
 [![pkgcheck](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/workflows/pkgcheck/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions?query=workflow%3Apkgcheck)
 [![R-CMD-check](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/actions/workflows/R-CMD-check.yaml)
 [![Codecov test coverage](https://codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d/graph/badge.svg)](https://app.codecov.io/gh/Marine-Biodiversity-Conservation-Lab/ocean3d)
-[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+[![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 <!-- badges: end -->
 
 **ocean3d** is an R package for three-dimensional marine spatial
@@ -44,26 +44,49 @@ example, which temperatures occur within a species' 3D distribution.
 
 In order to represent the 3D space in the ocean, we use a stacked-raster approach built on `terra`. We call this the Spatial Voxel Model, with the class `SpatVoxel`. Using this `SpatVoxel`, we can represent any number of spatial phenomena in the ocean, including species distributions, fishing effort, and oceanographic variables. 
 
-`ocean3d` uses two representations for 3D geometry: A `SpatEnvelope` stores one 
-continuous `[depth_min, depth_max]` interval per cell; a `SpatVoxel` stores a 
-value at each of a set of depth levels, so it can hold a variable and interior gaps.
-`SpatEnvelope` is useful for representing discrete 3D geometry (ex. species ranges 
-with defined boundaries for area and depth). In contrast, `SpatVoxel` is ideal for 
-representing continuous values (ex. species distribution models with probabilities 
-of occurrence, rather than presence and absences). `SpatVoxel` can also represent 
-overhangs, holes, etc. in 3D space since it contains a value for every depth, rather than a depth range. 
+`ocean3d` has three representations for 3D geometry:
 
-![A SpatEnvelope (A), storing a depth_min and depth_max per cell above the seafloor, converted with envelope_to_voxel() into a SpatVoxel (B), storing presence at each depth level (0, 50, 100, 200 and 500 m).](vignettes/figures/Comparison_SpatEnvelope_SpatVoxel.png)
+- A `SpatVector3D` holds points, lines and polygons with depth and time, such
+  as tag detections, dive tracks or a protected area from 0 to 200 m. Each
+  polygon has a top and a bottom depth. Build one with `as_vector3d()`.
+- A `SpatEnvelope` stores one continuous `[depth_min, depth_max]` interval per
+  grid cell, bounded by the seafloor. It suits ranges with defined limits in
+  area and depth, such as IUCN species ranges and fishery footprints.
+- A `SpatVoxel` stores a value at each of a set of depth levels in every cell.
+  It suits continuous values, such as temperature or the modelled probability
+  of occurrence, and can hold interior gaps and overhangs, because it has a
+  value at every depth rather than one depth range.
 
-This package includes functions for converting common vector representations
-to these 3D representations. For example, `vect_to_envelope()` turns a
-species range polygon and its observed depth range into a `SpatEnvelope`
+![The same example as a SpatVector3D, a polygon with a top and bottom surface (A); a SpatEnvelope, its depth_min and depth_max on a grid above the seafloor (B); and a SpatVoxel, presence at depth levels from 50 to 500 m (C). The curved top and bottom surfaces and vector3d_to_envelope() are planned: a SpatVector3D polygon currently has one depth range.](vignettes/figures/Comparison_SpatVector3D_SpatEnvelope_SpatVoxel.png)
+
+*`vector3d_to_envelope()` and the curved top and bottom surfaces in panel A
+are planned. Today each `SpatVector3D` polygon has one depth range.*
+
+Functions convert between these representations. `vect_to_envelope()` turns
+a species range polygon and its observed depth range into a `SpatEnvelope`
 bounded by the seafloor, and `envelope_to_voxel()` places it on the depth
-levels of a `SpatVoxel`, as in the figure above.
+levels of a `SpatVoxel`, as in panels B and C above.
 
 This package includes utilities for working with commonly used datasets in
 marine habitat spatial analyses, including IUCN Red List, World Ocean Atlas, 
 GEBCO, Copernicus Marine, and Global Fishing Watch. 
+
+## Existing spatial analysis packages and their limitations
+
+Several R packages and other tools handle depth or 3D data, and `ocean3d`
+builds on terra, sf, ncdf4 and CFtime. None of the tools below answers 3D
+spatial queries on gridded marine data on its own: which cells and depths a
+species, fishery or other layer occupies above the seafloor, where two of them
+overlap in 3D, and what environmental values fall inside.
+
+| Tool | What it does | Limitations for 3D spatial analysis |
+|---|---|---|
+| [terra](https://rspatial.github.io/terra/) | Raster and vector analysis. A multi-layer `SpatRaster` can record one depth per layer with `terra::depth()`. | Functions such as `mask()`, `extract()` and `zonal()` treat layers as a stack and don't use their depths. A raster can't store a depth range per cell, and there is no 3D intersect, overlap or volume. In [our trial](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/112), terra read 19 of 29 netCDF test cases correctly, and its errors were silent. |
+| [sf](https://r-spatial.github.io/sf/) | Vector geometry and spatial queries (buffers, clips, intersections). | Geometries can carry Z coordinates, but operations such as `st_intersection()`, `st_buffer()` and `st_area()` work in 2D and ignore them. No raster data. |
+| [stars](https://r-spatial.github.io/stars/) | Arrays with any number of dimensions (data cubes), including depth and time. | No class for a depth range per cell, and no 3D intersect or volume. In [our trial](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/112), extracting 2 points from a large file through a stars proxy took 198–243 s or tried to allocate 51–56 GB, and slicing a proxy dropped the decoded time. |
+| [rgl](https://dmurdoch.github.io/rgl/), [rayshader](https://www.rayshader.com/) | 3D visualisation. | They draw 3D scenes. They don't do spatial queries or calculate volumes. |
+| [lidR](https://r-lidar.github.io/lidRbook/), [rTLS](https://github.com/Antguz/rTLS) | 3D point clouds from LiDAR and terrestrial laser scanning. | Built for dense point clouds of land surfaces and vegetation. They don't work on gridded ocean data with depth levels, a seafloor and time. |
+| [PostGIS](https://postgis.net/docs/PostGIS_Special_Functions_Index.html#PostGIS_3D_Functions) | 3D functions on vector geometry in a PostgreSQL database. | Its 3D functions are for vector geometry, and its rasters have bands but no depth. Using it means running a database outside R. |
 
 ## Installation
 
@@ -110,8 +133,8 @@ No other function accepts a `SpatProxy` yet.
 
 ### Build: 3D objects
 
-Input: `SpatRaster` layers and polygons (`sf`, `SpatVector`). Output:
-`SpatVoxel` or `SpatEnvelope`.
+Input: `SpatRaster` layers, tables of points or lines, and polygons (`sf`,
+`SpatVector`). Output: `SpatVoxel`, `SpatEnvelope` or `SpatVector3D`.
 
 - `create_study_raster()` — build an empty study-area `SpatRaster`
   covering the combined extent of one or more spatial inputs.
@@ -122,6 +145,9 @@ Input: `SpatRaster` layers and polygons (`sf`, `SpatVector`). Output:
 - `as_envelope()` — define a 3D envelope with two rasters, with `depth_min` 
   and `depth_max` corresponding to the minimum and maximum depths present in 
   given cell. 
+- `as_vector3d()` — build a `SpatVector3D` of points, lines or polygons
+  with depth and time, from a table with one row per vertex or from `sf` or
+  `SpatVector` geometry.
 - `vect_to_envelope()` — rasterize a single species range or fishery
   footprint onto the study grid and attach per-cell `depth_min` /
   `depth_max`, returning a `SpatEnvelope`. 
@@ -246,6 +272,32 @@ usethis::edit_r_environ()
   `envelope_to_voxel()` — driven by a gear-to-depth-band lookup. Those
   operating-depth priors are analysis assumptions rather than package data,
   so they live in the `gfw-fishing-effort-3d` article.
+
+## Use of generative AI
+
+Generative AI tools were used to write much of this package. This section
+says how, following [rOpenSci's AI policy](https://ropensci.org/blog/2026/02/26/ropensci-ai-policy/).
+
+- **Without AI:** the package grew out of analysis scripts written over
+  about three years without AI, for a study of 3D overlap between species
+  and fisheries in Bangladesh
+  ([thesis](https://ora.ox.ac.uk/objects/uuid:b425c41e-deb4-4bed-917e-dfdaf7b59f78))
+  and for extracting environmental variables per species
+  ([preprint](https://www.biorxiv.org/content/10.64898/2026.07.16.739000v1)).
+  The first version of the package, including the first `SPEC.md`, tests
+  and documentation, was written by hand from those scripts.
+- **With AI:** since then, most of the code, tests and documentation have
+  been written with generative AI tools, mainly Claude Opus 5.5 and OpenAI GPT
+  6.1 Sol. AI is also used to review code and to draw some of the figures in
+  the documentation.
+- **What the authors do:** decide the package design (for example the
+  `SpatVoxel` and `SpatEnvelope` classes, the build, intersect and summarise
+  steps, and the data model decisions in [SPEC.md](SPEC.md)), decide what
+  each issue should do, and review every pull request before it is merged.
+- **How contributions are made:** [CONTRIBUTING.md](CONTRIBUTING.md) and
+  [AGENTS.md](AGENTS.md) set the rules AI agents follow. Commits and pull
+  requests written with an agent name the model in a `Co-Authored-By:`
+  trailer.
 
 ## Contributing
 
