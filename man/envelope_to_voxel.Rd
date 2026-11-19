@@ -10,7 +10,8 @@ envelope_to_voxel(
   values = NULL,
   profile = NULL,
   bounds = c("top", "midpoint"),
-  varname = "presence"
+  varname = "presence",
+  depth_bounds = NULL
 )
 }
 \arguments{
@@ -37,10 +38,16 @@ the depths a cell occupies. Any function meeting the contract in
 \code{"top"} (the default) runs the slab from the level down to the next, so the
 level is its shallow edge; \code{"midpoint"} puts the edges halfway between
 neighbouring levels. Under both, the outer edges are clamped to
-\code{range(depths)} rather than extrapolated.}
+\code{range(depths)} rather than extrapolated. Not used when \code{depth_bounds}
+is given.}
 
 \item{varname}{Name to use for depth layer, taking on form of
 \verb{\{varname\}_depth=\{depths[i]\}}}
+
+\item{depth_bounds}{Optional two-column matrix or data frame: the top and
+bottom of the slab of water each depth stands for, in metres, one row per
+element of \code{depths}. When given, these slabs are used instead of
+\code{bounds}, and the returned voxel carries them (see \code{\link[=as_voxel]{as_voxel()}}).}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} with one layer per depth in \code{depths}, on the

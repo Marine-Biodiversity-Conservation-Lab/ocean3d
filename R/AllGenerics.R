@@ -43,7 +43,8 @@ NULL
 #'   with edges halfway to each neighbour (the World Ocean Atlas convention).
 #'   Under `"top"` the deepest level has no next level and contributes no
 #'   volume. Outer edges are clamped to `range(depths)` under both. Same
-#'   argument, same meaning, as in [envelope_to_voxel()].
+#'   argument, same meaning, as in [envelope_to_voxel()]. Not used for a
+#'   voxel that carries its own depth edges (see [SpatVoxel-class]).
 #'
 #' @returns Numeric of length 1. Total volume in km³.
 #'
@@ -118,7 +119,8 @@ setGeneric("volume", function(x, ...) standardGeneric("volume"))
 #'   inputs are envelopes.
 #' @param bounds Only when one input is an envelope and the other a voxel. How
 #'   the envelope is placed on the voxel's depth levels: `"top"` (default) or
-#'   `"midpoint"`. See [envelope_to_voxel()].
+#'   `"midpoint"`. See [envelope_to_voxel()]. Not used when the voxel carries
+#'   its own depth edges (see [SpatVoxel-class]).
 #'
 #' @returns A [SpatEnvelope-class] when both inputs are envelopes, or when one
 #'   is an envelope and the other is 2D. Otherwise a [SpatVoxel-class] of
@@ -229,7 +231,8 @@ setGeneric("intersects_3d",
 #' @param ... Arguments for the voxel methods, which are an error for a pair
 #'   of envelopes.
 #' @param bounds Voxel methods only. See [volume()]. Also governs how an
-#'   envelope is discretized when the two inputs differ.
+#'   envelope is discretized when the two inputs differ. Not used when a voxel
+#'   carries its own depth edges; two voxels whose edges differ are an error.
 #'
 #' @returns Multi-layer SpatRaster with 9 layers:
 #'   \describe{

@@ -39,9 +39,9 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
 
-    depths <- .parse_depth_layers(x)
     occ <- .voxel_occupancy(x)
-    vol_rast <- .voxel_cell_volume(occ, depths, bounds, .cell_area_km2(x))
+    slab <- .slabs(.parse_depth_layers(x), .depth_bounds_of(x), bounds)
+    vol_rast <- .voxel_cell_volume(occ, slab, .cell_area_km2(x))
 
     terra::global(vol_rast, "sum", na.rm = TRUE)[[1]]
   }
@@ -109,7 +109,7 @@ setMethod(
     bounds <- match.arg(bounds)
     # Validates both inputs and checks they share a grid and depth levels.
     shared <- intersect_3d(x, y)
-    depths <- .parse_depth_layers(x)
+    slab <- .slabs(.parse_depth_layers(x), .shared_depth_bounds(x, y), bounds)
 
     occ_a <- .voxel_occupancy(x)
     occ_b <- .voxel_occupancy(y)
@@ -140,16 +140,16 @@ setMethod(
     # Volumes come from the occupancy stacks, so interior gaps are excluded
     # even though the depth bounds above span them.
     vol_a <- terra::mask(
-      .voxel_cell_volume(occ_a, depths, bounds, cell_area_km2), present_a)
+      .voxel_cell_volume(occ_a, slab, cell_area_km2), present_a)
     names(vol_a) <- "volume_a"
     vol_b <- terra::mask(
-      .voxel_cell_volume(occ_b, depths, bounds, cell_area_km2), present_b)
+      .voxel_cell_volume(occ_b, slab, cell_area_km2), present_b)
     names(vol_b) <- "volume_b"
 
     # Already 0 where both are present but share no occupied level; masking to
     # both_mask makes it NA where either is absent, matching the 2.5D method.
     vol_overlap <- terra::mask(
-      .voxel_cell_volume(occ_overlap, depths, bounds, cell_area_km2),
+      .voxel_cell_volume(occ_overlap, slab, cell_area_km2),
       both_mask)
     names(vol_overlap) <- "volume_overlap"
 

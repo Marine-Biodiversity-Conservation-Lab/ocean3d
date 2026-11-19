@@ -33,7 +33,8 @@ it with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{bounds}{Only when one side is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: \code{"top"} (default) or
-\code{"midpoint"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}.}
+\code{"midpoint"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel carries
+its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 
 \item{...}{Passed on to \code{\link[terra:mask]{terra::mask()}}. For example, \code{inverse = TRUE}
 keeps the values \emph{outside} the domain instead.}

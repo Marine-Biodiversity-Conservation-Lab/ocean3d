@@ -74,19 +74,48 @@
   .as_plain_raster(occ)
 }
 
-# Internal: vertical extent each depth level stands for, in metres.
-# .depth_slabs() (create_3d_objects.R) owns the top/midpoint conventions; this
-# is only their height, so the two stay in step by construction.
-.slab_thickness <- function(depths, bounds) {
-  slab <- .depth_slabs(depths, bounds)
-  slab$upper - slab$lower
+# Internal: a voxel's stored depth edges for its layers, as the two-column
+# (top, bottom) `depth_bounds` that as_voxel() takes, or NULL when it doesn't
+# carry them for every layer. Results built from a voxel pass this on, so they
+# keep its edges.
+.depth_bounds_of <- function(v) {
+  edges <- v@depth_edges
+  row <- .edge_rows(edges$depth, .parse_depth_layers(v))
+  if (!nrow(edges) || anyNA(row)) return(NULL)
+  cbind(edges$depth_min[row], edges$depth_max[row])
 }
 
-# Internal: per-cell occupied volume of a voxel, km^3. Summing thickness over
-# occupied layers is what makes an interior gap cost volume, which is the whole
-# reason the voxel path is not just voxel_to_envelope() plus the 2.5D formula.
-.voxel_cell_volume <- function(occ, depths, bounds, area_km2) {
-  thickness_m <- .slab_thickness(depths, bounds)
+# Internal: the depth edges two voxels on the same depths share: whichever
+# carries them, or NULL when neither does. Two voxels whose edges differ stop,
+# since either answer would be a guess.
+.shared_depth_bounds <- function(x, y) {
+  bx <- .depth_bounds_of(x)
+  by <- .depth_bounds_of(y)
+  if (!is.null(bx) && !is.null(by) && !isTRUE(all.equal(bx, by))) {
+    rlang::abort(
+      "`x` and `y` carry different depth edges for the same depths.",
+      class = "ocean3d_error_depth_bounds", call = NULL
+    )
+  }
+  if (is.null(bx)) by else bx
+}
+
+# Internal: the slab of water each layer stands for, as parallel vectors
+# `lower` (shallow edge) and `upper` (deep edge) in metres: from stored depth
+# edges (`depth_bounds`, as .depth_bounds_of() gives them) when there are
+# any, otherwise worked out from the depths by .depth_slabs()
+# (create_3d_objects.R) with `bounds`.
+.slabs <- function(depths, depth_bounds, bounds) {
+  if (is.null(depth_bounds)) return(.depth_slabs(depths, bounds))
+  list(lower = depth_bounds[, 1], upper = depth_bounds[, 2])
+}
+
+# Internal: per-cell occupied volume of a voxel, km^3, from the slab each
+# layer stands for. Summing thickness over occupied layers is what makes an
+# interior gap cost volume, which is the whole reason the voxel path is not
+# just voxel_to_envelope() plus the 2.5D formula.
+.voxel_cell_volume <- function(occ, slab, area_km2) {
+  thickness_m <- slab$upper - slab$lower
   # The raster stays on the left of the operator: terra mishandles
   # `numeric <op> SpatRaster`. The vector is recycled layer-wise.
   occupied_m <- sum(occ * thickness_m)
@@ -124,7 +153,9 @@
 # the reverse: envelope_to_voxel() quantizes, but voxel_to_envelope() fills
 # interior gaps, which would overstate an overlap.
 .promote_to_voxel <- function(e, v, bounds) {
-  envelope_to_voxel(e, depths = .parse_depth_layers(v), bounds = bounds)
+  # The envelope takes the voxel's edges when it carries them.
+  envelope_to_voxel(e, depths = .parse_depth_layers(v), bounds = bounds,
+                    depth_bounds = .depth_bounds_of(v))
 }
 
 # Internal: the class boundary is the contract. A raster that merely happens to

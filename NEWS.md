@@ -97,6 +97,12 @@ message says how many cells have the limits swapped (or a seafloor above
   the polygons covering it, so polygons from 0 to 50 m and from 200 to
   300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
   are polygon times, with a message (#114).
+* A `SpatVoxel` can carry the top and bottom of the slab of water each layer
+  stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
+  `as_voxel()` or `envelope_to_voxel()`. `volume()`, `calc_volume_overlap()`,
+  `intersect_3d()`, `mask()` and `envelope_to_voxel()` then use these edges
+  instead of working them out from the depths with `bounds`. Results built
+  from such a voxel keep its edges (#138).
 
 ## Bug fixes
 

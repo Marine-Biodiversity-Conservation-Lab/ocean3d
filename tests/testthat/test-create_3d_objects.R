@@ -535,7 +535,7 @@ test_that("envelope_to_voxel() treats the deepest level as a point", {
   below <- as_envelope(make_footprint(c(1, 1, 1, 1)),
                        depth_min = 310, depth_max = 400)
   expect_warning(v <- envelope_to_voxel(below, depths = c(0, 100, 200, 300)),
-                 "lying entirely outside")
+                 "shares no water")
   expect_true(all(is.na(terra::values(v))))
 
   # reaching the deepest level is enough to be recorded at it
@@ -637,7 +637,7 @@ test_that("envelope_to_voxel() warns outside depth span under either bounds", {
   for (bounds in c("top", "midpoint")) {
     expect_warning(
       envelope_to_voxel(envel, depths = c(0, 100, 200), bounds = bounds),
-      "lying entirely outside"
+      "shares no water"
     )
   }
 })
@@ -818,7 +818,7 @@ test_that("envelope_to_voxel() warns when an envelope is above all levels", {
                        depth_min = 5, depth_max = 40)
 
   expect_warning(v <- envelope_to_voxel(envel, depths = c(50, 100, 200)),
-                 "lying entirely outside")
+                 "shares no water")
   expect_true(all(is.na(terra::values(v))))
 })
 
@@ -1295,4 +1295,98 @@ test_that("volume() and voxel_to_envelope() reject invalid 3D input", {
 
   # A reversed voxel would otherwise collapse to an inverted envelope.
   expect_error(voxel_to_envelope(v[[c(3, 2, 1)]]), "not a valid one")
+})
+
+# ---- depth edges (#138) -----------------------------------------------------
+
+# Copernicus-style levels at cell centres, with edges that aren't halfway.
+edge_depths <- c(0.5, 1.5, 3)
+edge_bounds <- cbind(c(0, 1, 2), c(1, 2, 4))
+
+test_that("as_voxel() stores depth edges keyed by depth", {
+  r <- terra::rast(make_grid(), nlyrs = 3)
+  terra::values(r) <- 1
+  # Given out of order: the edges follow their layers when they are sorted.
+  names(r) <- paste0("t_depth=", edge_depths[c(3, 1, 2)])
+  v <- as_voxel(r, depth_bounds = edge_bounds[c(3, 1, 2), ])
+
+  expect_identical(names(v), paste0("t_depth=", edge_depths))
+  expect_equal(v@depth_edges$depth, edge_depths[c(3, 1, 2)])
+  expect_equal(.depth_bounds_of(v), edge_bounds)
+
+  # Without depth_bounds a voxel carries none, and the data frame form works.
+  expect_identical(nrow(as_voxel(r)@depth_edges), 0L)
+  df <- as_voxel(r, depth_bounds = as.data.frame(edge_bounds[c(3, 1, 2), ]))
+  expect_equal(.depth_bounds_of(df), edge_bounds)
+})
+
+test_that("depth edges survive terra operations that keep the class", {
+  v <- as_voxel(make_voxel(1, edge_depths), depth_bounds = edge_bounds)
+
+  # A subset keeps the rows for the layers it kept.
+  expect_equal(.depth_bounds_of(v[[2:3]]), edge_bounds[2:3, ])
+  expect_equal(.depth_bounds_of(as_voxel(v[[c(1, 3)]])), edge_bounds[c(1, 3), ])
+  expect_equal(.depth_bounds_of(terra::crop(v, terra::ext(0, 1, 0, 1))),
+               edge_bounds)
+  expect_equal(.depth_bounds_of(v * 2), edge_bounds)
+
+  # Re-wrapping keeps them; renaming the layers to other depths drops them.
+  expect_identical(as_voxel(v), v)
+  expect_identical(nrow(as_voxel(v, depths = c(1, 2, 5))@depth_edges), 0L)
+  # New edges replace the old ones.
+  wider <- cbind(c(0, 1, 2), c(1, 2, 6))
+  expect_equal(.depth_bounds_of(as_voxel(v, depth_bounds = wider)), wider)
+})
+
+test_that("invalid depth edges stop", {
+  r <- make_voxel(1, edge_depths)
+  bad <- list(
+    shape = edge_bounds[1:2, ],
+    contains = cbind(c(0, 2, 2), c(1, 2.5, 4)),
+    overlap = cbind(c(0, 0.8, 2), c(1, 2, 4)),
+    negative = cbind(c(-1, 1, 2), c(1, 2, 4))
+  )
+  messages <- c(shape = "one row per depth", contains = "contain its depth",
+                overlap = "must not overlap", negative = "positive metres")
+  for (case in names(bad)) {
+    err <- expect_error(as_voxel(r, depth_bounds = bad[[case]]),
+                        class = "ocean3d_error_depth_bounds")
+    expect_match(conditionMessage(err), messages[[case]])
+    expect_match(conditionMessage(err), "In as_voxel()", fixed = TRUE)
+  }
+
+  # Gaps between slabs are allowed.
+  gap <- cbind(c(0, 1.2, 2), c(1, 2, 4))
+  expect_equal(.depth_bounds_of(as_voxel(r, depth_bounds = gap)), gap)
+
+  # The validity method checks a voxel whose slot was set by hand.
+  v <- as_voxel(r, depth_bounds = edge_bounds)
+  v@depth_edges <- v@depth_edges[1:2, ]
+  expect_error(methods::validObject(v), "one row for each layer")
+  v@depth_edges <- data.frame(depth = 1)
+  expect_error(methods::validObject(v),
+               "columns depth, depth_min and depth_max")
+})
+
+test_that("envelope_to_voxel() places levels with given depth edges", {
+  # [1.1, 1.3] lies in the 1.5 m level's slab under "midpoint" (1-2.25), but
+  # in the 0.5 m level's slab with these edges.
+  fp <- terra::rast(nrows = 1, ncols = 1, xmin = 0, xmax = 1, ymin = 0,
+                    ymax = 1)
+  terra::values(fp) <- 1
+  e <- as_envelope(fp, depth_min = 1.1, depth_max = 1.3)
+  shifted <- cbind(c(0, 1.4, 2), c(1.4, 2, 4))
+
+  expect_equal(as.vector(terra::values(
+    envelope_to_voxel(e, edge_depths, bounds = "midpoint")
+  )), c(NA, 1, NA))
+  v <- envelope_to_voxel(e, edge_depths, depth_bounds = shifted)
+  expect_equal(as.vector(terra::values(v)), c(1, NA, NA))
+  expect_equal(.depth_bounds_of(v), shifted)
+
+  err <- expect_error(
+    envelope_to_voxel(e, edge_depths, depth_bounds = shifted[1:2, ]),
+    class = "ocean3d_error_depth_bounds"
+  )
+  expect_match(conditionMessage(err), "In envelope_to_voxel()", fixed = TRUE)
 })

@@ -26,10 +26,11 @@
 }
 
 # Internal: a voxel's occupancy as a presence domain: 1 where occupied, NA
-# elsewhere, on the depth levels of `x`.
-.presence_voxel <- function(occ, depths) {
+# elsewhere, on the depth levels of `x`, carrying `depth_bounds` if given.
+.presence_voxel <- function(occ, depths, depth_bounds = NULL) {
   out <- terra::ifel(occ > 0, 1, NA)
-  as_voxel(.as_plain_raster(out), depths = depths, varname = "presence")
+  as_voxel(.as_plain_raster(out), depths = depths, varname = "presence",
+           depth_bounds = depth_bounds)
 }
 
 # ---- intersect_3d -----------------------------------------------------------
@@ -73,7 +74,7 @@ setMethod(
     depths <- .shared_depths(x, y)
 
     occ <- .voxel_occupancy(x) * .voxel_occupancy(y)
-    .presence_voxel(occ, depths)
+    .presence_voxel(occ, depths, .shared_depth_bounds(x, y))
   }
 )
 
@@ -307,7 +308,8 @@ setMethod("intersects_3d", c("ANY", "ANY"),
 #'   [SpatVoxel-class] on the same grid as `x`.
 #' @param bounds Only when one side is an envelope and the other a voxel. How
 #'   the envelope is placed on the voxel's depth levels: `"top"` (default) or
-#'   `"midpoint"`. See [envelope_to_voxel()].
+#'   `"midpoint"`. See [envelope_to_voxel()]. Not used when the voxel carries
+#'   its own depth edges (see [SpatVoxel-class]).
 #' @param ... Passed on to [terra::mask()]. For example, `inverse = TRUE`
 #'   keeps the values *outside* the domain instead.
 #'
@@ -359,7 +361,7 @@ setMethod(
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
     keep <- .promote_to_voxel(mask, x, bounds)
-    as_voxel(.mask_plain(x, keep, ...))
+    as_voxel(.mask_plain(x, keep, ...), depth_bounds = .depth_bounds_of(x))
   }
 )
 
@@ -374,7 +376,7 @@ setMethod(
     .shared_depths(x, mask)
     keep <- .presence_voxel(.voxel_occupancy(mask),
                             .parse_depth_layers(mask))
-    as_voxel(.mask_plain(x, keep, ...))
+    as_voxel(.mask_plain(x, keep, ...), depth_bounds = .depth_bounds_of(x))
   }
 )
 

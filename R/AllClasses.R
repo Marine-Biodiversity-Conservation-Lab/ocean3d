@@ -5,6 +5,11 @@
 #' @importClassesFrom terra SpatRaster
 NULL
 
+# Internal: the depth_edges table of a voxel that carries no edges.
+.no_depth_edges <- function() {
+  data.frame(depth = numeric(0), depth_min = numeric(0), depth_max = numeric(0))
+}
+
 #' 3D voxel model: one layer per standard depth level
 #'
 #' A `SpatVoxel` is a [terra::SpatRaster] in which **depth is the layer index**
@@ -15,6 +20,23 @@ NULL
 #'
 #' A voxel may have interior gaps — a cell can be NA at one depth and non-NA
 #' at the depths above and below it.
+#'
+#' Each layer stands for a slab of water around its depth. A voxel can carry
+#' the top and bottom of each slab, for example a netCDF file's depth bounds,
+#' set with the `depth_bounds` argument of [as_voxel()] or
+#' [envelope_to_voxel()]. [volume()], [calc_volume_overlap()],
+#' [intersect_3d()], [mask()] and [envelope_to_voxel()] use these edges when
+#' the voxel has them, and work the edges out from the depths with their
+#' `bounds` argument when it doesn't. terra operations that keep the
+#' `SpatVoxel` class (`[[`, `crop()`, `mask()`, arithmetic) keep the edges; an
+#' operation that returns a plain `SpatRaster` (`app()`, writing to a file)
+#' drops them.
+#'
+#' @slot depth_edges A data frame with columns `depth`, `depth_min` and
+#'   `depth_max`, in metres positive down: the slab each depth stands for,
+#'   from `depth_min` (its top) to `depth_max` (its bottom). It has no rows when
+#'   the voxel carries no edges. Each layer finds its slab by its depth, so
+#'   the table may hold rows for depths the voxel no longer has.
 #'
 #' @seealso [SpatEnvelope-class], [SpatVolume-class]
 #'
@@ -45,7 +67,11 @@ NULL
 #' names(bad) <- c("a", "b", "c")
 #' try(methods::new("SpatVoxel", bad))
 #' @export
-setClass("SpatVoxel", contains = "SpatRaster")
+setClass(
+  "SpatVoxel", contains = "SpatRaster",
+  slots = c(depth_edges = "data.frame"),
+  prototype = list(depth_edges = .no_depth_edges())
+)
 
 #' 2.5D min-max envelope: exactly depth_min, depth_max
 #'
@@ -261,8 +287,51 @@ setValidity("SpatVoxel", function(object) {
   if (is.unsorted(d)) return("depth layers must be ordered shallow to deep")
   if (anyDuplicated(d)) return("depth layers must be distinct")
   if (any(d < 0)) return("depths are positive metres increasing downward")
+  edges <- object@depth_edges
+  if (!identical(names(edges), c("depth", "depth_min", "depth_max"))) {
+    return("depth_edges must have the columns depth, depth_min and depth_max")
+  }
+  if (nrow(edges)) {
+    row <- .edge_rows(edges$depth, d)
+    if (anyNA(row)) return("depth_edges must have one row for each layer")
+    problem <- .depth_edges_problem(d, edges$depth_min[row],
+                                    edges$depth_max[row])
+    if (!is.null(problem)) return(problem)
+  }
   TRUE
 })
+
+# Internal: the row of a depth_edges table for each depth, or NA for a depth
+# it doesn't hold. Depths are matched with a small tolerance, because a depth
+# read back from a layer name (`temp_depth=0.494025`) can differ from the
+# stored one in the last digits.
+.edge_rows <- function(edge_depths, depths) {
+  vapply(depths, function(d) {
+    hit <- which(abs(edge_depths - d) <= 1e-6 * max(1, abs(d)))
+    if (length(hit) == 1L) hit else NA_integer_
+  }, integer(1))
+}
+
+# Internal: why the slabs for `depths` (sorted shallow to deep) aren't valid,
+# or NULL when they are. Each slab contains its depth and the slabs don't
+# overlap; gaps between them are allowed.
+.depth_edges_problem <- function(depths, top, bottom) {
+  if (!is.numeric(top) || !is.numeric(bottom) || anyNA(c(top, bottom))) {
+    return("depth edges must be numbers")
+  }
+  if (any(top < 0)) {
+    return("depth edges are positive metres increasing downward")
+  }
+  if (any(top > depths | bottom < depths)) {
+    return(paste("each layer's slab must contain its depth: top at or above",
+                 "it, bottom at or below it"))
+  }
+  tol <- 1e-6 * pmax(1, abs(top[-1]))
+  if (any(bottom[-length(bottom)] - top[-1] > tol)) {
+    return("the slabs of neighbouring layers must not overlap")
+  }
+  NULL
+}
 
 setValidity("SpatEnvelope", function(object) {
   if (!identical(names(object), c("depth_min", "depth_max")))

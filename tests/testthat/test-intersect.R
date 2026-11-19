@@ -550,3 +550,27 @@ test_that("terra's own intersect() methods are untouched", {
 
   expect_identical(intersect(1:3, 2:5), 2:3)
 })
+
+# ---- depth edges (#138) -----------------------------------------------------
+
+test_that("voxel results keep the depth edges of their inputs", {
+  depths <- c(0.5, 1.5, 3)
+  edges <- cbind(c(0, 1.4, 2), c(1.4, 2, 4))
+  field <- as_voxel(make_voxel(seq_len(27), depths), depth_bounds = edges)
+  plain <- make_voxel(1, depths)
+
+  expect_equal(.depth_bounds_of(intersect_3d(field, plain)), edges)
+  expect_equal(.depth_bounds_of(intersect_3d(plain, field)), edges)
+  expect_equal(.depth_bounds_of(mask(field, plain)), edges)
+
+  # Masking by an envelope uses the edges: [1.1, 1.3] is in the 0.5 m
+  # level's slab (0-1.4 m), not the 1.5 m level's as under "midpoint".
+  e <- make_range_rast(rep(1.1, 9), rep(1.3, 9))
+  masked <- mask(field, e)
+  expect_equal(.depth_bounds_of(masked), edges)
+  expect_equal(terra::global(!is.na(masked), "sum")[, 1], c(9, 0, 0))
+  expect_equal(
+    terra::global(!is.na(mask(plain, e, bounds = "midpoint")), "sum")[, 1],
+    c(0, 9, 0)
+  )
+})

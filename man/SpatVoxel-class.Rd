@@ -14,7 +14,28 @@ cell is sampled at the same set of standard depths.
 \details{
 A voxel may have interior gaps — a cell can be NA at one depth and non-NA
 at the depths above and below it.
+
+Each layer stands for a slab of water around its depth. A voxel can carry
+the top and bottom of each slab, for example a netCDF file's depth bounds,
+set with the \code{depth_bounds} argument of \code{\link[=as_voxel]{as_voxel()}} or
+\code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. \code{\link[=volume]{volume()}}, \code{\link[=calc_volume_overlap]{calc_volume_overlap()}},
+\code{\link[=intersect_3d]{intersect_3d()}}, \code{\link[terra:mask]{mask()}} and \code{\link[=envelope_to_voxel]{envelope_to_voxel()}} use these edges when
+the voxel has them, and work the edges out from the depths with their
+\code{bounds} argument when it doesn't. terra operations that keep the
+\code{SpatVoxel} class (\code{[[}, \code{crop()}, \code{mask()}, arithmetic) keep the edges; an
+operation that returns a plain \code{SpatRaster} (\code{app()}, writing to a file)
+drops them.
 }
+\section{Slots}{
+
+\describe{
+\item{\code{depth_edges}}{A data frame with columns \code{depth}, \code{depth_min} and
+\code{depth_max}, in metres positive down: the slab each depth stands for,
+from \code{depth_min} (its top) to \code{depth_max} (its bottom). It has no rows when
+the voxel carries no edges. Each layer finds its slab by its depth, so
+the table may hold rows for depths the voxel no longer has.}
+}}
+
 \examples{
 # Two cells sampled at three standard depths. Build one with as_voxel(),
 # which names the layers for you and sorts them shallow to deep.

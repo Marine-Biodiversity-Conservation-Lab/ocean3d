@@ -30,7 +30,8 @@ and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 of envelopes.}
 
 \item{bounds}{Voxel methods only. See \code{\link[=volume]{volume()}}. Also governs how an
-envelope is discretized when the two inputs differ.}
+envelope is discretized when the two inputs differ. Not used when a voxel
+carries its own depth edges; two voxels whose edges differ are an error.}
 }
 \value{
 Multi-layer SpatRaster with 9 layers:

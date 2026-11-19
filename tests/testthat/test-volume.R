@@ -280,3 +280,43 @@ test_that("voxel-only arguments are an error for an envelope", {
   expect_error(calc_volume_overlap(e, e, bounds = "midpoint"),
                "unused argument")
 })
+
+# ---- depth edges (#138) -----------------------------------------------------
+
+test_that("volume() uses a voxel's depth edges before `bounds`", {
+  # Levels at 0.5, 1.5 and 3 m. Under "midpoint" the column is 0.5-3 m
+  # (2.5 m); the stored edges make it 0-4 m.
+  depths <- c(0.5, 1.5, 3)
+  plain <- make_voxel(1, depths)
+  edged <- as_voxel(plain, depth_bounds = cbind(c(0, 1, 2), c(1, 2, 4)))
+
+  expect_equal(volume(edged), volume(plain, bounds = "midpoint") * 4 / 2.5)
+  expect_equal(volume(edged, bounds = "top"),
+               volume(edged, bounds = "midpoint"))
+
+  # A layer subset keeps the edges of the layers it kept: 1-2 and 2-4 m.
+  expect_equal(volume(edged[[2:3]]), volume(edged) * 3 / 4)
+})
+
+test_that("calc_volume_overlap() uses the voxels' shared depth edges", {
+  depths <- c(0.5, 1.5, 3)
+  edges <- cbind(c(0, 1, 2), c(1, 2, 4))
+  plain <- make_voxel(1, depths)
+  edged <- as_voxel(plain, depth_bounds = edges)
+  total <- function(result) {
+    terra::global(result[["volume_overlap"]], "sum", na.rm = TRUE)[1, 1]
+  }
+
+  # Either voxel's edges are used, whichever carries them.
+  expect_equal(total(calc_volume_overlap(edged, plain)), volume(edged))
+  expect_equal(total(calc_volume_overlap(plain, edged)), volume(edged))
+
+  # An envelope promoted onto an edged voxel takes its edges.
+  e <- make_range_rast(rep(0, 9), rep(4, 9))
+  expect_equal(total(calc_volume_overlap(e, edged)), volume(edged))
+
+  other <- as_voxel(plain, depth_bounds = cbind(c(0, 1, 2), c(1, 2, 5)))
+  err <- expect_error(calc_volume_overlap(edged, other),
+                      class = "ocean3d_error_depth_bounds")
+  expect_match(conditionMessage(err), "different depth edges")
+})

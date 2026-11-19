@@ -33,7 +33,8 @@ runs down to the next level; \code{"midpoint"} puts the level in the middle,
 with edges halfway to each neighbour (the World Ocean Atlas convention).
 Under \code{"top"} the deepest level has no next level and contributes no
 volume. Outer edges are clamped to \code{range(depths)} under both. Same
-argument, same meaning, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}.}
+argument, same meaning, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used for a
+voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 }
 \value{
 Numeric of length 1. Total volume in km³.

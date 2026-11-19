@@ -54,7 +54,8 @@ inputs are envelopes.}
 
 \item{bounds}{Only when one input is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: \code{"top"} (default) or
-\code{"midpoint"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}.}
+\code{"midpoint"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel carries
+its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 }
 \value{
 A \link[=SpatEnvelope-class]{SpatEnvelope} when both inputs are envelopes, or when one
