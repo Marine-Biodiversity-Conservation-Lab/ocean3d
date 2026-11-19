@@ -446,7 +446,7 @@ test_that("buffer_3d() rejects inputs it can't buffer", {
                  class = err)
   }
   expect_error(buffer_3d(pts, 1, 1, time_window = 1),
-               "needs a time at every vertex. Feature 1 of `x` has none",
+               "needs a time at every vertex. Feature 1 of `x` has no time",
                class = err)
   expect_error(buffer_3d(pts, 1, 1, time_window = -1),
                "`time_window` must be", class = err)
@@ -455,4 +455,42 @@ test_that("buffer_3d() rejects inputs it can't buffer", {
                        time = "date")
   expect_error(buffer_3d(dated, 1, 1, time_window = 0.5),
                "must be whole days", class = err)
+  # A window computed in floating point that is a whole day to within
+  # rounding counts as one.
+  near_day <- buffer_3d(dated, 1, 1, time_window = 1 + 1e-12)
+  expect_equal(as.data.frame(near_day)$time_end,
+               as.POSIXct("2020-01-02", tz = "UTC"))
+
+  empty <- as_vector3d(data.frame(lon = numeric(), lat = numeric(),
+                                  depth = numeric()))
+  expect_error(buffer_3d(empty, 1, 1), "has no points or lines", class = err)
+})
+
+test_that("columns named like polygon columns stop, not duplicate", {
+  obs <- data.frame(lon = 150, lat = -20, depth = 5, geometry = "x")
+  expect_error(buffer_3d(as_vector3d(obs), 5, 0),
+               "Column names geometry are used by SpatVector3D",
+               class = "ocean3d_error_vector3d")
+})
+
+test_that("a line timed at only some vertices stops", {
+  d <- dive()
+  d$when[2] <- NA
+  tracks <- as_vector3d(d, type = "lines", id = "tag", time = "when")
+  for (window in list(NULL, 1)) {
+    expect_error(buffer_3d(tracks, 5, 0, time_window = window),
+                 "Line A of `x` has a time at some vertices but not others",
+                 class = "ocean3d_error_vector3d", fixed = TRUE)
+  }
+})
+
+test_that("vertices stored out of order are buffered in line order", {
+  # Line A is a V, so joining its vertices in another order changes the shape.
+  d <- dive()
+  d$lat[2] <- -20.5
+  tracks <- as_vector3d(d, type = "lines", id = "tag")
+  shuffled <- tracks
+  shuffled@vertices <- tracks@vertices[c(3, 1, 2, 6, 4, 5), ]
+  expect_equal(as.data.frame(buffer_3d(shuffled, 5, 10)),
+               as.data.frame(buffer_3d(tracks, 5, 10)))
 })

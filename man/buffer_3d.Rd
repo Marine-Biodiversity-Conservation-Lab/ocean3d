@@ -13,15 +13,16 @@ buffer_3d(x, radius_km, depth_window, time_window = NULL)
 below 10000.}
 
 \item{depth_window}{Depth in metres added above and below each feature's
-depths: one non-negative number. The top stops at the surface (0 m).
+depths: one number, 0 or more. The top stops at the surface (0 m).
 With \code{0}, the polygon spans just the feature's own depth range.}
 
 \item{time_window}{Optional time added before and after each feature's
-times: a number of days, or a \code{difftime} (e.g. \code{as.difftime(6, units = "hours")}). Needs a time at every vertex. With daily times, it must be
-whole days, and the interval covers whole UTC days as in
-\code{\link[=as_vector3d]{as_vector3d()}}. \code{NULL} (default) keeps each feature's own times: a
-point's polygon is at the point's time, a line's polygon spans its first
-to last time, and features without time give polygons without time.}
+times: a number of days, or a \code{difftime} (e.g. \code{as.difftime(6, units = "hours")}). Every vertex needs a time. If \code{x} has dates without hours,
+the window must be whole days, and the interval covers whole UTC days as
+in \code{\link[=as_vector3d]{as_vector3d()}}. With \code{NULL} (default), each polygon keeps its
+feature's own times: a point's time, a line's first to last time, or no
+time. A line with times at some vertices but not others is an error
+either way.}
 }
 \value{
 A \link[=SpatVector3D-class]{SpatVector3D} of polygons, one per feature of \code{x}, with
@@ -32,22 +33,23 @@ columns that change from vertex to vertex (such as speed) are dropped.
 \description{
 Draws a polygon around each point or line of a \link[=SpatVector3D-class]{SpatVector3D}, with
 a depth range and an optional time interval, as \code{sf::st_buffer()} does in
-2D. A detection at 35 m buffered by 10 km and 25 m becomes a 10 km circle
-from 10 to 60 m.
+2D. A detection at 35 m with \code{radius_km = 10} and \code{depth_window = 25}
+becomes a circle of 10 km radius from 10 to 60 m deep.
 }
 \details{
-Each point or line becomes one polygon with the same ID. The outline is a
-geodesic circle (or, for a line, the area within \code{radius_km} of it) on the
-WGS84 ellipsoid, as in \code{\link[=extract_to_buffer]{extract_to_buffer()}}; outlines that cross the
-antimeridian are split there.
+The outline is a circle (for a line, the area within \code{radius_km} of it)
+measured on the WGS84 ellipsoid, made with \code{terra::buffer()}. Outlines
+that cross the 180th meridian (the antimeridian) are split there into
+two parts.
 
-A polygon has one depth range and one time interval, so a line's polygon
-covers its whole depth and time range: from \code{depth_window} above its
-shallowest vertex to \code{depth_window} below its deepest, and from
-\code{time_window} before its first time to \code{time_window} after its last. For
-a dive that goes from the surface to 300 m, that is the whole water column
-along the track. To follow the dive more closely, split the line into
-shorter lines or points first and buffer those.
+Each polygon has one depth range and one time interval, so a line's
+polygon covers the line's whole depth and time range. Depth runs from
+\code{depth_window} above the shallowest vertex to \code{depth_window} below the
+deepest, and time from \code{time_window} before the first time to
+\code{time_window} after the last. For a dive from the surface to 300 m, the
+polygon spans 0 m to 300 m plus \code{depth_window} along the whole track. To
+follow the dive more closely, split the line into shorter lines or points
+and buffer those.
 }
 \examples{
 obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(35, 120),
