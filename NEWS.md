@@ -118,7 +118,8 @@ message says how many cells have the limits swapped (or a seafloor above
   are polygon times, with a message (#114).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
-  `as_voxel()` or `envelope_to_voxel()`. `volume()`, `calc_volume_overlap()`,
+  `as_voxel()` or `envelope_to_voxel()`, and read them with the new
+  `depth_bounds()`. `volume()`, `calc_volume_overlap()`,
   `envelope_to_voxel()`, `intersect_3d()`, `intersects_3d()` and `mask()`
   then use these edges instead of `bounds`. Results that stay a `SpatVoxel`
   keep the edges, including after `c()`; `app()` and writing to a file drop

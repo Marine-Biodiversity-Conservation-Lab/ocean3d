@@ -40,7 +40,7 @@ setMethod(
     .check_3d(x, "x")
 
     occ <- .voxel_occupancy(x)
-    slab <- .depth_slabs(.parse_depth_layers(x), bounds, .depth_bounds_of(x))
+    slab <- .depth_slabs(.parse_depth_layers(x), bounds, depth_bounds(x))
     vol_rast <- .voxel_cell_volume(occ, slab, .cell_area_km2(x))
 
     terra::global(vol_rast, "sum", na.rm = TRUE)[[1]]
@@ -110,7 +110,7 @@ setMethod(
     # Validates both inputs and checks they share a grid, depth levels and
     # any depth edges; the result carries the shared edges.
     shared <- intersect_3d(x, y)
-    edges <- .depth_bounds_of(shared)
+    edges <- depth_bounds(shared)
     slab <- .depth_slabs(.parse_depth_layers(x), bounds, edges)
 
     occ_a <- .voxel_occupancy(x)
@@ -126,10 +126,15 @@ setMethod(
     both_mask <- terra::mask(present_a, present_b)
 
     # Summary depth bounds, not a claim that the domain is solid between them:
-    # the outer slab edges when the voxels carry them, else the levels.
-    bounds_a <- .occupancy_bounds(occ_a, edges)
-    bounds_b <- .occupancy_bounds(occ_b, edges)
-    bounds_overlap <- .occupancy_bounds(occ_overlap, edges)
+    # the outer slab edges when the voxels carry them, else the levels. The
+    # occupancy stacks are 1/0, so a level counts where it is above 0.
+    bounds_a <- voxel_to_envelope(as_voxel(occ_a, depth_bounds = edges),
+                                  fun = function(v) v > 0)
+    bounds_b <- voxel_to_envelope(as_voxel(occ_b, depth_bounds = edges),
+                                  fun = function(v) v > 0)
+    bounds_overlap <- voxel_to_envelope(
+      as_voxel(occ_overlap, depth_bounds = edges), fun = function(v) v > 0
+    )
 
     dmin_a <- .named_layer(bounds_a, "depth_min", "depth_min_a")
     dmax_a <- .named_layer(bounds_a, "depth_max", "depth_max_a")

@@ -24,7 +24,8 @@ NULL
 #' Each layer stands for a slab of water around its depth. A voxel can carry
 #' the top and bottom of each slab, for example a netCDF file's depth bounds,
 #' set with the `depth_bounds` argument of [as_voxel()] or
-#' [envelope_to_voxel()]. [volume()], [calc_volume_overlap()],
+#' [envelope_to_voxel()] and read with [depth_bounds()]. [volume()],
+#' [calc_volume_overlap()],
 #' [envelope_to_voxel()], [voxel_to_envelope()], [intersect_3d()],
 #' [intersects_3d()] and [mask()] use these edges when the voxel has them for
 #' every layer, and work the edges out from the depths with their `bounds`

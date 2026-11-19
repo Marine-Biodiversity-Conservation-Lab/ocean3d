@@ -127,7 +127,7 @@ setMethod(
     .check_3d(x, "x")
     fp <- .footprint_of(y, x)
     occ <- terra::mask(.voxel_occupancy(x), fp, updatevalue = 0)
-    .presence_voxel(occ, .parse_depth_layers(x), .depth_bounds_of(x))
+    .presence_voxel(occ, .parse_depth_layers(x), depth_bounds(x))
   }
 )
 
@@ -361,7 +361,7 @@ setMethod(
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
     keep <- .promote_to_voxel(mask, x, bounds)
-    as_voxel(.mask_plain(x, keep, ...), depth_bounds = .depth_bounds_of(x))
+    as_voxel(.mask_plain(x, keep, ...), depth_bounds = depth_bounds(x))
   }
 )
 
@@ -376,7 +376,7 @@ setMethod(
     .shared_depths(x, mask)
     keep <- .presence_voxel(.voxel_occupancy(mask),
                             .parse_depth_layers(mask))
-    as_voxel(.mask_plain(x, keep, ...), depth_bounds = .depth_bounds_of(x))
+    as_voxel(.mask_plain(x, keep, ...), depth_bounds = depth_bounds(x))
   }
 )
 

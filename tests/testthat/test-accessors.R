@@ -42,3 +42,40 @@ test_that("depths() rejects input that is neither a raster nor character", {
   expect_error(depths(1:3), "SpatVoxel")
   expect_error(depths(NULL), "SpatVoxel")
 })
+
+test_that("depth_bounds() reads a voxel's edges for its current layers", {
+  edges <- cbind(c(0, 1, 2), c(1, 2, 4))
+  r <- terra::rast(make_grid(), nlyrs = 3, vals = 1)
+  # Given deepest first: the table comes back shallow to deep.
+  v <- as_voxel(r, depths = c(3, 0.5, 1.5), depth_bounds = edges[c(3, 1, 2), ])
+
+  b <- depth_bounds(v)
+  expect_s3_class(b, "data.frame")
+  expect_identical(names(b), c("depth", "lower", "upper"))
+  expect_equal(b$depth, depths(v))
+  expect_equal(b$lower, edges[, 1])
+  expect_equal(b$upper, edges[, 2])
+
+  # A subset gives the rows for the layers it kept, and the table goes back
+  # into as_voxel() as it is.
+  expect_equal(depth_bounds(v[[2:3]])$depth, c(1.5, 3))
+  again <- as_voxel(r, depths = c(0.5, 1.5, 3), depth_bounds = b)
+  expect_equal(depth_bounds(again), b)
+})
+
+test_that("depth_bounds() is NULL without edges for every layer", {
+  plain <- as_voxel(terra::rast(make_grid(), nlyrs = 2, vals = 1),
+                    depths = c(0.5, 1.5))
+  expect_null(depth_bounds(plain))
+
+  top <- as_voxel(terra::rast(make_grid(), nlyrs = 1, vals = 1), depths = 0.2,
+                  depth_bounds = cbind(0, 0.3))
+  expect_null(depth_bounds(c(top, plain)))
+})
+
+test_that("depth_bounds() needs a SpatVoxel", {
+  r <- terra::rast(make_grid(), nlyrs = 2, vals = 1)
+  names(r) <- c("t_depth=0", "t_depth=100")
+  err <- expect_error(depth_bounds(r), class = "ocean3d_error_not_voxel")
+  expect_match(conditionMessage(err), "must be a SpatVoxel; got SpatRaster")
+})

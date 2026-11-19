@@ -52,6 +52,60 @@ depths <- function(x) {
   .parse_depth_layers(x)
 }
 
+#' Depth edges of a voxel's layers
+#'
+#' Read the slab of water each layer of a [SpatVoxel-class] stands for, when
+#' the voxel carries its own depth edges. Set them with the `depth_bounds`
+#' argument of [as_voxel()] or [envelope_to_voxel()], for example from a
+#' netCDF file's depth bounds.
+#'
+#' [volume()], [calc_volume_overlap()], [envelope_to_voxel()],
+#' [voxel_to_envelope()], [intersect_3d()], [intersects_3d()] and [mask()]
+#' use these edges before their `bounds` argument. A voxel without edges, or
+#' with edges for only some of its layers (for example after `c()` with a
+#' voxel that has none), gives `NULL`, and those functions work the edges out
+#' from the depths with `bounds` instead.
+#'
+#' @param x A [SpatVoxel-class].
+#'
+#' @returns A data frame with one row per layer of `x`, shallow to deep:
+#'   `depth`, and `lower` and `upper`, the top and bottom of the layer's slab,
+#'   in metres positive down. `NULL` when `x` doesn't carry edges for every
+#'   layer. The data frame can be passed back as `depth_bounds` to
+#'   [as_voxel()] or [envelope_to_voxel()].
+#'
+#' @seealso [depths()] for the layer depths; [as_voxel()] to set the edges.
+#'
+#' @examples
+#' r <- terra::rast(nrows = 1, ncols = 1, nlyrs = 3, vals = 1)
+#' v <- as_voxel(r, depths = c(0.5, 1.5, 3),
+#'               depth_bounds = cbind(c(0, 1, 2), c(1, 2, 4)))
+#' depth_bounds(v)
+#'
+#' # A layer subset gives the edges of the layers it kept.
+#' depth_bounds(v[[2:3]])
+#'
+#' # A voxel without edges gives NULL, so `bounds` applies.
+#' depth_bounds(as_voxel(r, depths = c(0.5, 1.5, 3)))
+#' @export
+depth_bounds <- function(x) {
+  if (!methods::is(x, "SpatVoxel")) {
+    rlang::abort(glue::glue(
+      "`x` must be a SpatVoxel; got {paste(class(x), collapse = '/')}. ",
+      "Build one with as_voxel()."
+    ), class = "ocean3d_error_not_voxel", call = NULL)
+  }
+  # The table is keyed by depth and may hold rows for dropped layers, in any
+  # order, or lack rows for some layers: return the rows for the current
+  # layers, or NULL if any is missing.
+  edges <- x@depth_edges
+  row <- .edge_rows(edges$depth, .parse_depth_layers(x))
+  if (!nrow(edges) || anyNA(row)) return(NULL)
+  edges <- edges[row, , drop = FALSE]
+  rownames(edges) <- NULL
+  edges
+}
+
 # Internal: parse numeric depths from the `{variable}_depth={value}` layer
 # naming convention used throughout the package. Returns a numeric vector the
 # same length as its input, NA for any name that does not match. With

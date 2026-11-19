@@ -23,12 +23,12 @@ any existing names. Required if \code{x} has no conforming layer names.}
 bottom of the slab of water each layer stands for, in metres positive
 down, one row per layer of \code{x} in its current order (for example a netCDF
 file's depth bounds). A data frame with columns \code{depth}, \code{lower} and
-\code{upper}, such as another voxel's \verb{@depth_edges}, is matched to the layers
-by depth instead. Each slab must contain its depth and have a positive
-height, and slabs must not overlap. \code{NULL} (the default) keeps the edges
-an existing \code{SpatVoxel} carries, unless \code{depths} renames its layers; a
-voxel without edges uses the \code{bounds} argument of the functions it is
-passed to.}
+\code{upper}, such as \code{\link[=depth_bounds]{depth_bounds()}} of another voxel, is matched to the
+layers by depth instead. Each slab must contain its depth and have a
+positive height, and slabs must not overlap. \code{NULL} (the default) keeps
+the edges an existing \code{SpatVoxel} carries, unless \code{depths} renames its
+layers; a voxel without edges uses the \code{bounds} argument of the functions
+it is passed to.}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} whose layers are ordered shallow to deep.
@@ -69,5 +69,5 @@ names(as_voxel(r))
 
 # carry each layer's slab of water, as a netCDF file's depth bounds give it
 v <- as_voxel(r, depth_bounds = cbind(c(150, 0, 50), c(250, 50, 150)))
-v@depth_edges
+depth_bounds(v)
 }

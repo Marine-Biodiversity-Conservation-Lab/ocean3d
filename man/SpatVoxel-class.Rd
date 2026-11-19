@@ -27,7 +27,8 @@ at the depths above and below it.
 Each layer stands for a slab of water around its depth. A voxel can carry
 the top and bottom of each slab, for example a netCDF file's depth bounds,
 set with the \code{depth_bounds} argument of \code{\link[=as_voxel]{as_voxel()}} or
-\code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. \code{\link[=volume]{volume()}}, \code{\link[=calc_volume_overlap]{calc_volume_overlap()}},
+\code{\link[=envelope_to_voxel]{envelope_to_voxel()}} and read with \code{\link[=depth_bounds]{depth_bounds()}}. \code{\link[=volume]{volume()}},
+\code{\link[=calc_volume_overlap]{calc_volume_overlap()}},
 \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}, \code{\link[=voxel_to_envelope]{voxel_to_envelope()}}, \code{\link[=intersect_3d]{intersect_3d()}},
 \code{\link[=intersects_3d]{intersects_3d()}} and \code{\link[terra:mask]{mask()}} use these edges when the voxel has them for
 every layer, and work the edges out from the depths with their \code{bounds}

@@ -106,13 +106,13 @@ its own edges, for example a netCDF file's depth bounds, a `SpatVoxel` can
 carry them: pass them to `as_voxel()` or `envelope_to_voxel()` as
 `depth_bounds`, a two-column table of top and bottom with one row per level.
 `envelope_to_voxel()` and the functions listed above then use these edges and
-ignore `bounds`:
+ignore `bounds`, and `depth_bounds()` reads them back:
 
 ```{r depth-bounds}
 edges <- cbind(c(0, 65, 150), c(65, 150, 250))
 v <- envelope_to_voxel(shallow, depths = c(0, 100, 200), depth_bounds = edges)
 terra::values(v)
-v@depth_edges
+depth_bounds(v)
 ```
 
 Here the 0 m level's slab runs to 65 m, so `[60, 70]` occupies both the 0 m

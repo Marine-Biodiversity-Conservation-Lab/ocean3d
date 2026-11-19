@@ -55,7 +55,7 @@ make_range_rast <- function(depth_min_vals, depth_max_vals,
 # Helper: a voxel's stored depth edges for its layers, as a two-column (lower,
 # upper) matrix, or NULL when it carries none for every layer.
 edges_of <- function(v) {
-  b <- .depth_bounds_of(v)
+  b <- depth_bounds(v)
   if (is.null(b)) NULL else unname(as.matrix(b[c("lower", "upper")]))
 }
 

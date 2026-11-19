@@ -74,19 +74,6 @@
   .as_plain_raster(occ)
 }
 
-# Internal: a voxel's stored depth edges, one row per layer in layer order
-# (columns depth, lower, upper), or NULL when it doesn't carry them for every
-# layer. The table works as the `depth_bounds` of as_voxel() and as the slabs
-# of .depth_slabs(), so results built from a voxel can pass it on.
-.depth_bounds_of <- function(v) {
-  edges <- v@depth_edges
-  row <- .edge_rows(edges$depth, .parse_depth_layers(v))
-  if (!nrow(edges) || anyNA(row)) return(NULL)
-  edges <- edges[row, , drop = FALSE]
-  rownames(edges) <- NULL
-  edges
-}
-
 # Internal: per-cell occupied volume of a voxel, km^3, from the slab each
 # layer stands for. Summing thickness over occupied layers is what makes an
 # interior gap cost volume, which is the whole reason the voxel path is not
@@ -105,15 +92,6 @@
   terra::ifel(sum(occ) > 0, 1, NA)
 }
 
-# Internal: shallowest and deepest occupied level of an occupancy stack, or
-# the outer edges of their slabs when `depth_bounds` gives them. These are
-# summary bounds only: a voxel with an interior gap is not solid between them,
-# which is why volumes are computed from the occupancy itself.
-.occupancy_bounds <- function(occ, depth_bounds = NULL) {
-  voxel_to_envelope(as_voxel(occ, depth_bounds = depth_bounds),
-                    fun = function(v) v > 0)
-}
-
 # Internal: the shared depth levels of two voxels, and their shared depth
 # edges: whichever voxel carries them, or NULL when neither does. Resampling
 # one onto the other would be a guess about the vertical axis the caller is
@@ -127,8 +105,8 @@
          toString(dx), " and ", toString(dy),
          ". Rebuild one on the other's depths.", call. = FALSE)
   }
-  bx <- .depth_bounds_of(x)
-  by <- .depth_bounds_of(y)
+  bx <- depth_bounds(x)
+  by <- depth_bounds(y)
   if (!is.null(bx) && !is.null(by) &&
         !isTRUE(all.equal(bx[c("lower", "upper")], by[c("lower", "upper")]))) {
     rlang::abort(glue::glue(
@@ -145,7 +123,7 @@
 .promote_to_voxel <- function(e, v, bounds) {
   # The envelope takes the voxel's edges when it carries them.
   envelope_to_voxel(e, depths = .parse_depth_layers(v), bounds = bounds,
-                    depth_bounds = .depth_bounds_of(v))
+                    depth_bounds = depth_bounds(v))
 }
 
 # Internal: the class boundary is the contract. A raster that merely happens to
