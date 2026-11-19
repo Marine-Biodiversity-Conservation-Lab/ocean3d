@@ -571,12 +571,6 @@
          .selection_number(lat, 5L), ")")
 }
 
-# Depth axes stored as float32 read back slightly off their nominal values,
-# so report comparisons allow a small relative tolerance.
-.depth_tolerance <- function(requested) {
-  1e-6 * max(1, abs(requested))
-}
-
 # Use the source's physical grid, including layers with missing variable values.
 .depth_selection_reference <- function(depth_m, requested, chosen) {
   layers <- sort(as.numeric(depth_m))

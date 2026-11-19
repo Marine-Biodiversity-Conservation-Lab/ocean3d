@@ -74,40 +74,17 @@
   .as_plain_raster(occ)
 }
 
-# Internal: a voxel's stored depth edges for its layers, as the two-column
-# (top, bottom) `depth_bounds` that as_voxel() takes, or NULL when it doesn't
-# carry them for every layer. Results built from a voxel pass this on, so they
-# keep its edges.
+# Internal: a voxel's stored depth edges, one row per layer in layer order
+# (columns depth, lower, upper), or NULL when it doesn't carry them for every
+# layer. The table works as the `depth_bounds` of as_voxel() and as the slabs
+# of .depth_slabs(), so results built from a voxel can pass it on.
 .depth_bounds_of <- function(v) {
   edges <- v@depth_edges
   row <- .edge_rows(edges$depth, .parse_depth_layers(v))
   if (!nrow(edges) || anyNA(row)) return(NULL)
-  cbind(edges$depth_min[row], edges$depth_max[row])
-}
-
-# Internal: the depth edges two voxels on the same depths share: whichever
-# carries them, or NULL when neither does. Two voxels whose edges differ stop,
-# since either answer would be a guess.
-.shared_depth_bounds <- function(x, y) {
-  bx <- .depth_bounds_of(x)
-  by <- .depth_bounds_of(y)
-  if (!is.null(bx) && !is.null(by) && !isTRUE(all.equal(bx, by))) {
-    rlang::abort(
-      "`x` and `y` carry different depth edges for the same depths.",
-      class = "ocean3d_error_depth_bounds", call = NULL
-    )
-  }
-  if (is.null(bx)) by else bx
-}
-
-# Internal: the slab of water each layer stands for, as parallel vectors
-# `lower` (shallow edge) and `upper` (deep edge) in metres: from stored depth
-# edges (`depth_bounds`, as .depth_bounds_of() gives them) when there are
-# any, otherwise worked out from the depths by .depth_slabs()
-# (create_3d_objects.R) with `bounds`.
-.slabs <- function(depths, depth_bounds, bounds) {
-  if (is.null(depth_bounds)) return(.depth_slabs(depths, bounds))
-  list(lower = depth_bounds[, 1], upper = depth_bounds[, 2])
+  edges <- edges[row, , drop = FALSE]
+  rownames(edges) <- NULL
+  edges
 }
 
 # Internal: per-cell occupied volume of a voxel, km^3, from the slab each
@@ -137,9 +114,11 @@
                     fun = function(v) v > 0)
 }
 
-# Internal: the shared depth levels of two voxels. Resampling one onto the
-# other would be a guess about the vertical axis the caller is better placed to
-# make, so a mismatch is an error.
+# Internal: the shared depth levels of two voxels, and their shared depth
+# edges: whichever voxel carries them, or NULL when neither does. Resampling
+# one onto the other would be a guess about the vertical axis the caller is
+# better placed to make, so different levels, or different edges for the same
+# levels, are an error.
 .shared_depths <- function(x, y) {
   dx <- .parse_depth_layers(x)
   dy <- .parse_depth_layers(y)
@@ -148,7 +127,16 @@
          toString(dx), " and ", toString(dy),
          ". Rebuild one on the other's depths.", call. = FALSE)
   }
-  dx
+  bx <- .depth_bounds_of(x)
+  by <- .depth_bounds_of(y)
+  if (!is.null(bx) && !is.null(by) &&
+        !isTRUE(all.equal(bx[c("lower", "upper")], by[c("lower", "upper")]))) {
+    rlang::abort(glue::glue(
+      "`x` and `y` carry different depth edges for the same depth levels. ",
+      "Rebuild one with the other's edges (`depth_bounds` in as_voxel())."
+    ), class = "ocean3d_error_depth_edges_differ", call = NULL)
+  }
+  list(depths = dx, depth_bounds = if (is.null(bx)) by else bx)
 }
 
 # Internal: bring an envelope up to a voxel's depth levels. This direction, not

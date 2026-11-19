@@ -170,10 +170,13 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' @param depth_bounds Optional two-column matrix or data frame: the top and
 #'   bottom of the slab of water each layer stands for, in metres positive
 #'   down, one row per layer of `x` in its current order (for example a netCDF
-#'   file's depth bounds). Each slab must contain its depth, and slabs must not
-#'   overlap. `NULL` (the default) keeps the edges an existing `SpatVoxel`
-#'   carries, unless `depths` renames its layers; a voxel without edges uses
-#'   the `bounds` argument of the functions it is passed to.
+#'   file's depth bounds). A data frame with columns `depth`, `lower` and
+#'   `upper`, such as another voxel's `@depth_edges`, is matched to the layers
+#'   by depth instead. Each slab must contain its depth and have a positive
+#'   height, and slabs must not overlap. `NULL` (the default) keeps the edges
+#'   an existing `SpatVoxel` carries, unless `depths` renames its layers; a
+#'   voxel without edges uses the `bounds` argument of the functions it is
+#'   passed to.
 #'
 #' @returns A [SpatVoxel-class] whose layers are ordered shallow to deep.
 #' @examples
@@ -246,11 +249,11 @@ as_voxel <- function(x, depths = NULL, varname = "value",
   }
 
   if (!is.null(depth_bounds)) {
-    edges <- .depth_edge_table(d, depth_bounds, "as_voxel")
+    edges <- .depth_edge_table(d, depth_bounds)
   } else if (!is.null(edges) && nrow(edges)) {
-    # Edges the voxel had, for its current layers; none if any is missing.
+    # Edges the voxel had, for the layers it still has.
     row <- .edge_rows(edges$depth, d)
-    edges <- if (anyNA(row)) NULL else edges[row, , drop = FALSE]
+    edges <- edges[row[!is.na(row)], , drop = FALSE]
   }
   if (is.null(edges)) edges <- .no_depth_edges()
   rownames(edges) <- NULL
@@ -261,31 +264,58 @@ as_voxel <- function(x, depths = NULL, varname = "value",
   methods::new("SpatVoxel", x, depth_edges = edges)
 }
 
-# Internal: a depth_edges table from `depth_bounds`, one row of top and bottom
-# per depth, in the same order as `depths`. Stops with a classed error when the
-# shape is wrong or the slabs aren't valid.
-.depth_edge_table <- function(depths, depth_bounds, fn) {
-  m <- if (is.data.frame(depth_bounds)) as.matrix(depth_bounds) else
-    depth_bounds
+#' @rdname SpatVoxel-class
+#' @param x,... For `c()`: a `SpatVoxel` and further rasters to combine, as
+#'   with terra's `c()`. The result keeps the depth edges of every `SpatVoxel`
+#'   among them.
+#' @export
+setMethod("c", "SpatVoxel", function(x, ...) {
+  out <- methods::callNextMethod()
+  # terra copies only `x`'s slots, so gather the edges of every voxel.
+  voxels <- Filter(function(a) methods::is(a, "SpatVoxel"), list(x, ...))
+  edges <- do.call(rbind, lapply(voxels, function(v) v@depth_edges))
+  edges <- edges[!duplicated(edges$depth), , drop = FALSE]
+  rownames(edges) <- NULL
+  out@depth_edges <- edges
+  out
+})
+
+# Internal: a depth_edges table (depth, lower, upper) from `depth_bounds`: a
+# two-column matrix or data frame of top and bottom with one row per depth, in
+# the order of `depths`, or a table with columns depth, lower and upper (such
+# as a voxel's own `@depth_edges`), matched to `depths` by depth. The slabs are
+# checked as every depth axis is, by .axis_intervals(); problems stop with
+# `ocean3d_error_bounds`.
+.depth_edge_table <- function(depths, depth_bounds) {
+  if (is.data.frame(depth_bounds) &&
+        all(c("depth", "lower", "upper") %in% names(depth_bounds))) {
+    row <- .edge_rows(depth_bounds$depth, depths)
+    if (anyNA(row)) {
+      .abort_bounds("depth_bounds", NULL, glue::glue(
+        "have no row for depth {toString(depths[is.na(row)])}"
+      ))
+    }
+    m <- cbind(depth_bounds$lower[row], depth_bounds$upper[row])
+  } else {
+    m <- if (is.data.frame(depth_bounds)) as.matrix(depth_bounds) else
+      depth_bounds
+  }
   if (!is.matrix(m) || !is.numeric(m) || ncol(m) != 2L ||
         nrow(m) != length(depths)) {
-    rlang::abort(glue::glue(
-      "In {fn}(), `depth_bounds` must be a numeric two-column matrix or ",
-      "data frame (shallow edge, deep edge) with one row per depth: got ",
-      "{if (is.matrix(m)) paste(dim(m), collapse = ' x ') else class(m)[1]} ",
-      "for {length(depths)} depths."
-    ), class = "ocean3d_error_depth_bounds", call = NULL)
+    shape <- if (is.matrix(m)) paste(dim(m), collapse = " x ") else class(m)[1]
+    .abort_bounds("depth_bounds", NULL, glue::glue(
+      "must be a numeric two-column matrix or data frame (top, bottom) with ",
+      "one row per depth: got {shape} for {length(depths)} depths"
+    ))
   }
-  edges <- data.frame(depth = depths, depth_min = unname(m[, 1]),
-                      depth_max = unname(m[, 2]))
   o <- order(depths)
-  problem <- .depth_edges_problem(depths[o], edges$depth_min[o],
-                                  edges$depth_max[o])
-  if (!is.null(problem)) {
-    rlang::abort(glue::glue("In {fn}(), `depth_bounds` is invalid: {problem}."),
-                 class = "ocean3d_error_depth_bounds", call = NULL)
+  .axis_intervals(depths[o], t(m[o, , drop = FALSE]), "depth", "depth_bounds")
+  lower <- pmin(m[, 1], m[, 2])
+  if (any(lower < 0)) {
+    .abort_bounds("depth_bounds", NULL,
+                  "must be positive metres increasing downward")
   }
-  edges
+  data.frame(depth = depths, lower = lower, upper = pmax(m[, 1], m[, 2]))
 }
 
 #' Convert Envelope 2.5D -> Voxel 3D
@@ -324,11 +354,11 @@ as_voxel <- function(x, depths = NULL, varname = "value",
 #'
 #' \itemize{
 #'   \item `"midpoint"` (the default) puts the edges halfway between
-#'     neighbouring levels, so a level sits in the middle of what it stands
-#'     for. This is the World Ocean Atlas convention: `0, 5, 10, ...` the 0 m
-#'     layer covers `0-2.5` m, the 5 m layer `2.5-7.5` m, the 10 m layer
-#'     `7.5-12.5` m, and so on. Model output such as Copernicus Marine also
-#'     stores values at the middle of each layer.
+#'     neighbouring levels. This is the World Ocean Atlas convention:
+#'     `0, 5, 10, ...` the 0 m layer covers `0-2.5` m, the 5 m layer
+#'     `2.5-7.5` m, the 10 m layer `7.5-12.5` m, and so on. It is close for
+#'     model output such as Copernicus Marine, but leaves out the water above
+#'     the shallowest level and below the deepest.
 #'   \item `"top"` runs each slab from its level down to the next, so a level
 #'     names the top of what it stands for. Levels `c(0, 100, 200)` give slabs
 #'     `0-100`, `100-200`.
@@ -374,8 +404,9 @@ as_voxel <- function(x, depths = NULL, varname = "value",
 #'   `{varname}_depth={depths[i]}`
 #' @param depth_bounds Optional two-column matrix or data frame: the top and
 #'   bottom of the slab of water each depth stands for, in metres, one row per
-#'   element of `depths`. When given, these slabs are used instead of
-#'   `bounds`, and the returned voxel carries them (see [as_voxel()]).
+#'   element of `depths` (or a `depth`, `lower`, `upper` table, as in
+#'   [as_voxel()]). When given, these slabs are used instead of `bounds`, the
+#'   returned voxel carries them, and `depths` must not repeat a depth.
 #'
 #' @returns A [SpatVoxel-class] with one layer per depth in `depths`, on the
 #'   grid of `x`, layers ordered shallow to deep.
@@ -469,23 +500,25 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 
   # A voxel's layer axis is one layer per depth, shallow to deep, so the
   # requested levels are put in that form up front. Given edges come along;
-  # a repeated depth with edges is an overlap, which the table rejects.
+  # with edges, a repeated depth is an error from the edge checks.
   if (!is.null(depth_bounds)) {
-    table <- .depth_edge_table(depths, depth_bounds, "envelope_to_voxel")
-    table <- table[order(table$depth), , drop = FALSE]
-    depth_bounds <- cbind(table$depth_min, table$depth_max)
+    depth_bounds <- .depth_edge_table(depths, depth_bounds)
+    depth_bounds <- depth_bounds[order(depth_bounds$depth), , drop = FALSE]
   }
   depths <- sort(unique(depths))
 
-  # Step 1: occupancy. Each level stands for a slab of water, `bounds` says
-  # where its edges fall, and a cell occupies the level when its envelope
-  # shares some thickness of water with that slab. Strict `>` on the
-  # envelope's floor: an envelope that merely ends where a slab begins shares
-  # no water with it, the same rule intersect_3d() applies between envelopes,
-  # so adjacent depth ranges never meet on a level. Slabs are half-open so a
-  # shared edge is claimed by the deeper level alone, the deepest closed.
+  # Step 1: occupancy. Each level stands for a slab of water, `bounds` (or
+  # the given edges) says where its edges fall, and a cell occupies the level
+  # when its envelope shares some thickness of water with that slab. Strict
+  # `>` on the envelope's floor: an envelope that merely ends where a slab
+  # begins shares no water with it, the same rule intersect_3d() applies
+  # between envelopes, so adjacent depth ranges never meet on a level. Slabs
+  # are half-open so a shared edge is claimed by the deeper level alone. The
+  # deepest slab worked out from `depths` is closed, since under "top" it has
+  # no height; given slabs have a height, so they all stay half-open.
   # Raster stays left: terra mishandles `scalar <op> raster`.
-  slab <- .slabs(depths, depth_bounds, bounds)
+  slab <- .depth_slabs(depths, bounds, depth_bounds)
+  closed <- is.null(depth_bounds)
   # Plain layers, so the occupancy stack and everything derived from it is a
   # plain SpatRaster rather than an object still tagged SpatEnvelope. terra
   # propagates the class through `[[` and arithmetic, and a tagged
@@ -494,7 +527,7 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   upper <- .as_plain_raster(x[["depth_max"]])
   deepest <- length(depths)
   ind <- terra::rast(lapply(seq_along(depths), function(i) {
-    if (i == deepest) {
+    if (closed && i == deepest) {
       (lower <= slab$upper[i]) & (upper > slab$lower[i])
     } else {
       (lower < slab$upper[i]) & (upper > slab$lower[i])
@@ -503,16 +536,26 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   # number of depth levels present per vertical column, cell 
   n_depths <- sum(ind)
 
-  # The slabs tile `[min(depths), max(depths)]`, so a cell is left empty only
-  # when its envelope lies wholly above the shallowest level or wholly below
-  # the deepest — a range the levels cannot reach, not one that fell between
-  # them.
+  # Slabs worked out from `depths` tile `[min(depths), max(depths)]`, so a
+  # cell is left empty only when its envelope lies wholly above the shallowest
+  # level or wholly below the deepest: a range the levels cannot reach. Given
+  # slabs can leave gaps, so there an envelope can also fall between them.
   # `n_depths` is NA where the envelope is, so this counts only real cells.
   n_missed <- terra::global(n_depths == 0, "sum", na.rm = TRUE)[1, 1]
   if (!is.na(n_missed) && n_missed > 0) {
-    warning(n_missed, " cell(s) have an envelope that shares no water with ",
-            "the slab of any depth in `depths`, and are empty in the voxel. ",
-            "Extend `depths` to span them.", call. = FALSE)
+    cells <- if (n_missed == 1) "cell has" else "cells have"
+    where <- if (closed) {
+      paste("the slabs of `depths`: it lies wholly above or below them.",
+            "These cells are empty in the voxel. Extend `depths` to span them.")
+    } else {
+      paste("the slabs in `depth_bounds`: it lies above, below or between",
+            "them. These cells are empty in the voxel.")
+    }
+    rlang::warn(
+      glue::glue("{n_missed} {cells} an envelope that shares no water with ",
+                 "{where}"),
+      class = "ocean3d_warning_envelope_outside_slabs"
+    )
   }
 
   # Step 2: values. The magnitude each cell carries, and how `profile` spreads
@@ -547,7 +590,14 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 # would quietly swallow every range below the grid, turning a range the levels
 # cannot express into a plausible-looking answer instead of the warning the
 # caller needs to see.
-.depth_slabs <- function(depths, bounds) {
+#
+# `depth_bounds`, a voxel's stored edges (a table with `lower` and `upper` in
+# the order of `depths`, as .depth_bounds_of() gives it), wins over `bounds`
+# when given.
+.depth_slabs <- function(depths, bounds, depth_bounds = NULL) {
+  if (!is.null(depth_bounds)) {
+    return(list(lower = depth_bounds$lower, upper = depth_bounds$upper))
+  }
   n <- length(depths)
   switch(
     bounds,
@@ -601,9 +651,10 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 #' Pass a different predicate to bound a subset of the values instead, e.g.
 #' `\(x) x > 15` for the depths over which a cell exceeds 15 degrees.
 #'
-#' When the voxel carries depth edges (see [SpatVoxel-class]), the envelope
-#' runs from the top of the shallowest qualifying layer's slab to the bottom of
-#' the deepest one's, so it covers the water those layers stand for. A voxel
+#' When the voxel carries depth edges (see [SpatVoxel-class]), each cell's
+#' envelope runs from the top of the slab of its shallowest selected layer
+#' (where `fun` is `TRUE`) to the bottom of its deepest one's, so it covers
+#' the water those layers stand for. A voxel
 #' without edges gives the depths of the layers themselves.
 #'
 #' **This conversion is lossy.** An envelope stores a single continuous
@@ -695,8 +746,9 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
   # With stored edges, the top of the shallowest slab and the bottom of the
   # deepest; without, the layer depths.
   edges <- .depth_bounds_of(v)
-  depth_min <- if (is.null(edges)) depths[first_hit] else edges[first_hit, 1]
-  depth_max <- if (is.null(edges)) depths[last_hit] else edges[last_hit, 2]
+  depth_min <- if (is.null(edges)) depths[first_hit] else
+    edges$lower[first_hit]
+  depth_max <- if (is.null(edges)) depths[last_hit] else edges$upper[last_hit]
   depth_min[never] <- NA_real_
   depth_max[never] <- NA_real_
 
@@ -772,7 +824,8 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
          ". Build one with as_voxel() or envelope_to_voxel().", call. = FALSE)
   }
   .check_3d(x, "x")
-  .presence_voxel(.voxel_occupancy(x, fun), .parse_depth_layers(x))
+  .presence_voxel(.voxel_occupancy(x, fun), .parse_depth_layers(x),
+                  .depth_bounds_of(x))
 }
 
 # Internal: validate and normalise the `depth_min` / `depth_max` inputs of

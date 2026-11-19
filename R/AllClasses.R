@@ -7,7 +7,7 @@ NULL
 
 # Internal: the depth_edges table of a voxel that carries no edges.
 .no_depth_edges <- function() {
-  data.frame(depth = numeric(0), depth_min = numeric(0), depth_max = numeric(0))
+  data.frame(depth = numeric(0), lower = numeric(0), upper = numeric(0))
 }
 
 #' 3D voxel model: one layer per standard depth level
@@ -25,18 +25,23 @@ NULL
 #' the top and bottom of each slab, for example a netCDF file's depth bounds,
 #' set with the `depth_bounds` argument of [as_voxel()] or
 #' [envelope_to_voxel()]. [volume()], [calc_volume_overlap()],
-#' [intersect_3d()], [mask()] and [envelope_to_voxel()] use these edges when
-#' the voxel has them, and work the edges out from the depths with their
-#' `bounds` argument when it doesn't. terra operations that keep the
-#' `SpatVoxel` class (`[[`, `crop()`, `mask()`, arithmetic) keep the edges; an
-#' operation that returns a plain `SpatRaster` (`app()`, writing to a file)
-#' drops them.
+#' [envelope_to_voxel()], [voxel_to_envelope()], [intersect_3d()],
+#' [intersects_3d()] and [mask()] use these edges when the voxel has them for
+#' every layer, and work the edges out from the depths with their `bounds`
+#' argument when it doesn't. Each slab must contain its depth and have a
+#' positive height, and slabs must not overlap; gaps between them are allowed.
 #'
-#' @slot depth_edges A data frame with columns `depth`, `depth_min` and
-#'   `depth_max`, in metres positive down: the slab each depth stands for,
-#'   from `depth_min` (its top) to `depth_max` (its bottom). It has no rows when
-#'   the voxel carries no edges. Each layer finds its slab by its depth, so
-#'   the table may hold rows for depths the voxel no longer has.
+#' terra operations that keep the `SpatVoxel` class (`[[`, `crop()`,
+#' `mask()`, arithmetic, `c()`) keep the edges; an operation that returns a
+#' plain `SpatRaster` (`app()`, writing to a file) drops them. Combining a
+#' voxel that has edges with one that doesn't, with `c()`, leaves some layers
+#' without edges, so `bounds` applies to the result.
+#'
+#' @slot depth_edges A data frame with columns `depth`, `lower` and `upper`,
+#'   in metres positive down: the slab each depth stands for, from `lower`
+#'   (its top) to `upper` (its bottom), as in [SpatProxy-class]. It has no
+#'   rows when the voxel carries no edges. Each layer finds its slab by its
+#'   depth, so the table may hold rows for depths the voxel no longer has.
 #'
 #' @seealso [SpatEnvelope-class], [SpatVolume-class]
 #'
@@ -288,49 +293,38 @@ setValidity("SpatVoxel", function(object) {
   if (anyDuplicated(d)) return("depth layers must be distinct")
   if (any(d < 0)) return("depths are positive metres increasing downward")
   edges <- object@depth_edges
-  if (!identical(names(edges), c("depth", "depth_min", "depth_max"))) {
-    return("depth_edges must have the columns depth, depth_min and depth_max")
+  if (!identical(names(edges), c("depth", "lower", "upper")) ||
+        !all(vapply(edges, is.numeric, logical(1)))) {
+    return("depth_edges must have the numeric columns depth, lower and upper")
   }
-  if (nrow(edges)) {
-    row <- .edge_rows(edges$depth, d)
-    if (anyNA(row)) return("depth_edges must have one row for each layer")
-    problem <- .depth_edges_problem(d, edges$depth_min[row],
-                                    edges$depth_max[row])
-    if (!is.null(problem)) return(problem)
+  if (anyDuplicated(edges$depth)) {
+    return("depth_edges must have one row per depth")
+  }
+  # The layers that have a row; the rest have no stored edges.
+  row <- .edge_rows(edges$depth, d)
+  has <- !is.na(row)
+  if (any(has)) {
+    lower <- edges$lower[row[has]]
+    upper <- edges$upper[row[has]]
+    problem <- .interval_problem(d[has], lower, upper)
+    if (!is.null(problem)) return(paste("depth_edges", problem))
+    if (any(lower < 0)) {
+      return("depth_edges are positive metres increasing downward")
+    }
   }
   TRUE
 })
 
 # Internal: the row of a depth_edges table for each depth, or NA for a depth
-# it doesn't hold. Depths are matched with a small tolerance, because a depth
+# it doesn't hold. Depths are matched with .depth_tolerance(), because a depth
 # read back from a layer name (`temp_depth=0.494025`) can differ from the
 # stored one in the last digits.
 .edge_rows <- function(edge_depths, depths) {
-  vapply(depths, function(d) {
-    hit <- which(abs(edge_depths - d) <= 1e-6 * max(1, abs(d)))
+  tol <- .depth_tolerance(depths)
+  vapply(seq_along(depths), function(i) {
+    hit <- which(abs(edge_depths - depths[i]) <= tol[i])
     if (length(hit) == 1L) hit else NA_integer_
   }, integer(1))
-}
-
-# Internal: why the slabs for `depths` (sorted shallow to deep) aren't valid,
-# or NULL when they are. Each slab contains its depth and the slabs don't
-# overlap; gaps between them are allowed.
-.depth_edges_problem <- function(depths, top, bottom) {
-  if (!is.numeric(top) || !is.numeric(bottom) || anyNA(c(top, bottom))) {
-    return("depth edges must be numbers")
-  }
-  if (any(top < 0)) {
-    return("depth edges are positive metres increasing downward")
-  }
-  if (any(top > depths | bottom < depths)) {
-    return(paste("each layer's slab must contain its depth: top at or above",
-                 "it, bottom at or below it"))
-  }
-  tol <- 1e-6 * pmax(1, abs(top[-1]))
-  if (any(bottom[-length(bottom)] - top[-1] > tol)) {
-    return("the slabs of neighbouring layers must not overlap")
-  }
-  NULL
 }
 
 setValidity("SpatEnvelope", function(object) {

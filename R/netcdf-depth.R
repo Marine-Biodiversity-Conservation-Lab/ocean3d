@@ -3,6 +3,14 @@
 # (or inferred for heights and altitudes), and formula-based or pressure
 # coordinates are rejected. Shared by point, buffer and track extraction.
 
+# Depths read back slightly off their nominal values (float32 storage, or a
+# depth written into a layer name and parsed again), so comparisons allow a
+# small relative tolerance, per depth. Used by point extraction's reports and
+# by SpatVoxel depth edges (.edge_rows()).
+.depth_tolerance <- function(depths) {
+  1e-6 * pmax(1, abs(depths))
+}
+
 # Metres per unit for the supported length units, or NA.
 .length_unit_factor <- function(units) {
   switch(

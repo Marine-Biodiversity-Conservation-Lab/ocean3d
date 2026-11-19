@@ -541,7 +541,7 @@ test_that("envelope_to_voxel() treats the deepest level as a point", {
                        depth_min = 310, depth_max = 400)
   expect_warning(v <- envelope_to_voxel(below, depths = c(0, 100, 200, 300),
                                         bounds = "top"),
-                 "shares no water")
+                 class = "ocean3d_warning_envelope_outside_slabs")
   expect_true(all(is.na(terra::values(v))))
 
   # reaching the deepest level is enough to be recorded at it
@@ -650,7 +650,7 @@ test_that("envelope_to_voxel() warns outside depth span under either bounds", {
   for (bounds in c("top", "midpoint")) {
     expect_warning(
       envelope_to_voxel(envel, depths = c(0, 100, 200), bounds = bounds),
-      "shares no water"
+      class = "ocean3d_warning_envelope_outside_slabs"
     )
   }
 })
@@ -832,7 +832,7 @@ test_that("envelope_to_voxel() warns when an envelope is above all levels", {
                        depth_min = 5, depth_max = 40)
 
   expect_warning(v <- envelope_to_voxel(envel, depths = c(50, 100, 200)),
-                 "shares no water")
+                 class = "ocean3d_warning_envelope_outside_slabs")
   expect_true(all(is.na(terra::values(v))))
 })
 
@@ -1315,6 +1315,7 @@ test_that("volume() and voxel_to_envelope() reject invalid 3D input", {
   expect_error(voxel_to_envelope(v[[c(3, 2, 1)]]), "not a valid one")
 })
 
+
 # ---- depth edges (#138) -----------------------------------------------------
 
 # Copernicus-style levels at cell centres, with edges that aren't halfway.
@@ -1329,31 +1330,59 @@ test_that("as_voxel() stores depth edges keyed by depth", {
   v <- as_voxel(r, depth_bounds = edge_bounds[c(3, 1, 2), ])
 
   expect_identical(names(v), paste0("t_depth=", edge_depths))
+  expect_identical(names(v@depth_edges), c("depth", "lower", "upper"))
   expect_equal(v@depth_edges$depth, edge_depths[c(3, 1, 2)])
-  expect_equal(.depth_bounds_of(v), edge_bounds)
+  expect_equal(edges_of(v), edge_bounds)
 
-  # Without depth_bounds a voxel carries none, and the data frame form works.
+  # Without depth_bounds a voxel carries none; a data frame works too.
   expect_identical(nrow(as_voxel(r)@depth_edges), 0L)
   df <- as_voxel(r, depth_bounds = as.data.frame(edge_bounds[c(3, 1, 2), ]))
-  expect_equal(.depth_bounds_of(df), edge_bounds)
+  expect_equal(edges_of(df), edge_bounds)
+
+  # A voxel's own table goes back in, matched by depth whatever its order.
+  again <- as_voxel(make_voxel(2, edge_depths),
+                    depth_bounds = v@depth_edges[c(2, 3, 1), ])
+  expect_equal(edges_of(again), edge_bounds)
+
+  # Depths that round when written into layer names still find their edges.
+  tenths <- as_voxel(terra::rast(nrows = 2, ncols = 2, nlyrs = 4, vals = 1),
+                     depths = (0:3) * 0.1,
+                     depth_bounds = cbind((0:3) * 0.1, c((1:3) * 0.1, 0.4)))
+  expect_equal(edges_of(tenths), cbind((0:3) * 0.1, c((1:3) * 0.1, 0.4)))
 })
 
 test_that("depth edges survive terra operations that keep the class", {
   v <- as_voxel(make_voxel(1, edge_depths), depth_bounds = edge_bounds)
 
   # A subset keeps the rows for the layers it kept.
-  expect_equal(.depth_bounds_of(v[[2:3]]), edge_bounds[2:3, ])
-  expect_equal(.depth_bounds_of(as_voxel(v[[c(1, 3)]])), edge_bounds[c(1, 3), ])
-  expect_equal(.depth_bounds_of(terra::crop(v, terra::ext(0, 1, 0, 1))),
-               edge_bounds)
-  expect_equal(.depth_bounds_of(v * 2), edge_bounds)
+  expect_equal(edges_of(v[[2:3]]), edge_bounds[2:3, ])
+  expect_equal(edges_of(as_voxel(v[[c(1, 3)]])), edge_bounds[c(1, 3), ])
+  expect_equal(edges_of(terra::crop(v, terra::ext(0, 1, 0, 1))), edge_bounds)
+  expect_equal(edges_of(v * 2), edge_bounds)
+
+  # c() keeps the edges of every voxel it combines, each built with only its
+  # own layers' edges.
+  top <- as_voxel(make_voxel(1, edge_depths[1]),
+                  depth_bounds = edge_bounds[1, , drop = FALSE])
+  rest <- as_voxel(make_voxel(1, edge_depths[2:3]),
+                   depth_bounds = edge_bounds[2:3, ])
+  joined <- c(top, rest)
+  expect_true(methods::validObject(joined))
+  expect_equal(edges_of(joined), edge_bounds)
+  expect_equal(volume(joined), volume(v))
+  # With a voxel that has none, some layers have no edges, so `bounds`
+  # applies to all of them.
+  mixed <- c(top, make_voxel(1, edge_depths[2:3]))
+  expect_true(methods::validObject(mixed))
+  expect_null(edges_of(mixed))
+  expect_equal(volume(mixed), volume(make_voxel(1, edge_depths)))
 
   # Re-wrapping keeps them; renaming the layers to other depths drops them.
   expect_identical(as_voxel(v), v)
   expect_identical(nrow(as_voxel(v, depths = c(1, 2, 5))@depth_edges), 0L)
   # New edges replace the old ones.
   wider <- cbind(c(0, 1, 2), c(1, 2, 6))
-  expect_equal(.depth_bounds_of(as_voxel(v, depth_bounds = wider)), wider)
+  expect_equal(edges_of(as_voxel(v, depth_bounds = wider)), wider)
 })
 
 test_that("invalid depth edges stop", {
@@ -1362,28 +1391,39 @@ test_that("invalid depth edges stop", {
     shape = edge_bounds[1:2, ],
     contains = cbind(c(0, 2, 2), c(1, 2.5, 4)),
     overlap = cbind(c(0, 0.8, 2), c(1, 2, 4)),
-    negative = cbind(c(-1, 1, 2), c(1, 2, 4))
+    zero_width = cbind(c(0, 1, 3), c(1, 2, 3)),
+    infinite = cbind(c(0, 1, 2), c(1, 2, Inf)),
+    negative = cbind(c(-1, 1, 2), c(1, 2, 4)),
+    no_row = data.frame(depth = c(0.5, 1.5), lower = c(0, 1), upper = c(1, 2))
   )
-  messages <- c(shape = "one row per depth", contains = "contain its depth",
-                overlap = "must not overlap", negative = "positive metres")
+  messages <- c(
+    shape = "one row per depth: got 2 x 2 for 3 depths",
+    contains = "positive widths and must contain their centres",
+    overlap = "overlap",
+    zero_width = "positive widths",
+    infinite = "positive widths",
+    negative = "positive metres",
+    no_row = "no row for depth 3"
+  )
   for (case in names(bad)) {
     err <- expect_error(as_voxel(r, depth_bounds = bad[[case]]),
-                        class = "ocean3d_error_depth_bounds")
-    expect_match(conditionMessage(err), messages[[case]])
-    expect_match(conditionMessage(err), "In as_voxel()", fixed = TRUE)
+                        class = "ocean3d_error_bounds")
+    expect_match(conditionMessage(err), "Bounds for `depth_bounds`",
+                 fixed = TRUE)
+    expect_match(conditionMessage(err), messages[[case]], fixed = TRUE)
   }
 
   # Gaps between slabs are allowed.
   gap <- cbind(c(0, 1.2, 2), c(1, 2, 4))
-  expect_equal(.depth_bounds_of(as_voxel(r, depth_bounds = gap)), gap)
+  expect_equal(edges_of(as_voxel(r, depth_bounds = gap)), gap)
 
   # The validity method checks a voxel whose slot was set by hand.
   v <- as_voxel(r, depth_bounds = edge_bounds)
-  v@depth_edges <- v@depth_edges[1:2, ]
-  expect_error(methods::validObject(v), "one row for each layer")
+  v@depth_edges$upper[1] <- 1.2
+  expect_error(methods::validObject(v), "depth_edges overlap")
   v@depth_edges <- data.frame(depth = 1)
   expect_error(methods::validObject(v),
-               "columns depth, depth_min and depth_max")
+               "numeric columns depth, lower and upper")
 })
 
 test_that("envelope_to_voxel() places levels with given depth edges", {
@@ -1400,13 +1440,50 @@ test_that("envelope_to_voxel() places levels with given depth edges", {
   )), c(NA, 1, NA))
   v <- envelope_to_voxel(e, edge_depths, depth_bounds = shifted)
   expect_equal(as.vector(terra::values(v)), c(1, NA, NA))
-  expect_equal(.depth_bounds_of(v), shifted)
+  expect_equal(edges_of(v), shifted)
 
-  err <- expect_error(
-    envelope_to_voxel(e, edge_depths, depth_bounds = shifted[1:2, ]),
-    class = "ocean3d_error_depth_bounds"
+  expect_error(envelope_to_voxel(e, edge_depths, depth_bounds = shifted[1:2, ]),
+               class = "ocean3d_error_bounds")
+  # A repeated depth with edges is an error, not two rows for one level.
+  expect_error(
+    envelope_to_voxel(e, c(0.5, 1.5, 1.5),
+                      depth_bounds = cbind(c(0, 1, 1), c(1, 2, 2))),
+    class = "ocean3d_error_axis_order"
   )
-  expect_match(conditionMessage(err), "In envelope_to_voxel()", fixed = TRUE)
+})
+
+test_that("envelope_to_voxel() leaves out a slab the envelope only touches", {
+  fp <- terra::rast(nrows = 1, ncols = 1, xmin = 0, xmax = 1, ymin = 0,
+                    ymax = 1)
+  terra::values(fp) <- 1
+
+  # [4, 5] starts where the deepest stored slab (2-4 m) ends: no shared water.
+  below <- as_envelope(fp, depth_min = 4, depth_max = 5)
+  expect_warning(
+    v <- envelope_to_voxel(below, edge_depths, depth_bounds = edge_bounds),
+    class = "ocean3d_warning_envelope_outside_slabs"
+  )
+  expect_true(all(is.na(terra::values(v))))
+  # So a voxel and an envelope that only meet there share no volume.
+  edged <- as_voxel(make_voxel(1, edge_depths), depth_bounds = edge_bounds)
+  touching <- make_range_rast(rep(4, 9), rep(5, 9))
+  expect_warning(
+    overlap <- calc_volume_overlap(touching, edged),
+    class = "ocean3d_warning_envelope_outside_slabs"
+  )
+  # The promoted envelope is empty, so the overlap is NA (absent), never a
+  # positive volume.
+  shared <- terra::values(overlap[["volume_overlap"]])
+  expect_true(all(is.na(shared) | shared == 0))
+
+  # An envelope in a gap between stored slabs gets the same warning, which
+  # says it can fall between them.
+  gappy <- cbind(c(0, 1.2, 2), c(1, 2, 4))
+  between <- as_envelope(fp, depth_min = 1.05, depth_max = 1.15)
+  expect_warning(
+    envelope_to_voxel(between, edge_depths, depth_bounds = gappy),
+    "above, below or between them"
+  )
 })
 
 test_that("voxel_to_envelope() runs from the top to the bottom slab edge", {
@@ -1430,4 +1507,12 @@ test_that("voxel_to_envelope() runs from the top to the bottom slab edge", {
                             depth_bounds = edge_bounds)
   expect_identical(!is.na(terra::values(back))[1:2, ],
                    !is.na(terra::values(v))[1:2, ])
+})
+
+test_that("occupied() keeps a voxel's depth edges", {
+  v <- as_voxel(make_voxel(seq_len(27), edge_depths),
+                depth_bounds = edge_bounds)
+  kept <- occupied(v, function(x) x > 0)
+  expect_equal(edges_of(kept), edge_bounds)
+  expect_equal(volume(kept), volume(v))
 })

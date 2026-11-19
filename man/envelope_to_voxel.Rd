@@ -46,8 +46,9 @@ is given.}
 
 \item{depth_bounds}{Optional two-column matrix or data frame: the top and
 bottom of the slab of water each depth stands for, in metres, one row per
-element of \code{depths}. When given, these slabs are used instead of
-\code{bounds}, and the returned voxel carries them (see \code{\link[=as_voxel]{as_voxel()}}).}
+element of \code{depths} (or a \code{depth}, \code{lower}, \code{upper} table, as in
+\code{\link[=as_voxel]{as_voxel()}}). When given, these slabs are used instead of \code{bounds}, the
+returned voxel carries them, and \code{depths} must not repeat a depth.}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} with one layer per depth in \code{depths}, on the
@@ -89,11 +90,11 @@ not of the levels themselves, so \code{bounds} selects the convention:
 
 \itemize{
 \item \code{"midpoint"} (the default) puts the edges halfway between
-neighbouring levels, so a level sits in the middle of what it stands
-for. This is the World Ocean Atlas convention: \verb{0, 5, 10, ...} the 0 m
-layer covers \code{0-2.5} m, the 5 m layer \code{2.5-7.5} m, the 10 m layer
-\code{7.5-12.5} m, and so on. Model output such as Copernicus Marine also
-stores values at the middle of each layer.
+neighbouring levels. This is the World Ocean Atlas convention:
+\verb{0, 5, 10, ...} the 0 m layer covers \code{0-2.5} m, the 5 m layer
+\code{2.5-7.5} m, the 10 m layer \code{7.5-12.5} m, and so on. It is close for
+model output such as Copernicus Marine, but leaves out the water above
+the shallowest level and below the deepest.
 \item \code{"top"} runs each slab from its level down to the next, so a level
 names the top of what it stands for. Levels \code{c(0, 100, 200)} give slabs
 \code{0-100}, \code{100-200}.

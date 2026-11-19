@@ -38,8 +38,8 @@ NULL
 #' @param ... Arguments for the [SpatVoxel-class] method, which are an error
 #'   for an envelope.
 #' @param bounds SpatVoxel only. What each depth level stands for vertically:
-#'   `"midpoint"` (default) puts the level in the middle of its slab, with
-#'   edges halfway to each neighbour (the World Ocean Atlas convention);
+#'   `"midpoint"` (default) puts the slab edges halfway to each neighbouring
+#'   level (the World Ocean Atlas convention);
 #'   `"top"` treats the level as the top of its slab, so the slab runs down to
 #'   the next level. Under `"top"` the deepest level has no next level and
 #'   contributes no volume. Outer edges are clamped to `range(depths)` under

@@ -28,8 +28,8 @@ rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[
 for an envelope.}
 
 \item{bounds}{SpatVoxel only. What each depth level stands for vertically:
-\code{"midpoint"} (default) puts the level in the middle of its slab, with
-edges halfway to each neighbour (the World Ocean Atlas convention);
+\code{"midpoint"} (default) puts the slab edges halfway to each neighbouring
+level (the World Ocean Atlas convention);
 \code{"top"} treats the level as the top of its slab, so the slab runs down to
 the next level. Under \code{"top"} the deepest level has no next level and
 contributes no volume. Outer edges are clamped to \code{range(depths)} under

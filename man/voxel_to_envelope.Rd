@@ -33,9 +33,10 @@ the data: the shallowest and deepest depths at which the cell has any value.
 Pass a different predicate to bound a subset of the values instead, e.g.
 \verb{\\(x) x > 15} for the depths over which a cell exceeds 15 degrees.
 
-When the voxel carries depth edges (see \link[=SpatVoxel-class]{SpatVoxel}), the envelope
-runs from the top of the shallowest qualifying layer's slab to the bottom of
-the deepest one's, so it covers the water those layers stand for. A voxel
+When the voxel carries depth edges (see \link[=SpatVoxel-class]{SpatVoxel}), each cell's
+envelope runs from the top of the slab of its shallowest selected layer
+(where \code{fun} is \code{TRUE}) to the bottom of its deepest one's, so it covers
+the water those layers stand for. A voxel
 without edges gives the depths of the layers themselves.
 
 \strong{This conversion is lossy.} An envelope stores a single continuous

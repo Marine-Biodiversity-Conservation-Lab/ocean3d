@@ -563,18 +563,36 @@ test_that("voxel results keep the depth edges of their inputs", {
   field <- as_voxel(make_voxel(seq_len(27), depths), depth_bounds = edges)
   plain <- make_voxel(1, depths)
 
-  expect_equal(.depth_bounds_of(intersect_3d(field, plain)), edges)
-  expect_equal(.depth_bounds_of(intersect_3d(plain, field)), edges)
-  expect_equal(.depth_bounds_of(mask(field, plain)), edges)
+  expect_equal(edges_of(intersect_3d(field, plain)), edges)
+  expect_equal(edges_of(intersect_3d(plain, field)), edges)
+  expect_equal(edges_of(mask(field, plain)), edges)
+
+  # A 2D footprint keeps the voxel's edges, and so its volume.
+  fp <- terra::rast(make_grid(), vals = 1)
+  expect_equal(edges_of(intersect_3d(field, fp)), edges)
+  expect_equal(volume(intersect_3d(field, fp)), volume(field))
 
   # Masking by an envelope uses the edges: [1.1, 1.3] is in the 0.5 m
   # level's slab (0-1.4 m), not the 1.5 m level's as under "midpoint".
   e <- make_range_rast(rep(1.1, 9), rep(1.3, 9))
   masked <- mask(field, e)
-  expect_equal(.depth_bounds_of(masked), edges)
+  expect_equal(edges_of(masked), edges)
   expect_equal(terra::global(!is.na(masked), "sum")[, 1], c(9, 0, 0))
   expect_equal(
     terra::global(!is.na(mask(plain, e, bounds = "midpoint")), "sum")[, 1],
     c(0, 9, 0)
   )
+})
+
+test_that("voxel pairs with different depth edges stop", {
+  depths <- c(0.5, 1.5, 3)
+  a <- as_voxel(make_voxel(1, depths), depth_bounds = cbind(c(0, 1, 2),
+                                                            c(1, 2, 4)))
+  b <- as_voxel(make_voxel(1, depths), depth_bounds = cbind(c(0, 1, 2),
+                                                            c(1, 2, 5)))
+  for (call in list(quote(intersect_3d(a, b)), quote(intersects_3d(a, b)),
+                    quote(mask(a, b)))) {
+    err <- expect_error(eval(call), class = "ocean3d_error_depth_edges_differ")
+    expect_match(conditionMessage(err), "different depth edges")
+  }
 })
