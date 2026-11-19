@@ -141,8 +141,10 @@ onto the exported function rather than deleting them.
   branched from up-to-date `origin/main`. Name branches `<N>-<slug>` or
   `<type>/<N>-<slug>` (e.g. `74-coordinate-axis-handling`,
   `docs/59-getting-started-vignette`).
+
 - Put `Closes #N` in the PR body so the issue closes on merge. `(#N)` in
   the title is not enough.
+
 - Keep PRs reviewable in one sitting: about 400 changed lines in `R/`
   and 1000 in total. Generated files (`man/`, `NAMESPACE`, `renv.lock`,
   rendered articles) don’t count. Split bigger work into PRs that each
@@ -150,19 +152,42 @@ onto the exported function rather than deleting them.
   the next one after the previous one merges (e.g. shared helpers, then
   the function, then articles). \#83 (a 2100-line `extract_to_buffer.R`)
   is the example to avoid.
+
 - Don’t stack PRs (a PR whose base is another open PR’s branch). Every
   change to a lower PR has to be merged into and re-reviewed in each PR
   above it, which multiplies review work. Branch from `main`, and wait
   for the PR your work depends on to merge.
+
 - Agents can push their branch and open a PR for their issue. A person
   reviews every PR, and only the developer approves and squash-merges:
   don’t merge or approve. Don’t open issues or post comments elsewhere
   on GitHub unless the developer asks.
+
 - Each PR gets an agent code review and a prose review of its docs and
   text. Reply to each review comment with what changed and in which
   commit (e.g. “Fixed in e860cb3: …”).
+
 - Commits and PR descriptions written with an agent include AI
   attribution, e.g. a `Co-Authored-By:` trailer naming the model.
-- Before handing back: `devtools::document()`, `devtools::test()`,
-  `devtools::check()`, and `lintr::lint()` on changed files with no new
-  lints.
+
+- Before handing back: `devtools::document()`, then a check that skips
+  the vignettes and the PDF manual, as CI does
+  (`.github/workflows/R-CMD-check.yaml`):
+
+  ``` r
+
+  Sys.setenv(TESTTHAT_CPUS = 6)
+  devtools::check(
+    document = FALSE, vignettes = FALSE, cran = FALSE,
+    args = "--no-manual"
+  )
+  ```
+
+  `cran = FALSE` drops `--as-cran`, which limits testthat to two workers
+  and adds checks that CI runs on every PR anyway. This takes about 6
+  minutes, against 9 to 12 with `--as-cran`. The check runs the tests,
+  so don’t also run `devtools::test()` before it; use `devtools::test()`
+  or `devtools::test_active_file()` while iterating. Build the vignettes
+  with `devtools::build_vignettes()` only when the PR changes them or
+  the functions they call. Then run `lintr::lint()` on changed files,
+  with no new lints.

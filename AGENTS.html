@@ -103,14 +103,23 @@
 </ul></div>
 <div class="section level2">
 <h2 id="workflow">Workflow<a class="anchor" aria-label="anchor" href="#workflow"></a></h2>
-<ul><li>One agent per issue, on its own branch in its own git worktree, branched from up-to-date <code>origin/main</code>. Name branches <code>&lt;N&gt;-&lt;slug&gt;</code> or <code>&lt;type&gt;/&lt;N&gt;-&lt;slug&gt;</code> (e.g. <code>74-coordinate-axis-handling</code>, <code>docs/59-getting-started-vignette</code>).</li>
-<li>Put <code>Closes #N</code> in the PR body so the issue closes on merge. <code>(#N)</code> in the title is not enough.</li>
-<li>Keep PRs reviewable in one sitting: about 400 changed lines in <code>R/</code> and 1000 in total. Generated files (<code>man/</code>, <code>NAMESPACE</code>, <code>renv.lock</code>, rendered articles) don’t count. Split bigger work into PRs that each branch from <code>main</code>, do one thing and pass <code>devtools::check()</code>. Open the next one after the previous one merges (e.g. shared helpers, then the function, then articles). #83 (a 2100-line <code>extract_to_buffer.R</code>) is the example to avoid.</li>
-<li>Don’t stack PRs (a PR whose base is another open PR’s branch). Every change to a lower PR has to be merged into and re-reviewed in each PR above it, which multiplies review work. Branch from <code>main</code>, and wait for the PR your work depends on to merge.</li>
-<li>Agents can push their branch and open a PR for their issue. A person reviews every PR, and only the developer approves and squash-merges: don’t merge or approve. Don’t open issues or post comments elsewhere on GitHub unless the developer asks.</li>
-<li>Each PR gets an agent code review and a prose review of its docs and text. Reply to each review comment with what changed and in which commit (e.g. “Fixed in e860cb3: …”).</li>
-<li>Commits and PR descriptions written with an agent include AI attribution, e.g. a <code>Co-Authored-By:</code> trailer naming the model.</li>
-<li>Before handing back: <code>devtools::document()</code>, <code>devtools::test()</code>, <code>devtools::check()</code>, and <code>lintr::lint()</code> on changed files with no new lints.</li>
+<ul><li><p>One agent per issue, on its own branch in its own git worktree, branched from up-to-date <code>origin/main</code>. Name branches <code>&lt;N&gt;-&lt;slug&gt;</code> or <code>&lt;type&gt;/&lt;N&gt;-&lt;slug&gt;</code> (e.g. <code>74-coordinate-axis-handling</code>, <code>docs/59-getting-started-vignette</code>).</p></li>
+<li><p>Put <code>Closes #N</code> in the PR body so the issue closes on merge. <code>(#N)</code> in the title is not enough.</p></li>
+<li><p>Keep PRs reviewable in one sitting: about 400 changed lines in <code>R/</code> and 1000 in total. Generated files (<code>man/</code>, <code>NAMESPACE</code>, <code>renv.lock</code>, rendered articles) don’t count. Split bigger work into PRs that each branch from <code>main</code>, do one thing and pass <code>devtools::check()</code>. Open the next one after the previous one merges (e.g. shared helpers, then the function, then articles). #83 (a 2100-line <code>extract_to_buffer.R</code>) is the example to avoid.</p></li>
+<li><p>Don’t stack PRs (a PR whose base is another open PR’s branch). Every change to a lower PR has to be merged into and re-reviewed in each PR above it, which multiplies review work. Branch from <code>main</code>, and wait for the PR your work depends on to merge.</p></li>
+<li><p>Agents can push their branch and open a PR for their issue. A person reviews every PR, and only the developer approves and squash-merges: don’t merge or approve. Don’t open issues or post comments elsewhere on GitHub unless the developer asks.</p></li>
+<li><p>Each PR gets an agent code review and a prose review of its docs and text. Reply to each review comment with what changed and in which commit (e.g. “Fixed in e860cb3: …”).</p></li>
+<li><p>Commits and PR descriptions written with an agent include AI attribution, e.g. a <code>Co-Authored-By:</code> trailer naming the model.</p></li>
+<li>
+<p>Before handing back: <code>devtools::document()</code>, then a check that skips the vignettes and the PDF manual, as CI does (<code>.github/workflows/R-CMD-check.yaml</code>):</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Sys.setenv.html" class="external-link">Sys.setenv</a></span><span class="op">(</span>TESTTHAT_CPUS <span class="op">=</span> <span class="fl">6</span><span class="op">)</span></span>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">check</span><span class="op">(</span></span>
+<span>  document <span class="op">=</span> <span class="cn">FALSE</span>, vignettes <span class="op">=</span> <span class="cn">FALSE</span>, cran <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  args <span class="op">=</span> <span class="st">"--no-manual"</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><code>cran = FALSE</code> drops <code>--as-cran</code>, which limits testthat to two workers and adds checks that CI runs on every PR anyway. This takes about 6 minutes, against 9 to 12 with <code>--as-cran</code>. The check runs the tests, so don’t also run <code>devtools::test()</code> before it; use <code>devtools::test()</code> or <code>devtools::test_active_file()</code> while iterating. Build the vignettes with <code>devtools::build_vignettes()</code> only when the PR changes them or the functions they call. Then run <code>lintr::lint()</code> on changed files, with no new lints.</p>
+</li>
 </ul></div>
 </div>
 
