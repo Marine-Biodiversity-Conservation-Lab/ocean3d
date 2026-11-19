@@ -286,7 +286,7 @@ setValidity("SpatVector3D", function(object) {
 setClassUnion("SpatVolume", c("SpatVoxel", "SpatEnvelope", "SpatVector3D"))
 
 setValidity("SpatVoxel", function(object) {
-  d <- .parse_depth_layers(object, error = FALSE)
+  d <- .parse_depth_layers_names(names(object), error = FALSE)
   if (anyNA(d)) return("every layer name must follow {variable}_depth={value}")
   if (is.unsorted(d)) return("depth layers must be ordered shallow to deep")
   if (anyDuplicated(d)) return("depth layers must be distinct")

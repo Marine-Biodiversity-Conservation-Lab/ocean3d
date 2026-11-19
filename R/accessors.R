@@ -49,7 +49,7 @@ depths <- function(x) {
          "layer names; got ", paste(class(x), collapse = "/"), ".",
          call. = FALSE)
   }
-  .parse_depth_layers(x)
+  .parse_depth_layers_names(names(x))
 }
 
 #' Depth edges of a voxel's layers
@@ -99,25 +99,20 @@ depth_bounds <- function(x) {
   # order, or lack rows for some layers: return the rows for the current
   # layers, or NULL if any is missing.
   edges <- x@depth_edges
-  row <- .edge_rows(edges$depth, .parse_depth_layers(x))
+  row <- .edge_rows(edges$depth, depths(x))
   if (!nrow(edges) || anyNA(row)) return(NULL)
   edges <- edges[row, , drop = FALSE]
   rownames(edges) <- NULL
   edges
 }
 
-# Internal: parse numeric depths from the `{variable}_depth={value}` layer
-# naming convention used throughout the package. Returns a numeric vector the
-# same length as its input, NA for any name that does not match. With
-# `error = TRUE` (the default) it stops when no name matches; validity methods
-# pass `error = FALSE` so they can report the failure themselves.
-#
-# The `_names()` form takes the layer names directly, for callers that have
-# names but no raster.
-.parse_depth_layers <- function(rast, error = TRUE) {
-  .parse_depth_layers_names(layer_names = names(rast), error = error)
-}
-
+# Internal: parse numeric depths from layer names following the
+# `{variable}_depth={value}` convention used throughout the package. Returns a
+# numeric vector the same length as its input, NA for any name that does not
+# match. With `error = TRUE` (the default) it stops when no name matches.
+# Package code reads a raster's depths with depths(); only the SpatVoxel
+# validity method and as_voxel() call this directly, with `error = FALSE`, so
+# they can report bad names themselves.
 .parse_depth_layers_names <- function(layer_names, error = TRUE) {
   depths <- suppressWarnings(
     as.numeric(stringr::str_extract(layer_names, "(?<=_depth=)-?[0-9.]+"))

@@ -40,7 +40,7 @@ setMethod(
     .check_3d(x, "x")
 
     occ <- .voxel_occupancy(x)
-    slab <- .depth_slabs(.parse_depth_layers(x), bounds, depth_bounds(x))
+    slab <- .depth_slabs(depths(x), bounds, depth_bounds(x))
     vol_rast <- .voxel_cell_volume(occ, slab, .cell_area_km2(x))
 
     terra::global(vol_rast, "sum", na.rm = TRUE)[[1]]
@@ -111,7 +111,7 @@ setMethod(
     # any depth edges; the result carries the shared edges.
     shared <- intersect_3d(x, y)
     edges <- depth_bounds(shared)
-    slab <- .depth_slabs(.parse_depth_layers(x), bounds, edges)
+    slab <- .depth_slabs(depths(x), bounds, edges)
 
     occ_a <- .voxel_occupancy(x)
     occ_b <- .voxel_occupancy(y)

@@ -98,8 +98,8 @@
 # better placed to make, so different levels, or different edges for the same
 # levels, are an error.
 .shared_depths <- function(x, y) {
-  dx <- .parse_depth_layers(x)
-  dy <- .parse_depth_layers(y)
+  dx <- depths(x)
+  dy <- depths(y)
   if (!isTRUE(all.equal(dx, dy))) {
     stop("`x` and `y` must be sampled at the same depth levels; got ",
          toString(dx), " and ", toString(dy),
@@ -122,7 +122,7 @@
 # interior gaps, which would overstate an overlap.
 .promote_to_voxel <- function(e, v, bounds) {
   # The envelope takes the voxel's edges when it carries them.
-  envelope_to_voxel(e, depths = .parse_depth_layers(v), bounds = bounds,
+  envelope_to_voxel(e, depths = depths(v), bounds = bounds,
                     depth_bounds = depth_bounds(v))
 }
 

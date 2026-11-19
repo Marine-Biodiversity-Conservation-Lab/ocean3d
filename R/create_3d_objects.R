@@ -231,7 +231,7 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     names(x) <- paste0(varname, "_depth=", depths)
   }
 
-  d <- .parse_depth_layers(x, error = FALSE)
+  d <- .parse_depth_layers_names(names(x), error = FALSE)
   if (anyNA(d)) {
     stop("layer(s) ", toString(names(x)[is.na(d)]),
          " do not follow the '{variable}_depth={value}' convention. ",
@@ -277,7 +277,7 @@ setMethod("c", "SpatVoxel", function(x, ...) {
   # layer can't stand in for another voxel's edges at the same depth.
   voxels <- Filter(function(a) methods::is(a, "SpatVoxel"), list(x, ...))
   edges <- do.call(rbind, lapply(voxels, function(v) {
-    row <- .edge_rows(v@depth_edges$depth, .parse_depth_layers(v))
+    row <- .edge_rows(v@depth_edges$depth, depths(v))
     v@depth_edges[row[!is.na(row)], , drop = FALSE]
   }))
   edges <- edges[!duplicated(edges$depth), , drop = FALSE]
@@ -715,7 +715,7 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
     stop("`v` must be a SpatVoxel object.")
   }
   .check_3d(v, "v")
-  depths <- .parse_depth_layers(v)
+  depths <- depths(v)
   n_cells <- terra::ncell(v)
   n_depths <- length(depths)
 
@@ -830,7 +830,7 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
          ". Build one with as_voxel() or envelope_to_voxel().", call. = FALSE)
   }
   .check_3d(x, "x")
-  .presence_voxel(.voxel_occupancy(x, fun), .parse_depth_layers(x),
+  .presence_voxel(.voxel_occupancy(x, fun), depths(x),
                   depth_bounds(x))
 }
 

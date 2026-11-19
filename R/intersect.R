@@ -127,7 +127,7 @@ setMethod(
     .check_3d(x, "x")
     fp <- .footprint_of(y, x)
     occ <- terra::mask(.voxel_occupancy(x), fp, updatevalue = 0)
-    .presence_voxel(occ, .parse_depth_layers(x), depth_bounds(x))
+    .presence_voxel(occ, depths(x), depth_bounds(x))
   }
 )
 
