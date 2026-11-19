@@ -1,8 +1,8 @@
-# Longitude and latitude axes and horizontal cell matching. Coordinates are
-# checked and given cell edges (from CF bounds or inferred from the centres),
-# longitudes are compared in either convention (0-360 or -180-180), and each
-# observation is matched to the cell that contains it or to the nearest cell
-# by great-circle distance. Shared by point, buffer and track extraction.
+# Horizontal cell matching on longitude and latitude axes read by
+# .read_interval_axis(): longitudes are compared in either convention (0-360
+# or -180-180), and each observation is matched to the cell that contains it
+# or to the nearest cell by great-circle distance. Shared by point, buffer and
+# track extraction.
 
 .validate_spatial_matching <- function(spatial_match, max_distance_km) {
   spatial_match <- match.arg(spatial_match, c("within", "nearest"))
@@ -178,67 +178,4 @@
   ambiguous <- abs(abs(steps) - 180) < 1e-8
   steps[ambiguous] <- original_steps[ambiguous]
   values[1L] + c(0, cumsum(steps))
-}
-
-.prepare_spatial_axis <- function(nc, coordinate, values, longitude = FALSE,
-                                  periodic = FALSE) {
-  if (!is.numeric(values) || !length(values) ||
-        any(!is.finite(values))) {
-    stop("Spatial coordinates must be finite numbers.", call. = FALSE)
-  }
-  if (!longitude && any(values < -90 | values > 90)) {
-    stop("Latitude coordinates are outside [-90, 90].", call. = FALSE)
-  }
-  centres <- if (longitude) .unwrap_longitude(values) else values
-  steps <- diff(centres)
-  if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
-    stop(
-      "Spatial coordinates must form a monotonic axis (as CF requires). ",
-      "Sort the file along this dimension before extraction.",
-      call. = FALSE
-    )
-  }
-  explicit <- .read_bounds(nc, coordinate, length(values))$values
-  if (!is.null(explicit)) {
-    intervals <- explicit
-    if (longitude) {
-      for (j in seq_along(values)) {
-        width <- abs(diff(explicit[, j]))
-        if (width >= 360) {
-          intervals[, j] <- centres[j] + c(-180, 180)
-        } else {
-          offsets <- (explicit[, j] - values[j] + 180) %% 360 - 180
-          intervals[, j] <- centres[j] + offsets
-        }
-      }
-    }
-    lower <- apply(intervals, 2L, min)
-    upper <- apply(intervals, 2L, max)
-  }
-  if (!is.null(explicit)) {
-    basis <- "explicit_bounds"
-  } else if (length(centres) == 1L) {
-    lower <- upper <- centres
-    basis <- "singleton_coordinate"
-  } else {
-    edges <- .midpoint_edges(centres)
-    lower <- edges$lower
-    upper <- edges$upper
-    basis <- if (edges$regular) "inferred_regular" else "inferred_irregular"
-  }
-  # Bad bounds stop here, for every function that reads a spatial axis.
-  if (basis != "singleton_coordinate") {
-    .axis_intervals(centres, rbind(lower, upper),
-                    if (longitude) "lon" else "lat", coordinate,
-                    periodic = longitude && periodic,
-                    file = basename(nc$filename))
-  }
-  if (!longitude) {
-    lower <- pmax(lower, -90)
-    upper <- pmin(upper, 90)
-  }
-  list(
-    centres = centres, lower = lower, upper = upper,
-    longitude = longitude, basis = basis
-  )
 }

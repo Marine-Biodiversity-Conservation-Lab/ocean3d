@@ -181,8 +181,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         "with coordinate values are supported."
       ), class = "ocean3d_error_coordinate_variable", call = NULL)
     }
-    values <- as.vector(.get_dim_values(nc, dims[[axis]]))
-    out <- .prepare_spatial_axis(nc, dims[[axis]], values, axis == "lon")
+    out <- .read_interval_axis(nc, dims[[axis]], axis)
     c(list(dim = dims[[axis]]), out[c("centres", "lower", "upper")],
       list(edges = edges_from(out$basis)))
   })

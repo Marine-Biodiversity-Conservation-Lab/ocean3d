@@ -134,11 +134,15 @@
   if (is.null(positive) && standard_name %in% c("height", "altitude")) {
     positive <- "up"
   }
-  .prepare_depth_axis(
+  depth <- .prepare_depth_axis(
     values,
     units = .read_time_attribute(nc, coordinate, "units"),
     positive = positive
   )
+  # A stored axis must run one way, shallow to deep or deep to shallow, as in
+  # the core object. Bounds endpoints (.depth_bounds_m()) aren't checked.
+  .check_axis_order(depth$depth_m, coordinate, basename(nc$filename))
+  depth
 }
 
 # CF depth bounds (from .read_bounds()) in metres positive down, converted

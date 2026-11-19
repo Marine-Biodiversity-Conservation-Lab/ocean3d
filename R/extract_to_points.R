@@ -1219,12 +1219,8 @@
   lon_values <- .get_dim_values(nc, dims$lon)
   lat_values <- .get_dim_values(nc, dims$lat)
   spatial_axes <- list(
-    lon = .prepare_spatial_axis(
-      nc, dims$lon, lon_values, longitude = TRUE
-    ),
-    lat = .prepare_spatial_axis(
-      nc, dims$lat, lat_values, longitude = FALSE
-    )
+    lon = .read_interval_axis(nc, dims$lon, "lon"),
+    lat = .read_interval_axis(nc, dims$lat, "lat")
   )
   depth_values <- .get_dim_values(nc, dims$depth)
   depth_axis <- if (method == "2d") {
@@ -1278,7 +1274,11 @@
 
   horizontal_matches <- .cached_horizontal_matches(
     horizontal_cache,
-    key = list(lon_values, lat_values, spatial_axes),
+    # Only the fields the matching reads, so files with the same grid share
+    # an entry whatever their coordinate, units or bounds names.
+    key = list(lon_values, lat_values, lapply(
+      spatial_axes, `[`, c("centres", "lower", "upper", "longitude", "basis")
+    )),
     compute = function() {
       .match_horizontal_cells(
         lon_axis = spatial_axes$lon, lat_axis = spatial_axes$lat,
@@ -1705,7 +1705,8 @@
 #' Surface means the physically shallowest layer, even if its value is missing.
 #' Bottom means the deepest non-missing layer. Nearest selects the valid layer
 #' closest to the observation depth; ties select the shallower layer.
-#' Selection does not depend on the storage order of the depth coordinate.
+#' Selection works the same whether the depth coordinate is stored shallow to
+#' deep or deep to shallow; depths stored in any other order are rejected.
 #' Duplicate physical depths, unsupported units, coordinates above the assumed
 #' reference surface, and sigma, formula-based or pressure coordinates require
 #' explicit correction or conversion before extraction.
@@ -2319,7 +2320,8 @@ extract2d <- function(data, nc, var = NULL, ...) {
 #' Extract the surface layer from a 3D netCDF variable
 #'
 #' The surface layer is defined as the physically shallowest depth layer in the
-#' netCDF file, whatever the storage order of the depth coordinate.
+#' netCDF file, whether the depth coordinate is stored shallow to deep
+#' or deep to shallow.
 #'
 #' @param data Object containing observation points. Can be a data frame,
 #'   tibble, `sf` object with POINT geometries, matrix with column names, or

@@ -16,10 +16,11 @@ calls that used to return a value now return `NA` or stop with an error:
   before extraction.
 * Depth coordinates are converted to metres from their units, and the
   `positive` attribute sets their direction. Surface, bottom and nearest are
-  chosen by physical depth, whatever the storage order. The depth coordinate
-  must have length units, including for `extract3d_surface()` and
-  `extract3d_bottom()`; files without them stop with an error (a file with a
-  single depth level can be read with `extract2d()`).
+  chosen by physical depth, whether the coordinate is stored shallow to
+  deep or deep to shallow. The depth coordinate must have length units,
+  including for `extract3d_surface()` and `extract3d_bottom()`; files
+  without them stop with an error. A file with a single depth level can be
+  read with `extract2d()`.
 * With several files, a temporal tie between sources keeps input order under
   `"within"` matching, and goes to the closer cell centre under `"nearest"`
   matching.
@@ -38,6 +39,23 @@ stop with an error when they are bad (#113):
 * To read a file that now fails, fix its bounds, or remove the coordinate's
   `bounds` attribute so edges are inferred from the centres (for example
   with NCO: `ncatted -a bounds,lon,d,, file.nc`).
+
+Point and track extraction, and buffer extraction without a depth window
+(`depth_radius_m = 0`), used to accept a netCDF depth coordinate stored out
+of order (for example 50, 0, 100 m), and rejected only duplicate depths.
+They now stop with an error naming the coordinate and the file unless the
+depths run shallow to deep or deep to shallow (#147). Sort such files along
+the depth dimension before extraction. The error for longitude or latitude
+stored out of order, which already stopped extraction, now names the
+coordinate and the file too.
+
+With `return_match_info = TRUE`, the `bounds` entry of the
+`<output>_match_info` column from `extract_to_buffer()` used to label
+longitude and latitude edges inferred from the centres
+`"inferred_regular"` or `"inferred_irregular"`. Both now read
+`"inferred_midpoints"`, the label depth and time already use, so the entry
+no longer says whether the spacing is regular (#147). Code that checks for
+the old labels should check for `"inferred_midpoints"`.
 
 `vect_to_envelope()` now stops with an error when the envelope would have no
 cells: no cell the polygons cover has `depth_max` deeper than `depth_min`.

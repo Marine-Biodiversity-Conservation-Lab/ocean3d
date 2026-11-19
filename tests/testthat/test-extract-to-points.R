@@ -2020,7 +2020,6 @@ test_that("depth methods select physical layers for every storage order", {
   cases <- list(
     list(depth = c(0, 50, 100), values = c(11, 22, 33), positive = "down"),
     list(depth = c(100, 50, 0), values = c(33, 22, 11), positive = "down"),
-    list(depth = c(50, 0, 100), values = c(22, 11, 33), positive = "down"),
     list(depth = c(0, -50, -100), values = c(11, 22, 33), positive = "up"),
     list(depth = c(-100, -50, 0), values = c(33, 22, 11), positive = "up")
   )
@@ -2047,6 +2046,18 @@ test_that("depth methods select physical layers for every storage order", {
       x, paths[i], var = "temp", date_col = NULL
     )$temp, out$seabottom_temp)
   }
+
+  # A stored axis that doesn't run one way is rejected, as in as_proxy().
+  unsorted <- tempfile(fileext = ".nc")
+  on.exit(unlink(unsorted), add = TRUE)
+  make_depth_axis_test_nc(unsorted, c(50, 0, 100), c(22, 11, 33),
+                          positive = "down", depth_name = "z")
+  err <- expect_error(
+    extract3d_all(x, unsorted, var = "temp", date_col = NULL),
+    class = "ocean3d_error_axis_order"
+  )
+  expect_match(conditionMessage(err),
+               "`z` in .*\\.nc must be strictly increasing or decreasing")
 })
 
 test_that("file depth units convert to observation metres", {
