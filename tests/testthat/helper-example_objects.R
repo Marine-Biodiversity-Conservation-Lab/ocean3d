@@ -11,17 +11,12 @@ make_multidepth_rast <- function(depths = c(0, 100, 200, 300),
   names(out) <- paste0(varname, "_depth=", depths)
   out
 }
-# Helpers for 3D-object tests: a lon/lat template grid, a GEBCO-style
-# elevation raster (negative below sea level), and a polygon inside the grid.
+# Helpers for 3D-object tests: a lon/lat template grid and a polygon inside
+# the grid.
 make_template <- function(vals = NA) {
   terra::rast(nrows = 5, ncols = 5,
               xmin = 0, xmax = 5, ymin = 0, ymax = 5,
               vals = vals, crs = "EPSG:4326")
-}
-make_elevation <- function(elev = -500) {
-  r <- make_template()
-  terra::values(r) <- elev
-  r
 }
 make_polygon <- function() {
   poly <- sf::st_sfc(
@@ -32,6 +27,52 @@ make_polygon <- function() {
   )
   sf::st_sf(geometry = poly)
 }
+# Helpers for intersect and volume tests. The LAEA projection makes every cell
+# 1 km x 1 km, so volumes are hand-computable. With `vals`, make_grid() is a
+# single-layer footprint (NA = outside).
+make_grid <- function(ncol = 3, nrow = 3, vals = NULL) {
+  r <- terra::rast(nrows = nrow, ncols = ncol,
+                   xmin = 0, xmax = ncol * 1000,
+                   ymin = 0, ymax = nrow * 1000,
+                   crs = "+proj=laea +lat_0=0 +lon_0=0 +datum=WGS84 +units=m")
+  if (is.null(vals)) r else terra::setValues(r, vals)
+}
+
+# Helper: a SpatEnvelope with per-cell depth limits (NA marks absence).
+make_range_rast <- function(depth_min_vals, depth_max_vals,
+                            ncol = 3, nrow = 3) {
+  dmin <- make_grid(ncol, nrow)
+  terra::values(dmin) <- depth_min_vals
+  names(dmin) <- "depth_min"
+
+  dmax <- terra::rast(dmin)
+  terra::values(dmax) <- depth_max_vals
+  names(dmax) <- "depth_max"
+
+  as_envelope(c(dmin, dmax))
+}
+
+# Helper: a SpatVoxel from a cells x depths matrix of values (NA = unoccupied).
+make_voxel <- function(vals, depths, ncol = 3, nrow = 3, varname = "presence") {
+  r <- terra::rast(make_grid(ncol, nrow), nlyrs = length(depths))
+  terra::values(r) <- vals
+  as_voxel(r, depths = depths, varname = varname)
+}
+
+# Helper: a temperature field on five levels over make_grid()'s 3x3 grid,
+# every cell a distinct value so a misplaced mask would show.
+make_field <- function(depths = c(0, 50, 100, 150, 200)) {
+  vals <- matrix(seq_len(9 * length(depths)), nrow = 9)
+  make_voxel(vals, depths, varname = "temp")
+}
+
+# Helper: a polygon covering the centres of the left two columns of
+# make_grid()'s 3x3 grid, in the grid's CRS.
+make_left_polygon <- function() {
+  terra::vect("POLYGON ((0 0, 2000 0, 2000 3000, 0 3000, 0 0))",
+              crs = terra::crs(make_grid()))
+}
+
 # Helper: 2x2 footprint, cells 1-3 present, cell 4 absent. Values are
 # deliberately varied (and one is 0) because only their non-NA-ness counts.
 make_footprint <- function(vals = c(1, 5, 0, NA)) {
@@ -59,101 +100,8 @@ make_occupancy <- function(cells = list(c(TRUE, FALSE, FALSE, FALSE),
 }
 
 
-# Synthetic sources for track extraction
-# ---------------------------------------
-
-.make_track_nc <- function(
-  path, lon = 0:2, lat = c(0, 1),
-  depth = NULL, time = NULL, extra_static = FALSE, missing = FALSE
-) {
-  x <- ncdf4::ncdim_def("lon", "degrees_east", lon)
-  y <- ncdf4::ncdim_def("lat", "degrees_north", lat)
-  z <- if (is.null(depth)) {
-    NULL
-  } else {
-    ncdf4::ncdim_def("depth", "m", depth)
-  }
-  t <- if (is.null(time)) {
-    NULL
-  } else {
-    ncdf4::ncdim_def("time", "hours since 2020-01-01 00:00:00", time)
-  }
-  dims <- Filter(
-    Negate(is.null),
-    list(x, y, z, t)
-  )
-  variables <- list(
-    ncdf4::ncvar_def(
-      "temp", "degree_Celsius", dims,
-      missval = -9999,
-      prec = "double"
-    )
-  )
-  if (extra_static) {
-    variables <- c(
-      variables, list(
-        ncdf4::ncvar_def(
-          "static", "1", list(x, y),
-          prec = "double"
-        )
-      )
-    )
-  }
-  nc <- ncdf4::nc_create(path, variables)
-  on.exit(ncdf4::nc_close(nc))
-  zz <- if (is.null(depth)) {
-    0
-  } else {
-    depth
-  }
-  tt <- if (is.null(time)) {
-    0
-  } else {
-    time
-  }
-  field <- array(
-    NA_real_, c(
-      length(lon),
-      length(lat),
-      length(zz),
-      length(tt)
-    )
-  )
-  for (i in seq_along(lon)) {
-    for (j in seq_along(lat)) {
-      for (k in seq_along(zz)) {
-        for (l in seq_along(tt)) {
-          field[i, j, k, l] <- 10 * lon[i] + 100 * lat[j] + zz[k] + 1000 *
-            tt[l]
-        }
-      }
-    }
-  }
-  if (missing) {
-    field[1L, , , ] <- NA_real_
-  }
-  ncdf4::ncvar_put(
-    nc, "temp", array(
-      field, vapply(
-        dims, function(d) length(d$vals),
-        integer(1)
-      )
-    )
-  )
-  if (!is.null(z)) {
-    ncdf4::ncatt_put(nc, "depth", "positive", "down")
-  }
-  if (extra_static) {
-    ncdf4::ncvar_put(
-      nc, "static", matrix(
-        7, length(lon),
-        length(lat)
-      )
-    )
-  }
-  invisible(path)
-}
-
+# Helpers for track extraction tests
+# ----------------------------------
 
 .track_clock <- function(hours = c(0, 1, 2)) {
   as.POSIXct("2020-01-01", tz = "UTC") +

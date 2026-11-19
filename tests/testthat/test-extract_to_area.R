@@ -1,6 +1,7 @@
 # Helper: synthetic multi-depth voxel with standard layer naming. Covers a 4x4
 # grid in lon/lat with values that make each cell / layer distinguishable.
-# Defined locally so this file does not depend on definitions in another one.
+# Kept here: no shared helper (helper-example_objects.R) has this extent,
+# grid or values.
 make_area_voxel <- function(depths = c(0, 50, 100, 500, 1000),
                             variable = "tan",
                             ncol = 4, nrow = 4) {
@@ -16,6 +17,7 @@ make_area_voxel <- function(depths = c(0, 50, 100, 500, 1000),
   as_voxel(terra::rast(layers), depths = depths, varname = variable)
 }
 
+# Unlike make_polygon(), an sfc square centred on the raster.
 make_area_polygon <- function() {
   # Square covering the centre of the raster.
   sf::st_sfc(

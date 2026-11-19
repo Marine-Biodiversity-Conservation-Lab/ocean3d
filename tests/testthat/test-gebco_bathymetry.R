@@ -1,7 +1,6 @@
 # ---------------------------------------------------------------------------
 # load_gebco_bathymetry: exercise the validation paths. The happy-path test
-# writes a minimal global NetCDF with terra::writeCDF, which may not be
-# available in all environments.
+# writes a minimal global NetCDF with terra::writeCDF.
 # ---------------------------------------------------------------------------
 
 test_that("load_gebco_bathymetry errors when file is missing", {
@@ -34,12 +33,8 @@ test_that("load_gebco_bathymetry happy path and extent validation", {
   terra::values(regional) <- seq_len(terra::ncell(regional))
   terra::varnames(regional) <- "elevation"
 
-  ok <- tryCatch({
-    terra::writeCDF(global, tmp_good, overwrite = TRUE, varname = "elevation")
-    terra::writeCDF(regional, tmp_bad, overwrite = TRUE, varname = "elevation")
-    TRUE
-  }, error = function(e) FALSE)
-  skip_if_not(ok, "terra::writeCDF unavailable")
+  terra::writeCDF(global, tmp_good, overwrite = TRUE, varname = "elevation")
+  terra::writeCDF(regional, tmp_bad, overwrite = TRUE, varname = "elevation")
 
   r <- load_gebco_bathymetry(tmp_good)
   expect_s4_class(r, "SpatRaster")
@@ -60,13 +55,9 @@ test_that("load_gebco_bathymetry checks variable name", {
   terra::values(global) <- seq_len(terra::ncell(global)) - 1000
   terra::varnames(global) <- "elevation"
 
-  ok <- tryCatch({
-    terra::writeCDF(global, tmp_good, overwrite = TRUE, varname = "elevation")
-    terra::writeCDF(global, tmp_bad, overwrite = TRUE,
-                    varname = "not_elevation")
-    TRUE
-  }, error = function(e) FALSE)
-  skip_if_not(ok, "terra::writeCDF unavailable")
+  terra::writeCDF(global, tmp_good, overwrite = TRUE, varname = "elevation")
+  terra::writeCDF(global, tmp_bad, overwrite = TRUE,
+                  varname = "not_elevation")
 
   r <- load_gebco_bathymetry(tmp_good)
   expect_named(r, "elevation")

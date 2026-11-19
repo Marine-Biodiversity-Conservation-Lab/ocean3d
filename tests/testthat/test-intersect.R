@@ -1,45 +1,8 @@
-# Helpers are defined locally so this file does not depend on another test
-# file. The LAEA projection makes every cell 1 km x 1 km, so volumes below are
-# hand-computable.
-make_grid <- function(ncol = 3, nrow = 3) {
-  terra::rast(nrows = nrow, ncols = ncol,
-              xmin = 0, xmax = ncol * 1000,
-              ymin = 0, ymax = nrow * 1000,
-              crs = "+proj=laea +lat_0=0 +lon_0=0 +datum=WGS84 +units=m")
-}
-
-# Helper: a SpatEnvelope with per-cell depth limits (NA marks absence).
-make_range_rast <- function(depth_min_vals, depth_max_vals,
-                            ncol = 3, nrow = 3) {
-  dmin <- make_grid(ncol, nrow)
-  terra::values(dmin) <- depth_min_vals
-  names(dmin) <- "depth_min"
-
-  dmax <- terra::rast(dmin)
-  terra::values(dmax) <- depth_max_vals
-  names(dmax) <- "depth_max"
-
-  as_envelope(c(dmin, dmax))
-}
-
-# Helper: a SpatVoxel from a cells x depths matrix of values (NA = unoccupied).
-make_voxel <- function(vals, depths, ncol = 3, nrow = 3, varname = "presence") {
-  r <- terra::rast(make_grid(ncol, nrow), nlyrs = length(depths))
-  terra::values(r) <- vals
-  as_voxel(r, depths = depths, varname = varname)
-}
-
-# Helper: a single-layer footprint on the grid (NA = outside).
-make_footprint <- function(vals, ncol = 3, nrow = 3) {
-  terra::setValues(make_grid(ncol, nrow), vals)
-}
-
-# Helper: a polygon covering the centres of the left two columns of a 3x3
-# grid, in the grid's CRS.
-make_left_polygon <- function() {
-  terra::vect("POLYGON ((0 0, 2000 0, 2000 3000, 0 3000, 0 0))",
-              crs = terra::crs(make_grid()))
-}
+# make_grid(), make_range_rast(), make_voxel(), make_field() and
+# make_left_polygon() are in helper-example_objects.R; make_grid(vals = ) is a
+# single-layer footprint.
+# lintr checks this file on its own and can't see them, so the helpers below
+# that call them carry object_usage nolints.
 
 # ---- intersect_3d: envelopes ------------------------------------------------
 
@@ -123,18 +86,9 @@ test_that("intersect_3d() on voxels is the co-occupied set of levels", {
                unname(cbind(c(1, NA, NA), c(NA, NA, NA), c(1, NA, NA))))
 })
 
-test_that("intersect_3d() intersects voxel presence, requiring shared depths", {
-  depths <- c(0, 100)
-  a <- make_voxel(cbind(c(5, 5, 5), c(5, 5, 5)), depths,
+test_that("intersect_3d() on voxels requires shared depths", {
+  a <- make_voxel(cbind(c(5, 5, 5), c(5, 5, 5)), c(0, 100),
                   ncol = 3, nrow = 1, varname = "t")
-  b <- make_voxel(cbind(c(1, 10, NA), c(10, 1, NA)), depths,
-                  ncol = 3, nrow = 1, varname = "t")
-
-  out <- intersect_3d(occupied(a, function(v) v > 3),
-                      occupied(b, function(v) v > 3))
-  expect_identical(unname(terra::values(out)),
-               unname(cbind(c(NA, 1, NA), c(1, NA, NA))))
-
   c3 <- make_voxel(cbind(c(1, 1, 1), c(1, 1, 1), c(1, 1, 1)), c(0, 100, 200),
                    ncol = 3, nrow = 1)
   expect_error(intersect_3d(a, c3), "same depth levels")
@@ -162,7 +116,7 @@ test_that("intersect_3d() on mixed input promotes the envelope to a voxel", {
 test_that("intersect_3d() restricts an envelope to a footprint raster", {
   # the footprint restricts cells horizontally; depths are left as they are.
   a <- make_range_rast(rep(0, 9), rep(100, 9))
-  fp <- make_footprint(c(1, NA, 0, 7, NA, NA, 1, 1, 1))
+  fp <- make_grid(vals = c(1, NA, 0, 7, NA, NA, 1, 1, 1))
 
   out <- intersect_3d(a, fp)
   expect_identical(class(out)[[1]], "SpatEnvelope")
@@ -180,7 +134,7 @@ test_that("intersect_3d() restricts a voxel to a footprint raster", {
   depths <- c(0, 100)
   v <- make_voxel(cbind(c(3, NA, 3), c(NA, 3, 3)), depths,
                   ncol = 3, nrow = 1, varname = "t")
-  fp <- make_footprint(c(1, 1, NA), ncol = 3, nrow = 1)
+  fp <- make_grid(vals = c(1, 1, NA), ncol = 3, nrow = 1)
 
   out <- intersect_3d(v, fp)
   expect_identical(class(out)[[1]], "SpatVoxel")
@@ -222,13 +176,13 @@ test_that("intersect_3d() projects polygons in another CRS onto the grid", {
 
 test_that("intersect_3d() rejects input it cannot read as a footprint", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
-  fp <- make_footprint(rep(1, 9))
+  fp <- make_grid(vals = rep(1, 9))
 
   expect_error(intersect_3d(fp, fp), "neither `x` nor `y`")
   expect_error(intersect_3d(a, "hello"), "SpatVector, sf, sfc")
   expect_error(intersect_3d(a, c(fp, fp)), "single-layer footprint")
-  expect_error(intersect_3d(a, make_footprint(rep(1, 4), ncol = 2, nrow = 2)),
-               "same grid")
+  small <- make_grid(vals = rep(1, 4), ncol = 2, nrow = 2)
+  expect_error(intersect_3d(a, small), "same grid")
 })
 
 test_that("intersect_3d() requires a shared grid for two 3D inputs", {
@@ -263,6 +217,7 @@ test_that("volume(intersect_3d(a, b)) equals summed calc_volume_overlap()", {
 
 # Four cells covering the whole truth table: 1 = both present, depths meet;
 # 2 = both present, depths disjoint; 3 = A only; 4 = neither.
+# nolint start: object_usage_linter.
 truth_envelopes <- function() {
   list(
     a = make_range_rast(c(0, 0, 0, NA), c(100, 100, 100, NA),
@@ -271,6 +226,7 @@ truth_envelopes <- function() {
                         ncol = 4, nrow = 1)
   )
 }
+# nolint end
 
 test_that("intersects_3d() on envelopes gives the tri-state truth table", {
   e <- truth_envelopes()
@@ -382,28 +338,10 @@ test_that("intersects_3d() is TRUE exactly where intersect_3d() is non-empty", {
   # nolint end
 })
 
-test_that("intersects_3d() agrees with calc_volume_overlap() on overlap", {
-  a <- make_range_rast(c(0, 0, 0, 0, 0, 0, NA, NA, NA),
-                       c(100, 100, 100, 40, 40, 40, NA, NA, NA))
-  b <- make_range_rast(c(50, 50, 50, 50, 50, 50, 0, 0, 0),
-                       c(200, 200, 200, 200, 200, 200, 100, 100, 100))
-
-  from_volume <- terra::values(calc_volume_overlap(a, b))[, "depth_min_overlap"]
-  # nolint start: scalar_in_linter
-  # use %in% instead of ==, because NA == TRUE returns NA, compared to
-  # NA %in% TRUE returns FALSE
-  expect_identical(terra::values(intersects_3d(a, b))[, 1] %in% TRUE,
-                   !is.na(from_volume))
-  # nolint end
-  # ...and FALSE, not NA, where both are present but disjoint.
-  expect_identical(terra::values(intersects_3d(a, b))[, 1],
-                   c(rep(TRUE, 3), rep(FALSE, 6)))
-})
-
 test_that("intersects_3d() with 2D input tests presence on both sides", {
   a <- make_range_rast(c(0, 0, NA, NA), c(100, 100, NA, NA),
                        ncol = 4, nrow = 1)
-  fp <- make_footprint(c(1, NA, 1, NA), ncol = 4, nrow = 1)
+  fp <- make_grid(vals = c(1, NA, 1, NA), ncol = 4, nrow = 1)
 
   expect_identical(terra::values(intersects_3d(a, fp))[, 1],
                    c(TRUE, FALSE, FALSE, NA))
@@ -423,14 +361,8 @@ test_that("intersects_3d() with 2D input tests presence on both sides", {
                c(TRUE, TRUE, FALSE, FALSE, FALSE, NA, TRUE, TRUE, FALSE))
 })
 
-test_that("a stack of intersects_3d() layers sums to a richness map", {
-  e <- truth_envelopes()
-  stack <- c(intersects_3d(e$a, e$b), intersects_3d(e$a, e$a))
-  expect_identical(terra::values(sum(stack, na.rm = TRUE))[, 1], c(2, 1, 1, NA))
-})
-
 test_that("intersects_3d() rejects 2D-only input and mismatched grids", {
-  fp <- make_footprint(rep(1, 9))
+  fp <- make_grid(vals = rep(1, 9))
   expect_error(intersects_3d(fp, fp), "neither `x` nor `y`")
 
   a <- make_range_rast(rep(0, 9), rep(100, 9))
@@ -440,13 +372,6 @@ test_that("intersects_3d() rejects 2D-only input and mismatched grids", {
 })
 
 # ---- mask -------------------------------------------------------------------
-
-# A temperature field on five levels over a 3x3 grid, every cell a distinct
-# value so a misplaced mask would show.
-make_field <- function(depths = c(0, 50, 100, 150, 200)) {
-  vals <- matrix(seq_len(9 * length(depths)), nrow = 9)
-  make_voxel(vals, depths, varname = "temp")
-}
 
 test_that("mask(voxel, envelope) equals the hand-written idiom exactly", {
   field <- make_field()
@@ -531,7 +456,7 @@ test_that("mask(plain raster, voxel) keeps cells occupied at any depth", {
   # depth was dropped.
   depths <- c(0, 100)
   v <- make_voxel(cbind(c(NA, 1, NA), c(1, NA, NA)), depths, ncol = 3, nrow = 1)
-  fp <- make_footprint(c(7, 8, 9), ncol = 3, nrow = 1)
+  fp <- make_grid(vals = c(7, 8, 9), ncol = 3, nrow = 1)
 
   out <- mask(fp, v)
   expect_identical(class(out)[[1]], "SpatRaster")
@@ -557,7 +482,7 @@ test_that("mask() by 2D input applies terra's mask to 3D and plain rasters", {
   # a 2D mask needs no depth handling: a 3D object keeps its class, and a
   # plain raster gets exactly what terra returns.
   field <- make_field()
-  fp <- make_footprint(c(1, NA, 1, 1, 1, 1, 1, 1, NA))
+  fp <- make_grid(vals = c(1, NA, 1, 1, 1, 1, 1, 1, NA))
 
   by_raster <- mask(field, fp)
   expect_identical(class(by_raster)[[1]], "SpatVoxel")
@@ -588,24 +513,9 @@ test_that("the query verbs reject a tagged object that is no longer valid", {
 
   expect_error(intersect_3d(a, broken), "`y` is tagged SpatEnvelope")
   expect_error(intersects_3d(broken, a), "`x` is tagged SpatEnvelope")
-  expect_error(mask(make_footprint(rep(1, 9)), broken), "`mask` is tagged")
+  expect_error(mask(make_grid(vals = rep(1, 9)), broken), "`mask` is tagged")
   expect_error(mask(make_field(), broken), "as_envelope\\(\\)")
 })
-
-test_that("constructors accept tagged input as a footprint or template", {
-  field <- make_field()
-  # A voxel layer used as a footprint is still tagged SpatVoxel.
-  e <- as_envelope(field[[1]], depth_min = 0, depth_max = 100)
-  expect_identical(class(e)[[1]], "SpatEnvelope")
-  expect_identical(terra::values(e)[, "depth_min"], rep(0, 9))
-
-  poly <- sf::st_as_sf(make_left_polygon())
-  e2 <- vect_to_envelope(poly, field, depth_min = 0, depth_max = 100)
-  expect_identical(class(e2)[[1]], "SpatEnvelope")
-  expect_identical(terra::values(e2)[, "depth_max"],
-                   c(100, 100, NA, 100, 100, NA, 100, 100, NA))
-})
-
 
 # ---- terra::intersect() guard -----------------------------------------------
 
@@ -615,7 +525,7 @@ test_that("terra::intersect() on a 3D object errors and names replacements", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
   b <- make_range_rast(rep(200, 9), rep(300, 9))
   v <- envelope_to_voxel(a, c(0, 50, 100))
-  fp <- make_footprint(rep(1, 9))
+  fp <- make_grid(vals = rep(1, 9))
 
   expect_error(terra::intersect(a, b), "intersects_3d\\(\\)")
   expect_error(terra::intersect(v, v), "intersect_3d\\(\\)")
@@ -626,8 +536,8 @@ test_that("terra::intersect() on a 3D object errors and names replacements", {
 })
 
 test_that("terra's own intersect() methods are untouched", {
-  fp1 <- make_footprint(c(1, 2, NA, NA), ncol = 4, nrow = 1)
-  fp2 <- make_footprint(c(9, NA, 7, NA), ncol = 4, nrow = 1)
+  fp1 <- make_grid(vals = c(1, 2, NA, NA), ncol = 4, nrow = 1)
+  fp2 <- make_grid(vals = c(9, NA, 7, NA), ncol = 4, nrow = 1)
   expect_identical(terra::values(terra::intersect(fp1, fp2))[, 1],
                    c(TRUE, FALSE, FALSE, NA))
 

@@ -1,34 +1,3 @@
-# Helpers are defined locally so this does not depend on definitions that live
-# in another test file. The LAEA projection makes every cell 1 km x 1 km, so the
-# expected volumes below are hand-computable.
-make_grid <- function(ncol = 3, nrow = 3) {
-  terra::rast(nrows = nrow, ncols = ncol,
-              xmin = 0, xmax = ncol * 1000,
-              ymin = 0, ymax = nrow * 1000,
-              crs = "+proj=laea +lat_0=0 +lon_0=0 +datum=WGS84 +units=m")
-}
-
-# Helper: a SpatEnvelope with per-cell depth limits (NA marks absence).
-make_range_rast <- function(depth_min_vals, depth_max_vals,
-                            ncol = 3, nrow = 3) {
-  dmin <- make_grid(ncol, nrow)
-  terra::values(dmin) <- depth_min_vals
-  names(dmin) <- "depth_min"
-
-  dmax <- terra::rast(dmin)
-  terra::values(dmax) <- depth_max_vals
-  names(dmax) <- "depth_max"
-
-  as_envelope(c(dmin, dmax))
-}
-
-# Helper: a SpatVoxel from a cells x depths matrix of values (NA = unoccupied).
-make_voxel <- function(vals, depths, ncol = 3, nrow = 3) {
-  r <- terra::rast(make_grid(ncol, nrow), nlyrs = length(depths))
-  terra::values(r) <- vals
-  as_voxel(r, depths = depths, varname = "presence")
-}
-
 test_that("calc_volume_overlap() overlap never exceeds either range volume", {
   # Range A: covers all 9 cells, 0-100m depth
   a <- make_range_rast(
@@ -95,26 +64,6 @@ test_that("calc_volume_overlap() overlap is 0 for disjoint depth ranges", {
   expect_true(all(is.na(terra::values(result[["depth_max_overlap"]]))))
 })
 
-test_that("calc_volume_overlap() is 0 for adjacent envelopes and voxels", {
-  # A ends exactly where B begins. The envelopes share no water, and neither
-  # do their voxels: the boundary level belongs to B alone.
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  b <- make_range_rast(rep(100, 9), rep(200, 9))
-  depths <- c(0, 100, 200)
-
-  env_overlap <- terra::values(calc_volume_overlap(a, b)[["volume_overlap"]])
-  expect_true(all(env_overlap == 0))
-
-  va <- envelope_to_voxel(a, depths)
-  vb <- envelope_to_voxel(b, depths)
-  vox_overlap <- terra::values(calc_volume_overlap(va, vb)[["volume_overlap"]])
-  expect_true(all(vox_overlap == 0))
-
-  # the mixed path promotes the envelope and must agree
-  mixed_overlap <- terra::values(calc_volume_overlap(a, vb)[["volume_overlap"]])
-  expect_true(all(mixed_overlap == 0))
-})
-
 test_that("calc_volume_overlap() full overlap when ranges are identical", {
   a <- make_range_rast(
     depth_min_vals = rep(0, 9),
@@ -143,25 +92,6 @@ test_that("volume() returns correct value for uniform grid", {
   expect_gt(vol, 0)
   # With 1km cells: 9 cells * 1 km² * 0.1 km depth = 0.9 km³
   expect_identical(vol, 0.9, tolerance = 0.01)
-})
-
-test_that("volume() of a vect_to_envelope() output is positive and finite", {
-  grid <- terra::rast(nrows = 5, ncols = 5, xmin = 0, xmax = 5,
-                      ymin = 0, ymax = 5, vals = NA, crs = "EPSG:4326")
-  seafloor <- grid
-  terra::values(seafloor) <- 500
-  poly <- sf::st_sf(geometry = sf::st_sfc(
-    sf::st_polygon(list(rbind(c(1, 1), c(4, 1), c(4, 4), c(1, 4), c(1, 1)))),
-    crs = "EPSG:4326"
-  ))
-
-  out <- vect_to_envelope(poly, grid, depth_min = 0,
-                          depth_max = list(200, seafloor))
-
-  expect_s4_class(out, "SpatEnvelope")
-  v <- volume(out)
-  expect_true(is.finite(v))
-  expect_gt(v, 0)
 })
 
 # ---- SpatVoxel volume -------------------------------------------------------

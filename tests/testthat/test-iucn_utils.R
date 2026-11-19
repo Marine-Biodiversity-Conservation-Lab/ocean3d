@@ -33,41 +33,6 @@ test_that("fetch_species_assessments errors when all three inputs provided", {
 })
 
 # ---------------------------------------------------------------------------
-# group_code path
-# ---------------------------------------------------------------------------
-
-# Time consuming test, skip usually
-test_that("fetch_species_assessments returns data frame via group_code", {
-  skip_if_not_installed("vcr")
-  skip()
-  skip_on_ci()
-  skip_on_cran()
-  vcr::local_cassette("group_code")
-  out <- fetch_species_assessments(
-    api_key    = Sys.getenv("IUCN_REDLIST_KEY"),
-    group_code = "sharks_and_rays"
-  )
-  expect_s3_class(out, "data.frame")
-  expect_gt(nrow(out), 0L)
-})
-
-test_that("fetch_species_assessments result has expected columns", {
-  skip_if_not_installed("vcr")
-  vcr::local_cassette("expected_columns")
-  out <- fetch_species_assessments(
-    api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
-    species_names = "Sphyrna lewini"
-  )
-  expect_named(out, c(
-    "assessment_id", "assessment_date", "sis_id", "scientific_name",
-    "kingdom_name", "phylum_name", "class_name", "order_name",
-    "family_name", "genus_name", "species_name", "subpopulation_name",
-    "red_list_category", "systems_code",
-    "upper_depth_limit", "lower_depth_limit", "citation", "url"
-  ))
-})
-
-# ---------------------------------------------------------------------------
 # sis_ids path
 # ---------------------------------------------------------------------------
 
@@ -121,6 +86,21 @@ test_that("fetch_species_assessments resolves species names to assessments", {
   )
   expect_s3_class(out, "data.frame")
   expect_identical(nrow(out), 1L)
+  expect_named(out, c(
+    "assessment_id", "assessment_date", "sis_id", "scientific_name",
+    "kingdom_name", "phylum_name", "class_name", "order_name",
+    "family_name", "genus_name", "species_name", "subpopulation_name",
+    "red_list_category", "systems_code",
+    "upper_depth_limit", "lower_depth_limit", "citation", "url"
+  ))
+  # Depth limits and systems_code are filled from the assessment record.
+  expect_true(is.numeric(out$upper_depth_limit))
+  expect_true(is.numeric(out$lower_depth_limit))
+  expect_false(is.na(out$upper_depth_limit))
+  expect_false(is.na(out$lower_depth_limit))
+  expect_gte(out$lower_depth_limit, out$upper_depth_limit)
+  expect_type(out$systems_code, "character")
+  expect_false(is.na(out$systems_code))
 })
 
 test_that("fetch_species_assessments warns on unparseable species name", {
@@ -147,44 +127,6 @@ test_that("fetch_species_assessments warns and skips species name not in API", {
     "Foo unknownus"
   )
   expect_identical(nrow(out), 1L)
-})
-
-# ---------------------------------------------------------------------------
-# Output field values
-# ---------------------------------------------------------------------------
-
-test_that("fetch_species_assessments populates depth limits from assessment", {
-  skip_if_not_installed("vcr")
-  vcr::local_cassette("depth_limits")
-  out <- fetch_species_assessments(
-    api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
-    species_names = "Sphyrna lewini"
-  )
-  expect_false(is.na(out$upper_depth_limit))
-  expect_false(is.na(out$lower_depth_limit))
-  expect_gte(out$lower_depth_limit, out$upper_depth_limit)
-})
-
-test_that("fetch_species_assessments populates systems_code from assessment", {
-  skip_if_not_installed("vcr")
-  vcr::local_cassette("systems_code")
-  out <- fetch_species_assessments(
-    api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
-    species_names = "Sphyrna lewini"
-  )
-  expect_type(out$systems_code, "character")
-  expect_false(is.na(out$systems_code))
-})
-
-test_that("fetch_species_assessments depth fields are numeric or NA", {
-  skip_if_not_installed("vcr")
-  vcr::local_cassette("depth_fields_type")
-  out <- fetch_species_assessments(
-    api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
-    species_names = "Sphyrna lewini"
-  )
-  expect_true(is.numeric(out$upper_depth_limit) || is.na(out$upper_depth_limit))
-  expect_true(is.numeric(out$lower_depth_limit) || is.na(out$lower_depth_limit))
 })
 
 # ---------------------------------------------------------------------------
