@@ -56,7 +56,7 @@ following the <code>{variable}_depth={value}</code> convention.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">as_voxel</span><span class="op">(</span><span class="va">x</span>, depths <span class="op">=</span> <span class="cn">NULL</span>, varname <span class="op">=</span> <span class="st">"value"</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">as_voxel</span><span class="op">(</span><span class="va">x</span>, depths <span class="op">=</span> <span class="cn">NULL</span>, varname <span class="op">=</span> <span class="st">"value"</span>, depth_bounds <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -79,6 +79,19 @@ any existing names. Required if <code>x</code> has no conforming layer names.</p
 <dt id="arg-varname">varname<a class="anchor" aria-label="anchor" href="#arg-varname"></a></dt>
 <dd><p>Character. Variable name used when building layer names from
 <code>depths</code>. Ignored when <code>depths</code> is <code>NULL</code>.</p></dd>
+
+
+<dt id="arg-depth-bounds">depth_bounds<a class="anchor" aria-label="anchor" href="#arg-depth-bounds"></a></dt>
+<dd><p>Optional two-column matrix or data frame: the top and
+bottom of the slab of water each layer stands for, in metres positive
+down, one row per layer of <code>x</code> in its current order (for example a netCDF
+file's depth bounds). A data frame with columns <code>depth</code>, <code>lower</code> and
+<code>upper</code>, such as <code><a href="depth_bounds.html">depth_bounds()</a></code> of another voxel, is matched to the
+layers by depth instead. Each slab must contain its depth and have a
+positive height, and slabs must not overlap. <code>NULL</code> (the default) keeps
+the edges an existing <code>SpatVoxel</code> carries, unless <code>depths</code> renames its
+layers; a voxel without edges uses the <code>bounds</code> argument of the functions
+it is passed to.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -116,6 +129,14 @@ negated, since flipping the sign would change what the data mean.</p>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">r</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"temp_depth=200"</span>, <span class="st">"temp_depth=0"</span>, <span class="st">"temp_depth=100"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="fu">as_voxel</span><span class="op">(</span><span class="va">r</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "temp_depth=0"   "temp_depth=100" "temp_depth=200"</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># carry each layer's slab of water, as a netCDF file's depth bounds give it</span></span></span>
+<span class="r-in"><span><span class="va">v</span> <span class="op">&lt;-</span> <span class="fu">as_voxel</span><span class="op">(</span><span class="va">r</span>, depth_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">150</span>, <span class="fl">0</span>, <span class="fl">50</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">250</span>, <span class="fl">50</span>, <span class="fl">150</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="depth_bounds.html">depth_bounds</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   depth lower upper</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1     0     0    50</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2   100    50   150</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 3   200   150   250</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

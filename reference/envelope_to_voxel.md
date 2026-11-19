@@ -17,8 +17,9 @@ envelope_to_voxel(
   depths,
   values = NULL,
   profile = NULL,
-  bounds = c("top", "midpoint"),
-  varname = "presence"
+  bounds = c("midpoint", "top"),
+  varname = "presence",
+  depth_bounds = NULL
 )
 ```
 
@@ -60,15 +61,25 @@ envelope_to_voxel(
 - bounds:
 
   How to place the edges of the slab each depth level stands for.
-  `"top"` (the default) runs the slab from the level down to the next,
-  so the level is its shallow edge; `"midpoint"` puts the edges halfway
-  between neighbouring levels. Under both, the outer edges are clamped
-  to `range(depths)` rather than extrapolated.
+  `"midpoint"` (the default) puts the edges halfway between neighbouring
+  levels; `"top"` runs the slab from the level down to the next, so the
+  level is its shallow edge. Under both, the outer edges are clamped to
+  `range(depths)` rather than extrapolated. Not used when `depth_bounds`
+  is given.
 
 - varname:
 
   Name to use for depth layer, taking on form of
   `{varname}_depth={depths[i]}`
+
+- depth_bounds:
+
+  Optional two-column matrix or data frame: the top and bottom of the
+  slab of water each depth stands for, in metres, one row per element of
+  `depths` (or a `depth`, `lower`, `upper` table, as in
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)).
+  When given, these slabs are used instead of `bounds`, the returned
+  voxel carries them, and `depths` must not repeat a depth.
 
 ## Value
 
@@ -106,14 +117,19 @@ applies between two envelopes.
 Where a slab's edges fall is a property of the dataset the levels came
 from, not of the levels themselves, so `bounds` selects the convention:
 
-- `"top"` (the default) runs each slab from its level down to the next,
-  so a level names the top of what it stands for. Levels
-  `c(0, 100, 200)` give slabs `0-100`, `100-200`.
+- `"midpoint"` (the default) puts the edges halfway between neighbouring
+  levels. This is the World Ocean Atlas convention: `0, 5, 10, ...` the
+  0 m layer covers `0-2.5` m, the 5 m layer `2.5-7.5` m, the 10 m layer
+  `7.5-12.5` m, and so on. It is close for model output such as
+  Copernicus Marine, but leaves out the water above the shallowest level
+  and below the deepest.
 
-- `"midpoint"` puts the edges halfway between neighbouring levels, so a
-  level sits in the middle of what it stands for. This is the World
-  Ocean Atlas convention: `0, 5, 10, ...` the 0 m layer covers `0-2.5`
-  m, the 5 m layer `2.5-7.5` m, the 10 m layer `7.5-12.5` m, and so on.
+- `"top"` runs each slab from its level down to the next, so a level
+  names the top of what it stands for. Levels `c(0, 100, 200)` give
+  slabs `0-100`, `100-200`.
+
+When the dataset gives the real edges (a netCDF file's depth bounds),
+pass them as `depth_bounds` instead.
 
 Under either convention the slabs cover the span from the shallowest
 level to the deepest and no further: outer edges are clamped to
@@ -145,7 +161,7 @@ e <- as_envelope(fp, depth_min = 50, depth_max = 200)
 # presence at every standard depth the envelope covers
 terra::values(envelope_to_voxel(e, depths = c(0, 50, 100, 200, 300)))
 #>      presence_depth=0 presence_depth=50 presence_depth=100 presence_depth=200
-#> [1,]               NA                 1                  1                 NA
+#> [1,]               NA                 1                  1                  1
 #> [2,]               NA                NA                 NA                 NA
 #>      presence_depth=300
 #> [1,]                 NA
@@ -157,7 +173,7 @@ terra::values(
                     values = 5)
 )
 #>      presence_depth=0 presence_depth=50 presence_depth=100 presence_depth=200
-#> [1,]               NA                 5                  5                 NA
+#> [1,]               NA                 5                  5                  5
 #> [2,]               NA                NA                 NA                 NA
 #>      presence_depth=300
 #> [1,]                 NA
@@ -171,20 +187,30 @@ terra::values(
                     varname = "time")
 )
 #>      time_depth=0 time_depth=50 time_depth=100 time_depth=200 time_depth=300
-#> [1,]           NA           0.5            0.5             NA             NA
+#> [1,]           NA     0.3333333      0.3333333      0.3333333             NA
 #> [2,]           NA            NA             NA             NA             NA
 
-# the same envelope read against WOA-style layer bounds: [60, 70] sits in the
-# 50-150 m slab of the 100 m level, where the default puts it at 0-100 m
+# where a slab's edges fall decides the level: [60, 70] sits in the 50-150 m
+# slab of the 100 m level by default (WOA-style), but in the 0-100 m slab of
+# the 0 m level under "top"
 shallow <- as_envelope(fp, depth_min = 60, depth_max = 70)
 terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200)))
 #>      presence_depth=0 presence_depth=100 presence_depth=200
-#> [1,]                1                 NA                 NA
+#> [1,]               NA                  1                 NA
 #> [2,]               NA                 NA                 NA
 terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200),
-                                bounds = "midpoint"))
+                                bounds = "top"))
 #>      presence_depth=0 presence_depth=100 presence_depth=200
-#> [1,]               NA                  1                 NA
+#> [1,]                1                 NA                 NA
+#> [2,]               NA                 NA                 NA
+
+# or give the dataset's own edges
+terra::values(envelope_to_voxel(
+  shallow, depths = c(0, 100, 200),
+  depth_bounds = cbind(c(0, 65, 150), c(65, 150, 250))
+))
+#>      presence_depth=0 presence_depth=100 presence_depth=200
+#> [1,]                1                  1                 NA
 #> [2,]               NA                 NA                 NA
 
 # a per-cell magnitude comes in as a raster: split each cell's effort evenly
@@ -198,7 +224,7 @@ terra::values(
   )
 )
 #>      effort_depth=0 effort_depth=50 effort_depth=100 effort_depth=200
-#> [1,]             NA              50               50               NA
+#> [1,]             NA        33.33333         33.33333         33.33333
 #> [2,]             NA              NA               NA               NA
 #>      effort_depth=300
 #> [1,]               NA

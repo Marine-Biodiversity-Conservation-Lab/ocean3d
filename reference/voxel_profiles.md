@@ -100,15 +100,15 @@ depths <- c(0, 100, 200, 300)
 terra::values(envelope_to_voxel(e, depths, values = 12,
                                 profile = profile_flat))
 #>      presence_depth=0 presence_depth=100 presence_depth=200 presence_depth=300
-#> [1,]               12                 NA                 NA                 NA
-#> [2,]               12                 12                 12                 NA
+#> [1,]               12                 12                 NA                 NA
+#> [2,]               12                 12                 12                 12
 
 # an even share instead, so each cell's levels sum back to its value
 terra::values(envelope_to_voxel(e, depths, values = 12,
                                 profile = profile_equal))
 #>      presence_depth=0 presence_depth=100 presence_depth=200 presence_depth=300
-#> [1,]               12                 NA                 NA                 NA
-#> [2,]                4                  4                  4                 NA
+#> [1,]                6                  6                 NA                 NA
+#> [2,]                3                  3                  3                  3
 
 # a profile of your own: weight the shallow levels twice as heavily as the
 # deep ones, still conserving each cell's total
@@ -121,6 +121,6 @@ surface_weighted <- function(ind, depths, n_depths) {
 terra::values(envelope_to_voxel(e, depths, values = 12,
                                 profile = surface_weighted))
 #>      presence_depth=0 presence_depth=100 presence_depth=200 presence_depth=300
-#> [1,]             12.0                 NA                 NA                 NA
-#> [2,]              4.8                4.8                2.4                 NA
+#> [1,]                6                  6                 NA                 NA
+#> [2,]                4                  4                  2                  2
 ```

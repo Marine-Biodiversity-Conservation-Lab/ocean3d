@@ -4,6 +4,39 @@
 
 ### Breaking changes
 
+`bounds` now defaults to `"midpoint"` instead of `"top"` in
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md),
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+([\#138](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/138)).
+The slab of water each depth level stands for now runs halfway to the
+neighbouring levels. This matches World Ocean Atlas levels and is closer
+than `"top"` to Copernicus Marine layers. Under the old default each
+level was the top of its slab and the deepest level had no volume.
+Results change for voxels that don’t carry their own depth edges (see
+`depth_bounds` under New features):
+
+- [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+  and
+  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
+  give different volumes. For example, levels at 0, 100 and 300 m now
+  stand for 0-50, 50-200 and 200-300 m rather than 0-100, 100-300 and
+  none.
+- [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
+  can place an envelope on different levels, and so can
+  [`mask()`](https://rspatial.github.io/terra/reference/mask.html),
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+  and
+  [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+  when they combine an envelope with a voxel. An envelope from 60 to 70
+  m on levels at 0, 100 and 200 m now occupies the 100 m level rather
+  than the 0 m one.
+
+Pass `bounds = "top"` to keep the old results.
+
 Point extraction
 ([`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
 [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md),
@@ -132,6 +165,31 @@ how many cells have the limits swapped (or a seafloor above
   where top equals bottom are dropped, and so are polygon times, with a
   message
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
+- A `SpatVoxel` can carry the top and bottom of the slab of water each
+  layer stands for, such as a netCDF file’s depth bounds: pass
+  `depth_bounds` to
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  or
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
+  and read them with the new
+  [`depth_bounds()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depth_bounds.md).
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md),
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+  [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+  and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+  then use these edges instead of `bounds`. Results that stay a
+  `SpatVoxel` keep the edges, including after
+  [`c()`](https://rdrr.io/r/base/c.html);
+  [`app()`](https://rspatial.github.io/terra/reference/app.html) and
+  writing to a file drop them. For such a voxel,
+  [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
+  gives each cell an envelope from the top of its shallowest selected
+  slab to the bottom of its deepest, and the depth limits from
+  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
+  follow the same rule
+  ([\#138](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/138)).
 
 ### Bug fixes
 

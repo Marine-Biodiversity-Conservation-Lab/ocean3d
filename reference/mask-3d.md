@@ -14,7 +14,7 @@ stays only where the mask domain reaches that cell at that depth.
 
 ``` r
 # S4 method for class 'SpatVoxel,SpatEnvelope'
-mask(x, mask, bounds = c("top", "midpoint"), ...)
+mask(x, mask, bounds = c("midpoint", "top"), ...)
 
 # S4 method for class 'SpatVoxel,SpatVoxel'
 mask(x, mask, ...)
@@ -23,7 +23,7 @@ mask(x, mask, ...)
 mask(x, mask, ...)
 
 # S4 method for class 'SpatEnvelope,SpatVoxel'
-mask(x, mask, bounds = c("top", "midpoint"), ...)
+mask(x, mask, bounds = c("midpoint", "top"), ...)
 
 # S4 method for class 'SpatRaster,SpatEnvelope'
 mask(x, mask, ...)
@@ -57,9 +57,11 @@ mask(x, mask, ...)
 - bounds:
 
   Only when one side is an envelope and the other a voxel. How the
-  envelope is placed on the voxel's depth levels: `"top"` (default) or
-  `"midpoint"`. See
+  envelope is placed on the voxel's depth levels: `"midpoint"` (default)
+  or `"top"`. See
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
+  Not used when the voxel carries its own depth edges (see
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)).
 
 - ...:
 
@@ -140,8 +142,8 @@ range_env <- as_envelope(terra::setValues(fp, c(1, 1, NA)),
 # are gone.
 terra::values(mask(temp, range_env))
 #>      temp_depth=0 temp_depth=100 temp_depth=200
-#> [1,]           20             NA             NA
-#> [2,]           21             NA             NA
+#> [1,]           20             15             NA
+#> [2,]           21             16             NA
 #> [3,]           NA             NA             NA
 
 # A 2D raster masked by the range keeps cells where the range is present

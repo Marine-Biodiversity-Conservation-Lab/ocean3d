@@ -19,10 +19,10 @@ intersect_3d(x, y, ...)
 intersect_3d(x, y)
 
 # S4 method for class 'SpatEnvelope,SpatVoxel'
-intersect_3d(x, y, bounds = c("top", "midpoint"), ...)
+intersect_3d(x, y, bounds = c("midpoint", "top"), ...)
 
 # S4 method for class 'SpatVoxel,SpatEnvelope'
-intersect_3d(x, y, bounds = c("top", "midpoint"), ...)
+intersect_3d(x, y, bounds = c("midpoint", "top"), ...)
 
 # S4 method for class 'SpatEnvelope,ANY'
 intersect_3d(x, y, ...)
@@ -63,9 +63,11 @@ intersect_3d(x, y, ...)
 - bounds:
 
   Only when one input is an envelope and the other a voxel. How the
-  envelope is placed on the voxel's depth levels: `"top"` (default) or
-  `"midpoint"`. See
+  envelope is placed on the voxel's depth levels: `"midpoint"` (default)
+  or `"top"`. See
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
+  Not used when the voxel carries its own depth edges (see
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)).
 
 ## Value
 

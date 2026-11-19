@@ -23,13 +23,13 @@ calc_volume_overlap(x, y, ...)
 calc_volume_overlap(x, y, ...)
 
 # S4 method for class 'SpatVoxel,SpatVoxel'
-calc_volume_overlap(x, y, bounds = c("top", "midpoint"))
+calc_volume_overlap(x, y, bounds = c("midpoint", "top"))
 
 # S4 method for class 'SpatEnvelope,SpatVoxel'
-calc_volume_overlap(x, y, bounds = c("top", "midpoint"), ...)
+calc_volume_overlap(x, y, bounds = c("midpoint", "top"), ...)
 
 # S4 method for class 'SpatVoxel,SpatEnvelope'
-calc_volume_overlap(x, y, bounds = c("top", "midpoint"), ...)
+calc_volume_overlap(x, y, bounds = c("midpoint", "top"), ...)
 
 # S4 method for class 'SpatRaster,SpatRaster'
 calc_volume_overlap(x, y, ...)
@@ -57,7 +57,8 @@ calc_volume_overlap(x, y, ...)
   Voxel methods only. See
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md).
   Also governs how an envelope is discretized when the two inputs
-  differ.
+  differ. Not used when a voxel carries its own depth edges; two voxels
+  whose edges differ are an error.
 
 ## Value
 
@@ -86,10 +87,12 @@ Multi-layer SpatRaster with 9 layers:
   depths do not intersect, NA where either is absent.
 
 For voxel inputs the depth layers are *summary bounds* — the shallowest
-and deepest occupied level. A voxel with an interior gap is not solid
-between them, so read the volume layers, not the depth layers, for
-occupied volume. The result is a plain SpatRaster: it is neither an
-envelope nor a voxel.
+and deepest occupied level, or the top and bottom of their slabs when
+the voxels carry depth edges (as
+[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
+gives them). A voxel with an interior gap is not solid between them, so
+read the volume layers, not the depth layers, for occupied volume. The
+result is a plain SpatRaster: it is neither an envelope nor a voxel.
 
 ## Details
 
@@ -135,5 +138,5 @@ bv <- envelope_to_voxel(b, depths = c(0, 50, 100, 150, 200))
 terra::global(calc_volume_overlap(a, bv)[["volume_overlap"]], "sum",
               na.rm = TRUE)
 #>                sum
-#> volume_overlap 0.1
+#> volume_overlap 0.2
 ```

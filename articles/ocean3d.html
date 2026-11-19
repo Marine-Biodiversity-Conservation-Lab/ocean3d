@@ -806,13 +806,15 @@ Importantly, these values represent the number of potentially occupied
 geographical cells, not the number of individual animals or observations
 of the species.</p>
 <p>You may have noticed an additional argument in our code:
-<code>bounds = "midpoint"</code>. Why do we need it?</p>
+<code>bounds = "midpoint"</code>. What does it do?</p>
 <p>Our temperature data are organised into five standard depth levels.
 To combine these data with our species’ potential distribution, we need
 to represent both datasets using the same depth levels.</p>
 <p>The argument <code>bounds = "midpoint"</code> defines how the water
-column is divided into intervals around those depths. We will use this
-convention throughout our example.</p>
+column is divided into intervals around those depths: each interval runs
+halfway to the neighbouring depth levels. It is the default, so you can
+leave it out. We write it out to make the choice visible, and use it
+throughout our example.</p>
 <p>For further details, including how these intervals are calculated and
 why they matter, see the <a href="depth-levels.html">Understanding depth
 levels</a> vignette.</p>

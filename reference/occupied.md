@@ -85,7 +85,7 @@ terra::values(warm)
 
 # The verbs need no predicate.
 volume(warm)
-#> [1] 34004375
+#> [1] 25503281
 
 # A presence voxel is returned unchanged.
 identical(terra::values(occupied(warm)), terra::values(warm))

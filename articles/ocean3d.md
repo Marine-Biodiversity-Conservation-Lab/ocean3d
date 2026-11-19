@@ -711,15 +711,17 @@ geographical cells, not the number of individual animals or observations
 of the species.
 
 You may have noticed an additional argument in our code:
-`bounds = "midpoint"`. Why do we need it?
+`bounds = "midpoint"`. What does it do?
 
 Our temperature data are organised into five standard depth levels. To
 combine these data with our species’ potential distribution, we need to
 represent both datasets using the same depth levels.
 
 The argument `bounds = "midpoint"` defines how the water column is
-divided into intervals around those depths. We will use this convention
-throughout our example.
+divided into intervals around those depths: each interval runs halfway
+to the neighbouring depth levels. It is the default, so you can leave it
+out. We write it out to make the choice visible, and use it throughout
+our example.
 
 For further details, including how these intervals are calculated and
 why they matter, see the [Understanding depth

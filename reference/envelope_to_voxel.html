@@ -67,8 +67,9 @@ envelope, are <code>NA</code> in every layer.</p>
 <span>  <span class="va">depths</span>,</span>
 <span>  values <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  profile <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"top"</span>, <span class="st">"midpoint"</span><span class="op">)</span>,</span>
-<span>  varname <span class="op">=</span> <span class="st">"presence"</span></span>
+<span>  bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span>,</span>
+<span>  varname <span class="op">=</span> <span class="st">"presence"</span>,</span>
+<span>  depth_bounds <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -105,15 +106,24 @@ the depths a cell occupies. Any function meeting the contract in
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
 <dd><p>How to place the edges of the slab each depth level stands for.
-<code>"top"</code> (the default) runs the slab from the level down to the next, so the
-level is its shallow edge; <code>"midpoint"</code> puts the edges halfway between
-neighbouring levels. Under both, the outer edges are clamped to
-<code>range(depths)</code> rather than extrapolated.</p></dd>
+<code>"midpoint"</code> (the default) puts the edges halfway between neighbouring
+levels; <code>"top"</code> runs the slab from the level down to the next, so the
+level is its shallow edge. Under both, the outer edges are clamped to
+<code>range(depths)</code> rather than extrapolated. Not used when <code>depth_bounds</code>
+is given.</p></dd>
 
 
 <dt id="arg-varname">varname<a class="anchor" aria-label="anchor" href="#arg-varname"></a></dt>
 <dd><p>Name to use for depth layer, taking on form of
 <code>{varname}_depth={depths[i]}</code></p></dd>
+
+
+<dt id="arg-depth-bounds">depth_bounds<a class="anchor" aria-label="anchor" href="#arg-depth-bounds"></a></dt>
+<dd><p>Optional two-column matrix or data frame: the top and
+bottom of the slab of water each depth stands for, in metres, one row per
+element of <code>depths</code> (or a <code>depth</code>, <code>lower</code>, <code>upper</code> table, as in
+<code><a href="as_voxel.html">as_voxel()</a></code>). When given, these slabs are used instead of <code>bounds</code>, the
+returned voxel carries them, and <code>depths</code> must not repeat a depth.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -145,14 +155,18 @@ intersect as voxels. This is the same rule <code><a href="intersect_3d.html">int
 two envelopes.</p>
 <p>Where a slab's edges fall is a property of the dataset the levels came from,
 not of the levels themselves, so <code>bounds</code> selects the convention:</p>
-<ul><li><p><code>"top"</code> (the default) runs each slab from its level down to the next,
-so a level names the top of what it stands for. Levels <code>c(0, 100, 200)</code>
-give slabs <code>0-100</code>, <code>100-200</code>.</p></li>
-<li><p><code>"midpoint"</code> puts the edges halfway between neighbouring levels, so a
-level sits in the middle of what it stands for. This is the World Ocean
-Atlas convention: <code>0, 5, 10, ...</code> the 0 m layer covers <code>0-2.5</code> m, the
-5 m layer <code>2.5-7.5</code> m, the 10 m layer <code>7.5-12.5</code> m, and so on.</p></li>
-</ul><p>Under either convention the slabs cover the span from the shallowest level to
+<ul><li><p><code>"midpoint"</code> (the default) puts the edges halfway between
+neighbouring levels. This is the World Ocean Atlas convention:
+<code>0, 5, 10, ...</code> the 0 m layer covers <code>0-2.5</code> m, the 5 m layer
+<code>2.5-7.5</code> m, the 10 m layer <code>7.5-12.5</code> m, and so on. It is close for
+model output such as Copernicus Marine, but leaves out the water above
+the shallowest level and below the deepest.</p></li>
+<li><p><code>"top"</code> runs each slab from its level down to the next, so a level
+names the top of what it stands for. Levels <code>c(0, 100, 200)</code> give slabs
+<code>0-100</code>, <code>100-200</code>.</p></li>
+</ul><p>When the dataset gives the real edges (a netCDF file's depth bounds), pass
+them as <code>depth_bounds</code> instead.</p>
+<p>Under either convention the slabs cover the span from the shallowest level to
 the deepest and no further: outer edges are clamped to <code>range(depths)</code> rather
 than extrapolated, which is why WOA's 0 m layer starts at the surface rather
 than half a gap above it. The expansion is therefore limited only at the two
@@ -179,7 +193,7 @@ the envelope's <code>depth_max</code> names that level, which is the top of its 
 <span class="r-in"><span><span class="co"># presence at every standard depth the envelope covers</span></span></span>
 <span class="r-in"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu">envelope_to_voxel</span><span class="op">(</span><span class="va">e</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">50</span>, <span class="fl">100</span>, <span class="fl">200</span>, <span class="fl">300</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      presence_depth=0 presence_depth=50 presence_depth=100 presence_depth=200</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]               NA                 1                  1                 NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]               NA                 1                  1                  1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [2,]               NA                NA                 NA                 NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      presence_depth=300</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1,]                 NA</span>
@@ -191,7 +205,7 @@ the envelope's <code>depth_max</code> names that level, which is the top of its 
 <span class="r-in"><span>                    values <span class="op">=</span> <span class="fl">5</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      presence_depth=0 presence_depth=50 presence_depth=100 presence_depth=200</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]               NA                 5                  5                 NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]               NA                 5                  5                  5</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [2,]               NA                NA                 NA                 NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      presence_depth=300</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1,]                 NA</span>
@@ -205,20 +219,30 @@ the envelope's <code>depth_max</code> names that level, which is the top of its 
 <span class="r-in"><span>                    varname <span class="op">=</span> <span class="st">"time"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      time_depth=0 time_depth=50 time_depth=100 time_depth=200 time_depth=300</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]           NA           0.5            0.5             NA             NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]           NA     0.3333333      0.3333333      0.3333333             NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [2,]           NA            NA             NA             NA             NA</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># the same envelope read against WOA-style layer bounds: [60, 70] sits in the</span></span></span>
-<span class="r-in"><span><span class="co"># 50-150 m slab of the 100 m level, where the default puts it at 0-100 m</span></span></span>
+<span class="r-in"><span><span class="co"># where a slab's edges fall decides the level: [60, 70] sits in the 50-150 m</span></span></span>
+<span class="r-in"><span><span class="co"># slab of the 100 m level by default (WOA-style), but in the 0-100 m slab of</span></span></span>
+<span class="r-in"><span><span class="co"># the 0 m level under "top"</span></span></span>
 <span class="r-in"><span><span class="va">shallow</span> <span class="op">&lt;-</span> <span class="fu"><a href="as_envelope.html">as_envelope</a></span><span class="op">(</span><span class="va">fp</span>, depth_min <span class="op">=</span> <span class="fl">60</span>, depth_max <span class="op">=</span> <span class="fl">70</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu">envelope_to_voxel</span><span class="op">(</span><span class="va">shallow</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      presence_depth=0 presence_depth=100 presence_depth=200</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]                1                 NA                 NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]               NA                  1                 NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [2,]               NA                 NA                 NA</span>
 <span class="r-in"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu">envelope_to_voxel</span><span class="op">(</span><span class="va">shallow</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span>,</span></span>
-<span class="r-in"><span>                                bounds <span class="op">=</span> <span class="st">"midpoint"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span>                                bounds <span class="op">=</span> <span class="st">"top"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      presence_depth=0 presence_depth=100 presence_depth=200</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]               NA                  1                 NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]                1                 NA                 NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [2,]               NA                 NA                 NA</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># or give the dataset's own edges</span></span></span>
+<span class="r-in"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu">envelope_to_voxel</span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="va">shallow</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  depth_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">65</span>, <span class="fl">150</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">65</span>, <span class="fl">150</span>, <span class="fl">250</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      presence_depth=0 presence_depth=100 presence_depth=200</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]                1                  1                 NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [2,]               NA                 NA                 NA</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># a per-cell magnitude comes in as a raster: split each cell's effort evenly</span></span></span>
@@ -232,7 +256,7 @@ the envelope's <code>depth_max</code> names that level, which is the top of its 
 <span class="r-in"><span>  <span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      effort_depth=0 effort_depth=50 effort_depth=100 effort_depth=200</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]             NA              50               50               NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]             NA        33.33333         33.33333         33.33333</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [2,]             NA              NA               NA               NA</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>      effort_depth=300</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1,]               NA</span>

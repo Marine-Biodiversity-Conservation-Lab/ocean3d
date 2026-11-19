@@ -48,7 +48,7 @@ cell is sampled at the same set of standard depths."></head><body>
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>3D voxel model: one layer per standard depth level</h1>
-      <small class="dont-index">Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/AllClasses.R" class="external-link"><code>R/AllClasses.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/AllClasses.R" class="external-link"><code>R/AllClasses.R</code></a>, <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/create_3d_objects.R" class="external-link"><code>R/create_3d_objects.R</code></a></small>
       <div class="d-none name"><code>SpatVoxel-class.Rd</code></div>
     </div>
 
@@ -60,12 +60,55 @@ distinct and ordered shallow to deep. The depth axis is grid-wide: every
 cell is sampled at the same set of standard depths.</p>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># S4 method for class 'SpatVoxel'</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
+    </div>
 
+    <div class="section level2">
+    <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
+
+
+<dl><dt id="arg-x-">x, ...<a class="anchor" aria-label="anchor" href="#arg-x-"></a></dt>
+<dd><p>For <code><a href="https://rdrr.io/r/base/c.html" class="external-link">c()</a></code>: a <code>SpatVoxel</code> and further rasters to combine, as
+with terra's <code><a href="https://rdrr.io/r/base/c.html" class="external-link">c()</a></code>. The result keeps the depth edges of every <code>SpatVoxel</code>
+among them.</p></dd>
+
+</dl></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>A voxel may have interior gaps — a cell can be NA at one depth and non-NA
 at the depths above and below it.</p>
+<p>Each layer stands for a slab of water around its depth. A voxel can carry
+the top and bottom of each slab, for example a netCDF file's depth bounds,
+set with the <code>depth_bounds</code> argument of <code><a href="as_voxel.html">as_voxel()</a></code> or
+<code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code> and read with <code><a href="depth_bounds.html">depth_bounds()</a></code>. <code><a href="volume.html">volume()</a></code>,
+<code><a href="calc_volume_overlap.html">calc_volume_overlap()</a></code>,
+<code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>, <code><a href="voxel_to_envelope.html">voxel_to_envelope()</a></code>, <code><a href="intersect_3d.html">intersect_3d()</a></code>,
+<code><a href="intersects_3d.html">intersects_3d()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code> use these edges when the voxel has them for
+every layer, and work the edges out from the depths with their <code>bounds</code>
+argument when it doesn't. Each slab must contain its depth and have a
+positive height, and slabs must not overlap; gaps between them are allowed.</p>
+<p>terra operations that keep the <code>SpatVoxel</code> class (<code>[[</code>, <code>crop()</code>,
+<code>mask()</code>, arithmetic, <code><a href="https://rdrr.io/r/base/c.html" class="external-link">c()</a></code>) keep the edges; an operation that returns a
+plain <code>SpatRaster</code> (<code>app()</code>, writing to a file) drops them. Combining a
+voxel that has edges with one that doesn't, with <code><a href="https://rdrr.io/r/base/c.html" class="external-link">c()</a></code>, leaves some layers
+without edges, so <code>bounds</code> applies to the result.</p>
     </div>
+    <div class="section level2">
+    <h2 id="slots">Slots<a class="anchor" aria-label="anchor" href="#slots"></a></h2>
+
+
+<dl><dt><code>depth_edges</code></dt>
+<dd><p>A data frame with columns <code>depth</code>, <code>lower</code> and <code>upper</code>,
+in metres positive down: the slab each depth stands for, from <code>lower</code>
+(its top) to <code>upper</code> (its bottom), as in <a href="SpatProxy-class.html">SpatProxy</a>. It has no
+rows when the voxel carries no edges. Each layer finds its slab by its
+depth, so the table may hold rows for depths the voxel no longer has.</p></dd>
+
+
+</dl></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><a href="SpatEnvelope-class.html">SpatEnvelope</a>, <a href="SpatVolume-class.html">SpatVolume</a></p></div>

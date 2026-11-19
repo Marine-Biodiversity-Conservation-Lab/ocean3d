@@ -68,10 +68,10 @@ values where the other is present, use <code><a href="https://rspatial.github.io
 <span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatEnvelope,SpatVoxel'</span></span>
-<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"top"</span>, <span class="st">"midpoint"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span>
+<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatVoxel,SpatEnvelope'</span></span>
-<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"top"</span>, <span class="st">"midpoint"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span>
+<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatEnvelope,ANY'</span></span>
 <span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
@@ -108,8 +108,9 @@ inputs are envelopes.</p></dd>
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
 <dd><p>Only when one input is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: <code>"top"</code> (default) or
-<code>"midpoint"</code>. See <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>.</p></dd>
+the envelope is placed on the voxel's depth levels: <code>"midpoint"</code>
+(default) or <code>"top"</code>. See <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. Not used when the voxel
+carries its own depth edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>).</p></dd>
 
 </dl></div>
     <div class="section level2">

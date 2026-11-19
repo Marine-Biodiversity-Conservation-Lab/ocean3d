@@ -93,6 +93,11 @@ the same grid as <code>v</code>.</p>
 the data: the shallowest and deepest depths at which the cell has any value.
 Pass a different predicate to bound a subset of the values instead, e.g.
 <code>\(x) x &gt; 15</code> for the depths over which a cell exceeds 15 degrees.</p>
+<p>When the voxel carries depth edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>), each cell's
+envelope runs from the top of the slab of its shallowest selected layer
+(where <code>fun</code> is <code>TRUE</code>) to the bottom of its deepest one's, so it covers
+the water those layers stand for. A voxel
+without edges gives the depths of the layers themselves.</p>
 <p><strong>This conversion is lossy.</strong> An envelope stores a single continuous
 interval per cell, so any interior gap in the voxel is filled in: a cell that
 satisfies <code>fun</code> at 0 m and 200 m but not at 100 m still yields the envelope
@@ -126,6 +131,15 @@ satisfies <code>fun</code> at 0 m and 200 m but not at 100 m still yields the en
 <span class="r-out co"><span class="r-pr">#&gt;</span>      depth_min depth_max</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1,]         0        50</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [2,]        NA        NA</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># With depth edges, the envelope covers the slabs: cell 1 runs from the top</span></span></span>
+<span class="r-in"><span><span class="co"># of the 0 m slab to the bottom of the 200 m slab.</span></span></span>
+<span class="r-in"><span><span class="va">edged</span> <span class="op">&lt;-</span> <span class="fu"><a href="as_voxel.html">as_voxel</a></span><span class="op">(</span><span class="va">v</span>, depth_bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">25</span>, <span class="fl">75</span>, <span class="fl">150</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                                          <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">25</span>, <span class="fl">75</span>, <span class="fl">150</span>, <span class="fl">250</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu">voxel_to_envelope</span><span class="op">(</span><span class="va">edged</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      depth_min depth_max</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]         0       250</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [2,]        75       150</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

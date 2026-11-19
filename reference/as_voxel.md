@@ -9,7 +9,7 @@ convention.
 ## Usage
 
 ``` r
-as_voxel(x, depths = NULL, varname = "value")
+as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL)
 ```
 
 ## Arguments
@@ -37,6 +37,20 @@ as_voxel(x, depths = NULL, varname = "value")
 
   Character. Variable name used when building layer names from `depths`.
   Ignored when `depths` is `NULL`.
+
+- depth_bounds:
+
+  Optional two-column matrix or data frame: the top and bottom of the
+  slab of water each layer stands for, in metres positive down, one row
+  per layer of `x` in its current order (for example a netCDF file's
+  depth bounds). A data frame with columns `depth`, `lower` and `upper`,
+  such as
+  [`depth_bounds()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depth_bounds.md)
+  of another voxel, is matched to the layers by depth instead. Each slab
+  must contain its depth and have a positive height, and slabs must not
+  overlap. `NULL` (the default) keeps the edges an existing `SpatVoxel`
+  carries, unless `depths` renames its layers; a voxel without edges
+  uses the `bounds` argument of the functions it is passed to.
 
 ## Value
 
@@ -79,4 +93,12 @@ names(v)
 names(r) <- c("temp_depth=200", "temp_depth=0", "temp_depth=100")
 names(as_voxel(r))
 #> [1] "temp_depth=0"   "temp_depth=100" "temp_depth=200"
+
+# carry each layer's slab of water, as a netCDF file's depth bounds give it
+v <- as_voxel(r, depth_bounds = cbind(c(150, 0, 50), c(250, 50, 150)))
+depth_bounds(v)
+#>   depth lower upper
+#> 1     0     0    50
+#> 2   100    50   150
+#> 3   200   150   250
 ```

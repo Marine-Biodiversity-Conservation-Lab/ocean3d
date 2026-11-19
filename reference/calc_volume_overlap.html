@@ -74,13 +74,13 @@ would overstate the overlap.</p>
 <span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatVoxel,SpatVoxel'</span></span>
-<span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"top"</span>, <span class="st">"midpoint"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatEnvelope,SpatVoxel'</span></span>
-<span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"top"</span>, <span class="st">"midpoint"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span>
+<span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatVoxel,SpatEnvelope'</span></span>
-<span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"top"</span>, <span class="st">"midpoint"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span>
+<span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatRaster,SpatRaster'</span></span>
 <span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
@@ -103,7 +103,8 @@ of envelopes.</p></dd>
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
 <dd><p>Voxel methods only. See <code><a href="volume.html">volume()</a></code>. Also governs how an
-envelope is discretized when the two inputs differ.</p></dd>
+envelope is discretized when the two inputs differ. Not used when a voxel
+carries its own depth edges; two voxels whose edges differ are an error.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -128,7 +129,9 @@ absent.</p></dd>
 
 
 </dl><p>For voxel inputs the depth layers are <em>summary bounds</em> — the shallowest
-and deepest occupied level. A voxel with an interior gap is not solid
+and deepest occupied level, or the top and bottom of their slabs when the
+voxels carry depth edges (as <code><a href="voxel_to_envelope.html">voxel_to_envelope()</a></code> gives them). A voxel
+with an interior gap is not solid
 between them, so read the volume layers, not the depth layers, for
 occupied volume. The result is a plain SpatRaster: it is neither an
 envelope nor a voxel.</p>
@@ -173,7 +176,7 @@ needed.</p></div>
 <span class="r-in"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="fu">calc_volume_overlap</span><span class="op">(</span><span class="va">a</span>, <span class="va">bv</span><span class="op">)</span><span class="op">[[</span><span class="st">"volume_overlap"</span><span class="op">]</span><span class="op">]</span>, <span class="st">"sum"</span>,</span></span>
 <span class="r-in"><span>              na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>                sum</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> volume_overlap 0.1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> volume_overlap 0.2</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

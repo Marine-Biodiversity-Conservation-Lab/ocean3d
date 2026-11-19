@@ -46,6 +46,13 @@ value. Pass a different predicate to bound a subset of the values
 instead, e.g. `\(x) x > 15` for the depths over which a cell exceeds 15
 degrees.
 
+When the voxel carries depth edges (see
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)),
+each cell's envelope runs from the top of the slab of its shallowest
+selected layer (where `fun` is `TRUE`) to the bottom of its deepest
+one's, so it covers the water those layers stand for. A voxel without
+edges gives the depths of the layers themselves.
+
 **This conversion is lossy.** An envelope stores a single continuous
 interval per cell, so any interior gap in the voxel is filled in: a cell
 that satisfies `fun` at 0 m and 200 m but not at 100 m still yields the
@@ -82,4 +89,13 @@ terra::values(voxel_to_envelope(v, fun = function(x) x > 10))
 #>      depth_min depth_max
 #> [1,]         0        50
 #> [2,]        NA        NA
+
+# With depth edges, the envelope covers the slabs: cell 1 runs from the top
+# of the 0 m slab to the bottom of the 200 m slab.
+edged <- as_voxel(v, depth_bounds = cbind(c(0, 25, 75, 150),
+                                          c(25, 75, 150, 250)))
+terra::values(voxel_to_envelope(edged))
+#>      depth_min depth_max
+#> [1,]         0       250
+#> [2,]        75       150
 ```

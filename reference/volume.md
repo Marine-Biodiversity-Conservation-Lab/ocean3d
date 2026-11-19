@@ -20,7 +20,7 @@ volume(x, ...)
 volume(x, ...)
 
 # S4 method for class 'SpatVoxel'
-volume(x, bounds = c("top", "midpoint"))
+volume(x, bounds = c("midpoint", "top"))
 
 # S4 method for class 'SpatRaster'
 volume(x, ...)
@@ -53,14 +53,16 @@ volume(x, ...)
 
 - bounds:
 
-  SpatVoxel only. What each depth level stands for vertically: `"top"`
-  (default) treats the level as the top of its slab, so the slab runs
-  down to the next level; `"midpoint"` puts the level in the middle,
-  with edges halfway to each neighbour (the World Ocean Atlas
-  convention). Under `"top"` the deepest level has no next level and
+  SpatVoxel only. What each depth level stands for vertically:
+  `"midpoint"` (default) puts the slab edges halfway to each
+  neighbouring level (the World Ocean Atlas convention); `"top"` treats
+  the level as the top of its slab, so the slab runs down to the next
+  level. Under `"top"` the deepest level has no next level and
   contributes no volume. Outer edges are clamped to `range(depths)`
   under both. Same argument, same meaning, as in
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
+  Not used for a voxel that carries its own depth edges (see
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)).
 
 ## Value
 
@@ -112,8 +114,8 @@ e <- as_envelope(fp, depth_min = 0, depth_max = 200)
 volume(e)
 #> [1] 0.6
 
-# 3D: the same domain on three levels. Under "top" the slabs are 100 m,
-# 100 m and 0 m, so the discretized volume matches exactly here.
+# 3D: the same domain on three levels. The slabs are 50 m, 100 m and 50 m,
+# so the discretized volume matches exactly here.
 v <- envelope_to_voxel(e, depths = c(0, 100, 200))
 volume(v)
 #> [1] 0.6
@@ -125,5 +127,5 @@ gappy <- as_voxel(gappy)
 volume(gappy)
 #> [1] 0.3
 volume(voxel_to_envelope(gappy))
-#> [1] 0
+#> [1] 0.6
 ```

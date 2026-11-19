@@ -104,16 +104,20 @@ level represents:</p>
 <div class="section level2">
 <h2 id="touching-is-not-overlapping">Touching is not overlapping<a class="anchor" aria-label="anchor" href="#touching-is-not-overlapping"></a>
 </h2>
-<p>An envelope of <code>[0, 100]</code> ends exactly where the 100 m
-slab begins, so it occupies the 0 m level alone:</p>
+<p>By default the slab edges fall halfway between neighbouring levels,
+so with levels at 0, 50, 150 and 200 m one edge falls at 100 m. An
+envelope of <code>[0, 100]</code> ends exactly where the 150 m slab
+begins, so it occupies the 0 m and 50 m levels and not the 150 m
+one:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">upper</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_envelope.html">as_envelope</a></span><span class="op">(</span><span class="va">fp</span>, depth_min <span class="op">=</span> <span class="fl">0</span>, depth_max <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">levels</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">50</span>, <span class="fl">150</span>, <span class="fl">200</span><span class="op">)</span></span>
+<span><span class="va">upper</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_envelope.html">as_envelope</a></span><span class="op">(</span><span class="va">fp</span>, depth_min <span class="op">=</span> <span class="fl">0</span>, depth_max <span class="op">=</span> <span class="fl">100</span><span class="op">)</span></span>
 <span><span class="va">lower</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_envelope.html">as_envelope</a></span><span class="op">(</span><span class="va">fp</span>, depth_min <span class="op">=</span> <span class="fl">100</span>, depth_max <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">upper</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;      presence_depth=0 presence_depth=100 presence_depth=200</span></span>
-<span><span class="co">#&gt; [1,]                1                 NA                 NA</span></span>
-<span><span class="co">#&gt; [2,]                1                 NA                 NA</span></span></code></pre></div>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">upper</span>, depths <span class="op">=</span> <span class="va">levels</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;      presence_depth=0 presence_depth=50 presence_depth=150 presence_depth=200</span></span>
+<span><span class="co">#&gt; [1,]                1                 1                 NA                 NA</span></span>
+<span><span class="co">#&gt; [2,]                1                 1                 NA                 NA</span></span></code></pre></div>
 <p>Two envelopes that meet at 100 m therefore do not intersect.
 <code><a href="../reference/intersects_3d.html">intersects_3d()</a></code> gives the same answer for the envelopes
 themselves and for their voxels, which land on disjoint levels:</p>
@@ -124,8 +128,8 @@ themselves and for their voxels, which land on disjoint levels:</p>
 <span><span class="co">#&gt; [2,]      FALSE</span></span>
 <span></span>
 <span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu"><a href="../reference/intersects_3d.html">intersects_3d</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">upper</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  <span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">lower</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">upper</span>, depths <span class="op">=</span> <span class="va">levels</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">lower</span>, depths <span class="op">=</span> <span class="va">levels</span><span class="op">)</span></span>
 <span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt;      intersects</span></span>
 <span><span class="co">#&gt; [1,]      FALSE</span></span>
@@ -138,12 +142,14 @@ themselves and for their voxels, which land on disjoint levels:</p>
 came from, so <code>bounds</code> selects the convention:</p>
 <ul>
 <li>
-<code>"top"</code> (the default) runs each slab from its level down
-to the next.</li>
+<code>"midpoint"</code> (the default) puts the edges halfway between
+neighbouring levels. This matches World Ocean Atlas levels. It is close
+for model output such as Copernicus Marine, which stores values at the
+middle of each layer, but it leaves out the water above the shallowest
+level and below the deepest.</li>
 <li>
-<code>"midpoint"</code> puts the edges halfway between neighbours.
-This is what World Ocean Atlas levels mean, so use it with WOA
-data.</li>
+<code>"top"</code> runs each slab from its level down to the next,
+so each level is the top of its slab.</li>
 </ul>
 <p>An interval of <code>[60, 70]</code> lands in a different level under
 each:</p>
@@ -152,19 +158,46 @@ each:</p>
 <span></span>
 <span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">shallow</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt;      presence_depth=0 presence_depth=100 presence_depth=200</span></span>
-<span><span class="co">#&gt; [1,]                1                 NA                 NA</span></span>
-<span><span class="co">#&gt; [2,]                1                 NA                 NA</span></span>
-<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">shallow</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span>,</span>
-<span>                                bounds <span class="op">=</span> <span class="st">"midpoint"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="co">#&gt;      presence_depth=0 presence_depth=100 presence_depth=200</span></span>
 <span><span class="co">#&gt; [1,]               NA                  1                 NA</span></span>
-<span><span class="co">#&gt; [2,]               NA                  1                 NA</span></span></code></pre></div>
+<span><span class="co">#&gt; [2,]               NA                  1                 NA</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">shallow</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span>,</span>
+<span>                                bounds <span class="op">=</span> <span class="st">"top"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;      presence_depth=0 presence_depth=100 presence_depth=200</span></span>
+<span><span class="co">#&gt; [1,]                1                 NA                 NA</span></span>
+<span><span class="co">#&gt; [2,]                1                 NA                 NA</span></span></code></pre></div>
 <p>The same <code>bounds</code> argument is accepted by
 <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code>, <code><a href="../reference/intersect_3d.html">intersect_3d()</a></code>,
 <code><a href="../reference/intersects_3d.html">intersects_3d()</a></code>, <code><a href="../reference/volume.html">volume()</a></code> and
 <code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> wherever they place an envelope on a
 voxel’s depth levels. See <code><a href="../reference/envelope_to_voxel.html">?envelope_to_voxel</a></code> for the full
 rule, including how the shallowest and deepest levels are clamped.</p>
+</div>
+<div class="section level2">
+<h2 id="a-datasets-own-edges-depth_bounds">A dataset’s own edges: <code>depth_bounds</code><a class="anchor" aria-label="anchor" href="#a-datasets-own-edges-depth_bounds"></a>
+</h2>
+<p>Both conventions work the edges out from the levels. When the dataset
+gives its own edges, for example a netCDF file’s depth bounds, a
+<code>SpatVoxel</code> can carry them: pass them to
+<code><a href="../reference/as_voxel.html">as_voxel()</a></code> or <code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> as
+<code>depth_bounds</code>, a two-column table of top and bottom with one
+row per level. <code><a href="../reference/envelope_to_voxel.html">envelope_to_voxel()</a></code> and the functions listed
+above then use these edges and ignore <code>bounds</code>, and
+<code><a href="../reference/depth_bounds.html">depth_bounds()</a></code> reads them back:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">edges</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">65</span>, <span class="fl">150</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">65</span>, <span class="fl">150</span>, <span class="fl">250</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">v</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/envelope_to_voxel.html">envelope_to_voxel</a></span><span class="op">(</span><span class="va">shallow</span>, depths <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span>, <span class="fl">200</span><span class="op">)</span>, depth_bounds <span class="op">=</span> <span class="va">edges</span><span class="op">)</span></span>
+<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span></span>
+<span><span class="co">#&gt;      presence_depth=0 presence_depth=100 presence_depth=200</span></span>
+<span><span class="co">#&gt; [1,]                1                  1                 NA</span></span>
+<span><span class="co">#&gt; [2,]                1                  1                 NA</span></span>
+<span><span class="fu"><a href="../reference/depth_bounds.html">depth_bounds</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   depth lower upper</span></span>
+<span><span class="co">#&gt; 1     0     0    65</span></span>
+<span><span class="co">#&gt; 2   100    65   150</span></span>
+<span><span class="co">#&gt; 3   200   150   250</span></span></code></pre></div>
+<p>Here the 0 m level’s slab runs to 65 m, so <code>[60, 70]</code>
+occupies both the 0 m and the 100 m levels, where
+<code>"midpoint"</code> gave only the 100 m level.</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

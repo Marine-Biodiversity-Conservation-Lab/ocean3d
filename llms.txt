@@ -437,7 +437,7 @@ Marine Habitat.*
 holds a depth range per cell; a `SpatVector3D` holds points or lines
 with a depth and time at each vertex, or polygons with a depth range.
 
-- [`SpatVoxel-class`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+- [`c(`*`<SpatVoxel>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
   : 3D voxel model: one layer per standard depth level
 - [`SpatEnvelope-class`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   : 2.5D min-max envelope: exactly depth_min, depth_max
@@ -450,6 +450,8 @@ with a depth and time at each vertex, or polygons with a depth range.
   : Union of the package's 3D domain representations
 - [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
   : Depths of a voxel's layers
+- [`depth_bounds()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depth_bounds.md)
+  : Depth edges of a voxel's layers
 
 ## Build
 
