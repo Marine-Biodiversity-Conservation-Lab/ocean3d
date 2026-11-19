@@ -27,49 +27,26 @@ expect_period_change_warning <- function(expr) {
 
 # Helpers ----------------------------------------------------------------------
 
+# The wrappers below are make_grid_file() (helper-netcdf-grid.R) with each
+# group of tests' defaults; other arguments go to make_grid_file(). lintr
+# checks this file on its own and can't see test helpers, hence the nolints.
+
+# lon x lat 40, 41 x depth 0, 50, 100 x time 0, 2, 5 days, holding 1, 2, 3, ...
+# in storage order. `bottom_na` empties the deepest level of the first cell.
 make_test_netcdf <- function(path, var = "temp", with_depth = TRUE,
                              with_time = TRUE, bottom_na = FALSE,
                              time_units = "days since 2020-01-01",
-                             lon_vals = c(0, 1), coordinate_var = FALSE) {
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", vals = lon_vals)
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", vals = c(40, 41))
-  dims <- list(lon, lat)
-
-  if (with_depth) {
-    depth <- ncdf4::ncdim_def("depth", "m", vals = c(0, 50, 100))
-    dims <- c(dims, list(depth))
-  }
-
-  if (with_time) {
-    time <- ncdf4::ncdim_def(
-      "time", if (is.null(time_units)) "" else time_units,
-      vals = if (is.null(time_units)) 1:3 else c(0, 2, 5),
-      unlim = FALSE, create_dimvar = !is.null(time_units)
-    )
-    dims <- c(dims, list(time))
-  }
-
-  v <- ncdf4::ncvar_def(var, "1", dim = dims, missval = -9999, prec = "double")
-  vars <- list(v)
-  if (coordinate_var) {
-    vars <- c(vars, list(ncdf4::ncvar_def(
-      "longitude", "degrees_east", list(lon), prec = "double"
-    )))
-  }
-  nc <- ncdf4::nc_create(path, vars)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  shape <- vapply(dims, function(x) length(x$vals), integer(1))
-  values <- array(seq_len(prod(shape)), dim = shape)
-
-  if (with_depth && bottom_na) {
-    if (with_time) values[1, 1, 3, ] <- NA_real_
-    else values[1, 1, 3] <- NA_real_
-  }
-
-  if (coordinate_var) ncdf4::ncvar_put(nc, "longitude", lon_vals + 10)
-  ncdf4::ncvar_put(nc, var, values)
-  invisible(path)
+                             lon_vals = c(0, 1)) {
+  depth <- if (with_depth) c(0, 50, 100)
+  time <- if (with_time) c(0, 2, 5)
+  shape <- c(length(lon_vals), 2L, max(length(depth), 1L),
+             max(length(time), 1L))
+  values <- array(seq_len(prod(shape)), shape)
+  if (with_depth && bottom_na) values[1, 1, 3, ] <- NA_real_
+  make_grid_file( # nolint: object_usage_linter.
+    lon_vals, c(40, 41), depth, time, time_units = time_units, var = var,
+    var_units = "1", values = values, path = path
+  )
 }
 
 make_obs <- function(date = as.Date("2020-01-03"), depth = 60) {
@@ -816,7 +793,14 @@ test_that("extraction leaves caller-owned netCDF connections open", {
 test_that("dimension helpers read coordinates and report missing names", {
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
-  make_test_netcdf(f, coordinate_var = TRUE)
+  make_test_netcdf(f)
+  # Add a `longitude` coordinate variable on the lon dimension.
+  nc <- ncdf4::nc_open(f, write = TRUE)
+  nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def(
+    "longitude", "degrees_east", list(nc$dim$lon), prec = "double"
+  ))
+  ncdf4::ncvar_put(nc, "longitude", c(10, 11))
+  ncdf4::nc_close(nc)
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   expect_equal(as.vector(.get_dim_values(nc, "longitude")), c(10, 11))
@@ -1913,42 +1897,21 @@ test_that("temporal eligibility handles irregular and missing inputs", {
 
 test_that("multi-source extraction selects the correct temporal file", {
 
-  make_temporal_nc <- function(path, year, value) {
-    lon <- ncdf4::ncdim_def("lon", "degrees_east", vals = 0)
-    lat <- ncdf4::ncdim_def("lat", "degrees_north", vals = 40)
-
-    time <- ncdf4::ncdim_def(
-      "time",
-      paste0("days since ", year, "-01-01 00:00:00"),
-      vals = c(0, 364)
-    )
-
-    variable <- ncdf4::ncvar_def(
-      "temp", "degree_Celsius",
-      list(lon, lat, time),
-      missval = -9999,
-      prec = "double"
-    )
-
-    nc <- ncdf4::nc_create(path, variable)
-    on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-    ncdf4::ncvar_put(
-      nc, "temp",
-      array(value, dim = c(1, 1, 2))
-    )
-  }
-
-  file_2019 <- tempfile(fileext = ".nc")
-  file_2020 <- tempfile(fileext = ".nc")
+  file_2019 <- make_grid_file(
+    lon = 0, lat = 40, depth = NULL, time = c(0, 364),
+    time_units = "days since 2019-01-01 00:00:00", values = 1931,
+    var_units = "degree_Celsius"
+  )
+  file_2020 <- make_grid_file(
+    lon = 0, lat = 40, depth = NULL, time = c(0, 364),
+    time_units = "days since 2020-01-01 00:00:00", values = 2007,
+    var_units = "degree_Celsius"
+  )
 
   on.exit(
     unlink(c(file_2019, file_2020)),
     add = TRUE
   )
-
-  make_temporal_nc(file_2019, 2019, 1931)
-  make_temporal_nc(file_2020, 2020, 2007)
 
   observations <- data.frame(
     id = c("obs_2019", "obs_2020"),
@@ -1996,22 +1959,15 @@ test_that("multi-source extraction selects the correct temporal file", {
 
 # Issue #73 A2: compare temporal candidates across sources -----------------
 
+# One cell at lon 0, lat 40 with a daily time axis and optional depths.
 make_a2_temporal_nc <- function(path, days, values, with_depth = FALSE) {
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", 0)
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", 40)
-  time <- ncdf4::ncdim_def("time", "days since 2020-01-01", days)
-  dims <- list(lon, lat)
-  if (with_depth) {
-    dims <- c(dims, list(ncdf4::ncdim_def("depth", "m", c(0, 50, 100))))
-  }
-  dims <- c(dims, list(time))
-  variable <- ncdf4::ncvar_def(
-    "temp", "degree_Celsius", dims, -9999, prec = "double"
+  depth <- if (with_depth) c(0, 50, 100)
+  # array() recycles `values` over the grid.
+  values <- array(values, c(max(length(depth), 1L), length(days)))
+  make_grid_file( # nolint: object_usage_linter.
+    lon = 0, lat = 40, depth = depth, time = days, values = values,
+    var_units = "degree_Celsius", path = path
   )
-  nc <- ncdf4::nc_create(path, variable)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  shape <- vapply(dims, function(x) length(x$vals), integer(1))
-  ncdf4::ncvar_put(nc, "temp", array(values, dim = shape))
 }
 
 test_that("nearest compares singleton and multi-record files in either order", {
@@ -2771,23 +2727,14 @@ test_that("unknown cadence warnings explain how to set an interval", {
 
 
 # Issue #74 A: geographic selection and explicit horizontal limits.
+# No depth axis; an optional daily time axis.
 make_horizontal_test_nc <- function(path, lon, lat, values, days = NULL) {
-  dims <- list(
-    ncdf4::ncdim_def("lon", "degrees_east", lon),
-    ncdf4::ncdim_def("lat", "degrees_north", lat)
+  # array() recycles `values` over the grid.
+  values <- array(values, c(length(lon), length(lat), max(length(days), 1L)))
+  make_grid_file( # nolint: object_usage_linter.
+    lon, lat, depth = NULL, time = days, values = values,
+    var_units = "degree_Celsius", path = path
   )
-  if (!is.null(days)) {
-    dims <- c(dims, list(ncdf4::ncdim_def(
-      "time", "days since 2020-01-01", days
-    )))
-  }
-  variable <- ncdf4::ncvar_def(
-    "temp", "degree_Celsius", dims, -9999, prec = "double"
-  )
-  nc <- ncdf4::nc_create(path, variable)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  shape <- vapply(dims, function(x) length(x$vals), integer(1))
-  ncdf4::ncvar_put(nc, "temp", array(values, dim = shape))
 }
 
 test_that("nearest spatial matching requires an explicit valid distance", {
@@ -3021,25 +2968,16 @@ make_depth_axis_test_nc <- function(path, depths, values,
                                     depth_name = "depth",
                                     standard_name = NULL,
                                     formula_terms = NULL) {
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", 0)
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", 40)
-  depth <- ncdf4::ncdim_def(depth_name, units, depths)
-  variable <- ncdf4::ncvar_def(
-    "temp", "degree_Celsius", list(lon, lat, depth),
-    -9999, prec = "double"
+  # One cell at lon 0, lat 40 with no time axis. NULL attributes are left out.
+  make_grid_file( # nolint: object_usage_linter.
+    lon = 0, lat = 40, depth = depths, time = NULL,
+    values = array(values, length(depths)), depth_units = units,
+    positive = positive, depth_name = depth_name,
+    depth_atts = Filter(Negate(is.null), list(
+      standard_name = standard_name, formula_terms = formula_terms
+    )),
+    var_units = "degree_Celsius", path = path
   )
-  nc <- ncdf4::nc_create(path, variable)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  ncdf4::ncvar_put(nc, "temp", array(values, c(1, 1, length(depths))))
-  attributes <- list(
-    positive = positive, standard_name = standard_name,
-    formula_terms = formula_terms
-  )
-  for (name in names(attributes)) {
-    if (!is.null(attributes[[name]])) {
-      ncdf4::ncatt_put(nc, depth_name, name, attributes[[name]])
-    }
-  }
 }
 
 test_that("physical depth conversion retains original coordinate positions", {

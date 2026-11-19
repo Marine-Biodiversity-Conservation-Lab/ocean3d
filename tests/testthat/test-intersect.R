@@ -1,11 +1,7 @@
 # make_grid(), make_range_rast() and make_voxel() are in
-# helper-example_objects.R. lintr checks this file on its own and can't see
-# them, so the helpers below that call them carry object_usage nolints.
-
-# Helper: a single-layer footprint on the grid (NA = outside).
-make_footprint_grid <- function(vals, ncol = 3, nrow = 3) {
-  terra::setValues(make_grid(ncol, nrow), vals) # nolint: object_usage_linter.
-}
+# helper-example_objects.R; make_grid(vals = ) is a single-layer footprint.
+# lintr checks this file on its own and can't see them, so the helpers below
+# that call them carry object_usage nolints.
 
 # Helper: a polygon covering the centres of the left two columns of a 3x3
 # grid, in the grid's CRS.
@@ -135,7 +131,7 @@ test_that("intersect_3d() on mixed input promotes the envelope to a voxel", {
 test_that("intersect_3d() restricts an envelope to a footprint raster", {
   # the footprint restricts cells horizontally; depths are left as they are.
   a <- make_range_rast(rep(0, 9), rep(100, 9))
-  fp <- make_footprint_grid(c(1, NA, 0, 7, NA, NA, 1, 1, 1))
+  fp <- make_grid(vals = c(1, NA, 0, 7, NA, NA, 1, 1, 1))
 
   out <- intersect_3d(a, fp)
   expect_identical(class(out)[[1]], "SpatEnvelope")
@@ -153,7 +149,7 @@ test_that("intersect_3d() restricts a voxel to a footprint raster", {
   depths <- c(0, 100)
   v <- make_voxel(cbind(c(3, NA, 3), c(NA, 3, 3)), depths,
                   ncol = 3, nrow = 1, varname = "t")
-  fp <- make_footprint_grid(c(1, 1, NA), ncol = 3, nrow = 1)
+  fp <- make_grid(vals = c(1, 1, NA), ncol = 3, nrow = 1)
 
   out <- intersect_3d(v, fp)
   expect_identical(class(out)[[1]], "SpatVoxel")
@@ -195,12 +191,12 @@ test_that("intersect_3d() projects polygons in another CRS onto the grid", {
 
 test_that("intersect_3d() rejects input it cannot read as a footprint", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
-  fp <- make_footprint_grid(rep(1, 9))
+  fp <- make_grid(vals = rep(1, 9))
 
   expect_error(intersect_3d(fp, fp), "neither `x` nor `y`")
   expect_error(intersect_3d(a, "hello"), "SpatVector, sf, sfc")
   expect_error(intersect_3d(a, c(fp, fp)), "single-layer footprint")
-  small <- make_footprint_grid(rep(1, 4), ncol = 2, nrow = 2)
+  small <- make_grid(vals = rep(1, 4), ncol = 2, nrow = 2)
   expect_error(intersect_3d(a, small), "same grid")
 })
 
@@ -378,7 +374,7 @@ test_that("intersects_3d() agrees with calc_volume_overlap() on overlap", {
 test_that("intersects_3d() with 2D input tests presence on both sides", {
   a <- make_range_rast(c(0, 0, NA, NA), c(100, 100, NA, NA),
                        ncol = 4, nrow = 1)
-  fp <- make_footprint_grid(c(1, NA, 1, NA), ncol = 4, nrow = 1)
+  fp <- make_grid(vals = c(1, NA, 1, NA), ncol = 4, nrow = 1)
 
   expect_identical(terra::values(intersects_3d(a, fp))[, 1],
                    c(TRUE, FALSE, FALSE, NA))
@@ -405,7 +401,7 @@ test_that("a stack of intersects_3d() layers sums to a richness map", {
 })
 
 test_that("intersects_3d() rejects 2D-only input and mismatched grids", {
-  fp <- make_footprint_grid(rep(1, 9))
+  fp <- make_grid(vals = rep(1, 9))
   expect_error(intersects_3d(fp, fp), "neither `x` nor `y`")
 
   a <- make_range_rast(rep(0, 9), rep(100, 9))
@@ -506,7 +502,7 @@ test_that("mask(plain raster, voxel) keeps cells occupied at any depth", {
   # depth was dropped.
   depths <- c(0, 100)
   v <- make_voxel(cbind(c(NA, 1, NA), c(1, NA, NA)), depths, ncol = 3, nrow = 1)
-  fp <- make_footprint_grid(c(7, 8, 9), ncol = 3, nrow = 1)
+  fp <- make_grid(vals = c(7, 8, 9), ncol = 3, nrow = 1)
 
   out <- mask(fp, v)
   expect_identical(class(out)[[1]], "SpatRaster")
@@ -532,7 +528,7 @@ test_that("mask() by 2D input applies terra's mask to 3D and plain rasters", {
   # a 2D mask needs no depth handling: a 3D object keeps its class, and a
   # plain raster gets exactly what terra returns.
   field <- make_field()
-  fp <- make_footprint_grid(c(1, NA, 1, 1, 1, 1, 1, 1, NA))
+  fp <- make_grid(vals = c(1, NA, 1, 1, 1, 1, 1, 1, NA))
 
   by_raster <- mask(field, fp)
   expect_identical(class(by_raster)[[1]], "SpatVoxel")
@@ -563,7 +559,7 @@ test_that("the query verbs reject a tagged object that is no longer valid", {
 
   expect_error(intersect_3d(a, broken), "`y` is tagged SpatEnvelope")
   expect_error(intersects_3d(broken, a), "`x` is tagged SpatEnvelope")
-  expect_error(mask(make_footprint_grid(rep(1, 9)), broken), "`mask` is tagged")
+  expect_error(mask(make_grid(vals = rep(1, 9)), broken), "`mask` is tagged")
   expect_error(mask(make_field(), broken), "as_envelope\\(\\)")
 })
 
@@ -590,7 +586,7 @@ test_that("terra::intersect() on a 3D object errors and names replacements", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
   b <- make_range_rast(rep(200, 9), rep(300, 9))
   v <- envelope_to_voxel(a, c(0, 50, 100))
-  fp <- make_footprint_grid(rep(1, 9))
+  fp <- make_grid(vals = rep(1, 9))
 
   expect_error(terra::intersect(a, b), "intersects_3d\\(\\)")
   expect_error(terra::intersect(v, v), "intersect_3d\\(\\)")
@@ -601,8 +597,8 @@ test_that("terra::intersect() on a 3D object errors and names replacements", {
 })
 
 test_that("terra's own intersect() methods are untouched", {
-  fp1 <- make_footprint_grid(c(1, 2, NA, NA), ncol = 4, nrow = 1)
-  fp2 <- make_footprint_grid(c(9, NA, 7, NA), ncol = 4, nrow = 1)
+  fp1 <- make_grid(vals = c(1, 2, NA, NA), ncol = 4, nrow = 1)
+  fp2 <- make_grid(vals = c(9, NA, 7, NA), ncol = 4, nrow = 1)
   expect_identical(terra::values(terra::intersect(fp1, fp2))[, 1],
                    c(TRUE, FALSE, FALSE, NA))
 

@@ -17,15 +17,9 @@ make_effort <- function(rows) {
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
-# A 5x5 study grid covering 0..5 in both dimensions, EPSG:4326. Cells are
-# 1 deg square so longitude/latitude maps to integer cell indices cleanly.
-make_gfw_grid <- function(res = 1, xmin = 0, xmax = 5, ymin = 0, ymax = 5,
-                          crs = "EPSG:4326") {
-  terra::rast(
-    xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax,
-    resolution = res, crs = crs
-  )
-}
+# The study grid is make_template() (helper-example_objects.R): 5x5 over
+# 0..5 in both dimensions, EPSG:4326. Cells are 1 deg square so
+# longitude/latitude maps to integer cell indices cleanly.
 
 test_that("per-gear totals round-trip from effort table to raster", {
   # Create test data
@@ -36,7 +30,7 @@ test_that("per-gear totals round-trip from effort table to raster", {
                  "drifting_longlines", "set_gillnets"),
     hours    = c(10,  5,  3,  7,  2)
   ))
-  grid <- make_gfw_grid()
+  grid <- make_template()
 
   out <- gfw_effort_to_raster(effort, grid)
 
@@ -56,7 +50,7 @@ test_that("output has one layer per gear class, named effort_<level>", {
     geartype = c("trawlers", "drifting_longlines", "set_gillnets"),
     hours    = c(1, 1, 1)
   ))
-  grid <- make_gfw_grid()
+  grid <- make_template()
 
   out <- gfw_effort_to_raster(effort, grid)
 
@@ -76,7 +70,7 @@ test_that("multiple records in the same cell are aggregated by `fun`", {
     geartype = c("trawlers", "trawlers", "trawlers"),
     hours    = c(2, 3, 5)
   ))
-  grid <- make_gfw_grid()
+  grid <- make_template()
 
   summed <- gfw_effort_to_raster(effort, grid, fun = "sum")
   meaned <- gfw_effort_to_raster(effort, grid, fun = "mean")
@@ -96,7 +90,7 @@ test_that("layer_by = NULL gives one total-effort layer named 'effort'", {
     geartype = c("trawlers", "drifting_longlines", "set_gillnets"),
     hours    = c(2, 3, 5)
   ))
-  grid <- make_gfw_grid()
+  grid <- make_template()
 
   out <- gfw_effort_to_raster(effort, grid, layer_by = NULL)
 
@@ -111,7 +105,7 @@ test_that("missing required columns produce an informative error", {
     Lat = 0.5, Lon = 0.5, geartype = "trawlers",
     stringsAsFactors = FALSE
   )
-  grid <- make_gfw_grid()
+  grid <- make_template()
 
   expect_error(
     gfw_effort_to_raster(bad, grid),
@@ -128,7 +122,7 @@ test_that("custom `value` and `layer_by` columns are honoured", {
     hours_total = c(4, 6),
     stringsAsFactors = FALSE
   )
-  grid <- make_gfw_grid()
+  grid <- make_template()
 
   out <- gfw_effort_to_raster(
     effort, grid,
@@ -154,7 +148,7 @@ test_that("points in EPSG:4326 are reprojected onto a non-4326 grid", {
     hours    = c(4, 5, 6)
   ))
 
-  moll_grid <- terra::project(make_gfw_grid(), "+proj=moll")
+  moll_grid <- terra::project(make_template(), "+proj=moll")
 
   out <- gfw_effort_to_raster(effort, moll_grid)
 

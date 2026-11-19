@@ -10,6 +10,8 @@
 # first); axes left out with NULL are skipped. With `prec = "short"`, the
 # stored integers are packed with `scale` and `offset`. `extra_vars` adds
 # variables on lon and lat, named as in the list and filled with its values.
+# `depth_atts` and `time_atts` are attributes for those axes; `depth_name`
+# names the depth dimension.
 make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
                            depth = c(5, 15), time = c(0, 1),
                            depth_units = "m", positive = NULL,
@@ -21,13 +23,14 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
                            chunksizes = NULL, scale = 0.1, offset = 0,
                            values = NULL, var = "temp", var_units = "degC",
                            time_unlim = FALSE, extra_vars = list(),
+                           depth_atts = list(), depth_name = "depth",
                            path = tempfile(fileext = ".nc")) {
   axes <- list(
     lon = ncdf4::ncdim_def("lon", "degrees_east", lon),
     lat = ncdf4::ncdim_def("lat", "degrees_north", lat)
   )
   if (!is.null(depth)) {
-    axes$depth <- ncdf4::ncdim_def("depth", depth_units, depth)
+    axes$depth <- ncdf4::ncdim_def(depth_name, depth_units, depth)
   }
   if (!is.null(time)) {
     axes$time <- ncdf4::ncdim_def("time", time_units, time,
@@ -52,8 +55,9 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
   ))
   nv <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
   bounds_vars <- lapply(names(bounds), function(axis) {
-    ncdf4::ncvar_def(paste0(axis, "_bnds"), axes[[axis]]$units,
-                     list(nv, axes[[axis]]), prec = "double")
+    dim <- axes[[axis]]
+    ncdf4::ncvar_def(paste0(dim$name, "_bnds"), dim$units, list(nv, dim),
+                     prec = "double")
   })
   extra <- lapply(names(extra_vars), function(name) {
     ncdf4::ncvar_def(name, "1", list(axes$lon, axes$lat), prec = "double")
@@ -75,13 +79,17 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
     ncdf4::ncatt_put(nc, var, "add_offset", offset)
   }
   for (axis in names(bounds)) {
-    ncdf4::ncvar_put(nc, paste0(axis, "_bnds"), bounds[[axis]])
-    ncdf4::ncatt_put(nc, axis, "bounds", paste0(axis, "_bnds"))
+    name <- axes[[axis]]$name
+    ncdf4::ncvar_put(nc, paste0(name, "_bnds"), bounds[[axis]])
+    ncdf4::ncatt_put(nc, name, "bounds", paste0(name, "_bnds"))
   }
   for (name in names(extra_vars)) {
     ncdf4::ncvar_put(nc, name, array(extra_vars[[name]], shape[1:2]))
   }
-  if (!is.null(positive)) ncdf4::ncatt_put(nc, "depth", "positive", positive)
+  if (!is.null(positive)) depth_atts <- c(list(positive = positive), depth_atts)
+  for (att in names(depth_atts)) {
+    ncdf4::ncatt_put(nc, depth_name, att, depth_atts[[att]])
+  }
   if (!is.null(calendar)) ncdf4::ncatt_put(nc, "time", "calendar", calendar)
   for (att in names(time_atts)) {
     ncdf4::ncatt_put(nc, "time", att, time_atts[[att]])

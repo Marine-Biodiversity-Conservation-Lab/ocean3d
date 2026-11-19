@@ -28,12 +28,14 @@ make_polygon <- function() {
   sf::st_sf(geometry = poly)
 }
 # Helpers for intersect and volume tests. The LAEA projection makes every cell
-# 1 km x 1 km, so volumes are hand-computable.
-make_grid <- function(ncol = 3, nrow = 3) {
-  terra::rast(nrows = nrow, ncols = ncol,
-              xmin = 0, xmax = ncol * 1000,
-              ymin = 0, ymax = nrow * 1000,
-              crs = "+proj=laea +lat_0=0 +lon_0=0 +datum=WGS84 +units=m")
+# 1 km x 1 km, so volumes are hand-computable. With `vals`, make_grid() is a
+# single-layer footprint (NA = outside).
+make_grid <- function(ncol = 3, nrow = 3, vals = NULL) {
+  r <- terra::rast(nrows = nrow, ncols = ncol,
+                   xmin = 0, xmax = ncol * 1000,
+                   ymin = 0, ymax = nrow * 1000,
+                   crs = "+proj=laea +lat_0=0 +lon_0=0 +datum=WGS84 +units=m")
+  if (is.null(vals)) r else terra::setValues(r, vals)
 }
 
 # Helper: a SpatEnvelope with per-cell depth limits (NA marks absence).
