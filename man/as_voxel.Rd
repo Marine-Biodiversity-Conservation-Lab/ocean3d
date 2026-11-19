@@ -4,14 +4,15 @@
 \alias{as_voxel}
 \title{Create a voxel object}
 \usage{
-as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL)
+as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL, time = NULL)
 }
 \arguments{
-\item{x}{A SpatRaster with its depths in \code{\link[terra:depth]{terra::depth()}} or in
-\verb{\{variable\}_depth=\{value\}} layer names, a list of single-depth
-SpatRasters, or an existing \link[=SpatVoxel-class]{SpatVoxel}. This is how gridded data
-enter the \code{SpatVoxel} model: read a netCDF file with \code{\link[=woa_load_nc]{woa_load_nc()}} or
-\code{\link[terra:rast]{terra::rast()}} first. netCDF paths aren't accepted.}
+\item{x}{A \link[=SpatProxy-class]{SpatProxy}, a SpatRaster with its depths in
+\code{\link[terra:depth]{terra::depth()}} or in \verb{\{variable\}_depth=\{value\}} layer names, a list of
+single-depth SpatRasters, or an existing \link[=SpatVoxel-class]{SpatVoxel}. This is how
+gridded data enter the \code{SpatVoxel} model: describe a netCDF file with
+\code{\link[=as_proxy]{as_proxy()}} and pass the proxy here, which reads one time step. netCDF
+paths aren't accepted directly.}
 
 \item{depths}{Optional numeric vector, one depth per layer, in metres. When
 supplied, it sets the depths, and the layers are named
@@ -19,7 +20,8 @@ supplied, it sets the depths, and the layers are named
 has neither \code{\link[terra:depth]{terra::depth()}} nor depths in its layer names.}
 
 \item{varname}{Character. Variable name used in the layer names built from
-\code{depths}. Ignored when \code{depths} is \code{NULL}.}
+\code{depths}, or from a proxy's depths, where it defaults to the proxy's
+variable name. Ignored otherwise.}
 
 \item{depth_bounds}{Optional two-column matrix or data frame: the top and
 bottom of the slab of water each layer stands for, in metres positive
@@ -31,6 +33,11 @@ positive height, and slabs must not overlap. \code{NULL} (the default) keeps
 the edges an existing \code{SpatVoxel} carries, unless \code{depths} renames its
 layers; a voxel without edges uses the \code{bounds} argument of the functions
 it is passed to.}
+
+\item{time}{For a \link[=SpatProxy-class]{SpatProxy} only: the time step to read, as a step
+number or a date or date-time matched exactly at its own resolution (so
+\code{"2020-01-02"} selects that day). \code{NULL} (the default) reads the only
+step of a proxy that has one; a proxy with more needs \code{time}.}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} whose layers are ordered shallow to deep.

@@ -165,17 +165,23 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' Atlas convention. Negative depths are an error rather than being silently
 #' negated, since flipping the sign would change what the data mean.
 #'
-#' @param x A SpatRaster with its depths in [terra::depth()] or in
-#'   `{variable}_depth={value}` layer names, a list of single-depth
-#'   SpatRasters, or an existing [SpatVoxel-class]. This is how gridded data
-#'   enter the `SpatVoxel` model: read a netCDF file with [woa_load_nc()] or
-#'   [terra::rast()] first. netCDF paths aren't accepted.
+#' @param x A [SpatProxy-class], a SpatRaster with its depths in
+#'   [terra::depth()] or in `{variable}_depth={value}` layer names, a list of
+#'   single-depth SpatRasters, or an existing [SpatVoxel-class]. This is how
+#'   gridded data enter the `SpatVoxel` model: describe a netCDF file with
+#'   [as_proxy()] and pass the proxy here, which reads one time step. netCDF
+#'   paths aren't accepted directly.
 #' @param depths Optional numeric vector, one depth per layer, in metres. When
 #'   supplied, it sets the depths, and the layers are named
 #'   `{varname}_depth={value}`, replacing any existing names. Required if `x`
 #'   has neither [terra::depth()] nor depths in its layer names.
 #' @param varname Character. Variable name used in the layer names built from
-#'   `depths`. Ignored when `depths` is `NULL`.
+#'   `depths`, or from a proxy's depths, where it defaults to the proxy's
+#'   variable name. Ignored otherwise.
+#' @param time For a [SpatProxy-class] only: the time step to read, as a step
+#'   number or a date or date-time matched exactly at its own resolution (so
+#'   `"2020-01-02"` selects that day). `NULL` (the default) reads the only
+#'   step of a proxy that has one; a proxy with more needs `time`.
 #' @param depth_bounds Optional two-column matrix or data frame: the top and
 #'   bottom of the slab of water each layer stands for, in metres positive
 #'   down, one row per layer of `x` in its current order (for example a netCDF
@@ -212,7 +218,25 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' depth_bounds(v)
 #' @export
 as_voxel <- function(x, depths = NULL, varname = "value",
-                     depth_bounds = NULL) {
+                     depth_bounds = NULL, time = NULL) {
+  # A SpatProxy is read one time step at a time; it gives its own depths and
+  # edges, and `time` applies only to it.
+  proxy <- methods::is(x, "SpatProxy")
+  misplaced <- if (proxy) {
+    if (!is.null(depths) || !is.null(depth_bounds)) {
+      paste("A SpatProxy gives its own depths and edges; omit `depths`",
+            "and `depth_bounds`.")
+    }
+  } else if (!is.null(time)) {
+    "`time` selects a time step of a SpatProxy; `x` isn't one."
+  }
+  if (!is.null(misplaced)) {
+    rlang::abort(misplaced, class = "ocean3d_error_voxel_input", call = NULL)
+  }
+  if (proxy) {
+    if (missing(varname)) varname <- x@variable$name
+    return(.proxy_to_voxel(x, time, varname))
+  }
   # Idempotent: a valid SpatVoxel comes back as it is, so re-wrapping is cheap
   # and callers can do it defensively. terra propagates the class tag through
   # `[[`, `names<-` and the like without re-running validity, so a tagged
