@@ -858,11 +858,13 @@ test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
 test_that("vect_to_envelope() checks for correct params", {
   expect_error(
     vect_to_envelope("test", make_template(), 0, 10),
-    "`polygon` needs to be of class SpatVector, sf, or sfc"
+    "`polygon` must be a SpatVector, sf or sfc object",
+    class = "ocean3d_error_envelope_input"
   )
   expect_error(
     vect_to_envelope(make_polygon(), "test", 0, 10),
-    "`template` needs to be of class SpatRaster"
+    "`template` must be a SpatRaster",
+    class = "ocean3d_error_envelope_input"
   )
 })
 
@@ -874,8 +876,8 @@ test_that("vect_to_envelope() errors if polygon and template don't overlap", {
   )
   expect_error(
     vect_to_envelope(make_polygon(), template_r, 0, 10),
-    paste0("All output cell values are NA. ",
-           "`polygon` and `template` may not spatially overlap.")
+    "The polygons don't overlap any cell of `template`",
+    class = "ocean3d_error_envelope_empty"
   )
 })
 
@@ -886,7 +888,8 @@ test_that("vect_to_envelope() checks for agreement of CRS between inputs", {
   )
   expect_error(
     vect_to_envelope(make_polygon(), template_r, 0, 10),
-    "`polygon` and `template` have different CRS."
+    "`polygon` and `template` have different CRS.",
+    class = "ocean3d_error_envelope_input"
   )
 
   # TODO: implement check for the depth_min and depth_max inputs
@@ -991,22 +994,55 @@ test_that("vect_to_envelope() fills NA where depth_max < depth_min", {
   # nolint end
 })
 
-test_that("vect_to_envelope() warns when all depth_max < depth_min", {
+test_that("vect_to_envelope() stops when no cell would be left", {
   r <- make_template()
   terra::values(r) <- seq_along(values(r))
+  empty <- "ocean3d_error_envelope_empty"
 
-  expected_result <- r %>%
-    mask(make_polygon()) %>%
-    min(10) 
-  names(expected_result) <- "depth_max"
-
-  expect_warning(
+  expect_error(
     vect_to_envelope(make_polygon(), make_template(),
                      depth_min = 50, depth_max = c(10, r)),
-    paste0("All depth_max values are shallower than depth_min. ",
-           "Check `depth_min` and `depth_max`, ",
-           "you may have swapped these two.")
+    "have `depth_max` shallower than `depth_min` \\(the limits may be swapped",
+    class = empty
   )
+  expect_error(
+    vect_to_envelope(make_polygon(), make_template(),
+                     depth_min = 30, depth_max = 30),
+    "have them equal, so no thickness", class = empty
+  )
+  unknown <- make_template()
+  terra::values(unknown) <- NA_real_
+  expect_error(
+    vect_to_envelope(make_polygon(), make_template(),
+                     depth_min = 0, depth_max = list(100, unknown)),
+    "have no `depth_min` or `depth_max`", class = empty
+  )
+
+  # Cells that fail in different ways are counted separately.
+  mixed <- terra::setValues(make_template(), 30)
+  covered <- which(!is.na(terra::values(terra::mask(mixed, make_polygon()))))
+  mixed[covered[1]] <- 5
+  err <- expect_error(
+    vect_to_envelope(make_polygon(), make_template(),
+                     depth_min = 30, depth_max = list(100, mixed)),
+    class = empty
+  )
+  expect_match(conditionMessage(err), "1 has `depth_max` shallower",
+               fixed = TRUE)
+  expect_match(conditionMessage(err), "have them equal", fixed = TRUE)
+})
+
+test_that("vect_to_envelope() keeps decimal depths when terra writes to disk", {
+  old <- terra::terraOptions(print = FALSE)$todisk
+  terra::terraOptions(todisk = TRUE)
+  on.exit(terra::terraOptions(todisk = old))
+  out <- vect_to_envelope(make_polygon(), make_template(),
+                          depth_min = 10.1, depth_max = 35.1)
+  v <- stats::na.omit(terra::values(out))
+  expect_identical(unique(v[, "depth_min"]), 10.1)
+  expect_identical(unique(v[, "depth_max"]), 35.1)
+  # terra's own default is restored afterwards.
+  expect_identical(terra::terraOptions(print = FALSE)$datatype, "FLT4S")
 })
 
 test_that("vect_to_envelope() accepts SpatVector and sfc as well as sf", {
@@ -1068,14 +1104,16 @@ test_that("vect_to_envelope() errors on a misaligned depth raster", {
                          ymin = 0, ymax = 5, vals = 50, crs = "EPSG:4326")
   expect_error(
     vect_to_envelope(make_polygon(), make_template(), 0, list(10, bad_res)),
-    "does not align with `template`"
+    "does not align with `template`",
+    class = "ocean3d_error_envelope_input"
   )
 
   bad_ext <- terra::rast(nrows = 5, ncols = 5, xmin = 0, xmax = 9,
                          ymin = 0, ymax = 9, vals = 50, crs = "EPSG:4326")
   expect_error(
     vect_to_envelope(make_polygon(), make_template(), 0, list(10, bad_ext)),
-    "does not align with `template`"
+    "does not align with `template`",
+    class = "ocean3d_error_envelope_input"
   )
 })
 
@@ -1086,27 +1124,32 @@ test_that("vect_to_envelope() errors on a depth raster with a different CRS", {
                          ymin = 0, ymax = 5, vals = 50, crs = "EPSG:3857")
   expect_error(
     vect_to_envelope(make_polygon(), make_template(), 0, list(10, bad_crs)),
-    "different CRS than `template`"
+    "different CRS than `template`",
+    class = "ocean3d_error_envelope_input"
   )
 })
 
 test_that("vect_to_envelope() rejects empty and unusable depth inputs", {
   expect_error(
     vect_to_envelope(make_polygon(), make_template(), list(), 10),
-    "`depth_min` is empty"
+    "`depth_min` is empty",
+    class = "ocean3d_error_envelope_input"
   )
   expect_error(
     vect_to_envelope(make_polygon(), make_template(), 0, list()),
-    "`depth_max` is empty"
+    "`depth_max` is empty",
+    class = "ocean3d_error_envelope_input"
   )
   expect_error(
     vect_to_envelope(make_polygon(), make_template(), 0, list(10, "deep")),
-    "must be numeric or a SpatRaster"
+    "must be numeric or a SpatRaster",
+    class = "ocean3d_error_envelope_input"
   )
   # `na.rm = TRUE` would drop an NA silently, widening rather than narrowing.
   expect_error(
     vect_to_envelope(make_polygon(), make_template(), 0, list(10, NA_real_)),
-    "is NA"
+    "is NA",
+    class = "ocean3d_error_envelope_input"
   )
 })
 

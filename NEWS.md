@@ -54,6 +54,13 @@ longitude and latitude edges inferred from the centres used to read
 `"inferred_midpoints"`, the label depth and time already use (#147). Code
 that checks for the old labels should check for `"inferred_midpoints"`.
 
+`vect_to_envelope()` now stops with an error when the envelope would have no
+cells: no cell the polygons cover has `depth_max` deeper than `depth_min`.
+It used to warn and return an empty envelope, so code that loops over
+polygons and drops empty results has to handle the error instead. The
+message says how many cells have the limits swapped (or a seafloor above
+`depth_min`), equal, or missing (#114).
+
 ## New features
 
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
@@ -81,6 +88,12 @@ that checks for the old labels should check for `"inferred_midpoints"`.
   with a depth range and an optional time interval, such as a circle of
   10 km radius from 10 to 60 m deep around a detection at 35 m. `volume()`
   on points or lines now suggests it (#114).
+* New `vector3d_to_envelope()` puts `SpatVector3D` polygons onto a grid as
+  a `SpatEnvelope`, as `vect_to_envelope()` does for 2D polygons. Where
+  polygons overlap, a cell gets the shallowest top and deepest bottom of
+  the polygons covering it, so polygons from 0 to 50 m and from 200 to
+  300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
+  are polygon times, with a message (#114).
 
 ## Bug fixes
 

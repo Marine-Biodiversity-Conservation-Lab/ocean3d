@@ -694,39 +694,45 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
   }
 
   if (length(x) == 0L) {
-    stop("`", arg, "` is empty. Supply at least one numeric value or ",
-         "SpatRaster.", call. = FALSE)
+    .abort_envelope_input(glue::glue(
+      "`{arg}` is empty. Supply at least one numeric value or SpatRaster."
+    ))
   }
 
   for (i in seq_along(x)) {
     el <- x[[i]]
     label <- if (length(x) == 1L) {
-      paste0("`", arg, "`")
+      glue::glue("`{arg}`")
     } else {
-      paste0("`", arg, "` element ", i)
+      glue::glue("`{arg}` element {i}")
     }
 
     if (inherits(el, "SpatRaster")) {
       if (!terra::same.crs(el, template)) {
-        stop(label, " has a different CRS than `template`. ",
-             "Project it onto the template grid first.", call. = FALSE)
+        .abort_envelope_input(glue::glue(
+          "{label} has a different CRS than `template`. ",
+          "Project it onto the template grid first."
+        ))
       }
       aligned <- terra::compareGeom(el, template, crs = FALSE,
                                     stopOnError = FALSE, messages = FALSE)
       if (!isTRUE(aligned)) {
-        stop(label, " does not align with `template`; its extent or ",
-             "resolution differs. Resample it onto the template grid first.",
-             call. = FALSE)
+        .abort_envelope_input(glue::glue(
+          "{label} does not align with `template`; its extent or ",
+          "resolution differs. Resample it onto the template grid first."
+        ))
       }
     } else if (!is.numeric(el)) {
-      stop(label, " must be numeric or a SpatRaster, not ", class(el)[1], ".",
-           call. = FALSE)
+      .abort_envelope_input(glue::glue(
+        "{label} must be numeric or a SpatRaster, not {class(el)[1]}."
+      ))
     } else if (anyNA(el)) {
       # A scalar NA carries no information but, under `na.rm = FALSE`, would
       # blank every cell of the output. Reject it here where we can say which
       # argument was at fault instead of reporting an empty envelope later.
-      stop(label, " is NA. Drop it, or supply a real depth constraint.",
-           call. = FALSE)
+      .abort_envelope_input(glue::glue(
+        "{label} is NA. Drop it, or supply a real depth constraint."
+      ))
     }
   }
 
@@ -758,6 +764,19 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
   do.call(fun, c(x[is_rast], x[!is_rast], list(na.rm = FALSE)))
 }
 
+# The one producer of `ocean3d_error_envelope_input`: input that can't be
+# put on a grid as an envelope, from vect_to_envelope() or
+# vector3d_to_envelope().
+.abort_envelope_input <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_envelope_input", call = NULL)
+}
+
+# The one producer of `ocean3d_error_envelope_empty`: an envelope with no
+# cells left, because the shapes miss the grid or have no thickness.
+.abort_envelope_empty <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_envelope_empty", call = NULL)
+}
+
 #' Convert SpatVector or sf to SpatEnvelope
 #' 
 #' Rasterize polygons onto a template raster grid and assign per-cell depth
@@ -778,10 +797,13 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 #' @param depth_max List. Can contain both numeric and SpatRasters that match
 #'   CRS, resolution, extent of `template` and contain numeric values. For each
 #'   cell, the minimum across the `depth_max` list parameters is used as output
-#'   SpatEnvelope depth_max layer cell value. Note that when `depth_min` is
-#'   exactly `depth_max`, these cell values are dropped and replaced with NA.
+#'   SpatEnvelope depth_max layer cell value. Cells where it isn't deeper
+#'   than `depth_min` are `NA`.
 #' 
-#' @returns SpatEnvelope, with depth_min and depth_max layers. 
+#' @returns SpatEnvelope, with depth_min and depth_max layers. Stops with an
+#'   error if the envelope would have no cells: when the polygons don't
+#'   overlap `template`, or no cell they cover has `depth_max` deeper than
+#'   `depth_min`.
 #'
 #' @seealso [as_envelope()], which attaches depth limits to a footprint that is
 #'   already a raster.
@@ -817,20 +839,29 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 vect_to_envelope <- function(polygon, template, depth_min, depth_max) {
   # check params
   if (!inherits(polygon, c("sf", "sfc", "SpatVector"))) {
-    stop("`polygon` needs to be of class SpatVector, sf, or sfc")
+    .abort_envelope_input("`polygon` must be a SpatVector, sf or sfc object.")
   }
   if (inherits(polygon, "sf") || inherits(polygon, "sfc")) {
     polygon <- terra::vect(polygon)
   }
   if (!is(template, "SpatRaster")) {
-    stop("`template` needs to be of class SpatRaster")
+    .abort_envelope_input("`template` must be a SpatRaster.")
   }
   # Only the grid is used. Drop any class tag so a voxel can serve as the
   # template without its layers reaching the depth-aware mask() methods.
   template <- .as_plain_raster(template[[1]])
-  if(!terra::same.crs(crs(polygon), crs(template))) {
-    stop("`polygon` and `template` have different CRS.")
+  if (!terra::same.crs(crs(polygon), crs(template))) {
+    .abort_envelope_input(paste0(
+      "`polygon` and `template` have different CRS. Project `polygon` onto ",
+      "the CRS of `template` first."
+    ))
   }
+
+  # Depths stay 8-byte doubles if terra writes to disk; its default 4-byte
+  # floats would turn 10.1 m into 10.1000004 m.
+  datatype <- terra::terraOptions(print = FALSE)$datatype
+  terra::terraOptions(datatype = "FLT8S")
+  on.exit(terra::terraOptions(datatype = datatype), add = TRUE)
 
   # check the depth inputs for CRS, resolution, extent matching and reject NA
   # params
@@ -843,9 +874,11 @@ vect_to_envelope <- function(polygon, template, depth_min, depth_max) {
   terra::values(all_one) <- 1
   # intersect between polygon and template
   masked <- terra::mask(all_one, polygon) 
-  if(terra::global(masked, "notNA")[1,1] == 0) {
-    stop("All output cell values are NA. `polygon` and `template` may not ",
-         "spatially overlap.")
+  if (terra::global(masked, "notNA")[1, 1] == 0) {
+    .abort_envelope_empty(paste0(
+      "The polygons don't overlap any cell of `template`, so the envelope ",
+      "would be empty. Check that they cover the same area."
+    ))
   }
 
   # Creating depth_min, depth_max rasters that form the SpatEnvelope output
@@ -859,12 +892,46 @@ vect_to_envelope <- function(polygon, template, depth_min, depth_max) {
   depth_max_rast <- .combine_depths(depth_max, template, "min") %>%
     mask(masked)
 
-  # check for validity, where depth_max is greater than depth_min
+  # Keep cells where depth_max is deeper than depth_min. A cell with no
+  # thickness has no volume, and one with depth_max shallower is invalid.
   diffs <- depth_max_rast - depth_min_rast
   msk <- ifel(diffs > 0, 1, NA)
-  if(terra::global(msk, "notNA")[1,1] == 0) {
-    warning("All depth_max values are shallower than depth_min. Check ",
-            "`depth_min` and `depth_max`, you may have swapped these two.")
+  if (terra::global(msk, "notNA")[1, 1] == 0) {
+    # Say how the covered cells fail, since they can fail in different ways.
+    count <- function(r) {
+      n <- terra::global(r, "sum", na.rm = TRUE)[1, 1]
+      if (is.na(n)) 0 else n
+    }
+    counts <- c(
+      shallower = count(diffs < 0),
+      equal = count(diffs == 0),
+      missing = count(!is.na(masked) & is.na(diffs))
+    )
+    verb <- ifelse(counts == 1, "has", "have")
+    parts <- c(
+      if (counts[["shallower"]] > 0) glue::glue(
+        "{counts[['shallower']]} {verb[['shallower']]} `depth_max` shallower ",
+        "than `depth_min` (the limits may be swapped, or a seafloor raster is ",
+        "above `depth_min`)"
+      ),
+      if (counts[["equal"]] > 0) {
+        glue::glue(
+          "{counts[['equal']]} {verb[['equal']]} them equal, so no thickness"
+        )
+      },
+      if (counts[["missing"]] > 0) {
+        glue::glue(
+          "{counts[['missing']]} {verb[['missing']]} no `depth_min` or ",
+          "`depth_max`"
+        )
+      }
+    )
+    parts <- glue::glue_collapse(parts, sep = ", ", last = " and ")
+    .abort_envelope_empty(glue::glue(
+      "No cell has `depth_max` deeper than `depth_min`, so the envelope ",
+      "would be empty. Of the {sum(counts)} cells the polygons cover, ",
+      "{parts}."
+    ))
   }
 
   # mask cells that are not valid, depth_min is deeper than depth_max

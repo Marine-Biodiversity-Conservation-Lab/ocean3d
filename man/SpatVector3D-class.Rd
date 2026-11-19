@@ -79,5 +79,6 @@ geomtype(pts)
 pts
 }
 \seealso{
-\code{\link[=as_vector3d]{as_vector3d()}}, \code{\link[=buffer_3d]{buffer_3d()}}, \code{\link[terra:geomtype]{geomtype()}}
+\code{\link[=as_vector3d]{as_vector3d()}}, \code{\link[=buffer_3d]{buffer_3d()}}, \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}},
+\code{\link[terra:geomtype]{geomtype()}}
 }
