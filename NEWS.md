@@ -120,7 +120,9 @@ message says how many cells have the limits swapped (or a seafloor above
   `as_voxel()` or `envelope_to_voxel()`. `volume()`, `calc_volume_overlap()`,
   `intersect_3d()`, `mask()` and `envelope_to_voxel()` then use these edges
   instead of working them out from the depths with `bounds`. Results built
-  from such a voxel keep its edges (#138).
+  from such a voxel keep its edges. `voxel_to_envelope()` on such a voxel
+  gives an envelope from the top of the shallowest slab to the bottom of the
+  deepest, and so do the depth layers of `calc_volume_overlap()` (#138).
 
 ## Bug fixes
 

@@ -317,6 +317,15 @@ test_that("calc_volume_overlap() uses the voxels' shared depth edges", {
   e <- make_range_rast(rep(0, 9), rep(4, 9))
   expect_equal(total(calc_volume_overlap(e, edged)), volume(edged))
 
+  # The summary depth layers are the outer slab edges: 0 to 4 m.
+  result <- calc_volume_overlap(edged, plain)
+  for (layer in c("depth_min_a", "depth_min_b", "depth_min_overlap")) {
+    expect_true(all(terra::values(result[[layer]]) == 0), info = layer)
+  }
+  for (layer in c("depth_max_a", "depth_max_b", "depth_max_overlap")) {
+    expect_true(all(terra::values(result[[layer]]) == 4), info = layer)
+  }
+
   other <- as_voxel(plain, depth_bounds = cbind(c(0, 1, 2), c(1, 2, 5)))
   err <- expect_error(calc_volume_overlap(edged, other),
                       class = "ocean3d_error_depth_bounds")

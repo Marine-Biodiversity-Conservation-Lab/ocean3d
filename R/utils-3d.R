@@ -128,11 +128,13 @@
   terra::ifel(sum(occ) > 0, 1, NA)
 }
 
-# Internal: shallowest and deepest occupied level of an occupancy stack.
-# These are summary bounds only: a voxel with an interior gap is not solid
-# between them, which is why volumes are computed from the occupancy itself.
-.occupancy_bounds <- function(occ) {
-  voxel_to_envelope(as_voxel(occ), fun = function(v) v > 0)
+# Internal: shallowest and deepest occupied level of an occupancy stack, or
+# the outer edges of their slabs when `depth_bounds` gives them. These are
+# summary bounds only: a voxel with an interior gap is not solid between them,
+# which is why volumes are computed from the occupancy itself.
+.occupancy_bounds <- function(occ, depth_bounds = NULL) {
+  voxel_to_envelope(as_voxel(occ, depth_bounds = depth_bounds),
+                    fun = function(v) v > 0)
 }
 
 # Internal: the shared depth levels of two voxels. Resampling one onto the

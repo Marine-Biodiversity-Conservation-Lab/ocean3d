@@ -109,7 +109,8 @@ setMethod(
     bounds <- match.arg(bounds)
     # Validates both inputs and checks they share a grid and depth levels.
     shared <- intersect_3d(x, y)
-    slab <- .slabs(.parse_depth_layers(x), .shared_depth_bounds(x, y), bounds)
+    edges <- .shared_depth_bounds(x, y)
+    slab <- .slabs(.parse_depth_layers(x), edges, bounds)
 
     occ_a <- .voxel_occupancy(x)
     occ_b <- .voxel_occupancy(y)
@@ -123,10 +124,11 @@ setMethod(
     present_b <- .voxel_present(occ_b)
     both_mask <- terra::mask(present_a, present_b)
 
-    # Summary depth bounds, not a claim that the domain is solid between them.
-    bounds_a <- .occupancy_bounds(occ_a)
-    bounds_b <- .occupancy_bounds(occ_b)
-    bounds_overlap <- .occupancy_bounds(occ_overlap)
+    # Summary depth bounds, not a claim that the domain is solid between them:
+    # the outer slab edges when the voxels carry them, else the levels.
+    bounds_a <- .occupancy_bounds(occ_a, edges)
+    bounds_b <- .occupancy_bounds(occ_b, edges)
+    bounds_overlap <- .occupancy_bounds(occ_overlap, edges)
 
     dmin_a <- .named_layer(bounds_a, "depth_min", "depth_min_a")
     dmax_a <- .named_layer(bounds_a, "depth_max", "depth_max_a")

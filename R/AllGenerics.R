@@ -247,7 +247,9 @@ setGeneric("intersects_3d",
 #'   }
 #'
 #'   For voxel inputs the depth layers are *summary bounds* — the shallowest
-#'   and deepest occupied level. A voxel with an interior gap is not solid
+#'   and deepest occupied level, or the top and bottom of their slabs when the
+#'   voxels carry depth edges (as [voxel_to_envelope()] gives them). A voxel
+#'   with an interior gap is not solid
 #'   between them, so read the volume layers, not the depth layers, for
 #'   occupied volume. The result is a plain SpatRaster: it is neither an
 #'   envelope nor a voxel.

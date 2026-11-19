@@ -33,6 +33,11 @@ the data: the shallowest and deepest depths at which the cell has any value.
 Pass a different predicate to bound a subset of the values instead, e.g.
 \verb{\\(x) x > 15} for the depths over which a cell exceeds 15 degrees.
 
+When the voxel carries depth edges (see \link[=SpatVoxel-class]{SpatVoxel}), the envelope
+runs from the top of the shallowest qualifying layer's slab to the bottom of
+the deepest one's, so it covers the water those layers stand for. A voxel
+without edges gives the depths of the layers themselves.
+
 \strong{This conversion is lossy.} An envelope stores a single continuous
 interval per cell, so any interior gap in the voxel is filled in: a cell that
 satisfies \code{fun} at 0 m and 200 m but not at 100 m still yields the envelope
@@ -54,6 +59,12 @@ terra::values(voxel_to_envelope(v))
 # over which a cell is warmer than 10 degrees. Cell 2 never qualifies, so it
 # is NA in both layers.
 terra::values(voxel_to_envelope(v, fun = function(x) x > 10))
+
+# With depth edges, the envelope covers the slabs: cell 1 runs from the top
+# of the 0 m slab to the bottom of the 200 m slab.
+edged <- as_voxel(v, depth_bounds = cbind(c(0, 25, 75, 150),
+                                          c(25, 75, 150, 250)))
+terra::values(voxel_to_envelope(edged))
 }
 \seealso{
 \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}, the reverse expansion.

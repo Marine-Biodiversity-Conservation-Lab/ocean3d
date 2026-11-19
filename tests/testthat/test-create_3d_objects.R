@@ -1408,3 +1408,26 @@ test_that("envelope_to_voxel() places levels with given depth edges", {
   )
   expect_match(conditionMessage(err), "In envelope_to_voxel()", fixed = TRUE)
 })
+
+test_that("voxel_to_envelope() runs from the top to the bottom slab edge", {
+  # Cell 1 occupies all three levels, cell 2 only 1.5 m, cell 3 1.5 m and 3 m
+  # (a gap is filled), the rest none.
+  vals <- cbind(c(1, NA, NA, rep(NA, 6)), c(1, 1, 1, rep(NA, 6)),
+                c(1, NA, 1, rep(NA, 6)))
+  v <- as_voxel(make_voxel(vals, edge_depths), depth_bounds = edge_bounds)
+
+  e <- terra::values(voxel_to_envelope(v))
+  expect_equal(unname(e[1:3, ]), rbind(c(0, 4), c(1, 2), c(1, 4)))
+  expect_true(all(is.na(e[4:9, ])))
+
+  # Without edges, the layer depths, as before.
+  plain <- terra::values(voxel_to_envelope(make_voxel(vals, edge_depths)))
+  expect_equal(unname(plain[1:3, ]), rbind(c(0.5, 3), c(1.5, 1.5), c(1.5, 3)))
+
+  # With contiguous edges the round trip recovers every occupied level of the
+  # cells without a gap (cell 3's gap is filled, as always).
+  back <- envelope_to_voxel(voxel_to_envelope(v), edge_depths,
+                            depth_bounds = edge_bounds)
+  expect_identical(!is.na(terra::values(back))[1:2, ],
+                   !is.na(terra::values(v))[1:2, ])
+})

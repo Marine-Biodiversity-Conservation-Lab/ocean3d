@@ -601,6 +601,11 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 #' Pass a different predicate to bound a subset of the values instead, e.g.
 #' `\(x) x > 15` for the depths over which a cell exceeds 15 degrees.
 #'
+#' When the voxel carries depth edges (see [SpatVoxel-class]), the envelope
+#' runs from the top of the shallowest qualifying layer's slab to the bottom of
+#' the deepest one's, so it covers the water those layers stand for. A voxel
+#' without edges gives the depths of the layers themselves.
+#'
 #' **This conversion is lossy.** An envelope stores a single continuous
 #' interval per cell, so any interior gap in the voxel is filled in: a cell that
 #' satisfies `fun` at 0 m and 200 m but not at 100 m still yields the envelope
@@ -635,6 +640,12 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 #' # over which a cell is warmer than 10 degrees. Cell 2 never qualifies, so it
 #' # is NA in both layers.
 #' terra::values(voxel_to_envelope(v, fun = function(x) x > 10))
+#'
+#' # With depth edges, the envelope covers the slabs: cell 1 runs from the top
+#' # of the 0 m slab to the bottom of the 200 m slab.
+#' edged <- as_voxel(v, depth_bounds = cbind(c(0, 25, 75, 150),
+#'                                           c(25, 75, 150, 250)))
+#' terra::values(voxel_to_envelope(edged))
 #' @export
 voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
   if (!is.function(fun)) {
@@ -681,8 +692,11 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
   # An all-FALSE row still yields a column index, so cells where the predicate
   # never holds must go back to NA rather than point at the shallowest depth.
   never <- !hit[cbind(seq_len(n_cells), first_hit)]
-  depth_min <- depths[first_hit]
-  depth_max <- depths[last_hit]
+  # With stored edges, the top of the shallowest slab and the bottom of the
+  # deepest; without, the layer depths.
+  edges <- .depth_bounds_of(v)
+  depth_min <- if (is.null(edges)) depths[first_hit] else edges[first_hit, 1]
+  depth_max <- if (is.null(edges)) depths[last_hit] else edges[last_hit, 2]
   depth_min[never] <- NA_real_
   depth_max[never] <- NA_real_
 
