@@ -1256,8 +1256,6 @@ test_that("multi-source extraction selects the correct temporal file", {
 # One cell at lon 0, lat 40 with a daily time axis and optional depths.
 make_a2_temporal_nc <- function(path, days, values, with_depth = FALSE) {
   depth <- if (with_depth) c(0, 50, 100)
-  # array() recycles `values` over the grid.
-  values <- array(values, c(max(length(depth), 1L), length(days)))
   make_grid_file( # nolint: object_usage_linter.
     lon = 0, lat = 40, depth = depth, time = days, values = values,
     var_units = "degree_Celsius", path = path
@@ -1846,8 +1844,6 @@ test_that("unknown cadence warnings explain how to set an interval", {
 # Issue #74 A: geographic selection and explicit horizontal limits.
 # No depth axis; an optional daily time axis.
 make_horizontal_test_nc <- function(path, lon, lat, values, days = NULL) {
-  # array() recycles `values` over the grid.
-  values <- array(values, c(length(lon), length(lat), max(length(days), 1L)))
   make_grid_file( # nolint: object_usage_linter.
     lon, lat, depth = NULL, time = days, values = values,
     var_units = "degree_Celsius", path = path
@@ -2011,7 +2007,7 @@ make_depth_axis_test_nc <- function(path, depths, values,
   # One cell at lon 0, lat 40 with no time axis. NULL attributes are left out.
   make_grid_file( # nolint: object_usage_linter.
     lon = 0, lat = 40, depth = depths, time = NULL,
-    values = array(values, length(depths)), depth_units = units,
+    values = values, depth_units = units,
     positive = positive, depth_name = depth_name,
     depth_atts = Filter(Negate(is.null), list(
       standard_name = standard_name, formula_terms = formula_terms

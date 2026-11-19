@@ -3,7 +3,10 @@
 # make_grid_file() with the buffer tests' defaults: each cell holds its
 # `cell_values` entry (lon x lat) plus `field` (depth x time). Dimensions are
 # stored in a different order from lon, lat, depth, time on purpose. Other
-# arguments, such as depth_bounds, time_bounds and var, go to make_grid_file().
+# arguments, such as depth_bounds, time_bounds and var, go to make_grid_file(),
+# except `positive`, `var_units`, `time_units` and `dim_order`, which this
+# wrapper sets (bounds go through `lon_bounds`, `lat_bounds` and
+# `spatial_bounds`).
 .make_buffer_grid_nc <- function(
   path,
   cell_values = matrix(c(0, 10, 20, 30), 2L),

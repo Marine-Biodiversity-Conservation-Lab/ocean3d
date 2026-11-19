@@ -1,14 +1,8 @@
-# make_grid(), make_range_rast() and make_voxel() are in
-# helper-example_objects.R; make_grid(vals = ) is a single-layer footprint.
+# make_grid(), make_range_rast(), make_voxel(), make_field() and
+# make_left_polygon() are in helper-example_objects.R; make_grid(vals = ) is a
+# single-layer footprint.
 # lintr checks this file on its own and can't see them, so the helpers below
 # that call them carry object_usage nolints.
-
-# Helper: a polygon covering the centres of the left two columns of a 3x3
-# grid, in the grid's CRS.
-make_left_polygon <- function() {
-  terra::vect("POLYGON ((0 0, 2000 0, 2000 3000, 0 3000, 0 0))",
-              crs = terra::crs(make_grid())) # nolint: object_usage_linter.
-}
 
 # ---- intersect_3d: envelopes ------------------------------------------------
 
@@ -378,13 +372,6 @@ test_that("intersects_3d() rejects 2D-only input and mismatched grids", {
 })
 
 # ---- mask -------------------------------------------------------------------
-
-# A temperature field on five levels over a 3x3 grid, every cell a distinct
-# value so a misplaced mask would show.
-make_field <- function(depths = c(0, 50, 100, 150, 200)) {
-  vals <- matrix(seq_len(9 * length(depths)), nrow = 9)
-  make_voxel(vals, depths, varname = "temp") # nolint: object_usage_linter.
-}
 
 test_that("mask(voxel, envelope) equals the hand-written idiom exactly", {
   field <- make_field()

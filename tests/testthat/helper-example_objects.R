@@ -59,6 +59,20 @@ make_voxel <- function(vals, depths, ncol = 3, nrow = 3, varname = "presence") {
   as_voxel(r, depths = depths, varname = varname)
 }
 
+# Helper: a temperature field on five levels over make_grid()'s 3x3 grid,
+# every cell a distinct value so a misplaced mask would show.
+make_field <- function(depths = c(0, 50, 100, 150, 200)) {
+  vals <- matrix(seq_len(9 * length(depths)), nrow = 9)
+  make_voxel(vals, depths, varname = "temp")
+}
+
+# Helper: a polygon covering the centres of the left two columns of
+# make_grid()'s 3x3 grid, in the grid's CRS.
+make_left_polygon <- function() {
+  terra::vect("POLYGON ((0 0, 2000 0, 2000 3000, 0 3000, 0 0))",
+              crs = terra::crs(make_grid()))
+}
+
 # Helper: 2x2 footprint, cells 1-3 present, cell 4 absent. Values are
 # deliberately varied (and one is 0) because only their non-NA-ness counts.
 make_footprint <- function(vals = c(1, 5, 0, NA)) {

@@ -141,9 +141,7 @@ test_that("bad time units, offsets or bounds calendars get their own error", {
   on.exit(unlink(c(no_units, non_finite, calendars)), add = TRUE)
   expect_error(as_proxy(no_units), "has no usable `units` attribute")
   expect_error(as_proxy(non_finite), "must contain finite numeric offsets")
-  nc <- ncdf4::nc_open(calendars, write = TRUE)
-  ncdf4::ncatt_put(nc, "time_bnds", "calendar", "noleap")
-  ncdf4::nc_close(nc)
+  set_atts(calendars, "time_bnds", calendar = "noleap")
   expect_error(as_proxy(calendars), "use different calendars")
 })
 

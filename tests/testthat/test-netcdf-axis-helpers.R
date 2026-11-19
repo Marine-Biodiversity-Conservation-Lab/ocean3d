@@ -377,14 +377,6 @@ read_axis <- function(f, coordinate = "depth", ...) {
   .read_interval_axis(nc, coordinate, ...) # nolint: object_usage_linter.
 }
 
-# Sets attributes on one variable of an existing file.
-set_atts <- function(f, var, ...) {
-  nc <- ncdf4::nc_open(f, write = TRUE)
-  on.exit(ncdf4::nc_close(nc))
-  atts <- list(...)
-  for (name in names(atts)) ncdf4::ncatt_put(nc, var, name, atts[[name]])
-}
-
 # A file with one variable on a depth axis whose bounds variable is stored
 # `bounds` as given, which make_grid_file() can't do for bounds stored
 # coordinate first or with more than two vertices.
@@ -486,23 +478,23 @@ test_that("invalid declared bounds never fall back to inference", {
                  fixed = TRUE)
   }
   three <- raw_bounds_file(c(5, 20), matrix(0:5, nrow = 3L))
-  missing <- make_grid_file(depth = c(5, 20), time = NULL)
+  missing <- make_grid_file(depth = c(5, 20), time = NULL,
+                            depth_atts = list(bounds = "missing_bounds"))
   on.exit(unlink(c(three, missing)), add = TRUE)
   expect_error(read_axis(three, infer_bounds = TRUE), "two finite endpoints",
                fixed = TRUE)
-  set_atts(missing, "depth", bounds = "missing_bounds")
   expect_error(read_axis(missing, infer_bounds = TRUE),
                "missing bounds variable", fixed = TRUE)
 })
 
 test_that("incompatible units and directions are reported explicitly", {
   bounds <- matrix(c(0, 10, 10, 30), nrow = 2L)
-  f <- make_grid_file(depth = c(5, 20), time = NULL, depth_bounds = bounds)
+  f <- make_grid_file(depth = c(5, 20), time = NULL, depth_bounds = bounds,
+                      positive = "down")
   on.exit(unlink(f), add = TRUE)
   set_atts(f, "depth_bnds", units = "cm")
   expect_error(read_axis(f), "different units", fixed = TRUE)
   set_atts(f, "depth_bnds", units = "m", positive = "up")
-  set_atts(f, "depth", positive = "down")
   expect_error(read_axis(f), "conflicting directions", fixed = TRUE)
 })
 

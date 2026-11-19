@@ -505,9 +505,7 @@ test_that("temporal eligibility needs a target and a non-missing time axis", {
 test_that("metadata keeps bounds separate from sampling cadence", {
   f <- make_grid_file(depth = NULL, time = 0)
   on.exit(unlink(f), add = TRUE)
-  nc <- ncdf4::nc_open(f, write = TRUE)
-  ncdf4::ncatt_put(nc, "temp", "cell_methods", "time: mean")
-  ncdf4::nc_close(nc)
+  set_atts(f, "temp", cell_methods = "time: mean")
 
   info <- read_metadata(f)
   expect_identical(info$cell_methods, "time: mean")

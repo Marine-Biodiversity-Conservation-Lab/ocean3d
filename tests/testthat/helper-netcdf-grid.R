@@ -4,8 +4,9 @@
 # ncdf4::ncvar_get() on the whole variable.
 #
 # `values` are given in lon, lat, depth, time order whatever `dim_order` is; a
-# single value fills the grid. `*_bounds` are 2 x n matrices of cell edges in
-# the coordinate's units. Set `depth` or `time` to NULL to leave that axis out.
+# shorter vector is recycled over the grid. `*_bounds` are 2 x n matrices of
+# cell edges in the coordinate's units. Set `depth` or `time` to NULL to leave
+# that axis out.
 # `dim_order` lists the variable's dimensions in ncdf4 order (fastest-varying
 # first); axes left out with NULL are skipped. With `prec = "short"`, the
 # stored integers are packed with `scale` and `offset`. `extra_vars` adds
@@ -38,7 +39,7 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
   }
   shape <- vapply(axes, function(d) length(d$vals), integer(1))
   if (!is.null(values)) {
-    stopifnot(length(values) %in% c(1L, prod(shape)))
+    stopifnot(length(values) >= 1L, prod(shape) %% length(values) == 0L)
     values <- array(values, shape)
   }
   if (!is.null(dim_order)) {
@@ -101,7 +102,8 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
 # make_grid_file() with the track and buffer tests' defaults. Unless `values`
 # is given, each value says which cell it is in: 10 * lon + 100 * lat + depth +
 # 1000 * time, with time in hours since 2020-01-01. `missing = TRUE` empties
-# the first longitude. Other arguments go to make_grid_file().
+# the first longitude. Other arguments go to make_grid_file(), except
+# `positive`, `var_units` and `time_units`, which this wrapper sets.
 .make_track_nc <- function(
   path, lon = 0:2, lat = c(0, 1), depth = NULL, time = NULL,
   values = outer(outer(10 * lon, 100 * lat, "+"),
@@ -114,4 +116,14 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
     positive = if (!is.null(depth)) "down", var_units = "degree_Celsius",
     time_units = "hours since 2020-01-01 00:00:00", ...
   )
+}
+
+# Sets attributes, given as `name = value`, on variable `var` of an existing
+# file. For attributes make_grid_file() can't set, such as those of a bounds
+# variable.
+set_atts <- function(f, var, ...) {
+  nc <- ncdf4::nc_open(f, write = TRUE)
+  on.exit(ncdf4::nc_close(nc))
+  atts <- list(...)
+  for (name in names(atts)) ncdf4::ncatt_put(nc, var, name, atts[[name]])
 }
