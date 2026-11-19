@@ -330,18 +330,35 @@ the shallowest depth the animal occupies.</p>
 <p><code><a href="../reference/vect_to_envelope.html">vect_to_envelope()</a></code> works one polygon at a time and does
 not reproject, so we transform the ranges onto the grid’s CRS once and
 loop with <code><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply()</a></code>.</p>
+<p>If the seafloor is shallower than a species’ or fishery’s
+<code>depth_min</code> across its whole range, no water is left for it,
+and <code><a href="../reference/vect_to_envelope.html">vect_to_envelope()</a></code> stops with an error saying so.
+<code>envelope_or_skip()</code> prints that message, skips the polygon
+and lets the loop carry on, so the later steps use the others.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">species_proj</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_transform</a></span><span class="op">(</span><span class="va">bangladesh_species</span>, <span class="va">bangladesh_crs</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="va">envelope_or_skip</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">polygon</span>, <span class="va">depth_min</span>, <span class="va">depth_max</span>, <span class="va">label</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">tryCatch</a></span><span class="op">(</span></span>
+<span>    <span class="fu"><a href="../reference/vect_to_envelope.html">vect_to_envelope</a></span><span class="op">(</span></span>
+<span>      polygon   <span class="op">=</span> <span class="va">polygon</span>,</span>
+<span>      template  <span class="op">=</span> <span class="va">study_grid</span>,</span>
+<span>      depth_min <span class="op">=</span> <span class="va">depth_min</span>,</span>
+<span>      depth_max <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">depth_max</span>, <span class="va">seafloor</span><span class="op">)</span></span>
+<span>    <span class="op">)</span>,</span>
+<span>    error <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">e</span><span class="op">)</span> <span class="op">{</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Skipping "</span>, <span class="va">label</span>, <span class="st">": "</span>, <span class="fu"><a href="https://rdrr.io/r/base/conditions.html" class="external-link">conditionMessage</a></span><span class="op">(</span><span class="va">e</span><span class="op">)</span><span class="op">)</span></span>
+<span>      <span class="cn">NULL</span></span>
+<span>    <span class="op">}</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">species_proj</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_transform</a></span><span class="op">(</span><span class="va">bangladesh_species</span>, <span class="va">bangladesh_crs</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">species_rasters</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">species_proj</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/vect_to_envelope.html">vect_to_envelope</a></span><span class="op">(</span></span>
-<span>    polygon   <span class="op">=</span> <span class="va">species_proj</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>,</span>
-<span>    template  <span class="op">=</span> <span class="va">study_grid</span>,</span>
-<span>    depth_min <span class="op">=</span> <span class="va">species_proj</span><span class="op">$</span><span class="va">depth_min_sel</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>,</span>
-<span>    depth_max <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">species_proj</span><span class="op">$</span><span class="va">depth_max_sel</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, <span class="va">seafloor</span><span class="op">)</span></span>
-<span>  <span class="op">)</span></span>
+<span>  <span class="fu">envelope_or_skip</span><span class="op">(</span><span class="va">species_proj</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>, <span class="va">species_proj</span><span class="op">$</span><span class="va">depth_min_sel</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>,</span>
+<span>                   <span class="va">species_proj</span><span class="op">$</span><span class="va">depth_max_sel</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, <span class="va">species_proj</span><span class="op">$</span><span class="va">sci_name</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">species_rasters</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">species_proj</span><span class="op">$</span><span class="va">sci_name</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">species_rasters</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">species_proj</span><span class="op">$</span><span class="va">sci_name</span></span>
+<span><span class="va">species_rasters</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/funprog.html" class="external-link">Filter</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/funprog.html" class="external-link">Negate</a></span><span class="op">(</span><span class="va">is.null</span><span class="op">)</span>, <span class="va">species_rasters</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level4">
 <h4 id="c-rasterize-fisheries">2c: Rasterize fisheries<a class="anchor" aria-label="anchor" href="#c-rasterize-fisheries"></a>
@@ -350,14 +367,12 @@ loop with <code><a href="https://rdrr.io/r/base/lapply.html" class="external-lin
 <code class="sourceCode R"><span><span class="va">fisheries_proj</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_transform.html" class="external-link">st_transform</a></span><span class="op">(</span><span class="va">fisheries</span>, <span class="va">bangladesh_crs</span><span class="op">)</span></span>
 <span></span>
 <span><span class="va">fishery_rasters</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">fisheries_proj</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/vect_to_envelope.html">vect_to_envelope</a></span><span class="op">(</span></span>
-<span>    polygon   <span class="op">=</span> <span class="va">fisheries_proj</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>,</span>
-<span>    template  <span class="op">=</span> <span class="va">study_grid</span>,</span>
-<span>    depth_min <span class="op">=</span> <span class="va">fisheries_proj</span><span class="op">$</span><span class="va">depth_min</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>,</span>
-<span>    depth_max <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">fisheries_proj</span><span class="op">$</span><span class="va">depth_max</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, <span class="va">seafloor</span><span class="op">)</span></span>
-<span>  <span class="op">)</span></span>
+<span>  <span class="fu">envelope_or_skip</span><span class="op">(</span><span class="va">fisheries_proj</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>, <span class="va">fisheries_proj</span><span class="op">$</span><span class="va">depth_min</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>,</span>
+<span>                   <span class="va">fisheries_proj</span><span class="op">$</span><span class="va">depth_max</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>,</span>
+<span>                   <span class="va">fisheries_proj</span><span class="op">$</span><span class="va">fishery_type</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fishery_rasters</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">fisheries_proj</span><span class="op">$</span><span class="va">fishery_type</span></span></code></pre></div>
+<span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fishery_rasters</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">fisheries_proj</span><span class="op">$</span><span class="va">fishery_type</span></span>
+<span><span class="va">fishery_rasters</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/funprog.html" class="external-link">Filter</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/funprog.html" class="external-link">Negate</a></span><span class="op">(</span><span class="va">is.null</span><span class="op">)</span>, <span class="va">fishery_rasters</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level3">

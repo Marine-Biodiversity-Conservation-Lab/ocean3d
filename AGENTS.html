@@ -63,6 +63,12 @@
 <li>A new exported function, class or data representation needs a reason the existing ones can’t serve. Say what you checked in the PR description.</li>
 </ul></div>
 <div class="section level2">
+<h2 id="breaking-changes">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes"></a></h2>
+<p>Changing what an exported function does is fine when it makes the package more correct or consistent. Don’t keep old behaviour only so that existing code keeps working.</p>
+<ul><li>In the same PR, update every vignette and article that uses the changed function, so it works with the new behaviour or uses the new function. Most articles in <code>vignettes/articles/</code> have <code>eval = FALSE</code>, so <code>devtools::check()</code> doesn’t run them: find the calls (<code>grep -rn "&lt;function&gt;(" vignettes/</code>) and run the changed chunks, for example on synthetic data.</li>
+<li>List the change under “Breaking changes” in NEWS.md: what used to happen, what happens now, and what callers need to change.</li>
+</ul></div>
+<div class="section level2">
 <h2 id="internal-helpers">Internal helpers<a class="anchor" aria-label="anchor" href="#internal-helpers"></a></h2>
 <p>Don’t create an internal function unless it earns its place (#97).</p>
 <p>Keep a helper when:</p>

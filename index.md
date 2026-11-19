@@ -80,9 +80,9 @@ the seafloor (B); and a SpatVoxel, presence at depth levels from 50 to
 500 m (C). The curved top and bottom surfaces and vector3d_to_envelope()
 are planned: a SpatVector3D polygon currently has one depth range.
 
-*`vector3d_to_envelope()` and the curved top and bottom surfaces in
-panel A are planned. Today each `SpatVector3D` polygon has one depth
-range.*
+*[`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
+and the curved top and bottom surfaces in panel A are planned. Today
+each `SpatVector3D` polygon has one depth range.*
 
 Functions convert between these representations.
 [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)

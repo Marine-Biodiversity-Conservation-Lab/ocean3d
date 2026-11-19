@@ -37,13 +37,15 @@ vect_to_envelope(polygon, template, depth_min, depth_max)
   List. Can contain both numeric and SpatRasters that match CRS,
   resolution, extent of `template` and contain numeric values. For each
   cell, the minimum across the `depth_max` list parameters is used as
-  output SpatEnvelope depth_max layer cell value. Note that when
-  `depth_min` is exactly `depth_max`, these cell values are dropped and
-  replaced with NA.
+  output SpatEnvelope depth_max layer cell value. Cells where it isn't
+  deeper than `depth_min` are `NA`.
 
 ## Value
 
-SpatEnvelope, with depth_min and depth_max layers.
+SpatEnvelope, with depth_min and depth_max layers. Stops with an error
+if the envelope would have no cells: when the polygons don't overlap
+`template`, or no cell they cover has `depth_max` deeper than
+`depth_min`.
 
 ## See also
 

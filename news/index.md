@@ -52,6 +52,15 @@ and stop with an error when they are bad
   coordinate’s `bounds` attribute so edges are inferred from the centres
   (for example with NCO: `ncatted -a bounds,lon,d,, file.nc`).
 
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
+now stops with an error when the envelope would have no cells: no cell
+the polygons cover has `depth_max` deeper than `depth_min`. It used to
+warn and return an empty envelope, so code that loops over polygons and
+drops empty results has to handle the error instead. The message says
+how many cells have the limits swapped (or a seafloor above
+`depth_min`), equal, or missing
+([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
+
 ### New features
 
 - New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
@@ -90,6 +99,16 @@ and stop with an error when they are bad
   from 10 to 60 m deep around a detection at 35 m.
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
   on points or lines now suggests it
+  ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
+- New
+  [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
+  puts `SpatVector3D` polygons onto a grid as a `SpatEnvelope`, as
+  [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
+  does for 2D polygons. Where polygons overlap, a cell gets the
+  shallowest top and deepest bottom of the polygons covering it, so
+  polygons from 0 to 50 m and from 200 to 300 m give 0 to 300 m. Cells
+  where top equals bottom are dropped, and so are polygon times, with a
+  message
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
 
 ### Bug fixes
