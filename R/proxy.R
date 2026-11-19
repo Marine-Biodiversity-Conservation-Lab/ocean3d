@@ -15,13 +15,12 @@ setOldClass(c("CFTime", "R6"))
 #' describes vector data on disk. Build one with [as_proxy()].
 #'
 #' A `SpatProxy` is the planned core data object of ocean3d (SPEC.md, "Data
-#' model"). Later versions will read one time step of it into memory as a
-#' [SpatVoxel-class].
+#' model"). [as_voxel()] reads one time step of it into memory as a
+#' [SpatVoxel-class], with the proxy's depths, depth edges, CRS and date.
 #'
 #' @section Experimental:
 #' `SpatProxy` and [as_proxy()] are experimental. Their slots and behaviour
-#' may change without notice while the core object is built, and no other
-#' function accepts a `SpatProxy` yet.
+#' may change without notice while the core object is built.
 #'
 #' @slot source A list: `type` (`"netcdf"`) and `path`, the full path of the
 #'   file. A path rather than an open connection, so the object can be saved
@@ -37,7 +36,9 @@ setOldClass(c("CFTime", "R6"))
 #'   cell without bounds). `depth` is in metres positive down and also has
 #'   `storage` (`"shallow_first"` or `"deep_first"`). `time` holds `dim`,
 #'   `cftime` (a CFtime object, with the file's bounds attached when it has
-#'   them) and `edges` (`"bounds"` or `"none"`).
+#'   them) and `edges` (`"bounds"` or `"none"`). A one-step climatology, such
+#'   as a World Ocean Atlas period, has `climatology = TRUE`, its `units` and
+#'   no `cftime`.
 #' @slot crs The coordinate reference system, as text.
 #'
 #' @seealso [as_proxy()]
@@ -80,7 +81,11 @@ setValidity("SpatProxy", function(object) {
                             anyDuplicated(depth))) {
     return("depths must be distinct metres, positive down")
   }
-  if (!is.null(axes$time)) {
+  if (isTRUE(axes$time$climatology)) {
+    if (!identical(as.integer(size(axes$time)), 1L)) {
+      return("a climatological time axis must have one step")
+    }
+  } else if (!is.null(axes$time)) {
     time <- axes$time$cftime
     if (!inherits(time, "CFTime") || !isTRUE(all(diff(time$offsets) > 0)) ||
           !identical(length(time$offsets), as.integer(size(axes$time)))) {
@@ -110,8 +115,10 @@ setValidity("SpatProxy", function(object) {
 #'   must be strictly increasing; a backwards or out-of-order axis is an
 #'   error that suggests sorting the file, for example with CDO's
 #'   `sorttimestamp`. Only the `standard`, `gregorian` and
-#'   `proleptic_gregorian` calendars are supported, and climatological time
-#'   axes aren't supported yet.
+#'   `proleptic_gregorian` calendars are supported. A climatological time
+#'   axis with one step, such as a World Ocean Atlas period, is recorded as a
+#'   climatology without a date; climatologies with more steps aren't
+#'   supported yet.
 #' * **CRS:** EPSG:4326, unless the variable's `grid_mapping` gives another
 #'   geographic CRS as WKT (`crs_wkt` or `spatial_ref`).
 #'
@@ -140,6 +147,10 @@ setValidity("SpatProxy", function(object) {
 #' # Each axis in its fixed form: depth in metres, time as a CFtime object.
 #' x@axes$depth$centres
 #' x@axes$time$cftime
+#'
+#' # Read one time step into memory as a SpatVoxel.
+#' v <- as_voxel(x, time = 1)
+#' depths(v)
 #' @export
 as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
                      depth_dim = NULL, time_dim = NULL) {
@@ -234,9 +245,17 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 
 # The time axis as a CFtime object, with the file's bounds attached when it
 # has them. Time must run strictly forwards (SPEC.md, "Time runs forwards
-# only"); the core object doesn't reorder it.
+# only"); the core object doesn't reorder it. A one-step climatology is
+# recorded without a CFtime object.
 .proxy_time_axis <- function(nc, dim, path) {
   file <- basename(path)
+  # A one-step climatology, such as a World Ocean Atlas period, has no date
+  # CFtime can decode: it is recorded as a climatology, with its units.
+  one_step <- identical(as.integer(nc$dim[[dim]]$len), 1L)
+  if (.is_climatology(nc, dim) && one_step) {
+    return(list(dim = dim, cftime = NULL, edges = "none", climatology = TRUE,
+                units = .read_attribute(nc, dim, "units")))
+  }
   .check_climatology(nc, dim, file)
   offsets <- as.vector(.get_dim_values(nc, dim))
   units <- .read_attribute(nc, dim, "units")
@@ -393,6 +412,128 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # without a local file.
 .is_url <- function(path) grepl("^[A-Za-z][A-Za-z0-9+.-]*://", path)
 
+# The voxel builder (SPEC.md, "SpatVoxel / SpatEnvelope", Builder): one time
+# step of a SpatProxy read into memory as a SpatVoxel, for as_voxel(). The
+# raster's extent comes from the cell edges and its CRS from the proxy; depth
+# goes in terra::depth() with the proxy's depth edges, and the date of the
+# step in terra::time().
+.proxy_to_voxel <- function(x, time, varname) {
+  axes <- x@axes
+  if (is.null(axes$depth)) {
+    rlang::abort(glue::glue(
+      "Variable `{x@variable$name}` has no depth axis, so it isn't a voxel. ",
+      "Read 2D data with terra::rast()."
+    ), class = "ocean3d_error_proxy_no_depth", call = NULL)
+  }
+  step <- .proxy_time_step(x, time)
+  window <- if (is.null(step)) list() else list(time = c(step, step))
+  values <- .read_proxy_window(x, window)
+
+  # terra's cells run west to east, then north to south.
+  lon <- .regular_axis(axes$lon, "longitude")
+  lat <- .regular_axis(axes$lat, "latitude")
+  lon_order <- order(axes$lon$centres)
+  lat_order <- order(axes$lat$centres, decreasing = TRUE)
+  n_depth <- length(axes$depth$centres)
+  r <- terra::rast(nrows = length(lat_order), ncols = length(lon_order),
+                   nlyrs = n_depth, xmin = lon$min, xmax = lon$max,
+                   ymin = lat$min, ymax = lat$max, crs = x@crs)
+  terra::values(r) <- matrix(values[lon_order, lat_order, , 1L, drop = FALSE],
+                             ncol = n_depth)
+
+  depth_bounds <- if (!identical(axes$depth$edges, "none")) {
+    cbind(axes$depth$lower, axes$depth$upper)
+  }
+  v <- as_voxel(r, depths = axes$depth$centres, varname = varname,
+                depth_bounds = depth_bounds)
+  if (!is.null(x@variable$units)) terra::units(v) <- x@variable$units
+  if (!is.null(step) && !isTRUE(axes$time$climatology)) {
+    date <- axes$time$cftime$as_timestamp(asPOSIX = TRUE)[step]
+    terra::time(v) <- rep(date, terra::nlyr(v))
+  }
+  v
+}
+
+# The index of the time step `time` selects: a step number, or a date or
+# date-time matched exactly at its own resolution (a date selects that day).
+# NULL when the proxy has no time axis. Without `time`, a proxy with one step
+# (or a one-step climatology) gives that step, and one with more is an error.
+.proxy_time_step <- function(x, time) {
+  axis <- x@axes$time
+  if (is.null(axis)) {
+    if (!is.null(time)) {
+      rlang::abort(glue::glue(
+        "Variable `{x@variable$name}` has no time axis, so `time` can't ",
+        "select a step."
+      ), class = "ocean3d_error_proxy_time", call = NULL)
+    }
+    return(NULL)
+  }
+  n <- x@variable$dim_lengths[[axis$dim]]
+  if (is.null(time)) {
+    if (n == 1L) return(1L)
+    rlang::abort(glue::glue(
+      "Variable `{x@variable$name}` has {n} time steps. Choose one with ",
+      "`time`, a step number or a date."
+    ), class = "ocean3d_error_proxy_time", call = NULL)
+  }
+  if (is.numeric(time) && length(time) == 1L && !is.na(time) &&
+        time == round(time)) {
+    if (time >= 1 && time <= n) return(as.integer(time))
+    rlang::abort(glue::glue("`time` must be a step from 1 to {n}."),
+                 class = "ocean3d_error_proxy_time", call = NULL)
+  }
+  if (isTRUE(axis$climatology)) {
+    rlang::abort(
+      "The time axis is a climatology, so `time` can only be step 1.",
+      class = "ocean3d_error_proxy_time", call = NULL
+    )
+  }
+  dates <- axis$cftime$as_timestamp(asPOSIX = TRUE)
+  step <- if (length(time) == 1L) {
+    .match_time_index(dates, time, time_match = "exact")
+  } else {
+    NA_integer_
+  }
+  if (is.na(step)) {
+    shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
+                   collapse = " to ")
+    rlang::abort(glue::glue(
+      "No time step matches `time` ({toString(format(time))}). The steps run ",
+      "from {shown} UTC; give a step number, or a date or date-time that ",
+      "matches one."
+    ), class = "ocean3d_error_proxy_time", call = NULL)
+  }
+  step
+}
+
+# One horizontal axis as the extent of a regular grid: `min` and `max` from
+# the cell edges. Coordinates stored as float32 are rarely exactly regular,
+# so steps and centres are compared with a rounding tolerance; a truly
+# irregular axis can't be a terra raster and stops.
+.regular_axis <- function(axis, label) {
+  centres <- sort(axis$centres)
+  lower <- min(axis$lower)
+  upper <- max(axis$upper)
+  n <- length(centres)
+  if (!(upper > lower)) {
+    rlang::abort(glue::glue(
+      "The {label} axis has a single cell without bounds, so its width isn't ",
+      "known. Add cell bounds to the file."
+    ), class = "ocean3d_error_irregular_grid", call = NULL)
+  }
+  step <- (upper - lower) / n
+  expected <- lower + step * (seq_len(n) - 0.5)
+  tol <- max(4 * .interval_tolerance(axis$lower, axis$upper), 1e-6 * step)
+  if (any(abs(centres - expected) > tol)) {
+    rlang::abort(glue::glue(
+      "The {label} axis isn't regular: its cells differ in width. A ",
+      "SpatVoxel needs a regular grid; regrid the data first."
+    ), class = "ocean3d_error_irregular_grid", call = NULL)
+  }
+  list(min = lower, max = upper)
+}
+
 #' @rdname SpatProxy-class
 #' @param object A `SpatProxy`.
 #' @export
@@ -431,11 +572,17 @@ setMethod("show", "SpatProxy", function(object) {
       "{extent(axes$depth$centres)} m, {length(axes$depth$centres)} levels, ",
       "{sub('_', ' ', axes$depth$storage)}, {edges(axes$depth)}"
     ),
-    time = if (is.null(axes$time)) "none" else glue::glue(
-      "{paste(axes$time$cftime$range(), collapse = ' to ')}, ",
-      "{length(axes$time$cftime)} steps, {axes$time$cftime$cal$name} ",
-      "calendar, {time_bounds} bounds"
-    ),
+    time = if (is.null(axes$time)) {
+      "none"
+    } else if (isTRUE(axes$time$climatology)) {
+      glue::glue("climatology, 1 step ({axes$time$units})")
+    } else {
+      glue::glue(
+        "{paste(axes$time$cftime$range(), collapse = ' to ')}, ",
+        "{length(axes$time$cftime)} steps, {axes$time$cftime$cal$name} ",
+        "calendar, {time_bounds} bounds"
+      )
+    },
     crs = if (grepl("^EPSG:", object@crs)) object@crs else
       terra::crs(object@crs, describe = TRUE)$name
   )

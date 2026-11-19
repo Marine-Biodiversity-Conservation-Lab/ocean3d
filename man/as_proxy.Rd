@@ -47,8 +47,10 @@ them; otherwise the axis has none (they aren't inferred). The time axis
 must be strictly increasing; a backwards or out-of-order axis is an
 error that suggests sorting the file, for example with CDO's
 \code{sorttimestamp}. Only the \code{standard}, \code{gregorian} and
-\code{proleptic_gregorian} calendars are supported, and climatological time
-axes aren't supported yet.
+\code{proleptic_gregorian} calendars are supported. A climatological time
+axis with one step, such as a World Ocean Atlas period, is recorded as a
+climatology without a date; climatologies with more steps aren't
+supported yet.
 \item \strong{CRS:} EPSG:4326, unless the variable's \code{grid_mapping} gives another
 geographic CRS as WKT (\code{crs_wkt} or \code{spatial_ref}).
 }
@@ -62,8 +64,7 @@ example an unlimited time dimension with no records).
 \section{Experimental}{
 
 \code{SpatProxy} and \code{\link[=as_proxy]{as_proxy()}} are experimental. Their slots and behaviour
-may change without notice while the core object is built, and no other
-function accepts a \code{SpatProxy} yet.
+may change without notice while the core object is built.
 }
 
 \examples{
@@ -73,6 +74,10 @@ x
 # Each axis in its fixed form: depth in metres, time as a CFtime object.
 x@axes$depth$centres
 x@axes$time$cftime
+
+# Read one time step into memory as a SpatVoxel.
+v <- as_voxel(x, time = 1)
+depths(v)
 }
 \seealso{
 \link[=SpatProxy-class]{SpatProxy}

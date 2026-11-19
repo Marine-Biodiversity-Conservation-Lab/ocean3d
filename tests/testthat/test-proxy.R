@@ -219,11 +219,22 @@ test_that("unsupported calendars and climatologies stop", {
   calendar <- proxy_error(calendar = "noleap")
   expect_s3_class(calendar$error, "ocean3d_error_calendar")
 
-  # WOA-style monthly climatology, which CFtime can't read. The calendar and
-  # climatology checks are tested directly in test-netcdf-time.R.
+  # A climatology of more than one step, which CFtime can't read. The
+  # calendar and climatology checks are tested directly in
+  # test-netcdf-time.R.
   woa <- proxy_error(time = c(0.5, 1.5),
                      time_units = "months since 0000-01-01 00:00:00")
   expect_s3_class(woa$error, "ocean3d_error_time_climatology")
+})
+
+test_that("a one-step climatology is recorded without a date", {
+  # A World Ocean Atlas period: one step of `months since 0000-01-01`.
+  x <- proxy_of(time = 6, time_units = "months since 0000-01-01 00:00:00")
+  expect_true(x@axes$time$climatology)
+  expect_null(x@axes$time$cftime)
+  expect_identical(x@axes$time$units, "months since 0000-01-01 00:00:00")
+  expect_true(methods::validObject(x))
+  expect_match(capture.output(print(x))[8], "time .*: climatology, 1 step")
 })
 
 test_that("the CRS comes from a geographic grid mapping", {
@@ -357,13 +368,8 @@ test_that("the print shows each axis", {
   expect_identical(bare[7:8], c("depth      : none", "time       : none"))
 })
 
-# The index-window reader. The file must outlive the proxy, so each test
-# removes it at the end.
-proxy_and_file <- function(...) {
-  f <- make_grid_file(...)
-  list(proxy = as_proxy(f, var = "temp"), file = f)
-}
-
+# The index-window reader. proxy_and_file() is in helper-netcdf-grid.R; the
+# file must outlive the proxy, so each test removes it at the end.
 stored_values <- function(f) {
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc))
