@@ -35,13 +35,13 @@ setMethod("volume", "SpatEnvelope", function(x, ...) {
 #' @export
 setMethod(
   "volume", "SpatVoxel",
-  function(x, bounds = c("top", "midpoint")) {
+  function(x, bounds = c("midpoint", "top")) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
 
-    depths <- .parse_depth_layers(x)
     occ <- .voxel_occupancy(x)
-    vol_rast <- .voxel_cell_volume(occ, depths, bounds, .cell_area_km2(x))
+    slab <- .depth_slabs(depths(x), bounds, depth_bounds(x))
+    vol_rast <- .voxel_cell_volume(occ, slab, .cell_area_km2(x))
 
     terra::global(vol_rast, "sum", na.rm = TRUE)[[1]]
   }
@@ -105,11 +105,13 @@ setMethod(
 #' @export
 setMethod(
   "calc_volume_overlap", c("SpatVoxel", "SpatVoxel"),
-  function(x, y, bounds = c("top", "midpoint")) {
+  function(x, y, bounds = c("midpoint", "top")) {
     bounds <- match.arg(bounds)
-    # Validates both inputs and checks they share a grid and depth levels.
+    # Validates both inputs and checks they share a grid, depth levels and
+    # any depth edges; the result carries the shared edges.
     shared <- intersect_3d(x, y)
-    depths <- .parse_depth_layers(x)
+    edges <- depth_bounds(shared)
+    slab <- .depth_slabs(depths(x), bounds, edges)
 
     occ_a <- .voxel_occupancy(x)
     occ_b <- .voxel_occupancy(y)
@@ -123,10 +125,16 @@ setMethod(
     present_b <- .voxel_present(occ_b)
     both_mask <- terra::mask(present_a, present_b)
 
-    # Summary depth bounds, not a claim that the domain is solid between them.
-    bounds_a <- .occupancy_bounds(occ_a)
-    bounds_b <- .occupancy_bounds(occ_b)
-    bounds_overlap <- .occupancy_bounds(occ_overlap)
+    # Summary depth bounds, not a claim that the domain is solid between them:
+    # the outer slab edges when the voxels carry them, else the levels. The
+    # occupancy stacks are 1/0, so a level counts where it is above 0.
+    bounds_a <- voxel_to_envelope(as_voxel(occ_a, depth_bounds = edges),
+                                  fun = function(v) v > 0)
+    bounds_b <- voxel_to_envelope(as_voxel(occ_b, depth_bounds = edges),
+                                  fun = function(v) v > 0)
+    bounds_overlap <- voxel_to_envelope(
+      as_voxel(occ_overlap, depth_bounds = edges), fun = function(v) v > 0
+    )
 
     dmin_a <- .named_layer(bounds_a, "depth_min", "depth_min_a")
     dmax_a <- .named_layer(bounds_a, "depth_max", "depth_max_a")
@@ -140,16 +148,16 @@ setMethod(
     # Volumes come from the occupancy stacks, so interior gaps are excluded
     # even though the depth bounds above span them.
     vol_a <- terra::mask(
-      .voxel_cell_volume(occ_a, depths, bounds, cell_area_km2), present_a)
+      .voxel_cell_volume(occ_a, slab, cell_area_km2), present_a)
     names(vol_a) <- "volume_a"
     vol_b <- terra::mask(
-      .voxel_cell_volume(occ_b, depths, bounds, cell_area_km2), present_b)
+      .voxel_cell_volume(occ_b, slab, cell_area_km2), present_b)
     names(vol_b) <- "volume_b"
 
     # Already 0 where both are present but share no occupied level; masking to
     # both_mask makes it NA where either is absent, matching the 2.5D method.
     vol_overlap <- terra::mask(
-      .voxel_cell_volume(occ_overlap, depths, bounds, cell_area_km2),
+      .voxel_cell_volume(occ_overlap, slab, cell_area_km2),
       both_mask)
     names(vol_overlap) <- "volume_overlap"
 
@@ -162,7 +170,7 @@ setMethod(
 #' @export
 setMethod(
   "calc_volume_overlap", c("SpatEnvelope", "SpatVoxel"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     calc_volume_overlap(.promote_to_voxel(x, y, bounds), y,
                         bounds = bounds, ...)
@@ -173,7 +181,7 @@ setMethod(
 #' @export
 setMethod(
   "calc_volume_overlap", c("SpatVoxel", "SpatEnvelope"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     calc_volume_overlap(x, .promote_to_voxel(y, x, bounds),
                         bounds = bounds, ...)

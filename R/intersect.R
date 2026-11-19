@@ -26,10 +26,11 @@
 }
 
 # Internal: a voxel's occupancy as a presence domain: 1 where occupied, NA
-# elsewhere, on the depth levels of `x`.
-.presence_voxel <- function(occ, depths) {
+# elsewhere, on the depth levels of `x`, carrying `depth_bounds` if given.
+.presence_voxel <- function(occ, depths, depth_bounds = NULL) {
   out <- terra::ifel(occ > 0, 1, NA)
-  as_voxel(.as_plain_raster(out), depths = depths, varname = "presence")
+  as_voxel(.as_plain_raster(out), depths = depths, varname = "presence",
+           depth_bounds = depth_bounds)
 }
 
 # ---- intersect_3d -----------------------------------------------------------
@@ -70,10 +71,10 @@ setMethod(
     .check_3d(x, "x")
     .check_3d(y, "y")
     .check_same_grid(x, y)
-    depths <- .shared_depths(x, y)
+    shared <- .shared_depths(x, y)
 
     occ <- .voxel_occupancy(x) * .voxel_occupancy(y)
-    .presence_voxel(occ, depths)
+    .presence_voxel(occ, shared$depths, shared$depth_bounds)
   }
 )
 
@@ -84,7 +85,7 @@ setMethod(
 #' @export
 setMethod(
   "intersect_3d", c("SpatEnvelope", "SpatVoxel"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
@@ -96,7 +97,7 @@ setMethod(
 #' @export
 setMethod(
   "intersect_3d", c("SpatVoxel", "SpatEnvelope"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
@@ -126,7 +127,7 @@ setMethod(
     .check_3d(x, "x")
     fp <- .footprint_of(y, x)
     occ <- terra::mask(.voxel_occupancy(x), fp, updatevalue = 0)
-    .presence_voxel(occ, .parse_depth_layers(x))
+    .presence_voxel(occ, depths(x), depth_bounds(x))
   }
 )
 
@@ -205,7 +206,7 @@ setMethod(
 #' @export
 setMethod(
   "intersects_3d", c("SpatEnvelope", "SpatVoxel"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
@@ -217,7 +218,7 @@ setMethod(
 #' @export
 setMethod(
   "intersects_3d", c("SpatVoxel", "SpatEnvelope"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
@@ -306,8 +307,9 @@ setMethod("intersects_3d", c("ANY", "ANY"),
 #' @param mask The 3D domain to keep `x` inside: a [SpatEnvelope-class] or a
 #'   [SpatVoxel-class] on the same grid as `x`.
 #' @param bounds Only when one side is an envelope and the other a voxel. How
-#'   the envelope is placed on the voxel's depth levels: `"top"` (default) or
-#'   `"midpoint"`. See [envelope_to_voxel()].
+#'   the envelope is placed on the voxel's depth levels: `"midpoint"`
+#'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
+#'   carries its own depth edges (see [SpatVoxel-class]).
 #' @param ... Passed on to [terra::mask()]. For example, `inverse = TRUE`
 #'   keeps the values *outside* the domain instead.
 #'
@@ -353,13 +355,13 @@ NULL
 #' @export
 setMethod(
   "mask", c("SpatVoxel", "SpatEnvelope"),
-  function(x, mask, bounds = c("top", "midpoint"), ...) {
+  function(x, mask, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
     keep <- .promote_to_voxel(mask, x, bounds)
-    as_voxel(.mask_plain(x, keep, ...))
+    as_voxel(.mask_plain(x, keep, ...), depth_bounds = depth_bounds(x))
   }
 )
 
@@ -371,10 +373,11 @@ setMethod(
     .check_3d(x, "x")
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
-    .shared_depths(x, mask)
-    keep <- .presence_voxel(.voxel_occupancy(mask),
-                            .parse_depth_layers(mask))
-    as_voxel(.mask_plain(x, keep, ...))
+    # The result keeps the pair's shared edges, whichever voxel carries them,
+    # as intersect_3d() does.
+    shared <- .shared_depths(x, mask)
+    keep <- .presence_voxel(.voxel_occupancy(mask), shared$depths)
+    as_voxel(.mask_plain(x, keep, ...), depth_bounds = shared$depth_bounds)
   }
 )
 
@@ -394,7 +397,7 @@ setMethod(
 #' @export
 setMethod(
   "mask", c("SpatEnvelope", "SpatVoxel"),
-  function(x, mask, bounds = c("top", "midpoint"), ...) {
+  function(x, mask, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(mask, "mask")

@@ -15,13 +15,14 @@ test_that("calc_volume_overlap() totals match hand-computed volumes", {
     # full overlap when the ranges are identical
     list(label = "identical envelopes", a = a, b = a,
          expected = c(0.9, 0.9, 0.9), tolerance = 0.01, same = TRUE),
-    # A occupies 0 and 50 m (0-100 m) in every cell; B occupies 0, 50 and
-    # 100 m (0-150 m) in the centre 3 cells
+    # By default the levels stand for 0-25, 25-75, 75-125 and 125-150 m. A
+    # occupies 0 and 50 m (75 m) in every cell; B occupies 0, 50 and 100 m
+    # (125 m) in the centre 3 cells, and they share 75 m there.
     list(label = "voxels",
          a = make_voxel(cbind(rep(1, 9), rep(1, 9), rep(NA, 9), rep(NA, 9)),
                         depths),
          b = make_voxel(cbind(centre, centre, centre, rep(NA, 9)), depths),
-         expected = c(0.9, 0.45, 0.3), tolerance = 0.01)
+         expected = c(0.675, 0.375, 0.225), tolerance = 0.01)
   )
   for (case in cases) {
     result <- calc_volume_overlap(case$a, case$b)
@@ -85,7 +86,8 @@ test_that("calc_volume_overlap() overlap is 0 for disjoint depth ranges", {
 test_that("volume() sums the occupied water in km^3", {
   # Every cell is 1 km x 1 km, so a volume is 9 cells x thickness in km.
   # Voxel levels stand for slabs: under "top" a level names the top of its
-  # slab, under "midpoint" the edges fall halfway to each neighbour.
+  # slab, under "midpoint", the default, the edges fall halfway to each
+  # neighbour.
   # `tolerance` allows for the cell areas terra computes; rows without one are
   # exact.
   # 9 cells, occupied at 0 m and 100 m but not at 300 m
@@ -102,26 +104,28 @@ test_that("volume() sums the occupied water in km^3", {
     list(label = "envelope", x = make_range_rast(rep(0, 9), rep(100, 9)),
          expected = 0.9, tolerance = 0.01),
     # 0 m stands for 0-100 m and 100 m for 100-300 m: 300 m per cell
-    list(label = "voxel, top", x = two_levels, expected = 9 * 0.3,
-         tolerance = 0.01),
+    list(label = "voxel, top", x = two_levels, bounds = "top",
+         expected = 9 * 0.3, tolerance = 0.01),
     # 0 m stands for 0-50 m and 100 m for 50-200 m: 200 m per cell
     list(label = "voxel, midpoint", x = two_levels, bounds = "midpoint",
          expected = 9 * 0.2, tolerance = 0.01),
-    # slabs are 100, 100, 100 and 0 m, so the occupied levels give 100 +
-    # 100 + 0 m
+    list(label = "voxel, default", x = two_levels,
+         expected = volume(two_levels, bounds = "midpoint")),
+    # slabs are 50, 100, 100 and 50 m, so the occupied levels give 50 +
+    # 100 + 50 m
     list(label = "voxel with an interior gap", x = gap, expected = 9 * 0.2,
          tolerance = 0.01),
     # voxel_to_envelope() is lossy in exactly this way: it spans 0-300 m solid
     list(label = "the gap filled by voxel_to_envelope()",
          x = voxel_to_envelope(gap), expected = 9 * 0.3, tolerance = 0.01),
-    # Under "top" the levels are 0, 100 and 200 m with slabs 100, 100 and 0 m,
-    # so the discretization neither loses nor invents any water here.
+    # The levels 0, 100 and 200 m stand for 0-50, 50-150 and 150-200 m, which
+    # tile 0-200 m, so the discretization neither loses nor invents any water
+    # here.
     list(label = "envelope_to_voxel() on aligned levels",
          x = envelope_to_voxel(e200, depths = c(0, 100, 200)),
          expected = volume(e200)),
-    # Default !is.na() counts all three levels (100 + 100 + 0 m). A threshold
-    # drops the middle one, leaving only the 100 m slab the surface level
-    # names.
+    # Default !is.na() counts all three levels (50 + 100 + 50 m). A threshold
+    # drops the middle one, leaving the 50 m slabs of the outer levels.
     list(label = "default occupancy", x = scores, expected = 9 * 0.2,
          tolerance = 0.01),
     list(label = "occupied where x > 0.5",
@@ -150,7 +154,8 @@ test_that("calc_volume_overlap() uses occupied, not spanned, voxel volume", {
   a <- make_voxel(cbind(rep(1, 9), rep(1, 9), rep(1, 9), rep(NA, 9)), depths)
   b <- make_voxel(cbind(rep(1, 9), rep(NA, 9), rep(1, 9), rep(NA, 9)), depths)
 
-  result <- calc_volume_overlap(a, b)
+  # Under "top", each of the three upper levels stands for 100 m.
+  result <- calc_volume_overlap(a, b, bounds = "top")
   vals <- terra::values(result)
 
   # Depth layers are summary bounds: B spans 0-200 m despite the gap.
@@ -235,4 +240,53 @@ test_that("volume functions reject input they cannot measure", {
     expect_error(case$call(), case$pattern,
                  label = paste(deparse(body(case$call)), collapse = " "))
   }
+})
+
+# ---- depth edges (#138) -----------------------------------------------------
+
+test_that("volume() uses a voxel's depth edges before `bounds`", {
+  # Levels at 0.5, 1.5 and 3 m. Under "midpoint" the column is 0.5-3 m
+  # (2.5 m); the stored edges make it 0-4 m.
+  depths <- c(0.5, 1.5, 3)
+  plain <- make_voxel(1, depths)
+  edged <- as_voxel(plain, depth_bounds = cbind(c(0, 1, 2), c(1, 2, 4)))
+
+  expect_equal(volume(edged), volume(plain, bounds = "midpoint") * 4 / 2.5)
+  expect_equal(volume(edged, bounds = "top"),
+               volume(edged, bounds = "midpoint"))
+
+  # A layer subset keeps the edges of the layers it kept: 1-2 and 2-4 m.
+  expect_equal(volume(edged[[2:3]]), volume(edged) * 3 / 4)
+})
+
+test_that("calc_volume_overlap() uses the voxels' shared depth edges", {
+  depths <- c(0.5, 1.5, 3)
+  edges <- cbind(c(0, 1, 2), c(1, 2, 4))
+  plain <- make_voxel(1, depths)
+  edged <- as_voxel(plain, depth_bounds = edges)
+  total <- function(result) {
+    terra::global(result[["volume_overlap"]], "sum", na.rm = TRUE)[1, 1]
+  }
+
+  # Either voxel's edges are used, whichever carries them.
+  expect_equal(total(calc_volume_overlap(edged, plain)), volume(edged))
+  expect_equal(total(calc_volume_overlap(plain, edged)), volume(edged))
+
+  # An envelope promoted onto an edged voxel takes its edges.
+  e <- make_range_rast(rep(0, 9), rep(4, 9))
+  expect_equal(total(calc_volume_overlap(e, edged)), volume(edged))
+
+  # The summary depth layers are the outer slab edges: 0 to 4 m.
+  result <- calc_volume_overlap(edged, plain)
+  for (layer in c("depth_min_a", "depth_min_b", "depth_min_overlap")) {
+    expect_true(all(terra::values(result[[layer]]) == 0), info = layer)
+  }
+  for (layer in c("depth_max_a", "depth_max_b", "depth_max_overlap")) {
+    expect_true(all(terra::values(result[[layer]]) == 4), info = layer)
+  }
+
+  other <- as_voxel(plain, depth_bounds = cbind(c(0, 1, 2), c(1, 2, 5)))
+  err <- expect_error(calc_volume_overlap(edged, other),
+                      class = "ocean3d_error_depth_edges_differ")
+  expect_match(conditionMessage(err), "different depth edges")
 })

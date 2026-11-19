@@ -2,6 +2,25 @@
 
 ## Breaking changes
 
+`bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
+`calc_volume_overlap()`, `envelope_to_voxel()`, `intersect_3d()`,
+`intersects_3d()` and `mask()` (#138). The slab of water each depth level
+stands for now runs halfway to the neighbouring levels. This matches World
+Ocean Atlas levels and is closer than `"top"` to Copernicus Marine layers.
+Under the old default each level was the top of its slab and the deepest
+level had no volume. Results change for voxels that don't carry their own
+depth edges (see `depth_bounds` under New features):
+
+* `volume()` and `calc_volume_overlap()` give different volumes. For example,
+  levels at 0, 100 and 300 m now stand for 0-50, 50-200 and 200-300 m rather
+  than 0-100, 100-300 and none.
+* `envelope_to_voxel()` can place an envelope on different levels, and so
+  can `mask()`, `intersect_3d()` and `intersects_3d()` when they combine an
+  envelope with a voxel. An envelope from 60 to 70 m on levels at 0, 100 and
+  200 m now occupies the 100 m level rather than the 0 m one.
+
+Pass `bounds = "top"` to keep the old results.
+
 Point extraction (`extract_to_point()`, `extract2d()`, `extract3d_*()`) now
 checks the grid's coordinates instead of assuming one layout (#74). Some
 calls that used to return a value now return `NA` or stop with an error:
@@ -97,6 +116,17 @@ message says how many cells have the limits swapped (or a seafloor above
   the polygons covering it, so polygons from 0 to 50 m and from 200 to
   300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
   are polygon times, with a message (#114).
+* A `SpatVoxel` can carry the top and bottom of the slab of water each layer
+  stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
+  `as_voxel()` or `envelope_to_voxel()`, and read them with the new
+  `depth_bounds()`. `volume()`, `calc_volume_overlap()`,
+  `envelope_to_voxel()`, `intersect_3d()`, `intersects_3d()` and `mask()`
+  then use these edges instead of `bounds`. Results that stay a `SpatVoxel`
+  keep the edges, including after `c()`; `app()` and writing to a file drop
+  them. For such a voxel, `voxel_to_envelope()` gives each cell an envelope
+  from the top of its shallowest selected slab to the bottom of its deepest,
+  and the depth limits from `calc_volume_overlap()` follow the same rule
+  (#138).
 
 ## Bug fixes
 

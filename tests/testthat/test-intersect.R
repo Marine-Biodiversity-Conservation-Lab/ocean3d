@@ -229,8 +229,8 @@ test_that("adjacent depth ranges do not intersect as voxels either", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
   b <- make_range_rast(rep(100, 9), rep(200, 9))
   depths <- c(0, 100, 200)
-  va <- envelope_to_voxel(a, depths)
-  vb <- envelope_to_voxel(b, depths)
+  va <- envelope_to_voxel(a, depths, bounds = "top")
+  vb <- envelope_to_voxel(b, depths, bounds = "top")
 
   # voxel vs voxel
   expect_identical(terra::values(intersects_3d(va, vb))[, 1], rep(FALSE, 9))
@@ -238,10 +238,12 @@ test_that("adjacent depth ranges do not intersect as voxels either", {
   expect_true(all(is.na(terra::values(intersect_3d(va, vb)))))
 
   # envelope vs voxel, both orders
-  expect_identical(terra::values(intersects_3d(a, vb))[, 1], rep(FALSE, 9))
-  expect_identical(terra::values(intersects_3d(vb, a))[, 1], rep(FALSE, 9))
-  expect_true(all(is.na(terra::values(intersect_3d(a, vb)))))
-  expect_true(all(is.na(terra::values(intersect_3d(va, b)))))
+  expect_identical(terra::values(intersects_3d(a, vb, bounds = "top"))[, 1],
+                   rep(FALSE, 9))
+  expect_identical(terra::values(intersects_3d(vb, a, bounds = "top"))[, 1],
+                   rep(FALSE, 9))
+  expect_true(all(is.na(terra::values(intersect_3d(a, vb, bounds = "top")))))
+  expect_true(all(is.na(terra::values(intersect_3d(va, b, bounds = "top")))))
 
   # and the same under the midpoint convention, with levels whose slab edge
   # falls at 100 m (halfway between 50 and 150)
@@ -259,7 +261,9 @@ test_that("adjacent depth ranges do not intersect as voxels either", {
   # boundary itself and not a wider gap
   c_ <- make_range_rast(rep(99, 9), rep(200, 9))
   expect_identical(
-    terra::values(intersects_3d(va, envelope_to_voxel(c_, depths)))[, 1],
+    terra::values(intersects_3d(
+      va, envelope_to_voxel(c_, depths, bounds = "top")
+    ))[, 1],
     rep(TRUE, 9)
   )
 })
@@ -553,4 +557,50 @@ test_that("terra's own intersect() methods are untouched", {
   expect_s4_class(terra::intersect(poly, poly), "SpatVector")
 
   expect_identical(intersect(1:3, 2:5), 2:3)
+})
+
+# ---- depth edges (#138) -----------------------------------------------------
+
+test_that("voxel results keep the depth edges of their inputs", {
+  depths <- c(0.5, 1.5, 3)
+  edges <- cbind(c(0, 1.4, 2), c(1.4, 2, 4))
+  field <- as_voxel(make_voxel(seq_len(27), depths), depth_bounds = edges)
+  plain <- make_voxel(1, depths)
+
+  expect_equal(edges_of(intersect_3d(field, plain)), edges)
+  expect_equal(edges_of(intersect_3d(plain, field)), edges)
+  expect_equal(edges_of(mask(field, plain)), edges)
+  # Masking by a voxel that carries the edges keeps them too, so the result
+  # stands for the same water as the intersection.
+  expect_equal(edges_of(mask(plain, field)), edges)
+  expect_equal(volume(mask(plain, field)), volume(intersect_3d(plain, field)))
+
+  # A 2D footprint keeps the voxel's edges, and so its volume.
+  fp <- terra::rast(make_grid(), vals = 1)
+  expect_equal(edges_of(intersect_3d(field, fp)), edges)
+  expect_equal(volume(intersect_3d(field, fp)), volume(field))
+
+  # Masking by an envelope uses the edges: [1.1, 1.3] is in the 0.5 m
+  # level's slab (0-1.4 m), not the 1.5 m level's as under "midpoint".
+  e <- make_range_rast(rep(1.1, 9), rep(1.3, 9))
+  masked <- mask(field, e)
+  expect_equal(edges_of(masked), edges)
+  expect_equal(terra::global(!is.na(masked), "sum")[, 1], c(9, 0, 0))
+  expect_equal(
+    terra::global(!is.na(mask(plain, e, bounds = "midpoint")), "sum")[, 1],
+    c(0, 9, 0)
+  )
+})
+
+test_that("voxel pairs with different depth edges stop", {
+  depths <- c(0.5, 1.5, 3)
+  a <- as_voxel(make_voxel(1, depths), depth_bounds = cbind(c(0, 1, 2),
+                                                            c(1, 2, 4)))
+  b <- as_voxel(make_voxel(1, depths), depth_bounds = cbind(c(0, 1, 2),
+                                                            c(1, 2, 5)))
+  for (call in list(quote(intersect_3d(a, b)), quote(intersects_3d(a, b)),
+                    quote(mask(a, b)))) {
+    err <- expect_error(eval(call), class = "ocean3d_error_depth_edges_differ")
+    expect_match(conditionMessage(err), "different depth edges")
+  }
 })
