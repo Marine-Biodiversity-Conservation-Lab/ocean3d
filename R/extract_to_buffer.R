@@ -329,9 +329,8 @@
 .buffer_spatial_axis <- function(nc, coordinate, longitude, infer_bounds) {
   # Horizontal buffers could count a cell twice around the globe, so they
   # also check longitude cells modulo 360.
-  axis <- .prepare_spatial_axis(
-    nc, coordinate, .get_dim_values(nc, coordinate), longitude,
-    periodic = TRUE
+  axis <- .read_interval_axis(
+    nc, coordinate, if (longitude) "lon" else "lat", periodic = TRUE
   )
   if (axis$basis != "explicit_bounds" && !infer_bounds) {
     stop("Coordinate `", coordinate, "` needs cell bounds for aggregation. ",
@@ -451,12 +450,12 @@
   lon_axis <- if (spatial) {
     .buffer_spatial_axis(nc, dims$lon, TRUE, options$infer_bounds)
   } else {
-    .prepare_spatial_axis(nc, dims$lon, lon, TRUE)
+    .read_interval_axis(nc, dims$lon, "lon")
   }
   lat_axis <- if (spatial) {
     .buffer_spatial_axis(nc, dims$lat, FALSE, options$infer_bounds)
   } else {
-    .prepare_spatial_axis(nc, dims$lat, lat)
+    .read_interval_axis(nc, dims$lat, "lat")
   }
   if (!is.null(dims$time)) {
     .check_climatology(nc, dims$time, basename(nc$filename))

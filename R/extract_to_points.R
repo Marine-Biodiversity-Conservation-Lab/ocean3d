@@ -1219,12 +1219,8 @@
   lon_values <- .get_dim_values(nc, dims$lon)
   lat_values <- .get_dim_values(nc, dims$lat)
   spatial_axes <- list(
-    lon = .prepare_spatial_axis(
-      nc, dims$lon, lon_values, longitude = TRUE
-    ),
-    lat = .prepare_spatial_axis(
-      nc, dims$lat, lat_values, longitude = FALSE
-    )
+    lon = .read_interval_axis(nc, dims$lon, "lon"),
+    lat = .read_interval_axis(nc, dims$lat, "lat")
   )
   depth_values <- .get_dim_values(nc, dims$depth)
   depth_axis <- if (method == "2d") {

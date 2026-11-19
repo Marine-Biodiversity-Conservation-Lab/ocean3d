@@ -22,12 +22,10 @@ test_that("midpoint edges keep the order of the centres", {
   regular <- .midpoint_edges(c(30, 20, 10))
   expect_equal(regular$lower, c(25, 15, 5))
   expect_equal(regular$upper, c(35, 25, 15))
-  expect_true(regular$regular)
 
   irregular <- .midpoint_edges(c(5, 15, 35))
   expect_equal(irregular$lower, c(0, 10, 25))
   expect_equal(irregular$upper, c(10, 25, 45))
-  expect_false(irregular$regular)
 })
 
 test_that("bounds checks allow float32 rounding on global grids", {
@@ -41,7 +39,7 @@ test_that("bounds checks allow float32 rounding on global grids", {
   on.exit(unlink(f), add = TRUE)
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
-  expect_no_error(.prepare_spatial_axis(nc, "lon", lon, TRUE, periodic = TRUE))
+  expect_no_error(.read_interval_axis(nc, "lon", "lon", periodic = TRUE))
 })
 
 test_that("a repeated first meridian is only rejected around the globe", {
@@ -49,8 +47,8 @@ test_that("a repeated first meridian is only rejected around the globe", {
   on.exit(unlink(f), add = TRUE)
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
-  expect_no_error(.prepare_spatial_axis(nc, "lon", 0:360, TRUE))
-  expect_error(.prepare_spatial_axis(nc, "lon", 0:360, TRUE, periodic = TRUE),
+  expect_no_error(.read_interval_axis(nc, "lon", "lon"))
+  expect_error(.read_interval_axis(nc, "lon", "lon", periodic = TRUE),
                class = "ocean3d_error_bounds")
 })
 
@@ -65,9 +63,9 @@ test_that("longitude cells that overlap modulo 360 are rejected", {
   on.exit(unlink(f), add = TRUE)
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
-  expect_no_error(.prepare_spatial_axis(nc, "lon", lon, TRUE))
+  expect_no_error(.read_interval_axis(nc, "lon", "lon"))
   err <- expect_error(
-    .prepare_spatial_axis(nc, "lon", lon, TRUE, periodic = TRUE),
+    .read_interval_axis(nc, "lon", "lon", periodic = TRUE),
     class = "ocean3d_error_bounds"
   )
   expect_match(conditionMessage(err), "overlap around the globe")
@@ -78,14 +76,14 @@ test_that("longitude cells that overlap modulo 360 are rejected", {
 test_that("spatial indices respect edges and longitude conventions", {
   axis <- list(
     centres = c(0, 1), lower = c(-0.5, 0.5), upper = c(0.5, 1.5),
-    longitude = FALSE, basis = "inferred_regular"
+    longitude = FALSE, basis = "inferred_midpoints"
   )
   expect_identical(.containing_axis_indices(axis, -0.5), 1L)
   expect_identical(.containing_axis_indices(axis, 1.5), 2L)
   expect_length(.containing_axis_indices(axis, 1.6), 0L)
   axis <- list(
     centres = c(179, 181), lower = c(178, 180), upper = c(180, 182),
-    longitude = TRUE, basis = "inferred_regular"
+    longitude = TRUE, basis = "inferred_midpoints"
   )
   expect_identical(.containing_axis_indices(axis, -179), 2L)
   expect_identical(.containing_axis_indices(axis, 181), 2L)
@@ -119,11 +117,33 @@ test_that("irregular descending axes preserve original indices", {
                  path = path)
   nc <- ncdf4::nc_open(path)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
-  axis <- .prepare_spatial_axis(nc, "lon", c(5, 2, 0), longitude = TRUE)
-  expect_identical(axis$basis, "inferred_irregular")
+  axis <- .read_interval_axis(nc, "lon", "lon")
+  expect_identical(axis$basis, "inferred_midpoints")
   expect_identical(.containing_axis_indices(axis, 5), 1L)
   expect_identical(.containing_axis_indices(axis, 0), 3L)
   expect_length(.containing_axis_indices(axis, 20), 0L)
+})
+
+test_that("spatial axes check their values and wrap whole-globe cells", {
+  bad_lat <- make_grid_file(lon = 0, lat = c(80, 95), depth = NULL,
+                            time = NULL)
+  missing_lon <- make_grid_file(lon = c(0, NaN), depth = NULL, time = NULL)
+  # One longitude cell 360 degrees wide, stored from 0 to 360.
+  globe <- make_grid_file(lon = 10, lat = 0, depth = NULL, time = NULL,
+                          lon_bounds = matrix(c(0, 360), 2L),
+                          lat_bounds = matrix(c(-1, 1), 2L))
+  on.exit(unlink(c(bad_lat, missing_lon, globe)), add = TRUE)
+  read <- function(f, axis, ...) {
+    nc <- ncdf4::nc_open(f)
+    on.exit(ncdf4::nc_close(nc))
+    .read_interval_axis(nc, axis, axis, ...)
+  }
+  expect_error(read(bad_lat, "lat"), "outside \\[-90, 90\\]")
+  expect_error(read(missing_lon, "lon"), "must be finite numbers")
+  expect_error(read(globe, "lon", infer_bounds = NA), "TRUE or FALSE")
+  axis <- read(globe, "lon")
+  expect_equal(c(axis$lower, axis$upper), c(-170, 190))
+  expect_identical(axis$basis, "explicit_bounds")
 })
 
 test_that("longitude and latitude stored out of order are rejected", {
@@ -132,14 +152,11 @@ test_that("longitude and latitude stored out of order are rejected", {
   on.exit(unlink(f), add = TRUE)
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
-  for (case in list(list("lon", c(2, 0, 5), TRUE),
-                    list("lat", c(41, 40, 42), FALSE))) {
-    err <- expect_error(
-      .prepare_spatial_axis(nc, case[[1]], case[[2]], longitude = case[[3]]),
-      class = "ocean3d_error_axis_order"
-    )
+  for (axis in c("lon", "lat")) {
+    err <- expect_error(.read_interval_axis(nc, axis, axis),
+                        class = "ocean3d_error_axis_order")
     expect_match(conditionMessage(err), glue::glue(
-      "`{case[[1]]}` in {basename(f)} must be strictly increasing"
+      "`{axis}` in {basename(f)} must be strictly increasing"
     ))
   }
 })
@@ -397,7 +414,7 @@ test_that("shared bounds edges that differ by rounding are accepted", {
   on.exit(unlink(f), add = TRUE)
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc), add = TRUE)
-  axis <- .prepare_spatial_axis(nc, "lon", lon, longitude = TRUE)
+  axis <- .read_interval_axis(nc, "lon", "lon")
   expect_identical(axis$basis, "explicit_bounds")
   expect_identical(.containing_axis_indices(axis, 120), 201L)
 })

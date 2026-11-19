@@ -48,6 +48,12 @@ and the file. Sort the file along its depth dimension before extraction.
 Longitude or latitude stored out of order already stopped with an error;
 that error now names the coordinate and the file too.
 
+In the diagnostics column of `extract_to_buffer()`, the `bounds` entry for
+longitude and latitude edges inferred from the centres used to read
+`"inferred_regular"` or `"inferred_irregular"`. It now reads
+`"inferred_midpoints"`, the label depth and time already use (#147). Code
+that checks for the old labels should check for `"inferred_midpoints"`.
+
 ## New features
 
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and

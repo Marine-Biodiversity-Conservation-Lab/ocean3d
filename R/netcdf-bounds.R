@@ -1,16 +1,13 @@
 # CF cell bounds: the bounds variable named by a coordinate's `bounds`
 # attribute is read and checked against the coordinate (shape, finite values,
-# matching units). Used for longitude and latitude edges in point extraction
-# and for the cell edges buffer extraction weights by. Without bounds, edges
-# are inferred halfway between neighbouring centres. Also builds and checks
-# the cell intervals of depth and time axes, for buffer extraction and the
-# core object.
+# matching units). Without bounds, edges are inferred halfway between
+# neighbouring centres. .read_interval_axis() builds and checks the cell
+# intervals of every axis (longitude, latitude, depth and time) for point,
+# buffer and track extraction and the core object.
 
 # Cell edges halfway between neighbouring centres, with the outer edges half
 # a step beyond the end centres. `centres` (at least two) may be in any
-# order; `lower` and `upper` keep that order. `regular` is TRUE when the
-# steps are equal. Shared by the longitude and latitude axes, buffer
-# extraction's depth and time intervals, and the core object's depth axis.
+# order; `lower` and `upper` keep that order. Used by .axis_intervals().
 .midpoint_edges <- function(centres) {
   index <- order(centres)
   sorted <- centres[index]
@@ -23,8 +20,7 @@
   lower <- upper <- numeric(length(centres))
   lower[index] <- head(edges, -1L)
   upper[index] <- tail(edges, -1L)
-  regular <- all(abs(gaps - gaps[1L]) <= max(1e-8, gaps[1L] * 1e-8))
-  list(lower = lower, upper = upper, regular = regular)
+  list(lower = lower, upper = upper)
 }
 
 # Units can be spelled differently and still mean the same thing: angles
@@ -113,8 +109,7 @@
 # Stops with `ocean3d_error_axis_order` unless `values` run strictly one way,
 # so that each value is one cell (an NA counts as out of order). The only
 # producer of that class, so every stored axis follows the same rule. Called
-# by .axis_intervals() (time; depth in the core object and buffer extraction;
-# longitude and latitude through .prepare_spatial_axis()) and by
+# by .axis_intervals() (every axis read by .read_interval_axis()) and by
 # .read_depth_axis() (depth in point, buffer and track extraction).
 .check_axis_order <- function(values, coordinate, file = NULL) {
   steps <- diff(values)
@@ -138,9 +133,8 @@
 # could count twice), allowing for float32 rounding. Bad bounds stop with
 # `ocean3d_error_bounds`. A single centre without bounds is an error, unless
 # `allow_singleton`, when it becomes a zero-width cell. Values keep their
-# storage order. Shared by every axis reader: longitude and latitude
-# (.prepare_spatial_axis()), buffer extraction's depth and time, and the core
-# object's depth and time (as_proxy()).
+# storage order. Called by .read_interval_axis() for every axis, and by the
+# core object's time axis (as_proxy()).
 .axis_intervals <- function(centres, bounds, axis, coordinate,
                             allow_singleton = FALSE, periodic = FALSE,
                             file = NULL) {
@@ -213,18 +207,26 @@
   )
 }
 
-# Reads a depth or time coordinate with its cell intervals, through
-# .axis_intervals(): depth in metres positive down (with CF bounds converted
-# the same way), time in UTC seconds. Without CF bounds, edges are inferred
-# only when `infer_bounds = TRUE`. Depth order is checked by
-# .read_depth_axis() before .axis_intervals() checks it again. Used by buffer
-# extraction and the core object's depth axis.
+# Reads one coordinate with its cell intervals, through .axis_intervals():
+# longitude and latitude in degrees, depth in metres positive down (with CF
+# bounds converted the same way), time in UTC seconds. Longitudes are
+# unwrapped so neighbouring centres differ by less than 180 degrees, and each
+# cell's bounds are wrapped around its centre (a cell 360 degrees or wider
+# becomes centre +/- 180); latitude edges are clamped to +/-90. `periodic`
+# also rejects longitude cells that overlap modulo 360. Without CF bounds,
+# edges are inferred only when `infer_bounds`, and a single coordinate is a
+# zero-width cell only when `allow_singleton`; both default to TRUE for
+# longitude and latitude (the defaults are evaluated after match.arg()).
+# Depth order is checked by .read_depth_axis() before .axis_intervals()
+# checks it again. Used by point, buffer and track extraction and the core
+# object.
 .read_interval_axis <- function(
   nc,
   coordinate,
-  axis = c("depth", "time"),
-  infer_bounds = FALSE,
-  allow_singleton = FALSE
+  axis = c("depth", "time", "lon", "lat"),
+  infer_bounds = axis %in% c("lon", "lat"),
+  allow_singleton = axis %in% c("lon", "lat"),
+  periodic = FALSE
 ) {
   axis <- match.arg(axis)
   if (!is.logical(infer_bounds) || length(infer_bounds) != 1L ||
@@ -232,12 +234,34 @@
     stop("`infer_bounds` must be TRUE or FALSE.", call. = FALSE)
   }
   raw <- as.vector(.get_dim_values(nc, coordinate))
+  if (axis %in% c("lon", "lat")) {
+    if (!is.numeric(raw) || !length(raw) || any(!is.finite(raw))) {
+      stop("Spatial coordinates must be finite numbers.", call. = FALSE)
+    }
+    if (axis == "lat" && any(raw < -90 | raw > 90)) {
+      stop("Latitude coordinates are outside [-90, 90].", call. = FALSE)
+    }
+  }
   bounds <- .read_bounds(nc, coordinate, length(raw))
   units <- .read_time_attribute(nc, coordinate, "units")
   calendar <- NULL
   direction_basis <- NULL
 
-  if (axis == "depth") {
+  if (axis == "lon") {
+    centres <- .unwrap_longitude(raw)
+    if (!is.null(bounds)) {
+      for (j in seq_along(raw)) {
+        if (abs(diff(bounds$values[, j])) >= 360) {
+          bounds$values[, j] <- centres[j] + c(-180, 180)
+        } else {
+          offsets <- (bounds$values[, j] - raw[j] + 180) %% 360 - 180
+          bounds$values[, j] <- centres[j] + offsets
+        }
+      }
+    }
+  } else if (axis == "lat") {
+    centres <- raw
+  } else if (axis == "depth") {
     depth <- .read_depth_axis(nc, coordinate, raw)
     centres <- depth$depth_m
     direction_basis <- depth$direction_basis
@@ -270,11 +294,17 @@
     axis,
     coordinate,
     allow_singleton,
+    periodic = axis == "lon" && periodic,
     file = basename(nc$filename)
   )
+  if (axis == "lat") {
+    result$lower <- pmax(result$lower, -90)
+    result$upper <- pmin(result$upper, 90)
+  }
   c(result, list(
-    coordinate = coordinate, axis = axis,
-    units = if (axis == "depth") "m" else "UTC seconds since 1970-01-01",
+    coordinate = coordinate, axis = axis, longitude = axis == "lon",
+    units = switch(axis, depth = "m", time = "UTC seconds since 1970-01-01",
+                   lon = "degrees_east", lat = "degrees_north"),
     source_units = units,
     bounds_name = if (is.null(bounds)) NULL else bounds$name,
     calendar = calendar, direction_basis = direction_basis

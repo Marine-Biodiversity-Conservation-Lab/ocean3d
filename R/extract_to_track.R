@@ -1330,10 +1330,8 @@ extract_to_track <- function(
           "nearest"
         },
         temporal = !is.null(dims$time), longitude = lon, latitude = lat,
-        lon_axis = .prepare_spatial_axis(
-          handle, dims$lon, lon, longitude = TRUE
-        ),
-        lat_axis = .prepare_spatial_axis(handle, dims$lat, lat),
+        lon_axis = .read_interval_axis(handle, dims$lon, "lon"),
+        lat_axis = .read_interval_axis(handle, dims$lat, "lat"),
         depth_m = if (!is.null(dims$depth)) {
           .read_depth_axis(
             handle, dims$depth, .get_dim_values(handle, dims$depth)
