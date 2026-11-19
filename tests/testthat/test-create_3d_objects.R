@@ -11,6 +11,8 @@ test_that("SpatVoxel and SpatEnvelope are SpatRasters and SpatVolumes", {
 test_that("new() refuses an object that breaks the class rules", {
   bad_names <- make_multidepth_rast()
   names(bad_names) <- c("a", "b", "c", "d")
+  no_values <- terra::rast(nrows = 2, ncols = 2, nlyrs = 2)
+  names(no_values) <- c("depth_min", "depth_max")
 
   cases <- list(
     list(label = "voxel with non-conforming names", class = "SpatVoxel",
@@ -20,7 +22,9 @@ test_that("new() refuses an object that breaks the class rules", {
          pattern = "shallow to deep"),
     list(label = "envelope without the two depth layers",
          class = "SpatEnvelope", object = make_multidepth_rast(),
-         pattern = "exactly: depth_min, depth_max")
+         pattern = "exactly: depth_min, depth_max"),
+    list(label = "envelope without cell values", class = "SpatEnvelope",
+         object = no_values, pattern = "must have values")
   )
   for (case in cases) {
     expect_error(methods::new(case$class, case$object), case$pattern,

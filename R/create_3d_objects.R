@@ -507,12 +507,9 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   # Raster stays left: terra mishandles `scalar <op> raster`.
   slab <- .depth_slabs(depths, bounds, depth_bounds)
   closed <- is.null(depth_bounds)
-  # Plain layers, so the occupancy stack and everything derived from it is a
-  # plain SpatRaster rather than an object still tagged SpatEnvelope. terra
-  # propagates the class through `[[` and arithmetic, and a tagged
-  # intermediate would reach the depth-aware mask() methods in R/intersect.R.
-  lower <- methods::as(x[["depth_min"]], "SpatRaster")  # remove the 3D class
-  upper <- methods::as(x[["depth_max"]], "SpatRaster")  # remove the 3D class
+  # Plain layers, so the occupancy stack built from them is a plain SpatRaster.
+  lower <- .envelope_layer(x, "depth_min")
+  upper <- .envelope_layer(x, "depth_max")
   deepest <- length(depths)
   ind <- terra::rast(lapply(seq_along(depths), function(i) {
     if (closed && i == deepest) {

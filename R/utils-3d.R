@@ -156,8 +156,9 @@
 # Internal: one depth layer of an envelope as a plain SpatRaster. `[[` keeps
 # the SpatEnvelope tag on a single layer, which is both invalid and, since a
 # tagged raster dispatches to the depth-aware methods in R/intersect.R,
-# hazardous to compute with. Every internal that reads an envelope's layers
-# goes through here.
+# hazardous to compute with. Internals that compute with an envelope's
+# layers read them through here; the validity method's in-memory check reads
+# the cell values directly.
 .envelope_layer <- function(x, which = c("depth_min", "depth_max")) {
   which <- match.arg(which)
   methods::as(x[[which]], "SpatRaster")  # remove the 3D class
