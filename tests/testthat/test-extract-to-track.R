@@ -1184,7 +1184,12 @@ test_that(
       time_unit = "months",
       quiet = TRUE
     )
-    expect_equal(nrow(out$samples), 4)
+    # Each step shifts the previous, clamped date, so the month end drifts
+    # (02-29, then 03-29). This pins current behaviour; the drift is known.
+    expect_equal(
+      format(out$samples$date, "%Y-%m-%d", tz = "UTC"),
+      c("2020-01-31", "2020-02-29", "2020-03-29", "2020-04-01")
+    )
     expect_error(
       extract_to_track(
         route,
@@ -1449,28 +1454,28 @@ test_that(
   }
 )
 
-test_that("cells mode rejects nearest and custom matching", {
+test_that("cells normalize selection options before partitioning", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
   .make_track_nc(path, time = 24)
   route <- data.frame(lon = c(0, 2), lat = 0, date = .track_clock(c(0, 48)))
+  # Abbreviated options are matched before the cells-mode checks.
   out <- extract_to_track(
-    route, path, sampling = "cells", time_match = "exact",
+    route, path, sampling = "cells", time_match = "ex",
     interpolate_time = TRUE, quiet = TRUE
   )
   expect_true(all(is.na(out$samples$temp)))
   expect_error(
     extract_to_track(route, path, sampling = "cells",
-                     spatial_match = "nearest", max_distance_km = 10),
-    "Cells mode"
+                     spatial_match = "nea", max_distance_km = 10),
+    "Cells mode requires spatial within matching", fixed = TRUE
   )
   expect_error(
     extract_to_track(route, path, sampling = "cells",
-                     time_resolution = "custom"),
-    "Cells mode"
+                     time_resolution = "cust"),
+    "Cells mode requires spatial within matching", fixed = TRUE
   )
 })
-
 
 test_that(
   "time steps preserve UTC instants across daylight saving",
@@ -1507,6 +1512,19 @@ test_that(
       c("00:30", "01:30", "02:30")
     )
     expect_equal(seconds$samples$date, hours$samples$date)
+    route$date <- as.Date(c("2020-02-29", "2023-03-01"))
+    years <- extract_to_track(
+      route,
+      path,
+      interpolate_time = TRUE,
+      time_step = 1,
+      time_unit = "years",
+      quiet = TRUE
+    )
+    expect_equal(
+      format(years$samples$date, "%Y-%m-%d", tz = "UTC"),
+      c("2020-02-29", "2021-02-28", "2022-02-28", "2023-02-28", "2023-03-01")
+    )
   }
 )
 
@@ -1660,3 +1678,28 @@ test_that(
     )
   }
 )
+
+test_that("a temporal variable needs a date column", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, time = c(0, 24))
+  err <- expect_error(
+    extract_to_track(data.frame(lon = c(0, 2), lat = 0), path, quiet = TRUE)
+  )
+  expect_match(conditionMessage(err), "`temp` has a time dimension",
+               fixed = TRUE)
+  expect_match(conditionMessage(err), "Column `date` is missing", fixed = TRUE)
+})
+
+test_that("unzoned text times warn even when quiet", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, time = 0:2)
+  route <- data.frame(lon = c(0, 2), lat = 0,
+                      date = c("2020-01-01 00:00", "2020-01-01 02:00"))
+  expect_warning(
+    out <- extract_to_track(route, path, sampling = "vertices", quiet = TRUE),
+    class = "ocean3d_timezone_warning"
+  )
+  expect_equal(out$samples$temp, c(0, 2020))
+})

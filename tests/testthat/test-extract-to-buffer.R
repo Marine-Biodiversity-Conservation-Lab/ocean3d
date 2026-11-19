@@ -628,6 +628,23 @@ test_that("circles containing a pole cover the cells around it", {
 })
 
 
+test_that("longitude cells that overlap modulo 360 are rejected", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  # Increasing and non-overlapping as stored, but [340, 360] is [-20, 0].
+  .make_buffer_grid_nc(
+    path, matrix(1:4, 4L, 1L), lon = c(0, 120, 240, 350), lat = 0,
+    lon_bounds = matrix(c(-15, 15, 105, 135, 225, 255, 340, 360), 2L),
+    lat_bounds = matrix(c(-1, 1), 2L)
+  )
+  err <- expect_error(
+    extract_to_buffer(data.frame(lon = 0, lat = 0), path,
+                      horizontal_radius_km = 1, quiet = TRUE),
+    class = "ocean3d_error_bounds"
+  )
+  expect_match(conditionMessage(err), "overlap around the globe")
+})
+
 test_that("invalid horizontal requests are rejected", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path))
@@ -1125,6 +1142,34 @@ test_that(
       )
     )
     expect_true(is.na(rejected$temp))
+  }
+)
+
+
+test_that(
+  "unzoned text times warn even when quiet",
+  {
+    path <- tempfile(fileext = ".nc")
+    on.exit(unlink(path))
+    .make_buffer_grid_nc(
+      path, .buffer_source_cells,
+      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
+      field = matrix(10),
+      time = 12,
+      time_bounds = matrix(c(0, 24), 2L)
+    )
+    expect_warning(
+      timed <- extract_to_buffer(
+        data.frame(lon = 0, lat = 40, date = "2020-01-01 12:00"),
+        path,
+        time_before = 12,
+        time_after = 12,
+        time_unit = "hours",
+        quiet = TRUE
+      ),
+      class = "ocean3d_timezone_warning"
+    )
+    expect_equal(timed$temp, 10)
   }
 )
 

@@ -216,7 +216,10 @@ test_that("overlapping time bounds stop", {
   expect_match(conditionMessage(err), "Bounds for `time` in .* overlap\\.")
 })
 
-test_that("climatologies stop", {
+test_that("unsupported calendars and climatologies stop", {
+  calendar <- proxy_error(calendar = "noleap")
+  expect_s3_class(calendar$error, "ocean3d_error_calendar")
+
   # WOA-style monthly climatology, which CFtime can't read. The calendar and
   # climatology checks are tested directly in test-netcdf-time.R.
   woa <- proxy_error(time = c(0.5, 1.5),
