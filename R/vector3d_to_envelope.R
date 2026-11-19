@@ -3,9 +3,9 @@
 #' Convert 3D polygons to an envelope on a grid
 #'
 #' Puts [SpatVector3D-class] polygons onto the grid of `template` as a
-#' [SpatEnvelope-class]: each cell a polygon touches gets that polygon's
-#' depth range, as [vect_to_envelope()] does for 2D polygons with one depth
-#' range. Cells no polygon touches are `NA`, and so are cells where
+#' [SpatEnvelope-class], as [vect_to_envelope()] does for 2D polygons with
+#' one depth range. Each cell a polygon touches gets that polygon's depth
+#' range. Cells that no polygon touches are `NA`, and so are cells where
 #' `depth_min` equals `depth_max`, which have no thickness.
 #'
 #' Where polygons overlap, a cell gets the shallowest `depth_min` and the
@@ -20,9 +20,9 @@
 #' @param x A [SpatVector3D-class] of polygons, from [as_vector3d()] or
 #'   [buffer_3d()].
 #' @param template A `SpatRaster` whose grid (extent, resolution and CRS) the
-#'   envelope uses, such as a [SpatVoxel-class] or a raster from
-#'   [create_study_raster()]. Only its grid is used, not its values. Polygons
-#'   are projected to its CRS if it isn't WGS84.
+#'   envelope uses; its values are ignored. For example, a [SpatVoxel-class]
+#'   or a raster from [create_study_raster()]. Polygons are projected to its
+#'   CRS if it isn't WGS84. Longitudes from 0 to 360 work too.
 #'
 #' @return A [SpatEnvelope-class] on the grid of `template`.
 #' @seealso [vect_to_envelope()] for 2D polygons, [as_envelope()]
@@ -51,11 +51,16 @@ vector3d_to_envelope <- function(x, template) {
       ""
     }
     rlang::abort(glue::glue("`x` must be SpatVector3D polygons.{hint}"),
-                 class = "ocean3d_error_vector3d_to_envelope", call = NULL)
+                 class = "ocean3d_error_envelope_input", call = NULL)
   }
   if (!inherits(template, "SpatRaster")) {
     rlang::abort("`template` must be a SpatRaster that defines the grid.",
-                 class = "ocean3d_error_vector3d_to_envelope", call = NULL)
+                 class = "ocean3d_error_envelope_input", call = NULL)
+  }
+  if (terra::crs(template) == "") {
+    rlang::abort(paste0("`template` has no CRS, so the polygons can't be ",
+                        "placed on it. Set one with terra::crs()."),
+                 class = "ocean3d_error_envelope_input", call = NULL)
   }
   f <- x@features
   if (any(!is.na(f$time_start))) {
@@ -75,17 +80,29 @@ vector3d_to_envelope <- function(x, template) {
   if (!terra::same.crs(polygons, grid)) {
     polygons <- terra::project(polygons, terra::crs(grid))
   }
+  # Outlines are stored in [-180, 180]. On a longitude grid that runs past
+  # 180 (0 to 360) or below -180, copies shifted by 360 degrees put them, and
+  # both halves of a shape split at the antimeridian, where the grid is.
+  if (terra::is.lonlat(grid)) {
+    grid_x <- terra::ext(grid)[1:2]
+    shifts <- c(if (grid_x[2] > 180) 360, if (grid_x[1] < -180) -360)
+    polygons <- do.call(rbind, c(list(polygons), lapply(shifts, function(dx) {
+      terra::shift(polygons, dx = dx)
+    })))
+  }
   # Every cell a polygon touches, as terra::mask() picks them in
-  # vect_to_envelope().
+  # vect_to_envelope(). Depths stay doubles: terra's default of 4-byte floats
+  # would turn 10.1 m into 10.1000004 m.
+  doubles <- list(datatype = "FLT8S")
   top <- terra::rasterize(polygons, grid, field = "depth_min", fun = "min",
-                          touches = TRUE)
+                          touches = TRUE, wopt = doubles)
   bottom <- terra::rasterize(polygons, grid, field = "depth_max", fun = "max",
-                             touches = TRUE)
+                             touches = TRUE, wopt = doubles)
   if (terra::global(top, "notNA")[1, 1] == 0) {
     rlang::abort(
       paste0("The polygons don't touch any cell of `template`. Check that ",
              "they overlap it."),
-      class = "ocean3d_error_vector3d_to_envelope", call = NULL
+      class = "ocean3d_error_envelope_empty", call = NULL
     )
   }
   # A cell with no thickness has no volume, so it is dropped, as in
@@ -97,7 +114,7 @@ vector3d_to_envelope <- function(x, template) {
              "`depth_max`, so the envelope would be empty. Give the ",
              "polygons a depth range, e.g. a `depth_window` above 0 in ",
              "buffer_3d()."),
-      class = "ocean3d_error_vector3d_to_envelope", call = NULL
+      class = "ocean3d_error_envelope_empty", call = NULL
     )
   }
   layers <- terra::mask(c(top, bottom), thick)

@@ -11,18 +11,18 @@ vector3d_to_envelope(x, template)
 \code{\link[=buffer_3d]{buffer_3d()}}.}
 
 \item{template}{A \code{SpatRaster} whose grid (extent, resolution and CRS) the
-envelope uses, such as a \link[=SpatVoxel-class]{SpatVoxel} or a raster from
-\code{\link[=create_study_raster]{create_study_raster()}}. Only its grid is used, not its values. Polygons
-are projected to its CRS if it isn't WGS84.}
+envelope uses; its values are ignored. For example, a \link[=SpatVoxel-class]{SpatVoxel}
+or a raster from \code{\link[=create_study_raster]{create_study_raster()}}. Polygons are projected to its
+CRS if it isn't WGS84. Longitudes from 0 to 360 work too.}
 }
 \value{
 A \link[=SpatEnvelope-class]{SpatEnvelope} on the grid of \code{template}.
 }
 \description{
 Puts \link[=SpatVector3D-class]{SpatVector3D} polygons onto the grid of \code{template} as a
-\link[=SpatEnvelope-class]{SpatEnvelope}: each cell a polygon touches gets that polygon's
-depth range, as \code{\link[=vect_to_envelope]{vect_to_envelope()}} does for 2D polygons with one depth
-range. Cells no polygon touches are \code{NA}, and so are cells where
+\link[=SpatEnvelope-class]{SpatEnvelope}, as \code{\link[=vect_to_envelope]{vect_to_envelope()}} does for 2D polygons with
+one depth range. Each cell a polygon touches gets that polygon's depth
+range. Cells that no polygon touches are \code{NA}, and so are cells where
 \code{depth_min} equals \code{depth_max}, which have no thickness.
 }
 \details{

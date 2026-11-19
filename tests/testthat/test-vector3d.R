@@ -556,7 +556,8 @@ test_that("a buffered detection becomes an envelope with its depth window", {
 })
 
 test_that("vector3d_to_envelope() rejects inputs it can't convert", {
-  err <- "ocean3d_error_vector3d_to_envelope"
+  err <- "ocean3d_error_envelope_input"
+  empty <- "ocean3d_error_envelope_empty"
   pts <- as_vector3d(data.frame(lon = 151, lat = -20.5, depth = 5))
   expect_error(vector3d_to_envelope(pts, envelope_grid()),
                "These are points; buffer_3d() turns them into polygons",
@@ -569,10 +570,14 @@ test_that("vector3d_to_envelope() rejects inputs it can't convert", {
   far <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 1, ymin = 0,
                      ymax = 1, crs = "EPSG:4326")
   expect_error(vector3d_to_envelope(p, far), "don't touch any cell",
+               class = empty)
+  no_crs <- terra::rast(nrows = 2, ncols = 2, xmin = 150, xmax = 153,
+                        ymin = -21, ymax = -20, crs = "")
+  expect_error(vector3d_to_envelope(p, no_crs), "`template` has no CRS",
                class = err)
   flat <- buffer_3d(pts, radius_km = 20, depth_window = 0)
   expect_error(vector3d_to_envelope(flat, envelope_grid()),
-               "`depth_min` equal to `depth_max`", class = err)
+               "`depth_min` equal to `depth_max`", class = empty)
 })
 
 test_that("cells with no thickness are dropped", {
@@ -588,4 +593,30 @@ test_that("cells with no thickness are dropped", {
   p <- as_vector3d(flat, depth_min = "top", depth_max = "bottom")
   v <- stats::na.omit(terra::values(vector3d_to_envelope(p, envelope_grid())))
   expect_true(all(v[, "depth_min"] == 10 & v[, "depth_max"] == 50))
+})
+
+test_that("envelope depths keep their decimals", {
+  p <- as_vector3d(areas(), depth_min = 10.1, depth_max = 35.1)
+  v <- stats::na.omit(terra::values(vector3d_to_envelope(p, envelope_grid())))
+  expect_identical(unique(v[, "depth_min"]), 10.1)
+  expect_identical(unique(v[, "depth_max"]), 35.1)
+})
+
+test_that("polygons land on grids with longitudes past 180", {
+  # A circle across the antimeridian is split in two; both halves count.
+  b <- buffer_3d(as_vector3d(data.frame(lon = 180, lat = 0, depth = 10)),
+                 radius_km = 300, depth_window = 5)
+  b0 <- buffer_3d(as_vector3d(data.frame(lon = 0, lat = 0, depth = 10)),
+                  radius_km = 300, depth_window = 5)
+  cells <- function(polygons, xmin) {
+    grid <- terra::rast(nrows = 10, ncols = 40, xmin = xmin,
+                        xmax = xmin + 20, ymin = -5, ymax = 5,
+                        crs = "EPSG:4326")
+    e <- vector3d_to_envelope(polygons, grid)
+    sum(!is.na(terra::values(e)[, "depth_min"]))
+  }
+  expected <- cells(b0, -10)
+  expect_gt(expected, 0)
+  expect_identical(cells(b, 170), expected)
+  expect_identical(cells(b, -190), expected)
 })
