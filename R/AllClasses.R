@@ -335,16 +335,31 @@ setValidity("SpatEnvelope", function(object) {
   # grid, which the sibling class avoids because its depths live in the layer
   # names. It is worth paying: without it a tagged raster that terra produced
   # passes as a valid envelope, and volume() returns a negative number.
-  min_of <- function(r) {
-    v <- terra::global(r, "min", na.rm = TRUE)[1, 1]
-    if (is.null(v) || is.na(v)) NA_real_ else v
-  }
-  shallowest <- min_of(.envelope_layer(object, "depth_min"))
-  if (!is.na(shallowest) && shallowest < 0)
-    return("depths are positive metres increasing downward")
-  thinnest <- min_of(.envelope_layer(object, "depth_max") -
-                       .envelope_layer(object, "depth_min"))
-  if (!is.na(thinnest) && thinnest < 0)
-    return("depth_max must be at least depth_min in every cell")
-  TRUE
+  switch(.envelope_depth_problem(object) %||% "none",
+         negative = "depths are positive metres increasing downward",
+         inverted = "depth_max must be at least depth_min in every cell",
+         TRUE)
 })
+
+# Internal: the depth rule a (depth_min, depth_max) raster breaks, "negative"
+# or "inverted", or NULL when it breaks neither. The validity method and
+# as_envelope() both check these rules and word the error differently.
+# An in-memory raster is read once with terra::values(), which is much
+# cheaper than two terra::global() calls and a difference raster. A
+# file-backed raster is summarised by terra::global(), which reads it in
+# blocks, so a large file is never loaded whole.
+.envelope_depth_problem <- function(x) {
+  x <- .as_plain_raster(x)
+  if (all(terra::inMemory(x))) {
+    v <- terra::values(x, mat = TRUE)
+    shallowest_negative <- any(v[, 1] < 0, na.rm = TRUE)
+    inverted <- any(v[, 2] < v[, 1], na.rm = TRUE)
+  } else {
+    min_of <- function(r) terra::global(r, "min", na.rm = TRUE)[1, 1]
+    shallowest_negative <- isTRUE(min_of(x[[1]]) < 0)
+    inverted <- isTRUE(min_of(x[[2]] - x[[1]]) < 0)
+  }
+  if (shallowest_negative) return("negative")
+  if (inverted) return("inverted")
+  NULL
+}

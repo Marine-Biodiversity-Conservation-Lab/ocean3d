@@ -87,29 +87,22 @@ as_envelope <- function(x, depth_min, depth_max) {
     dmax <- terra::mask(.as_depth_layer(depth_max, "depth_max", x), present)
   }
 
-  # Check dmin and dmax layers 
-  min_of <- function(r) {
-    v <- terra::global(r, "min", na.rm = TRUE)[1, 1]
-    if (is.null(v) || is.na(v)) NA_real_ else v
-  }
-  shallowest <- min_of(dmin)
-  if (!is.na(shallowest) && shallowest < 0) {
+  out <- c(dmin, dmax)
+  names(out) <- c("depth_min", "depth_max")
+
+  problem <- .envelope_depth_problem(out)
+  if (identical(problem, "negative")) {
     stop("depths are positive metres increasing downward; `depth_min` has ",
          "negative values. Flip the sign of elevation data first.",
          call. = FALSE)
   }
-  thinnest <- min_of(dmax - dmin)
-  if (!is.na(thinnest) && thinnest < 0) {
+  if (identical(problem, "inverted")) {
     stop("`depth_max` must be at least `depth_min` in every cell.",
          call. = FALSE)
   }
 
-  out <- c(dmin, dmax)
-  names(out) <- c("depth_min", "depth_max")
-
-  out <- methods::new("SpatEnvelope", out)
-  methods::validObject(out)
-  out
+  # new() runs the validity method.
+  methods::new("SpatEnvelope", out)
 }
 
 # Internal: resolve a depth limit given either as a single number or as a
@@ -762,9 +755,8 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
                           cbind(depth_min, depth_max))
   names(out) <- c("depth_min", "depth_max")
 
-  out <- methods::new("SpatEnvelope", out)
-  methods::validObject(out)
-  out
+  # new() runs the validity method.
+  methods::new("SpatEnvelope", out)
 }
 
 #' Reduce a variable voxel to a presence voxel

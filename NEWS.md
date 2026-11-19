@@ -182,6 +182,14 @@ message says how many cells have the limits swapped (or a seafloor above
   and latitude. Regrid such data to a regular longitude/latitude grid
   first (#93).
 
+## Minor improvements
+
+* The 3D verbs check their inputs faster. Checking a `SpatEnvelope` is
+  valid now reads an in-memory raster once instead of building a difference
+  raster and summarising it twice, which takes about 1 ms instead of 33 ms on
+  a 9-cell grid. `as_envelope()` is about 5 times faster, `intersect_3d()`
+  and `volume()` about 1.6 to 2 times, and `calc_volume_overlap()` about 20%.
+
 ## Dependencies
 
 * CFtime (>= 1.7.3) is now imported, for decoding CF time units.

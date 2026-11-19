@@ -1111,6 +1111,47 @@ test_that("tagged 3D objects that a terra operation broke are refused", {
   expect_named(rebuilt, names(v))
 })
 
+test_that("envelope depth rules hold for file-backed rasters", {
+  # The depth rules are read from memory when the raster is in memory and
+  # summarised block by block when it is on disk; both must catch the same
+  # breaches.
+  paths <- character()
+  on.exit(unlink(paths))
+  on_disk <- function(dmin, dmax) {
+    r <- terra::rast(make_footprint(), nlyrs = 2)
+    terra::values(r) <- cbind(dmin, dmax)
+    names(r) <- c("depth_min", "depth_max")
+    path <- tempfile(fileext = ".tif")
+    paths <<- c(paths, path)
+    terra::writeRaster(r, path)
+    out <- terra::rast(path)
+    expect_false(any(terra::inMemory(out)))
+    out
+  }
+
+  good <- on_disk(c(0, 10, 20, NA), c(100, 10, 50, NA))
+  expect_s4_class(as_envelope(good), "SpatEnvelope")
+  expect_true(methods::validObject(methods::new("SpatEnvelope", good),
+                                   test = TRUE))
+
+  cases <- list(
+    list(label = "negative depth_min", object = on_disk(c(-5, 0, 0, NA),
+                                                        c(10, 10, 10, NA)),
+         constructor = "positive metres increasing downward",
+         validity = "positive metres increasing downward"),
+    list(label = "inverted cell", object = on_disk(c(0, 50, 0, NA),
+                                                   c(10, 20, 10, NA)),
+         constructor = "at least `depth_min`",
+         validity = "depth_max must be at least depth_min")
+  )
+  for (case in cases) {
+    expect_error(as_envelope(case$object), case$constructor,
+                 label = case$label)
+    expect_error(methods::new("SpatEnvelope", case$object), case$validity,
+                 label = case$label)
+  }
+})
+
 
 # ---- depth edges (#138) -----------------------------------------------------
 
