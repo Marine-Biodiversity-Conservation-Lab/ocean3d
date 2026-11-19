@@ -570,4 +570,22 @@ test_that("vector3d_to_envelope() rejects inputs it can't convert", {
                      ymax = 1, crs = "EPSG:4326")
   expect_error(vector3d_to_envelope(p, far), "don't touch any cell",
                class = err)
+  flat <- buffer_3d(pts, radius_km = 20, depth_window = 0)
+  expect_error(vector3d_to_envelope(flat, envelope_grid()),
+               "`depth_min` equal to `depth_max`", class = err)
+})
+
+test_that("cells with no thickness are dropped", {
+  flat <- areas()
+  flat$top <- c(30, 10)
+  flat$bottom <- c(30, 50)
+  p <- as_vector3d(flat, depth_min = "top", depth_max = "bottom")
+  v <- stats::na.omit(terra::values(vector3d_to_envelope(p, envelope_grid())))
+  expect_true(all(v[, "depth_min"] == 10 & v[, "depth_max"] == 50))
+
+  # The flat square under the thick one keeps the thick one's range.
+  flat$geometry[1] <- flat$geometry[2]
+  p <- as_vector3d(flat, depth_min = "top", depth_max = "bottom")
+  v <- stats::na.omit(terra::values(vector3d_to_envelope(p, envelope_grid())))
+  expect_true(all(v[, "depth_min"] == 10 & v[, "depth_max"] == 50))
 })

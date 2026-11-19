@@ -5,7 +5,8 @@
 #' Puts [SpatVector3D-class] polygons onto the grid of `template` as a
 #' [SpatEnvelope-class]: each cell a polygon touches gets that polygon's
 #' depth range, as [vect_to_envelope()] does for 2D polygons with one depth
-#' range. Cells no polygon touches are `NA`.
+#' range. Cells no polygon touches are `NA`, and so are cells where
+#' `depth_min` equals `depth_max`, which have no thickness.
 #'
 #' Where polygons overlap, a cell gets the shallowest `depth_min` and the
 #' deepest `depth_max` of the polygons that cover it. An envelope has one
@@ -87,7 +88,19 @@ vector3d_to_envelope <- function(x, template) {
       class = "ocean3d_error_vector3d_to_envelope", call = NULL
     )
   }
-  layers <- c(top, bottom)
+  # A cell with no thickness has no volume, so it is dropped, as in
+  # vect_to_envelope().
+  thick <- terra::ifel(bottom > top, 1, NA)
+  if (terra::global(thick, "notNA")[1, 1] == 0) {
+    rlang::abort(
+      paste0("Every cell the polygons touch has `depth_min` equal to ",
+             "`depth_max`, so the envelope would be empty. Give the ",
+             "polygons a depth range, e.g. a `depth_window` above 0 in ",
+             "buffer_3d()."),
+      class = "ocean3d_error_vector3d_to_envelope", call = NULL
+    )
+  }
+  layers <- terra::mask(c(top, bottom), thick)
   names(layers) <- c("depth_min", "depth_max")
   as_envelope(layers)
 }

@@ -22,7 +22,8 @@ A \link[=SpatEnvelope-class]{SpatEnvelope} on the grid of \code{template}.
 Puts \link[=SpatVector3D-class]{SpatVector3D} polygons onto the grid of \code{template} as a
 \link[=SpatEnvelope-class]{SpatEnvelope}: each cell a polygon touches gets that polygon's
 depth range, as \code{\link[=vect_to_envelope]{vect_to_envelope()}} does for 2D polygons with one depth
-range. Cells no polygon touches are \code{NA}.
+range. Cells no polygon touches are \code{NA}, and so are cells where
+\code{depth_min} equals \code{depth_max}, which have no thickness.
 }
 \details{
 Where polygons overlap, a cell gets the shallowest \code{depth_min} and the
