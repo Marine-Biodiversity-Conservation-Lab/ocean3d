@@ -98,6 +98,7 @@ an sf geometry column.
 ## See also
 
 [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md),
+[`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
 [`geomtype()`](https://rspatial.github.io/terra/reference/geomtype.html)
 
 ## Examples

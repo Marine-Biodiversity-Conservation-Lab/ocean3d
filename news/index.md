@@ -83,6 +83,14 @@ and stop with an error when they are bad
   [`geomtype()`](https://rspatial.github.io/terra/reference/geomtype.html)
   reports the type
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
+- New
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
+  turns each `SpatVector3D` point or line into a polygon with a depth
+  range and an optional time interval, such as a circle of 10 km radius
+  from 10 to 60 m deep around a detection at 35 m.
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+  on points or lines now suggests it
+  ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
 
 ### Bug fixes
 
