@@ -112,10 +112,10 @@
 
 # Stops with `ocean3d_error_axis_order` unless `values` run strictly one way,
 # so that each value is one cell (an NA counts as out of order). The only
-# producer of that class, so every stored axis follows the same rule: called
-# by .axis_intervals() (time, and depth and longitude/latitude again after
-# their readers), .read_depth_axis() for extraction's depth and
-# .prepare_spatial_axis() for longitude and latitude.
+# producer of that class, so every stored axis follows the same rule. Called
+# by .axis_intervals() (time; depth in the core object and buffer extraction;
+# longitude and latitude through .prepare_spatial_axis()) and by
+# .read_depth_axis() (depth in point, buffer and track extraction).
 .check_axis_order <- function(values, coordinate, file = NULL) {
   steps <- diff(values)
   if (length(steps) &&

@@ -190,7 +190,6 @@
     stop("Latitude coordinates are outside [-90, 90].", call. = FALSE)
   }
   centres <- if (longitude) .unwrap_longitude(values) else values
-  .check_axis_order(centres, coordinate, basename(nc$filename))
   explicit <- .read_bounds(nc, coordinate, length(values))$values
   if (!is.null(explicit)) {
     intervals <- explicit
@@ -219,7 +218,8 @@
     upper <- edges$upper
     basis <- if (edges$regular) "inferred_regular" else "inferred_irregular"
   }
-  # Bad bounds stop here, for every function that reads a spatial axis.
+  # Out-of-order centres and bad bounds stop here, for every function that
+  # reads a spatial axis. A single coordinate can't be out of order.
   if (basis != "singleton_coordinate") {
     .axis_intervals(centres, rbind(lower, upper),
                     if (longitude) "lon" else "lat", coordinate,

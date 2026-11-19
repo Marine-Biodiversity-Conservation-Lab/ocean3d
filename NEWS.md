@@ -40,11 +40,13 @@ stop with an error when they are bad (#113):
   `bounds` attribute so edges are inferred from the centres (for example
   with NCO: `ncatted -a bounds,lon,d,, file.nc`).
 
-Point, buffer and track extraction now stop with an error when a netCDF
-file's depths aren't stored in order, shallow to deep or deep to shallow
-(for example 50, 0, 100 m). The error names the coordinate and the file.
-Sort the depth axis before extraction. The error for longitude or latitude
-stored out of order now names the coordinate and the file too (#147).
+Point, buffer and track extraction used to accept a netCDF depth
+coordinate stored out of order (for example 50, 0, 100 m), rejecting only
+duplicate depths. They now stop with an error unless the depths are stored
+shallow to deep or deep to shallow (#147). The error names the coordinate
+and the file. Sort the file along its depth dimension before extraction.
+Longitude or latitude stored out of order already stopped with an error;
+that error now names the coordinate and the file too.
 
 ## New features
 
