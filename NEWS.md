@@ -69,8 +69,9 @@ stop with an error when they are bad (#113):
 * New `vector3d_to_envelope()` puts `SpatVector3D` polygons onto a grid as
   a `SpatEnvelope`, as `vect_to_envelope()` does for 2D polygons. Where
   polygons overlap, a cell gets the shallowest top and deepest bottom of
-  the polygons covering it, and cells with no thickness are dropped.
-  Polygon times are dropped, with a message (#114).
+  the polygons covering it, so polygons from 0 to 50 m and from 200 to
+  300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
+  are polygon times, with a message (#114).
 
 ## Bug fixes
 
