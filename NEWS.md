@@ -2,6 +2,34 @@
 
 ## Breaking changes
 
+`calc_volume_overlap()` is removed (#150). It intersected two domains and
+measured them in one call, returning a nine-layer `SpatRaster` that was
+neither an envelope nor a voxel, so no other 3D function could take it.
+Intersect with `intersect_3d()`, then measure with `volume()`, which has a
+new `per_cell` argument: `volume(x, per_cell = TRUE)` returns a one-layer
+`SpatRaster` named `volume` with the volume of each cell in km³, `NA` where
+`x` is absent. Each layer of the old stack maps to:
+
+| `calc_volume_overlap(a, b)` layer | Now |
+|---|---|
+| `depth_min_a`, `depth_max_a` | `a` itself (envelope), or `voxel_to_envelope(a)` (voxel) |
+| `depth_min_overlap`, `depth_max_overlap` | `ov <- intersect_3d(a, b)` |
+| `volume_a`, `volume_b` | `volume(a, per_cell = TRUE)`, `volume(b, per_cell = TRUE)` |
+| `volume_overlap` | `volume(ov, per_cell = TRUE)` |
+| `0` where both are present but share no depth | `terra::ifel(!intersects_3d(a, b), 0, volume(ov, per_cell = TRUE))` |
+| totals | `volume(a)`, `volume(b)`, `volume(ov)` |
+
+Two results differ from the old stack:
+
+* With an envelope and a voxel, `calc_volume_overlap()` reported the volume of
+  the envelope after placing it on the voxel's depth levels. `volume()` of the
+  envelope is exact. To compare it with the overlap on the same levels, use
+  `volume(envelope_to_voxel(a, depths(b), bounds))`.
+* A voxel cell with no occupied level is `NA` in `volume(per_cell = TRUE)`,
+  as outside an envelope.
+
+Pass the same `bounds` to `intersect_3d()` and `volume()`.
+
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
 `calc_volume_overlap()`, `envelope_to_voxel()`, `intersect_3d()`,
 `intersects_3d()` and `mask()` (#138). The slab of water each depth level
