@@ -280,7 +280,7 @@ test_that("an open connection is read and left open", {
   expect_identical(nc$var$temp$name, "temp")
   expect_no_error(ncdf4::ncvar_get(nc, "temp"))
 
-  expect_error(as_proxy(c(f, f)), class = "ocean3d_error_proxy_input")
+  expect_error(as_proxy(1), class = "ocean3d_error_proxy_input")
 })
 
 test_that("unlimited, empty and unsaved time axes", {

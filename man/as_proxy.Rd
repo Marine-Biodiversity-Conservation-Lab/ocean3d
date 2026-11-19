@@ -15,8 +15,9 @@ as_proxy(
 )
 }
 \arguments{
-\item{x}{A netCDF file path, or a connection opened with
-\code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} (netCDF model). A connection is left open.}
+\item{x}{A netCDF file path, several paths for a series of files, a
+connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} (left open), or a
+\link[=SpatVoxel-class]{SpatVoxel}. \code{var} and the dimension arguments apply to files.}
 
 \item{var}{Name of the variable. \code{NULL} (the default) detects it when the
 file holds exactly one data variable.}
@@ -35,7 +36,19 @@ applied here, once, so later steps can rely on each axis being in a fixed
 form. No values of the variable are read.
 }
 \details{
+Two other sources give the same kind of proxy:
 \itemize{
+\item \strong{A series of files} (several paths): the same variable on the same
+grid and depths in every file, each with its own dated time axis, such as
+one file per day. The files are put in time order and their time axes
+joined into one, in the first file's units. Each time step must come
+from one file: repeated or overlapping steps, a file without a time
+axis, and files on different grids (spatial tiles) stop with an error.
+The time axis keeps its bounds only when every file has them.
+\item \strong{A \link[=SpatVoxel-class]{SpatVoxel} already in memory}: one time step (the voxel's
+\code{\link[terra:time]{terra::time()}} when set), with the voxel's cells, depths and depth edges
+(or the slabs its default \code{bounds} gives). \code{\link[=as_voxel]{as_voxel()}} returns the voxel
+itself.
 \item \strong{Longitude and latitude:} cell edges come from the coordinate's CF
 \code{bounds} variable, or halfway between neighbouring centres.
 \item \strong{Depth:} converted to metres positive down from the coordinate's

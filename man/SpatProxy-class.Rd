@@ -25,9 +25,11 @@ model"). \code{\link[=as_voxel]{as_voxel()}} reads one time step of it into memo
 \section{Slots}{
 
 \describe{
-\item{\code{source}}{A list: \code{type} (\code{"netcdf"}) and \code{path}, the full path of the
-file. A path rather than an open connection, so the object can be saved
-with \code{\link[base:saveRDS]{base::saveRDS()}}.}
+\item{\code{source}}{A list with \code{type} and where the data are: for \code{"netcdf"},
+\code{path}, the full path of the file (a path rather than an open connection,
+so the object can be saved with \code{\link[base:saveRDS]{base::saveRDS()}}); for \code{"series"},
+\code{path}, the files in time order, and \code{steps}, the number of time steps
+in each; for \code{"voxel"}, \code{voxel}, the \link[=SpatVoxel-class]{SpatVoxel} in memory.}
 
 \item{\code{variable}}{A list: \code{name}, \code{units}, \code{long_name}, \code{dims} (the
 variable's dimension names in ncdf4 order), \code{dim_lengths}, \code{axis_dims}
