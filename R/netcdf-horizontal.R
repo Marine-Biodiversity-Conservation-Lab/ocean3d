@@ -190,14 +190,7 @@
     stop("Latitude coordinates are outside [-90, 90].", call. = FALSE)
   }
   centres <- if (longitude) .unwrap_longitude(values) else values
-  steps <- diff(centres)
-  if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
-    stop(
-      "Spatial coordinates must form a monotonic axis (as CF requires). ",
-      "Sort the file along this dimension before extraction.",
-      call. = FALSE
-    )
-  }
+  .check_axis_order(centres, coordinate, basename(nc$filename))
   explicit <- .read_bounds(nc, coordinate, length(values))$values
   if (!is.null(explicit)) {
     intervals <- explicit

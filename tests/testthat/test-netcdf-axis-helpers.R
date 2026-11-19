@@ -126,6 +126,24 @@ test_that("irregular descending axes preserve original indices", {
   expect_length(.containing_axis_indices(axis, 20), 0L)
 })
 
+test_that("longitude and latitude stored out of order are rejected", {
+  f <- make_grid_file(lon = c(2, 0, 5), lat = c(41, 40, 42), depth = NULL,
+                      time = NULL)
+  on.exit(unlink(f), add = TRUE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  for (case in list(list("lon", c(2, 0, 5), TRUE),
+                    list("lat", c(41, 40, 42), FALSE))) {
+    err <- expect_error(
+      .prepare_spatial_axis(nc, case[[1]], case[[2]], longitude = case[[3]]),
+      class = "ocean3d_error_axis_order"
+    )
+    expect_match(conditionMessage(err), glue::glue(
+      "`{case[[1]]}` in {basename(f)} must be strictly increasing"
+    ))
+  }
+})
+
 test_that("geographic proximity is not independent degree subtraction", {
   # At high latitude the geographically closest centre is not necessarily
   # the one with the smallest latitude difference.

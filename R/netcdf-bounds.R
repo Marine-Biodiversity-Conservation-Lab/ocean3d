@@ -111,16 +111,20 @@
 }
 
 # Stops with `ocean3d_error_axis_order` unless `values` run strictly one way,
-# so that each value is one cell. The only producer of that class: the core
-# object's axes (.axis_intervals()) and extraction's depth axis
-# (.read_depth_axis()) apply the same rule.
+# so that each value is one cell (an NA counts as out of order). The only
+# producer of that class, so every stored axis follows the same rule: called
+# by .axis_intervals() (time, and depth and longitude/latitude again after
+# their readers), .read_depth_axis() for extraction's depth and
+# .prepare_spatial_axis() for longitude and latitude.
 .check_axis_order <- function(values, coordinate, file = NULL) {
   steps <- diff(values)
-  if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
+  if (length(steps) &&
+        !(isTRUE(all(steps > 0)) || isTRUE(all(steps < 0)))) {
     where <- if (is.null(file)) "" else glue::glue(" in {file}")
     rlang::abort(glue::glue(
       "Coordinate `{coordinate}`{where} must be strictly increasing or ",
-      "decreasing, without duplicates."
+      "decreasing, without duplicates. Sort the file along this dimension ",
+      "first."
     ), class = "ocean3d_error_axis_order", call = NULL)
   }
   invisible(values)
@@ -136,8 +140,7 @@
 # `allow_singleton`, when it becomes a zero-width cell. Values keep their
 # storage order. Shared by every axis reader: longitude and latitude
 # (.prepare_spatial_axis()), buffer extraction's depth and time, and the core
-# object's depth and time
-# and the core object's depth axis (as_proxy()).
+# object's depth and time (as_proxy()).
 .axis_intervals <- function(centres, bounds, axis, coordinate,
                             allow_singleton = FALSE, periodic = FALSE,
                             file = NULL) {
@@ -213,8 +216,9 @@
 # Reads a depth or time coordinate with its cell intervals, through
 # .axis_intervals(): depth in metres positive down (with CF bounds converted
 # the same way), time in UTC seconds. Without CF bounds, edges are inferred
-# only when `infer_bounds = TRUE`. Used by buffer extraction and the core
-# object's depth axis.
+# only when `infer_bounds = TRUE`. Depth order is checked by
+# .read_depth_axis() before .axis_intervals() checks it again. Used by buffer
+# extraction and the core object's depth axis.
 .read_interval_axis <- function(
   nc,
   coordinate,
