@@ -126,11 +126,12 @@ test_that("2D geographic coordinates are rejected by units or standard_name", {
     f <- make_curvilinear_file(standard_name = standard_name)
     on.exit(unlink(f), add = TRUE)
 
-    expect_error(detect(f), class = "ocean3d_error_curvilinear_grid")
-    err <- tryCatch(detect(f), error = conditionMessage)
-    expect_match(err, "two-dimensional geographic coordinate `nav_lon`",
+    err <- expect_error(detect(f), class = "ocean3d_error_curvilinear_grid")
+    expect_match(conditionMessage(err),
+                 "two-dimensional geographic coordinate `nav_lon`",
                  fixed = TRUE)
-    expect_match(err, "regular longitude/latitude grid", fixed = TRUE)
+    expect_match(conditionMessage(err),
+                 "regular longitude/latitude grid", fixed = TRUE)
   }
 })
 

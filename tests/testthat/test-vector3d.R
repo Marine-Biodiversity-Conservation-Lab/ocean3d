@@ -64,10 +64,8 @@ test_that("invalid vertices are rejected with a clear error", {
     list(x = transform(obs, lat = c(-20, -95)), why = "latitudes within")
   )
   for (case in cases) {
-    expect_error(as_vector3d(case$x), class = "ocean3d_error_vector3d")
-    err <- tryCatch(as_vector3d(case$x),
-                    error = function(e) conditionMessage(e))
-    expect_match(err, case$why, fixed = TRUE)
+    err <- expect_error(as_vector3d(case$x), class = "ocean3d_error_vector3d")
+    expect_match(conditionMessage(err), case$why, fixed = TRUE)
   }
 
   one_vertex <- dive()[1, ]

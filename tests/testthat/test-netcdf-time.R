@@ -27,10 +27,10 @@ test_that("a single-step months axis is read and a longer one rejected (#88)", {
   on.exit(unlink(c(one, several)), add = TRUE)
 
   expect_equal(decode_time(one), utc("1955-01-01"))
-  expect_error(decode_time(several), class = "ocean3d_error_time_units")
-  err <- tryCatch(decode_time(several), error = conditionMessage)
-  expect_match(err, "months since 2020-01-01", fixed = TRUE)
-  expect_match(err, "several months or years is ambiguous", fixed = TRUE)
+  err <- expect_error(decode_time(several), class = "ocean3d_error_time_units")
+  expect_match(conditionMessage(err), "months since 2020-01-01", fixed = TRUE)
+  expect_match(conditionMessage(err),
+               "several months or years is ambiguous", fixed = TRUE)
 })
 
 test_that("reference times with a numeric time zone offset are rejected", {
@@ -38,9 +38,8 @@ test_that("reference times with a numeric time zone offset are rejected", {
                       time_units = "hours since 2020-01-01 05:00:00+05:00")
   on.exit(unlink(f), add = TRUE)
 
-  expect_error(decode_time(f), class = "ocean3d_error_time_units")
-  err <- tryCatch(decode_time(f), error = conditionMessage)
-  expect_match(err, "time zone offset +0500", fixed = TRUE)
+  err <- expect_error(decode_time(f), class = "ocean3d_error_time_units")
+  expect_match(conditionMessage(err), "time zone offset +0500", fixed = TRUE)
 })
 
 test_that("fractional-day timestamps decode and match exactly (#90)", {
@@ -61,10 +60,10 @@ test_that("calendars other than the standard ones stop with a clear error", {
                         time_units = "days since 2000-01-01",
                         calendar = calendar)
     on.exit(unlink(f), add = TRUE)
-    expect_error(decode_time(f), class = "ocean3d_error_calendar",
-                 label = calendar)
-    err <- tryCatch(decode_time(f), error = conditionMessage)
-    expect_match(err, paste("unsupported calendar:", calendar), fixed = TRUE)
+    err <- expect_error(decode_time(f), class = "ocean3d_error_calendar",
+                        label = calendar)
+    expect_match(conditionMessage(err),
+                 paste("unsupported calendar:", calendar), fixed = TRUE)
   }
 })
 
@@ -107,15 +106,15 @@ test_that("a repeated time step is only an error if it is selected (#91)", {
   expect_identical(match_times(axis, as.Date("2020-01-01")), 1L)
   expect_identical(match_times(axis, as.Date("2020-01-03")), 4L)
 
-  expect_error(match_times(axis, as.Date("2020-01-02"), file = basename(f)),
-               class = "ocean3d_error_repeated_time")
-  err <- tryCatch(
+  err <- expect_error(
     match_times(axis, as.Date("2020-01-02"), file = basename(f)),
-    error = conditionMessage
+    class = "ocean3d_error_repeated_time"
   )
-  expect_match(err, "Multiple dataset timestamps", fixed = TRUE)
-  expect_match(err, "2020-01-02 00:00:00 UTC appears 2 times", fixed = TRUE)
-  expect_match(err, basename(f), fixed = TRUE)
+  expect_match(conditionMessage(err),
+               "Multiple dataset timestamps", fixed = TRUE)
+  expect_match(conditionMessage(err),
+               "2020-01-02 00:00:00 UTC appears 2 times", fixed = TRUE)
+  expect_match(conditionMessage(err), basename(f), fixed = TRUE)
 })
 
 test_that("midnight date-times keep their day on noon-stamped files (#71)", {
@@ -172,11 +171,11 @@ test_that("time bounds that miss their time step are rejected (#113)", {
   f <- make_grid_file(depth = NULL, time = c(15, 45), time_bounds = bad)
   on.exit(unlink(f), add = TRUE)
 
-  expect_error(decode_time(f, bounds = bad),
-               class = "ocean3d_error_time_bounds")
-  err <- tryCatch(decode_time(f, bounds = bad), error = conditionMessage)
-  expect_match(err, "Invalid bounds for `time`", fixed = TRUE)
-  expect_match(err, "must contain its time step", fixed = TRUE)
+  err <- expect_error(decode_time(f, bounds = bad),
+                      class = "ocean3d_error_time_bounds")
+  expect_match(conditionMessage(err), "Invalid bounds for `time`", fixed = TRUE)
+  expect_match(conditionMessage(err),
+               "must contain its time step", fixed = TRUE)
 
   # Point extraction doesn't read time bounds, so they don't stop it.
   expect_no_error(read_metadata(f))
