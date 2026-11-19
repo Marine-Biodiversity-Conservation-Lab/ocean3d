@@ -255,12 +255,13 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     row <- .edge_rows(edges$depth, d)
     edges <- edges[row[!is.na(row)], , drop = FALSE]
   }
-  if (is.null(edges)) edges <- .no_depth_edges()
-  rownames(edges) <- NULL
 
   # Repair what is unambiguously repairable rather than rejecting it.
   if (is.unsorted(d)) x <- x[[order(d)]]
 
+  # Without edges, the class prototype gives the empty table.
+  if (is.null(edges)) return(methods::new("SpatVoxel", x))
+  rownames(edges) <- NULL
   methods::new("SpatVoxel", x, depth_edges = edges)
 }
 

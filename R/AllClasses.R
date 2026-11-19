@@ -5,11 +5,6 @@
 #' @importClassesFrom terra SpatRaster
 NULL
 
-# Internal: the depth_edges table of a voxel that carries no edges.
-.no_depth_edges <- function() {
-  data.frame(depth = numeric(0), lower = numeric(0), upper = numeric(0))
-}
-
 #' 3D voxel model: one layer per standard depth level
 #'
 #' A `SpatVoxel` is a [terra::SpatRaster] in which **depth is the layer index**
@@ -76,7 +71,10 @@ NULL
 setClass(
   "SpatVoxel", contains = "SpatRaster",
   slots = c(depth_edges = "data.frame"),
-  prototype = list(depth_edges = .no_depth_edges())
+  # A voxel without edges has the empty table.
+  prototype = list(depth_edges = data.frame(
+    depth = numeric(0), lower = numeric(0), upper = numeric(0)
+  ))
 )
 
 #' 2.5D min-max envelope: exactly depth_min, depth_max
