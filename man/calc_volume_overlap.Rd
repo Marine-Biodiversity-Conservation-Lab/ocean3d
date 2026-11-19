@@ -13,11 +13,11 @@ calc_volume_overlap(x, y, ...)
 
 \S4method{calc_volume_overlap}{SpatEnvelope,SpatEnvelope}(x, y, ...)
 
-\S4method{calc_volume_overlap}{SpatVoxel,SpatVoxel}(x, y, bounds = c("top", "midpoint"))
+\S4method{calc_volume_overlap}{SpatVoxel,SpatVoxel}(x, y, bounds = c("midpoint", "top"))
 
-\S4method{calc_volume_overlap}{SpatEnvelope,SpatVoxel}(x, y, bounds = c("top", "midpoint"), ...)
+\S4method{calc_volume_overlap}{SpatEnvelope,SpatVoxel}(x, y, bounds = c("midpoint", "top"), ...)
 
-\S4method{calc_volume_overlap}{SpatVoxel,SpatEnvelope}(x, y, bounds = c("top", "midpoint"), ...)
+\S4method{calc_volume_overlap}{SpatVoxel,SpatEnvelope}(x, y, bounds = c("midpoint", "top"), ...)
 
 \S4method{calc_volume_overlap}{SpatRaster,SpatRaster}(x, y, ...)
 }

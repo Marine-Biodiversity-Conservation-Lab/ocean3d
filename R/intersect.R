@@ -85,7 +85,7 @@ setMethod(
 #' @export
 setMethod(
   "intersect_3d", c("SpatEnvelope", "SpatVoxel"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
@@ -97,7 +97,7 @@ setMethod(
 #' @export
 setMethod(
   "intersect_3d", c("SpatVoxel", "SpatEnvelope"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
@@ -206,7 +206,7 @@ setMethod(
 #' @export
 setMethod(
   "intersects_3d", c("SpatEnvelope", "SpatVoxel"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
@@ -218,7 +218,7 @@ setMethod(
 #' @export
 setMethod(
   "intersects_3d", c("SpatVoxel", "SpatEnvelope"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
@@ -307,9 +307,9 @@ setMethod("intersects_3d", c("ANY", "ANY"),
 #' @param mask The 3D domain to keep `x` inside: a [SpatEnvelope-class] or a
 #'   [SpatVoxel-class] on the same grid as `x`.
 #' @param bounds Only when one side is an envelope and the other a voxel. How
-#'   the envelope is placed on the voxel's depth levels: `"top"` (default) or
-#'   `"midpoint"`. See [envelope_to_voxel()]. Not used when the voxel carries
-#'   its own depth edges (see [SpatVoxel-class]).
+#'   the envelope is placed on the voxel's depth levels: `"midpoint"`
+#'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
+#'   carries its own depth edges (see [SpatVoxel-class]).
 #' @param ... Passed on to [terra::mask()]. For example, `inverse = TRUE`
 #'   keeps the values *outside* the domain instead.
 #'
@@ -355,7 +355,7 @@ NULL
 #' @export
 setMethod(
   "mask", c("SpatVoxel", "SpatEnvelope"),
-  function(x, mask, bounds = c("top", "midpoint"), ...) {
+  function(x, mask, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(mask, "mask")
@@ -396,7 +396,7 @@ setMethod(
 #' @export
 setMethod(
   "mask", c("SpatEnvelope", "SpatVoxel"),
-  function(x, mask, bounds = c("top", "midpoint"), ...) {
+  function(x, mask, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(mask, "mask")

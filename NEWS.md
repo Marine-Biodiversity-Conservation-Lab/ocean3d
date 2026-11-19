@@ -2,6 +2,24 @@
 
 ## Breaking changes
 
+`bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
+`calc_volume_overlap()`, `envelope_to_voxel()`, `intersect_3d()`,
+`intersects_3d()` and `mask()` (#138). Each depth level is treated as the
+middle of its slab of water, with edges halfway to its neighbours, which is
+how World Ocean Atlas and Copernicus Marine data are laid out. Under the old
+default each level was the top of its slab and the deepest level had no
+volume. Results change for voxels without stored depth edges:
+
+* `volume()` and `calc_volume_overlap()` give different volumes. For example,
+  levels at 0, 100 and 300 m now stand for 0-50, 50-200 and 200-300 m rather
+  than 0-100, 100-300 and none.
+* `envelope_to_voxel()`, and `mask()`, `intersect_3d()` and `intersects_3d()`
+  between an envelope and a voxel, can place an envelope on different levels.
+  An envelope from 60 to 70 m on levels at 0, 100 and 200 m now occupies the
+  100 m level rather than the 0 m one.
+
+Pass `bounds = "top"` to keep the old results.
+
 Point extraction (`extract_to_point()`, `extract2d()`, `extract3d_*()`) now
 checks the grid's coordinates instead of assuming one layout (#74). Some
 calls that used to return a value now return `NA` or stop with an error:

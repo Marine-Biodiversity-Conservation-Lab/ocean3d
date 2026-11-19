@@ -105,11 +105,12 @@ test_that("volume() sums slab thicknesses over occupied voxels", {
 
   # "top": the level names the top of its slab, so 0 m stands for 0-100 m and
   # 100 m for 100-300 m => 300 m of occupied water per cell.
-  expect_identical(volume(v), 9 * 0.3, tolerance = 0.01)
+  expect_identical(volume(v, bounds = "top"), 9 * 0.3, tolerance = 0.01)
 
-  # "midpoint": edges fall halfway to each neighbour, so 0 m stands for 0-50 m
-  # and 100 m for 50-200 m => 200 m per cell.
+  # "midpoint", the default: edges fall halfway to each neighbour, so 0 m
+  # stands for 0-50 m and 100 m for 50-200 m => 200 m per cell.
   expect_identical(volume(v, bounds = "midpoint"), 9 * 0.2, tolerance = 0.01)
+  expect_identical(volume(v), volume(v, bounds = "midpoint"))
 })
 
 test_that("volume() excludes interior gaps that an envelope would fill", {
@@ -162,7 +163,8 @@ test_that("calc_volume_overlap() uses occupied, not spanned, voxel volume", {
   a <- make_voxel(cbind(rep(1, 9), rep(1, 9), rep(1, 9), rep(NA, 9)), depths)
   b <- make_voxel(cbind(rep(1, 9), rep(NA, 9), rep(1, 9), rep(NA, 9)), depths)
 
-  result <- calc_volume_overlap(a, b)
+  # Under "top", each of the three upper levels stands for 100 m.
+  result <- calc_volume_overlap(a, b, bounds = "top")
   vals <- terra::values(result)
 
   # Depth layers are summary bounds: B spans 0-200 m despite the gap.

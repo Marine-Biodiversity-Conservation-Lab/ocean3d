@@ -323,14 +323,19 @@ as_voxel <- function(x, depths = NULL, varname = "value",
 #' not of the levels themselves, so `bounds` selects the convention:
 #'
 #' \itemize{
-#'   \item `"top"` (the default) runs each slab from its level down to the next,
-#'     so a level names the top of what it stands for. Levels `c(0, 100, 200)`
-#'     give slabs `0-100`, `100-200`.
-#'   \item `"midpoint"` puts the edges halfway between neighbouring levels, so a
-#'     level sits in the middle of what it stands for. This is the World Ocean
-#'     Atlas convention: `0, 5, 10, ...` the 0 m layer covers `0-2.5` m, the
-#'     5 m layer `2.5-7.5` m, the 10 m layer `7.5-12.5` m, and so on.
+#'   \item `"midpoint"` (the default) puts the edges halfway between
+#'     neighbouring levels, so a level sits in the middle of what it stands
+#'     for. This is the World Ocean Atlas convention: `0, 5, 10, ...` the 0 m
+#'     layer covers `0-2.5` m, the 5 m layer `2.5-7.5` m, the 10 m layer
+#'     `7.5-12.5` m, and so on. Model output such as Copernicus Marine also
+#'     stores values at the middle of each layer.
+#'   \item `"top"` runs each slab from its level down to the next, so a level
+#'     names the top of what it stands for. Levels `c(0, 100, 200)` give slabs
+#'     `0-100`, `100-200`.
 #' }
+#'
+#' When the dataset gives the real edges (a netCDF file's depth bounds), pass
+#' them as `depth_bounds` instead.
 #'
 #' Under either convention the slabs cover the span from the shallowest level to
 #' the deepest and no further: outer edges are clamped to `range(depths)` rather
@@ -360,9 +365,9 @@ as_voxel <- function(x, depths = NULL, varname = "value",
 #'   the depths a cell occupies. Any function meeting the contract in
 #'   [voxel_profiles] works, including your own.
 #' @param bounds How to place the edges of the slab each depth level stands for.
-#'   `"top"` (the default) runs the slab from the level down to the next, so the
-#'   level is its shallow edge; `"midpoint"` puts the edges halfway between
-#'   neighbouring levels. Under both, the outer edges are clamped to
+#'   `"midpoint"` (the default) puts the edges halfway between neighbouring
+#'   levels; `"top"` runs the slab from the level down to the next, so the
+#'   level is its shallow edge. Under both, the outer edges are clamped to
 #'   `range(depths)` rather than extrapolated. Not used when `depth_bounds`
 #'   is given.
 #' @param varname Name to use for depth layer, taking on form of
@@ -400,12 +405,19 @@ as_voxel <- function(x, depths = NULL, varname = "value",
 #'                     varname = "time")
 #' )
 #'
-#' # the same envelope read against WOA-style layer bounds: [60, 70] sits in the
-#' # 50-150 m slab of the 100 m level, where the default puts it at 0-100 m
+#' # where a slab's edges fall decides the level: [60, 70] sits in the 50-150 m
+#' # slab of the 100 m level by default (WOA-style), but in the 0-100 m slab of
+#' # the 0 m level under "top"
 #' shallow <- as_envelope(fp, depth_min = 60, depth_max = 70)
 #' terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200)))
 #' terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200),
-#'                                 bounds = "midpoint"))
+#'                                 bounds = "top"))
+#'
+#' # or give the dataset's own edges
+#' terra::values(envelope_to_voxel(
+#'   shallow, depths = c(0, 100, 200),
+#'   depth_bounds = cbind(c(0, 65, 150), c(65, 150, 250))
+#' ))
 #'
 #' # a per-cell magnitude comes in as a raster: split each cell's effort evenly
 #' # over the depths it occupies, conserving the cell total
@@ -419,7 +431,7 @@ as_voxel <- function(x, depths = NULL, varname = "value",
 #' )
 #' @export
 envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
-                              bounds = c("top", "midpoint"),
+                              bounds = c("midpoint", "top"),
                               varname = "presence", depth_bounds = NULL) {
   if (!is(x, "SpatEnvelope")) {
     stop("Input error for envelope_to_voxel(): `x` needs to be of ",

@@ -19,9 +19,9 @@ intersects_3d(x, y, ...)
 
 \S4method{intersects_3d}{SpatVoxel,SpatVoxel}(x, y)
 
-\S4method{intersects_3d}{SpatEnvelope,SpatVoxel}(x, y, bounds = c("top", "midpoint"), ...)
+\S4method{intersects_3d}{SpatEnvelope,SpatVoxel}(x, y, bounds = c("midpoint", "top"), ...)
 
-\S4method{intersects_3d}{SpatVoxel,SpatEnvelope}(x, y, bounds = c("top", "midpoint"), ...)
+\S4method{intersects_3d}{SpatVoxel,SpatEnvelope}(x, y, bounds = c("midpoint", "top"), ...)
 
 \S4method{intersects_3d}{SpatEnvelope,ANY}(x, y, ...)
 
@@ -44,9 +44,9 @@ accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxe
 inputs are envelopes.}
 
 \item{bounds}{Only when one input is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: \code{"top"} (default) or
-\code{"midpoint"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel carries
-its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
+the envelope is placed on the voxel's depth levels: \code{"midpoint"}
+(default) or \code{"top"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel
+carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 }
 \value{
 A single-layer boolean \code{SpatRaster} named \code{intersects}, on the

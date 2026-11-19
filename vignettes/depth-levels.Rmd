@@ -45,14 +45,17 @@ terra::values(envelope_to_voxel(thin, depths = c(0, 100, 200)))
 
 ## Touching is not overlapping
 
-An envelope of `[0, 100]` ends exactly where the 100 m slab begins, so it
-occupies the 0 m level alone:
+By default each level sits in the middle of its slab, so with levels at 0, 50,
+150 and 200 m one slab edge falls at 100 m, halfway between 50 and 150. An
+envelope of `[0, 100]` ends exactly where the 150 m slab begins, so it
+occupies the 0 m and 50 m levels and not the 150 m one:
 
 ```{r adjacent-upper}
+levels <- c(0, 50, 150, 200)
 upper <- as_envelope(fp, depth_min = 0, depth_max = 100)
 lower <- as_envelope(fp, depth_min = 100, depth_max = 200)
 
-terra::values(envelope_to_voxel(upper, depths = c(0, 100, 200)))
+terra::values(envelope_to_voxel(upper, depths = levels))
 ```
 
 Two envelopes that meet at 100 m therefore do not intersect. `intersects_3d()`
@@ -63,8 +66,8 @@ land on disjoint levels:
 terra::values(intersects_3d(upper, lower))
 
 terra::values(intersects_3d(
-  envelope_to_voxel(upper, depths = c(0, 100, 200)),
-  envelope_to_voxel(lower, depths = c(0, 100, 200))
+  envelope_to_voxel(upper, depths = levels),
+  envelope_to_voxel(lower, depths = levels)
 ))
 ```
 
@@ -73,9 +76,12 @@ terra::values(intersects_3d(
 Where the slab edges fall is a property of the dataset the levels came from,
 so `bounds` selects the convention:
 
-- `"top"` (the default) runs each slab from its level down to the next.
-- `"midpoint"` puts the edges halfway between neighbours. This is what World
-  Ocean Atlas levels mean, so use it with WOA data.
+- `"midpoint"` (the default) puts the edges halfway between neighbours, so
+  each level sits in the middle of its slab. This is what World Ocean Atlas
+  levels mean, and model output such as Copernicus Marine also stores values
+  at the middle of each layer.
+- `"top"` runs each slab from its level down to the next, so each level is
+  the top of its slab.
 
 An interval of `[60, 70]` lands in a different level under each:
 
@@ -84,10 +90,28 @@ shallow <- as_envelope(fp, depth_min = 60, depth_max = 70)
 
 terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200)))
 terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200),
-                                bounds = "midpoint"))
+                                bounds = "top"))
 ```
 
 The same `bounds` argument is accepted by `terra::mask()`, `intersect_3d()`,
 `intersects_3d()`, `volume()` and `calc_volume_overlap()` wherever they place
 an envelope on a voxel's depth levels. See `?envelope_to_voxel` for the full
 rule, including how the shallowest and deepest levels are clamped.
+
+## A dataset's own edges: `depth_bounds`
+
+Both conventions work the edges out from the levels. When the dataset gives
+the real edges, for example a netCDF file's depth bounds, a `SpatVoxel` can
+carry them: pass them as `depth_bounds` to `as_voxel()` or
+`envelope_to_voxel()`, one row of top and bottom per level. Functions that
+use slabs then take these edges, and `bounds` isn't used:
+
+```{r depth-bounds}
+edges <- cbind(c(0, 65, 150), c(65, 150, 250))
+v <- envelope_to_voxel(shallow, depths = c(0, 100, 200), depth_bounds = edges)
+terra::values(v)
+v@depth_edges
+```
+
+Here the 0 m level's slab runs to 65 m, so `[60, 70]` reaches into both the
+0 m and the 100 m slabs.

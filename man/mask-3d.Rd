@@ -10,13 +10,13 @@
 \alias{mask,SpatRaster,SpatVoxel-method}
 \title{Keep a raster's values inside a 3D domain}
 \usage{
-\S4method{mask}{SpatVoxel,SpatEnvelope}(x, mask, bounds = c("top", "midpoint"), ...)
+\S4method{mask}{SpatVoxel,SpatEnvelope}(x, mask, bounds = c("midpoint", "top"), ...)
 
 \S4method{mask}{SpatVoxel,SpatVoxel}(x, mask, ...)
 
 \S4method{mask}{SpatEnvelope,SpatEnvelope}(x, mask, ...)
 
-\S4method{mask}{SpatEnvelope,SpatVoxel}(x, mask, bounds = c("top", "midpoint"), ...)
+\S4method{mask}{SpatEnvelope,SpatVoxel}(x, mask, bounds = c("midpoint", "top"), ...)
 
 \S4method{mask}{SpatRaster,SpatEnvelope}(x, mask, ...)
 
@@ -32,9 +32,9 @@ it with \code{\link[=as_voxel]{as_voxel()}}.}
 \link[=SpatVoxel-class]{SpatVoxel} on the same grid as \code{x}.}
 
 \item{bounds}{Only when one side is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: \code{"top"} (default) or
-\code{"midpoint"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel carries
-its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
+the envelope is placed on the voxel's depth levels: \code{"midpoint"}
+(default) or \code{"top"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel
+carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 
 \item{...}{Passed on to \code{\link[terra:mask]{terra::mask()}}. For example, \code{inverse = TRUE}
 keeps the values \emph{outside} the domain instead.}

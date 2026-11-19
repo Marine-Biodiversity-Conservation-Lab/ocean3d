@@ -254,8 +254,8 @@ test_that("adjacent depth ranges do not intersect as voxels either", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
   b <- make_range_rast(rep(100, 9), rep(200, 9))
   depths <- c(0, 100, 200)
-  va <- envelope_to_voxel(a, depths)
-  vb <- envelope_to_voxel(b, depths)
+  va <- envelope_to_voxel(a, depths, bounds = "top")
+  vb <- envelope_to_voxel(b, depths, bounds = "top")
 
   # voxel vs voxel
   expect_identical(terra::values(intersects_3d(va, vb))[, 1], rep(FALSE, 9))
@@ -263,10 +263,12 @@ test_that("adjacent depth ranges do not intersect as voxels either", {
   expect_true(all(is.na(terra::values(intersect_3d(va, vb)))))
 
   # envelope vs voxel, both orders
-  expect_identical(terra::values(intersects_3d(a, vb))[, 1], rep(FALSE, 9))
-  expect_identical(terra::values(intersects_3d(vb, a))[, 1], rep(FALSE, 9))
-  expect_true(all(is.na(terra::values(intersect_3d(a, vb)))))
-  expect_true(all(is.na(terra::values(intersect_3d(va, b)))))
+  expect_identical(terra::values(intersects_3d(a, vb, bounds = "top"))[, 1],
+                   rep(FALSE, 9))
+  expect_identical(terra::values(intersects_3d(vb, a, bounds = "top"))[, 1],
+                   rep(FALSE, 9))
+  expect_true(all(is.na(terra::values(intersect_3d(a, vb, bounds = "top")))))
+  expect_true(all(is.na(terra::values(intersect_3d(va, b, bounds = "top")))))
 
   # and the same under the midpoint convention, with levels whose slab edge
   # falls at 100 m (halfway between 50 and 150)
@@ -284,7 +286,9 @@ test_that("adjacent depth ranges do not intersect as voxels either", {
   # boundary itself and not a wider gap
   c_ <- make_range_rast(rep(99, 9), rep(200, 9))
   expect_identical(
-    terra::values(intersects_3d(va, envelope_to_voxel(c_, depths)))[, 1],
+    terra::values(intersects_3d(
+      va, envelope_to_voxel(c_, depths, bounds = "top")
+    ))[, 1],
     rep(TRUE, 9)
   )
 })

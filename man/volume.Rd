@@ -14,7 +14,7 @@ volume(x, ...)
 
 \S4method{volume}{SpatEnvelope}(x, ...)
 
-\S4method{volume}{SpatVoxel}(x, bounds = c("top", "midpoint"))
+\S4method{volume}{SpatVoxel}(x, bounds = c("midpoint", "top"))
 
 \S4method{volume}{SpatRaster}(x, ...)
 }
@@ -28,13 +28,13 @@ rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[
 for an envelope.}
 
 \item{bounds}{SpatVoxel only. What each depth level stands for vertically:
-\code{"top"} (default) treats the level as the top of its slab, so the slab
-runs down to the next level; \code{"midpoint"} puts the level in the middle,
-with edges halfway to each neighbour (the World Ocean Atlas convention).
-Under \code{"top"} the deepest level has no next level and contributes no
-volume. Outer edges are clamped to \code{range(depths)} under both. Same
-argument, same meaning, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used for a
-voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
+\code{"midpoint"} (default) puts the level in the middle of its slab, with
+edges halfway to each neighbour (the World Ocean Atlas convention);
+\code{"top"} treats the level as the top of its slab, so the slab runs down to
+the next level. Under \code{"top"} the deepest level has no next level and
+contributes no volume. Outer edges are clamped to \code{range(depths)} under
+both. Same argument, same meaning, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used
+for a voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 }
 \value{
 Numeric of length 1. Total volume in km³.
@@ -73,8 +73,8 @@ terra::values(fp) <- c(1, 1, 1, NA)
 e <- as_envelope(fp, depth_min = 0, depth_max = 200)
 volume(e)
 
-# 3D: the same domain on three levels. Under "top" the slabs are 100 m,
-# 100 m and 0 m, so the discretized volume matches exactly here.
+# 3D: the same domain on three levels. The slabs are 50 m, 100 m and 50 m,
+# so the discretized volume matches exactly here.
 v <- envelope_to_voxel(e, depths = c(0, 100, 200))
 volume(v)
 

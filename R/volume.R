@@ -35,7 +35,7 @@ setMethod("volume", "SpatEnvelope", function(x, ...) {
 #' @export
 setMethod(
   "volume", "SpatVoxel",
-  function(x, bounds = c("top", "midpoint")) {
+  function(x, bounds = c("midpoint", "top")) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
 
@@ -105,7 +105,7 @@ setMethod(
 #' @export
 setMethod(
   "calc_volume_overlap", c("SpatVoxel", "SpatVoxel"),
-  function(x, y, bounds = c("top", "midpoint")) {
+  function(x, y, bounds = c("midpoint", "top")) {
     bounds <- match.arg(bounds)
     # Validates both inputs and checks they share a grid and depth levels.
     shared <- intersect_3d(x, y)
@@ -162,7 +162,7 @@ setMethod(
 #' @export
 setMethod(
   "calc_volume_overlap", c("SpatEnvelope", "SpatVoxel"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     calc_volume_overlap(.promote_to_voxel(x, y, bounds), y,
                         bounds = bounds, ...)
@@ -173,7 +173,7 @@ setMethod(
 #' @export
 setMethod(
   "calc_volume_overlap", c("SpatVoxel", "SpatEnvelope"),
-  function(x, y, bounds = c("top", "midpoint"), ...) {
+  function(x, y, bounds = c("midpoint", "top"), ...) {
     bounds <- match.arg(bounds)
     calc_volume_overlap(x, .promote_to_voxel(y, x, bounds),
                         bounds = bounds, ...)
