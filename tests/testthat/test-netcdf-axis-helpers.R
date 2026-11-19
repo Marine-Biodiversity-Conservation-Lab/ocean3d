@@ -138,12 +138,34 @@ test_that("spatial axes check their values and wrap whole-globe cells", {
     on.exit(ncdf4::nc_close(nc))
     .read_interval_axis(nc, axis, axis, ...)
   }
-  expect_error(read(bad_lat, "lat"), "outside \\[-90, 90\\]")
-  expect_error(read(missing_lon, "lon"), "must be finite numbers")
+  err <- expect_error(read(bad_lat, "lat"),
+                      class = "ocean3d_error_spatial_coordinates")
+  expect_match(conditionMessage(err), glue::glue(
+    "`lat` in {basename(bad_lat)} must be within [-90, 90]"
+  ), fixed = TRUE)
+  err <- expect_error(read(missing_lon, "lon"),
+                      class = "ocean3d_error_spatial_coordinates")
+  expect_match(conditionMessage(err), "`lon` in .* must be finite numbers")
   expect_error(read(globe, "lon", infer_bounds = NA), "TRUE or FALSE")
   axis <- read(globe, "lon")
   expect_equal(c(axis$lower, axis$upper), c(-170, 190))
   expect_identical(axis$basis, "explicit_bounds")
+})
+
+test_that("latitude edges past the poles are clamped to +/-90", {
+  inferred <- make_grid_file(lon = 0, lat = c(89, 90), depth = NULL,
+                             time = NULL)
+  explicit <- make_grid_file(lon = 0, lat = c(-89.5, 89.5), depth = NULL,
+                             time = NULL, lat_bounds = cbind(c(-91, 0),
+                                                             c(0, 91)))
+  on.exit(unlink(c(inferred, explicit)), add = TRUE)
+  for (f in c(inferred, explicit)) {
+    nc <- ncdf4::nc_open(f)
+    axis <- .read_interval_axis(nc, "lat", "lat")
+    ncdf4::nc_close(nc)
+    expect_identical(c(min(axis$lower), max(axis$upper)),
+                     c(if (f == inferred) 88.5 else -90, 90))
+  }
 })
 
 test_that("longitude and latitude stored out of order are rejected", {

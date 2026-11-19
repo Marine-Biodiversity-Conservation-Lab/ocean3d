@@ -1274,7 +1274,11 @@
 
   horizontal_matches <- .cached_horizontal_matches(
     horizontal_cache,
-    key = list(lon_values, lat_values, spatial_axes),
+    # Only the fields the matching reads, so files with the same grid share
+    # an entry whatever their coordinate, units or bounds names.
+    key = list(lon_values, lat_values, lapply(
+      spatial_axes, `[`, c("centres", "lower", "upper", "longitude", "basis")
+    )),
     compute = function() {
       .match_horizontal_cells(
         lon_axis = spatial_axes$lon, lat_axis = spatial_axes$lat,

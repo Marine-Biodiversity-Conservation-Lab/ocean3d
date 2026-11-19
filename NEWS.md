@@ -40,19 +40,22 @@ stop with an error when they are bad (#113):
   `bounds` attribute so edges are inferred from the centres (for example
   with NCO: `ncatted -a bounds,lon,d,, file.nc`).
 
-Point, buffer and track extraction used to accept a netCDF depth
-coordinate stored out of order (for example 50, 0, 100 m), rejecting only
-duplicate depths. They now stop with an error unless the depths are stored
-shallow to deep or deep to shallow (#147). The error names the coordinate
-and the file. Sort the file along its depth dimension before extraction.
-Longitude or latitude stored out of order already stopped with an error;
-that error now names the coordinate and the file too.
+Point and track extraction, and buffer extraction without a depth window
+(`depth_radius_m = 0`), used to accept a netCDF depth coordinate stored out
+of order (for example 50, 0, 100 m), and rejected only duplicate depths.
+They now stop with an error naming the coordinate and the file unless the
+depths run shallow to deep or deep to shallow (#147). Sort such files along
+the depth dimension before extraction. The error for longitude or latitude
+stored out of order, which already stopped extraction, now names the
+coordinate and the file too.
 
-In the diagnostics column of `extract_to_buffer()`, the `bounds` entry for
-longitude and latitude edges inferred from the centres used to read
-`"inferred_regular"` or `"inferred_irregular"`. It now reads
-`"inferred_midpoints"`, the label depth and time already use (#147). Code
-that checks for the old labels should check for `"inferred_midpoints"`.
+With `return_match_info = TRUE`, the `bounds` entry of the
+`<output>_match_info` column from `extract_to_buffer()` used to label
+longitude and latitude edges inferred from the centres
+`"inferred_regular"` or `"inferred_irregular"`. Both now read
+`"inferred_midpoints"`, the label depth and time already use, so the entry
+no longer says whether the spacing is regular (#147). Code that checks for
+the old labels should check for `"inferred_midpoints"`.
 
 `vect_to_envelope()` now stops with an error when the envelope would have no
 cells: no cell the polygons cover has `depth_max` deeper than `depth_min`.

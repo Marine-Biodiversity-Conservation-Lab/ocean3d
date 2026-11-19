@@ -107,7 +107,9 @@
 }
 
 # Stops with `ocean3d_error_axis_order` unless `values` run strictly one way,
-# so that each value is one cell (an NA counts as out of order). The only
+# so that each value is one cell. Both callers reject non-finite values
+# first (.axis_intervals() and .prepare_depth_axis()); an NA would still count
+# as out of order rather than fail inside `if`. The only
 # producer of that class, so every stored axis follows the same rule. Called
 # by .axis_intervals() (every axis read by .read_interval_axis()) and by
 # .read_depth_axis() (depth in point, buffer and track extraction).
@@ -235,11 +237,15 @@
   }
   raw <- as.vector(.get_dim_values(nc, coordinate))
   if (axis %in% c("lon", "lat")) {
-    if (!is.numeric(raw) || !length(raw) || any(!is.finite(raw))) {
-      stop("Spatial coordinates must be finite numbers.", call. = FALSE)
+    problem <- if (!is.numeric(raw) || !length(raw) || any(!is.finite(raw))) {
+      "must be finite numbers"
+    } else if (axis == "lat" && any(raw < -90 | raw > 90)) {
+      "must be within [-90, 90]"
     }
-    if (axis == "lat" && any(raw < -90 | raw > 90)) {
-      stop("Latitude coordinates are outside [-90, 90].", call. = FALSE)
+    if (!is.null(problem)) {
+      rlang::abort(glue::glue(
+        "Coordinate `{coordinate}` in {basename(nc$filename)} {problem}."
+      ), class = "ocean3d_error_spatial_coordinates", call = NULL)
     }
   }
   bounds <- .read_bounds(nc, coordinate, length(raw))
@@ -250,14 +256,14 @@
   if (axis == "lon") {
     centres <- .unwrap_longitude(raw)
     if (!is.null(bounds)) {
-      for (j in seq_along(raw)) {
-        if (abs(diff(bounds$values[, j])) >= 360) {
-          bounds$values[, j] <- centres[j] + c(-180, 180)
-        } else {
-          offsets <- (bounds$values[, j] - raw[j] + 180) %% 360 - 180
-          bounds$values[, j] <- centres[j] + offsets
-        }
-      }
+      # Each column is one cell: its edges as offsets from the stored centre,
+      # wrapped to [-180, 180) and moved to the unwrapped centre.
+      edges <- bounds$values
+      whole <- abs(edges[1L, ] - edges[2L, ]) >= 360
+      edges <- rep(centres, each = 2L) +
+        .normalise_longitude(edges - rep(raw, each = 2L))
+      edges[, whole] <- rbind(centres[whole] - 180, centres[whole] + 180)
+      bounds$values <- edges
     }
   } else if (axis == "lat") {
     centres <- raw
