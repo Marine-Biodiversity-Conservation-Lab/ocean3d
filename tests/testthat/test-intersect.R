@@ -38,31 +38,32 @@ test_that("intersect_3d() on envelopes is empty where domains do not meet", {
   expect_true(all(is.na(terra::values(intersect_3d(top, bottom)))))
 })
 
-test_that("intersect_3d() on envelopes keeps only cells present in both", {
+test_that("intersect_3d() keeps only cells present in both, either way round", {
+  # A is absent from cell 3
   a <- make_range_rast(c(0, 0, NA, 0, 0, 0, 0, 0, 0),
                        c(100, 100, NA, 100, 100, 100, 100, 100, 100))
-  b <- make_range_rast(c(NA, 50, 50, 50, 50, 50, 50, 50, 50),
-                       c(NA, 200, 200, 200, 200, 200, 200, 200, 200))
 
-  out <- intersect_3d(a, b)
-  expect_identical(terra::values(out)[, "depth_min"],
-                   c(NA, 50, NA, rep(50, 6)))
-  expect_identical(terra::values(out)[, "depth_max"],
-                   c(NA, 100, NA, rep(100, 6)))
-})
+  cases <- list(
+    list(label = "B absent from cell 1",
+         b = make_range_rast(c(NA, 50, 50, 50, 50, 50, 50, 50, 50),
+                             c(NA, 200, 200, 200, 200, 200, 200, 200, 200)),
+         min = c(NA, 50, NA, rep(50, 6)), max = c(NA, 100, NA, rep(100, 6))),
+    list(label = "B shallower than A in cell 2",
+         b = make_range_rast(rep(50, 9),
+                             c(200, 60, 200, 200, 200, 200, 200, 200, 200)),
+         min = c(50, 50, NA, rep(50, 6)), max = c(100, 60, NA, rep(100, 6)))
+  )
+  for (case in cases) {
+    out <- intersect_3d(a, case$b)
 
-test_that("intersect_3d() is symmetric", {
-  a <- make_range_rast(c(0, 0, NA, 0, 0, 0, 0, 0, 0),
-                       c(100, 100, NA, 100, 100, 100, 100, 100, 100))
-  b <- make_range_rast(rep(50, 9),
-                       c(200, 60, 200, 200, 200, 200, 200, 200, 200))
-  expect_identical(terra::values(intersect_3d(a, b)),
-                   terra::values(intersect_3d(b, a)))
-})
-
-test_that("intersect_3d() rejects voxel-only arguments for two envelopes", {
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  expect_error(intersect_3d(a, a, bounds = "top"), "unused argument")
+    expect_identical(terra::values(out)[, "depth_min"], case$min,
+                     label = case$label)
+    expect_identical(terra::values(out)[, "depth_max"], case$max,
+                     label = case$label)
+    # symmetric
+    expect_identical(terra::values(intersect_3d(case$b, a)),
+                     terra::values(out), label = case$label)
+  }
 })
 
 # ---- intersect_3d: voxels and mixed input -----------------------------------
@@ -84,14 +85,6 @@ test_that("intersect_3d() on voxels is the co-occupied set of levels", {
   expect_identical(depths(out), depths)
   expect_identical(unname(terra::values(out)),
                unname(cbind(c(1, NA, NA), c(NA, NA, NA), c(1, NA, NA))))
-})
-
-test_that("intersect_3d() on voxels requires shared depths", {
-  a <- make_voxel(cbind(c(5, 5, 5), c(5, 5, 5)), c(0, 100),
-                  ncol = 3, nrow = 1, varname = "t")
-  c3 <- make_voxel(cbind(c(1, 1, 1), c(1, 1, 1), c(1, 1, 1)), c(0, 100, 200),
-                   ncol = 3, nrow = 1)
-  expect_error(intersect_3d(a, c3), "same depth levels")
 })
 
 test_that("intersect_3d() on mixed input promotes the envelope to a voxel", {
@@ -148,47 +141,22 @@ test_that("intersect_3d() restricts a voxel to a footprint raster", {
 test_that("intersect_3d() accepts polygons as SpatVector, sf and sfc", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
   poly <- make_left_polygon()
+  poly_sf <- sf::st_as_sf(poly)
   expected_min <- c(0, 0, NA, 0, 0, NA, 0, 0, NA)
 
-  expect_identical(terra::values(intersect_3d(a, poly))[, "depth_min"],
-                   expected_min)
-  expect_identical(terra::values(intersect_3d(poly, a))[, "depth_min"],
-                   expected_min)
-
-  poly_sf <- sf::st_as_sf(poly)
-  expect_identical(terra::values(intersect_3d(a, poly_sf))[, "depth_min"],
-                   expected_min)
-  expect_identical(
-    terra::values(intersect_3d(a, sf::st_geometry(poly_sf)))[, "depth_min"],
-    expected_min
+  cases <- list(
+    "SpatVector" = list(a, poly),
+    "SpatVector first" = list(poly, a),
+    "sf" = list(a, poly_sf),
+    "sfc" = list(a, sf::st_geometry(poly_sf)),
+    # polygons in another CRS are projected onto the grid
+    "SpatVector in EPSG:4326" = list(a, terra::project(poly, "EPSG:4326"))
   )
-})
-
-test_that("intersect_3d() projects polygons in another CRS onto the grid", {
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  poly_ll <- terra::project(make_left_polygon(), "EPSG:4326")
-
-  expect_identical(
-    terra::values(intersect_3d(a, poly_ll))[, "depth_min"],
-    terra::values(intersect_3d(a, make_left_polygon()))[, "depth_min"]
-  )
-})
-
-test_that("intersect_3d() rejects input it cannot read as a footprint", {
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  fp <- make_grid(vals = rep(1, 9))
-
-  expect_error(intersect_3d(fp, fp), "neither `x` nor `y`")
-  expect_error(intersect_3d(a, "hello"), "SpatVector, sf, sfc")
-  expect_error(intersect_3d(a, c(fp, fp)), "single-layer footprint")
-  small <- make_grid(vals = rep(1, 4), ncol = 2, nrow = 2)
-  expect_error(intersect_3d(a, small), "same grid")
-})
-
-test_that("intersect_3d() requires a shared grid for two 3D inputs", {
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  b <- make_range_rast(rep(0, 4), rep(100, 4), ncol = 2, nrow = 2)
-  expect_error(intersect_3d(a, b), "same grid")
+  for (form in names(cases)) {
+    out <- do.call(intersect_3d, cases[[form]])
+    expect_identical(terra::values(out)[, "depth_min"], expected_min,
+                     label = form)
+  }
 })
 
 # ---- intersect_3d: composition with volume ----------------------------------
@@ -230,20 +198,27 @@ truth_envelopes <- function() {
 
 test_that("intersects_3d() on envelopes gives the tri-state truth table", {
   e <- truth_envelopes()
-  out <- intersects_3d(e$a, e$b)
 
-  expect_identical(class(out)[[1]], "SpatRaster")
-  expect_true(terra::is.bool(out))
-  expect_named(out, "intersects")
-  expect_identical(terra::values(out)[, 1], c(TRUE, FALSE, FALSE, NA))
-  expect_identical(terra::values(intersects_3d(e$b, e$a))[, 1],
-                   c(TRUE, FALSE, FALSE, NA))
-})
+  cases <- list(
+    list(label = "truth table", a = e$a, b = e$b,
+         expected = c(TRUE, FALSE, FALSE, NA)),
+    # touching intervals share an edge and no water
+    list(label = "touching intervals",
+         a = make_range_rast(rep(0, 9), rep(100, 9)),
+         b = make_range_rast(rep(100, 9), rep(200, 9)),
+         expected = rep(FALSE, 9))
+  )
+  for (case in cases) {
+    out <- intersects_3d(case$a, case$b)
 
-test_that("intersects_3d() treats touching intervals as not intersecting", {
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  b <- make_range_rast(rep(100, 9), rep(200, 9))
-  expect_identical(terra::values(intersects_3d(a, b))[, 1], rep(FALSE, 9))
+    expect_identical(class(out)[[1]], "SpatRaster", label = case$label)
+    expect_true(terra::is.bool(out), label = case$label)
+    expect_named(out, "intersects", label = case$label)
+    expect_identical(terra::values(out)[, 1], case$expected,
+                     label = case$label)
+    expect_identical(terra::values(intersects_3d(case$b, case$a))[, 1],
+                     case$expected, label = case$label)
+  }
 })
 
 test_that("adjacent depth ranges do not intersect as voxels either", {
@@ -359,16 +334,6 @@ test_that("intersects_3d() with 2D input tests presence on both sides", {
                         c(100, 100, 100, NA, NA, NA, 100, 100, 100))
   expect_identical(terra::values(intersects_3d(a9, make_left_polygon()))[, 1],
                c(TRUE, TRUE, FALSE, FALSE, FALSE, NA, TRUE, TRUE, FALSE))
-})
-
-test_that("intersects_3d() rejects 2D-only input and mismatched grids", {
-  fp <- make_grid(vals = rep(1, 9))
-  expect_error(intersects_3d(fp, fp), "neither `x` nor `y`")
-
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  b <- make_range_rast(rep(0, 4), rep(100, 4), ncol = 2, nrow = 2)
-  expect_error(intersects_3d(a, b), "same grid")
-  expect_error(intersects_3d(a, a, bounds = "top"), "unused argument")
 })
 
 # ---- mask -------------------------------------------------------------------
@@ -499,10 +464,72 @@ test_that("mask() by 2D input applies terra's mask to 3D and plain rasters", {
   expect_identical(class(mask(plain, fp))[[1]], "SpatRaster")
 })
 
-test_that("mask() names the offending argument for a grid mismatch", {
+# ---- input errors -----------------------------------------------------------
+
+test_that("the 3D verbs reject input they cannot compare", {
+  a <- make_range_rast(rep(0, 9), rep(100, 9))
+  # an envelope on another grid
+  a_2x2 <- make_range_rast(rep(0, 4), rep(100, 4), ncol = 2, nrow = 2)
+  fp <- make_grid(vals = rep(1, 9))
+  small <- make_grid(vals = rep(1, 4), ncol = 2, nrow = 2)
+  t2 <- make_voxel(cbind(c(5, 5, 5), c(5, 5, 5)), c(0, 100),
+                   ncol = 3, nrow = 1, varname = "t")
+  p3 <- make_voxel(cbind(c(1, 1, 1), c(1, 1, 1), c(1, 1, 1)), c(0, 100, 200),
+                   ncol = 3, nrow = 1)
+  v100 <- make_voxel(cbind(rep(1, 9), rep(1, 9)), depths = c(0, 100))
+  v200 <- make_voxel(cbind(rep(1, 9), rep(1, 9)), depths = c(0, 200))
   field <- make_field()
-  e <- make_range_rast(rep(0, 4), rep(100, 4), ncol = 2, nrow = 2)
-  expect_error(mask(field, e), "`x` and `mask` must be on the same grid")
+
+  # Carrying the right layer names is not the same as being a SpatEnvelope.
+  bare <- methods::as(a, "SpatRaster")
+  expect_s4_class(bare, "SpatRaster")
+  expect_false(methods::is(bare, "SpatEnvelope"))
+
+  cases <- list(
+    # voxel-only arguments for envelopes
+    list(call = function() intersect_3d(a, a, bounds = "top"),
+         pattern = "unused argument"),
+    list(call = function() intersects_3d(a, a, bounds = "top"),
+         pattern = "unused argument"),
+    list(call = function() volume(a, bounds = "midpoint"),
+         pattern = "unused argument"),
+    list(call = function() calc_volume_overlap(a, a, bounds = "midpoint"),
+         pattern = "unused argument"),
+    # voxels on different depth levels
+    list(call = function() intersect_3d(t2, p3), pattern = "same depth levels"),
+    list(call = function() calc_volume_overlap(v100, v200),
+         pattern = "same depth levels"),
+    # inputs on different grids
+    list(call = function() intersect_3d(a, a_2x2), pattern = "same grid"),
+    list(call = function() intersects_3d(a, a_2x2), pattern = "same grid"),
+    list(call = function() calc_volume_overlap(a, a_2x2),
+         pattern = "same grid"),
+    list(call = function() intersect_3d(a, small), pattern = "same grid"),
+    # mask() names the offending argument
+    list(call = function() mask(field, a_2x2),
+         pattern = "`x` and `mask` must be on the same grid"),
+    # input that cannot be read as a footprint
+    list(call = function() intersect_3d(fp, fp),
+         pattern = "neither `x` nor `y`"),
+    list(call = function() intersects_3d(fp, fp),
+         pattern = "neither `x` nor `y`"),
+    list(call = function() intersect_3d(a, "hello"),
+         pattern = "SpatVector, sf, sfc"),
+    list(call = function() intersect_3d(a, c(fp, fp)),
+         pattern = "single-layer footprint"),
+    # bare SpatRasters, alone or with a real envelope in either position
+    list(call = function() volume(bare), pattern = "not a bare SpatRaster"),
+    list(call = function() calc_volume_overlap(bare, bare),
+         pattern = "not a bare SpatRaster"),
+    list(call = function() calc_volume_overlap(a, bare),
+         pattern = "not a bare SpatRaster"),
+    list(call = function() calc_volume_overlap(bare, a),
+         pattern = "not a bare SpatRaster")
+  )
+  for (case in cases) {
+    expect_error(case$call(), case$pattern,
+                 label = paste(deparse(body(case$call)), collapse = " "))
+  }
 })
 
 test_that("the query verbs reject a tagged object that is no longer valid", {

@@ -1,24 +1,36 @@
-test_that("calc_volume_overlap() overlap never exceeds either range volume", {
-  # Range A: covers all 9 cells, 0-100m depth
-  a <- make_range_rast(
-    depth_min_vals = rep(0, 9),
-    depth_max_vals = rep(100, 9)
+test_that("calc_volume_overlap() totals match hand-computed volumes", {
+  # Every cell is 1 km x 1 km, so each total is cells x thickness in km.
+  depths <- c(0, 50, 100, 150)
+  centre <- c(NA, NA, NA, 1, 1, 1, NA, NA, NA)
+  # A covers all 9 cells, 0-100 m
+  a <- make_range_rast(rep(0, 9), rep(100, 9))
+
+  cases <- list(
+    # B covers only the centre 3 cells, 50-200 m: they share 50-100 m there
+    list(label = "envelopes",
+         a = a, b = make_range_rast(50 * centre, 200 * centre),
+         expected = c(0.9, 0.45, 0.15)),
+    # full overlap when the ranges are identical
+    list(label = "identical envelopes", a = a, b = a,
+         expected = c(0.9, 0.9, 0.9)),
+    # A occupies 0 and 50 m (0-100 m) in every cell; B occupies 0, 50 and
+    # 100 m (0-150 m) in the centre 3 cells
+    list(label = "voxels",
+         a = make_voxel(cbind(rep(1, 9), rep(1, 9), rep(NA, 9), rep(NA, 9)),
+                        depths),
+         b = make_voxel(cbind(centre, centre, centre, rep(NA, 9)), depths),
+         expected = c(0.9, 0.45, 0.3))
   )
+  for (case in cases) {
+    result <- calc_volume_overlap(case$a, case$b)
+    totals <- terra::global(
+      result[[c("volume_a", "volume_b", "volume_overlap")]], "sum",
+      na.rm = TRUE
+    )$sum
 
-  # Range B: covers only the center 3 cells, 50-200m depth
-  b <- make_range_rast(
-    depth_min_vals = c(NA, NA, NA, 50, 50, 50, NA, NA, NA),
-    depth_max_vals = c(NA, NA, NA, 200, 200, 200, NA, NA, NA)
-  )
-
-  result <- calc_volume_overlap(a, b)
-  vol_layers <- result[[c("volume_a", "volume_b", "volume_overlap")]]
-  totals <- terra::global(vol_layers, "sum", na.rm = TRUE)$sum
-  names(totals) <- c("volume_a", "volume_b", "volume_overlap")
-
-  expect_lte(totals[["volume_overlap"]], totals[["volume_a"]])
-  expect_lte(totals[["volume_overlap"]], totals[["volume_b"]])
-  expect_gt(totals[["volume_overlap"]], 0)
+    expect_identical(totals, case$expected, tolerance = 0.01,
+                     label = case$label)
+  }
 })
 
 test_that("calc_volume_overlap() is NA where ranges share no cells", {
@@ -64,93 +76,56 @@ test_that("calc_volume_overlap() overlap is 0 for disjoint depth ranges", {
   expect_true(all(is.na(terra::values(result[["depth_max_overlap"]]))))
 })
 
-test_that("calc_volume_overlap() full overlap when ranges are identical", {
-  a <- make_range_rast(
-    depth_min_vals = rep(0, 9),
-    depth_max_vals = rep(100, 9)
+test_that("volume() sums the occupied water in km^3", {
+  # Every cell is 1 km x 1 km, so a volume is 9 cells x thickness in km.
+  # Voxel levels stand for slabs: under "top" a level names the top of its
+  # slab, under "midpoint" the edges fall halfway to each neighbour.
+  # 9 cells, occupied at 0 m and 100 m but not at 300 m
+  two_levels <- make_voxel(cbind(rep(1, 9), rep(1, 9), rep(NA, 9)),
+                           depths = c(0, 100, 300))
+  # occupied at 0, 200 and 300 m, with a gap at 100 m
+  gap <- make_voxel(cbind(rep(1, 9), rep(NA, 9), rep(1, 9), rep(1, 9)),
+                    depths = c(0, 100, 200, 300))
+  e200 <- make_range_rast(rep(0, 9), rep(200, 9))
+  scores <- make_voxel(cbind(rep(0.9, 9), rep(0.1, 9), rep(0.9, 9)),
+                       depths = c(0, 100, 200))
+
+  cases <- list(
+    list(label = "envelope", x = make_range_rast(rep(0, 9), rep(100, 9)),
+         expected = 0.9),
+    # 0 m stands for 0-100 m and 100 m for 100-300 m: 300 m per cell
+    list(label = "voxel, top", x = two_levels, expected = 9 * 0.3),
+    # 0 m stands for 0-50 m and 100 m for 50-200 m: 200 m per cell
+    list(label = "voxel, midpoint", x = two_levels, bounds = "midpoint",
+         expected = 9 * 0.2),
+    # slabs are 100, 100, 100 and 0 m, so the occupied levels give 100 +
+    # 100 + 0 m
+    list(label = "voxel with an interior gap", x = gap, expected = 9 * 0.2),
+    # voxel_to_envelope() is lossy in exactly this way: it spans 0-300 m solid
+    list(label = "the gap filled by voxel_to_envelope()",
+         x = voxel_to_envelope(gap), expected = 9 * 0.3),
+    # Under "top" the levels are 0, 100 and 200 m with slabs 100, 100 and 0 m,
+    # so the discretization neither loses nor invents any water here.
+    list(label = "envelope_to_voxel() on aligned levels",
+         x = envelope_to_voxel(e200, depths = c(0, 100, 200)),
+         expected = volume(e200)),
+    # Default !is.na() counts all three levels (100 + 100 + 0 m). A threshold
+    # drops the middle one, leaving only the 100 m slab the surface level
+    # names.
+    list(label = "default occupancy", x = scores, expected = 9 * 0.2),
+    list(label = "occupied where x > 0.5",
+         x = occupied(scores, function(x) x > 0.5), expected = 9 * 0.1),
+    list(label = "occupied nowhere",
+         x = occupied(scores, function(x) x > 0.99), expected = 0)
   )
-
-  result <- calc_volume_overlap(a, a)
-  vol_layers <- result[[c("volume_a", "volume_b", "volume_overlap")]]
-  totals <- terra::global(vol_layers, "sum", na.rm = TRUE)$sum
-  names(totals) <- c("volume_a", "volume_b", "volume_overlap")
-
-  expect_identical(totals[["volume_overlap"]], totals[["volume_a"]])
-  expect_identical(totals[["volume_overlap"]], totals[["volume_b"]])
-})
-
-test_that("volume() returns correct value for uniform grid", {
-  # 9 cells, each 1km x 1km, 100m depth = 9 * 1 * 0.1 = 0.9 km³
-  r <- make_range_rast(
-    depth_min_vals = rep(0, 9),
-    depth_max_vals = rep(100, 9)
-  )
-
-  vol <- volume(r)
-
-  # Cell area depends on projection; just check it's positive and reasonable
-  expect_gt(vol, 0)
-  # With 1km cells: 9 cells * 1 km² * 0.1 km depth = 0.9 km³
-  expect_identical(vol, 0.9, tolerance = 0.01)
-})
-
-# ---- SpatVoxel volume -------------------------------------------------------
-
-test_that("volume() sums slab thicknesses over occupied voxels", {
-  # 9 cells, occupied at 0 m and 100 m but not at 300 m.
-  v <- make_voxel(
-    vals = cbind(rep(1, 9), rep(1, 9), rep(NA, 9)),
-    depths = c(0, 100, 300)
-  )
-
-  # "top": the level names the top of its slab, so 0 m stands for 0-100 m and
-  # 100 m for 100-300 m => 300 m of occupied water per cell.
-  expect_identical(volume(v), 9 * 0.3, tolerance = 0.01)
-
-  # "midpoint": edges fall halfway to each neighbour, so 0 m stands for 0-50 m
-  # and 100 m for 50-200 m => 200 m per cell.
-  expect_identical(volume(v, bounds = "midpoint"), 9 * 0.2, tolerance = 0.01)
-})
-
-test_that("volume() excludes interior gaps that an envelope would fill", {
-  # Occupied at 0, 200 and 300 m, with a gap at 100 m.
-  v <- make_voxel(
-    vals = cbind(rep(1, 9), rep(NA, 9), rep(1, 9), rep(1, 9)),
-    depths = c(0, 100, 200, 300)
-  )
-
-  # Slabs are 100, 100, 100 and 0 m, so the occupied levels give 100 + 100 + 0.
-  expect_identical(volume(v), 9 * 0.2, tolerance = 0.01)
-
-  # voxel_to_envelope() is lossy in exactly this way: it spans 0-300 m solid.
-  expect_identical(volume(voxel_to_envelope(v)), 9 * 0.3, tolerance = 0.01)
-  expect_lt(volume(v), volume(voxel_to_envelope(v)))
-})
-
-test_that("volume() is unchanged by envelope_to_voxel() on aligned levels", {
-  e <- make_range_rast(
-    depth_min_vals = rep(0, 9),
-    depth_max_vals = rep(200, 9)
-  )
-
-  # Under "top" the levels are 0, 100 and 200 m with slabs 100, 100 and 0 m,
-  # so the discretization neither loses nor invents any water here.
-  v <- envelope_to_voxel(e, depths = c(0, 100, 200))
-  expect_identical(volume(v), volume(e))
-})
-
-test_that("volume() honours a custom occupancy predicate", {
-  v <- make_voxel(
-    vals = cbind(rep(0.9, 9), rep(0.1, 9), rep(0.9, 9)),
-    depths = c(0, 100, 200)
-  )
-
-  # Default !is.na() counts all three levels (100 + 100 + 0 m). A threshold
-  # drops the middle one, leaving only the 100 m slab the surface level names.
-  expect_identical(volume(v), 9 * 0.2, tolerance = 0.01)
-  expect_identical(volume(occupied(v, function(x) x > 0.5)), 9 * 0.1,
-               tolerance = 0.01)
-  expect_identical(volume(occupied(v, function(x) x > 0.99)), 0)
+  for (case in cases) {
+    vol <- if (is.null(case$bounds)) {
+      volume(case$x)
+    } else {
+      volume(case$x, bounds = case$bounds)
+    }
+    expect_identical(vol, case$expected, tolerance = 0.01, label = case$label)
+  }
 })
 
 # ---- SpatVoxel and mixed overlap --------------------------------------------
@@ -181,28 +156,10 @@ test_that("calc_volume_overlap() uses occupied, not spanned, voxel volume", {
   )
 })
 
-test_that("calc_volume_overlap() overlap never exceeds either voxel's volume", {
-  depths <- c(0, 50, 100, 150)
-  a <- make_voxel(cbind(rep(1, 9), rep(1, 9), rep(NA, 9), rep(NA, 9)), depths)
-  b <- make_voxel(
-    cbind(c(NA, NA, NA, 1, 1, 1, NA, NA, NA),
-          c(NA, NA, NA, 1, 1, 1, NA, NA, NA),
-          c(NA, NA, NA, 1, 1, 1, NA, NA, NA),
-          rep(NA, 9)),
-    depths
-  )
-
-  result <- calc_volume_overlap(a, b)
-  totals <- terra::global(
-    result[[c("volume_a", "volume_b", "volume_overlap")]], "sum", na.rm = TRUE
-  )$sum
-
-  expect_lte(totals[3], totals[1])
-  expect_lte(totals[3], totals[2])
-  expect_gt(totals[3], 0)
-})
-
 test_that("calc_volume_overlap() promotes an envelope to the voxel's levels", {
+  # Either argument may be the envelope; both give the all-voxel answer. terra
+  # keeps the input's class on `[[` and `c()`, so the nine-layer stack used to
+  # come back tagged SpatEnvelope while failing that class's rules.
   depths <- c(0, 50, 100, 150, 200)
 
   a <- make_range_rast(rep(0, 9), rep(100, 9))
@@ -210,73 +167,20 @@ test_that("calc_volume_overlap() promotes an envelope to the voxel's levels", {
   av <- envelope_to_voxel(a, depths = depths)
   bv <- envelope_to_voxel(b, depths = depths)
 
-  all_voxel <- terra::values(calc_volume_overlap(av, bv))
-
-  # Either argument may be the envelope; both give the all-voxel answer.
-  expect_identical(terra::values(calc_volume_overlap(a, bv)), all_voxel)
-  expect_identical(terra::values(calc_volume_overlap(av, b)), all_voxel)
-})
-
-test_that("calc_volume_overlap() rejects voxels on different depth levels", {
-  a <- make_voxel(cbind(rep(1, 9), rep(1, 9)), depths = c(0, 100))
-  b <- make_voxel(cbind(rep(1, 9), rep(1, 9)), depths = c(0, 200))
-
-  expect_error(calc_volume_overlap(a, b), "same depth levels")
-})
-
-# ---- output class -----------------------------------------------------------
-
-test_that("calc_volume_overlap() returns a plain SpatRaster", {
-  # terra keeps the input's class on `[[` and `c()`, so the nine-layer stack
-  # used to come back tagged SpatEnvelope while failing that class's rules.
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  b <- make_range_rast(rep(50, 9), rep(200, 9))
-  depths <- c(0, 50, 100, 150, 200)
-  va <- envelope_to_voxel(a, depths)
-  vb <- envelope_to_voxel(b, depths)
-
-  for (out in list(calc_volume_overlap(a, b), calc_volume_overlap(va, vb),
-                   calc_volume_overlap(a, vb), calc_volume_overlap(va, b))) {
-    expect_identical(class(out)[[1]], "SpatRaster")
-    expect_identical(terra::nlyr(out), 9)
+  all_voxel <- calc_volume_overlap(av, bv)
+  cases <- list(
+    "two voxels" = all_voxel,
+    "two envelopes" = calc_volume_overlap(a, b),
+    "envelope and voxel" = calc_volume_overlap(a, bv),
+    "voxel and envelope" = calc_volume_overlap(av, b)
+  )
+  for (combo in names(cases)) {
+    out <- cases[[combo]]
+    expect_identical(class(out)[[1]], "SpatRaster", label = combo)
+    expect_identical(terra::nlyr(out), 9, label = combo)
   }
-})
-
-# ---- input contract ---------------------------------------------------------
-
-test_that("volume functions reject bare SpatRasters", {
-  dmin <- make_grid()
-  terra::values(dmin) <- rep(0, 9)
-  names(dmin) <- "depth_min"
-  dmax <- terra::rast(dmin)
-  terra::values(dmax) <- rep(100, 9)
-  names(dmax) <- "depth_max"
-
-  # Carrying the right layer names is not the same as being a SpatEnvelope.
-  bare <- c(dmin, dmax)
-  expect_s4_class(bare, "SpatRaster")
-  expect_false(methods::is(bare, "SpatEnvelope"))
-
-  expect_error(volume(bare), "not a bare SpatRaster")
-  expect_error(calc_volume_overlap(bare, bare), "not a bare SpatRaster")
-
-  # Mixed with a real envelope, in either position.
-  e <- as_envelope(bare)
-  expect_error(calc_volume_overlap(e, bare), "not a bare SpatRaster")
-  expect_error(calc_volume_overlap(bare, e), "not a bare SpatRaster")
-})
-
-test_that("volume functions reject inputs on different grids", {
-  a <- make_range_rast(rep(0, 9), rep(100, 9))
-  b <- make_range_rast(rep(0, 16), rep(100, 16), ncol = 4, nrow = 4)
-
-  expect_error(calc_volume_overlap(a, b), "same grid")
-})
-
-test_that("voxel-only arguments are an error for an envelope", {
-  e <- make_range_rast(rep(0, 9), rep(100, 9))
-
-  expect_error(volume(e, bounds = "midpoint"), "unused argument")
-  expect_error(calc_volume_overlap(e, e, bounds = "midpoint"),
-               "unused argument")
+  expect_identical(terra::values(cases[["envelope and voxel"]]),
+                   terra::values(all_voxel))
+  expect_identical(terra::values(cases[["voxel and envelope"]]),
+                   terra::values(all_voxel))
 })
