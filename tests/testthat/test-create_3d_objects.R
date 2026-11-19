@@ -1376,6 +1376,11 @@ test_that("depth edges survive terra operations that keep the class", {
   expect_true(methods::validObject(mixed))
   expect_null(edges_of(mixed))
   expect_equal(volume(mixed), volume(make_voxel(1, edge_depths)))
+  # A subset's rows for layers it dropped don't stand in for another voxel's
+  # edges at the same depth: v[[1]] still holds the 1.5 m row (1-2 m).
+  other <- as_voxel(make_voxel(1, edge_depths[2]),
+                    depth_bounds = cbind(1, 2.5))
+  expect_equal(edges_of(c(v[[1]], other)), rbind(c(0, 1), c(1, 2.5)))
 
   # Re-wrapping keeps them; renaming the layers to other depths drops them.
   expect_identical(as_voxel(v), v)

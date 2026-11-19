@@ -373,10 +373,11 @@ setMethod(
     .check_3d(x, "x")
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
-    .shared_depths(x, mask)
-    keep <- .presence_voxel(.voxel_occupancy(mask),
-                            .parse_depth_layers(mask))
-    as_voxel(.mask_plain(x, keep, ...), depth_bounds = depth_bounds(x))
+    # The result keeps the pair's shared edges, whichever voxel carries them,
+    # as intersect_3d() does.
+    shared <- .shared_depths(x, mask)
+    keep <- .presence_voxel(.voxel_occupancy(mask), shared$depths)
+    as_voxel(.mask_plain(x, keep, ...), depth_bounds = shared$depth_bounds)
   }
 )
 

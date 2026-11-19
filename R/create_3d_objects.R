@@ -272,9 +272,14 @@ as_voxel <- function(x, depths = NULL, varname = "value",
 #' @export
 setMethod("c", "SpatVoxel", function(x, ...) {
   out <- methods::callNextMethod()
-  # terra copies only `x`'s slots, so gather the edges of every voxel.
+  # terra copies only `x`'s slots, so gather the edges of every voxel: only
+  # the rows for the layers each still has, so a row left over from a dropped
+  # layer can't stand in for another voxel's edges at the same depth.
   voxels <- Filter(function(a) methods::is(a, "SpatVoxel"), list(x, ...))
-  edges <- do.call(rbind, lapply(voxels, function(v) v@depth_edges))
+  edges <- do.call(rbind, lapply(voxels, function(v) {
+    row <- .edge_rows(v@depth_edges$depth, .parse_depth_layers(v))
+    v@depth_edges[row[!is.na(row)], , drop = FALSE]
+  }))
   edges <- edges[!duplicated(edges$depth), , drop = FALSE]
   rownames(edges) <- NULL
   out@depth_edges <- edges

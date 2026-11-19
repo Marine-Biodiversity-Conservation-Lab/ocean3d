@@ -566,6 +566,10 @@ test_that("voxel results keep the depth edges of their inputs", {
   expect_equal(edges_of(intersect_3d(field, plain)), edges)
   expect_equal(edges_of(intersect_3d(plain, field)), edges)
   expect_equal(edges_of(mask(field, plain)), edges)
+  # Masking by a voxel that carries the edges keeps them too, so the result
+  # stands for the same water as the intersection.
+  expect_equal(edges_of(mask(plain, field)), edges)
+  expect_equal(volume(mask(plain, field)), volume(intersect_3d(plain, field)))
 
   # A 2D footprint keeps the voxel's edges, and so its volume.
   fp <- terra::rast(make_grid(), vals = 1)
