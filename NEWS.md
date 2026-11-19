@@ -4,19 +4,20 @@
 
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
 `calc_volume_overlap()`, `envelope_to_voxel()`, `intersect_3d()`,
-`intersects_3d()` and `mask()` (#138). Each depth level is treated as the
-middle of its slab of water, with edges halfway to its neighbours, which is
-how World Ocean Atlas and Copernicus Marine data are laid out. Under the old
-default each level was the top of its slab and the deepest level had no
-volume. Results change for voxels without stored depth edges:
+`intersects_3d()` and `mask()` (#138). The slab of water each depth level
+stands for now runs halfway to the neighbouring levels. This matches World
+Ocean Atlas levels and is closer than `"top"` to Copernicus Marine layers.
+Under the old default each level was the top of its slab and the deepest
+level had no volume. Results change for voxels that don't carry their own
+depth edges (see `depth_bounds` under New features):
 
 * `volume()` and `calc_volume_overlap()` give different volumes. For example,
   levels at 0, 100 and 300 m now stand for 0-50, 50-200 and 200-300 m rather
   than 0-100, 100-300 and none.
-* `envelope_to_voxel()`, and `mask()`, `intersect_3d()` and `intersects_3d()`
-  between an envelope and a voxel, can place an envelope on different levels.
-  An envelope from 60 to 70 m on levels at 0, 100 and 200 m now occupies the
-  100 m level rather than the 0 m one.
+* `envelope_to_voxel()` can place an envelope on different levels, and so
+  can `mask()`, `intersect_3d()` and `intersects_3d()` when they combine an
+  envelope with a voxel. An envelope from 60 to 70 m on levels at 0, 100 and
+  200 m now occupies the 100 m level rather than the 0 m one.
 
 Pass `bounds = "top"` to keep the old results.
 
@@ -118,11 +119,13 @@ message says how many cells have the limits swapped (or a seafloor above
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`. `volume()`, `calc_volume_overlap()`,
-  `intersect_3d()`, `mask()` and `envelope_to_voxel()` then use these edges
-  instead of working them out from the depths with `bounds`. Results built
-  from such a voxel keep its edges. `voxel_to_envelope()` on such a voxel
-  gives an envelope from the top of the shallowest slab to the bottom of the
-  deepest, and so do the depth layers of `calc_volume_overlap()` (#138).
+  `envelope_to_voxel()`, `intersect_3d()`, `intersects_3d()` and `mask()`
+  then use these edges instead of `bounds`. Results that stay a `SpatVoxel`
+  keep the edges, including after `c()`; `app()` and writing to a file drop
+  them. For such a voxel, `voxel_to_envelope()` gives each cell an envelope
+  from the top of its shallowest selected slab to the bottom of its deepest,
+  and the depth limits from `calc_volume_overlap()` follow the same rule
+  (#138).
 
 ## Bug fixes
 

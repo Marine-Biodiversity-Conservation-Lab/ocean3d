@@ -760,7 +760,7 @@ in our code: `bounds = "midpoint"`. What does it do?
 
 Our temperature data are organised into five standard depth levels. To combine these data with our species' potential distribution, we need to represent both datasets using the same depth levels.
 
-The argument `bounds = "midpoint"` defines how the water column is divided into intervals around those depths: each depth level sits in the middle of its interval. It is the default, so it can be left out; we write it here to make the choice visible, and use it throughout our example.
+The argument `bounds = "midpoint"` defines how the water column is divided into intervals around those depths: each interval runs halfway to the neighbouring depth levels. It is the default, so you can leave it out. We write it out to make the choice visible, and use it throughout our example.
 
 For further details, including how these intervals are calculated and why they matter, see the [Understanding depth levels](depth-levels.html) vignette.
 
