@@ -569,7 +569,7 @@ test_that("vector3d_to_envelope() rejects inputs it can't convert", {
                "`template` must be a SpatRaster", class = err)
   far <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 1, ymin = 0,
                      ymax = 1, crs = "EPSG:4326")
-  expect_error(vector3d_to_envelope(p, far), "don't touch any cell",
+  expect_error(vector3d_to_envelope(p, far), "may not spatially overlap",
                class = empty)
   no_crs <- terra::rast(nrows = 2, ncols = 2, xmin = 150, xmax = 153,
                         ymin = -21, ymax = -20, crs = "")
@@ -577,7 +577,7 @@ test_that("vector3d_to_envelope() rejects inputs it can't convert", {
                class = err)
   flat <- buffer_3d(pts, radius_km = 20, depth_window = 0)
   expect_error(vector3d_to_envelope(flat, envelope_grid()),
-               "`depth_min` equal to `depth_max`", class = empty)
+               "Every cell has depth_min equal to depth_max", class = empty)
 })
 
 test_that("cells with no thickness are dropped", {

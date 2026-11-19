@@ -25,7 +25,9 @@ SpatEnvelope depth_max layer cell value. Note that when \code{depth_min} is
 exactly \code{depth_max}, these cell values are dropped and replaced with NA.}
 }
 \value{
-SpatEnvelope, with depth_min and depth_max layers.
+SpatEnvelope, with depth_min and depth_max layers. It stops with
+an error if no cell is left: the polygons miss \code{template}, or no cell
+has \code{depth_max} deeper than \code{depth_min}.
 }
 \description{
 Rasterize polygons onto a template raster grid and assign per-cell depth

@@ -50,17 +50,20 @@ vector3d_to_envelope <- function(x, template) {
     } else {
       ""
     }
-    rlang::abort(glue::glue("`x` must be SpatVector3D polygons.{hint}"),
-                 class = "ocean3d_error_envelope_input", call = NULL)
+    .abort_envelope_input(
+      glue::glue("`x` must be SpatVector3D polygons.{hint}")
+    )
   }
   if (!inherits(template, "SpatRaster")) {
-    rlang::abort("`template` must be a SpatRaster that defines the grid.",
-                 class = "ocean3d_error_envelope_input", call = NULL)
+    .abort_envelope_input(
+      "`template` must be a SpatRaster that defines the grid."
+    )
   }
   if (terra::crs(template) == "") {
-    rlang::abort(paste0("`template` has no CRS, so the polygons can't be ",
-                        "placed on it. Set one with terra::crs()."),
-                 class = "ocean3d_error_envelope_input", call = NULL)
+    .abort_envelope_input(paste0(
+      "`template` has no CRS, so the polygons can't be placed on it. Set one ",
+      "with terra::crs()."
+    ))
   }
   f <- x@features
   if (any(!is.na(f$time_start))) {
@@ -90,34 +93,16 @@ vector3d_to_envelope <- function(x, template) {
       terra::shift(polygons, dx = dx)
     })))
   }
-  # Every cell a polygon touches, as terra::mask() picks them in
-  # vect_to_envelope(). Depths stay doubles: terra's default of 4-byte floats
-  # would turn 10.1 m into 10.1000004 m.
+  # Each cell's shallowest top and deepest bottom over the polygons touching
+  # it, picked as terra::mask() picks cells in vect_to_envelope(). Depths stay
+  # doubles: terra's default of 4-byte floats would turn 10.1 m into
+  # 10.1000004 m.
   doubles <- list(datatype = "FLT8S")
   top <- terra::rasterize(polygons, grid, field = "depth_min", fun = "min",
                           touches = TRUE, wopt = doubles)
   bottom <- terra::rasterize(polygons, grid, field = "depth_max", fun = "max",
                              touches = TRUE, wopt = doubles)
-  if (terra::global(top, "notNA")[1, 1] == 0) {
-    rlang::abort(
-      paste0("The polygons don't touch any cell of `template`. Check that ",
-             "they overlap it."),
-      class = "ocean3d_error_envelope_empty", call = NULL
-    )
-  }
-  # A cell with no thickness has no volume, so it is dropped, as in
-  # vect_to_envelope().
-  thick <- terra::ifel(bottom > top, 1, NA)
-  if (terra::global(thick, "notNA")[1, 1] == 0) {
-    rlang::abort(
-      paste0("Every cell the polygons touch has `depth_min` equal to ",
-             "`depth_max`, so the envelope would be empty. Give the ",
-             "polygons a depth range, e.g. a `depth_window` above 0 in ",
-             "buffer_3d()."),
-      class = "ocean3d_error_envelope_empty", call = NULL
-    )
-  }
-  layers <- terra::mask(c(top, bottom), thick)
-  names(layers) <- c("depth_min", "depth_max")
-  as_envelope(layers)
+  # vect_to_envelope() keeps the cells the polygons touch, drops cells with
+  # no thickness, and stops if none are left.
+  vect_to_envelope(polygons, grid, depth_min = top, depth_max = bottom)
 }

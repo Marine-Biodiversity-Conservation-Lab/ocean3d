@@ -39,6 +39,12 @@ stop with an error when they are bad (#113):
   `bounds` attribute so edges are inferred from the centres (for example
   with NCO: `ncatted -a bounds,lon,d,, file.nc`).
 
+`vect_to_envelope()` now stops with an error when no cell has `depth_max`
+deeper than `depth_min`, because the envelope would be empty. It used to warn
+("you may have swapped these two") and return an envelope with no cells. The
+error says whether the limits are swapped, equal (no thickness) or missing
+(#114).
+
 ## New features
 
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
