@@ -20,32 +20,51 @@ Documentation:
 \url{https://repository.library.noaa.gov/view/noaa/70581}}
 }
 \value{
-SpatRaster with standardized depth layer names. Wrap it with
-\code{\link[=as_voxel]{as_voxel()}} to use it with the \code{SpatVoxel} functions (\code{\link[=volume]{volume()}},
-\code{\link[terra:mask]{mask()}}, \code{\link[=extract_to_area]{extract_to_area()}}, ...). The point, buffer and track
-extraction functions take the netCDF file itself, not this raster.
+A \link[=SpatVoxel-class]{SpatVoxel} of the field's variable (for example \code{t_an}),
+one layer per WOA standard depth, with layers named
+\verb{\{variable\}_\{field\}_depth=\{value\}}. Use it with the \code{SpatVoxel}
+functions (\code{\link[=volume]{volume()}}, \code{\link[terra:mask]{mask()}}, \code{\link[=extract_to_area]{extract_to_area()}}, ...). The point,
+buffer and track extraction functions take the netCDF file itself.
 }
 \description{
-Load a WOA .nc file and select layers for a given statistical field.
-Returns a SpatRaster with layer names already following the
-\verb{\{variable\}_depth=\{value\}} convention used throughout this package
-(native to WOA NetCDFs).
+Load one statistical field of a World Ocean Atlas .nc file as a
+\link[=SpatVoxel-class]{SpatVoxel}. The file is read through \code{\link[=as_proxy]{as_proxy()}} and the voxel
+builder in \code{\link[=as_voxel]{as_voxel()}}, so the CF metadata is applied once: depth in
+metres in \code{\link[terra:depth]{terra::depth()}}, WOA's own depth bounds as the voxel's depth
+edges (\code{\link[=depth_bounds]{depth_bounds()}}), and the CRS set. A WOA file holds one period (a
+month, a season or the year), a climatology without a date, so the voxel
+has no \code{\link[terra:time]{terra::time()}}.
 }
 \examples{
-# Build a small WOA-style NetCDF to demonstrate field selection.
-# Real files come from woa_download().
+# Build a small WOA-style NetCDF: temperature analysed and standard
+# deviation fields on two standard depths, with WOA's depth bounds and its
+# climatological time axis. Real files come from woa_download().
 nc <- file.path(tempdir(), "woa_demo.nc")
-demo <- terra::rast(nrows = 2, ncols = 2, nlyrs = 4,
-                    xmin = 0, xmax = 2, ymin = 0, ymax = 2,
-                    crs = "EPSG:4326")
-names(demo) <- c("t_an_depth=0", "t_an_depth=100",
-                 "t_sd_depth=0", "t_sd_depth=100")
-terra::values(demo) <- matrix(1:16, nrow = 4)
-terra::writeCDF(demo, nc, overwrite = TRUE, split = TRUE)
+dims <- list(
+  lon = ncdf4::ncdim_def("lon", "degrees_east", c(0.5, 1.5)),
+  lat = ncdf4::ncdim_def("lat", "degrees_north", c(0.5, 1.5)),
+  depth = ncdf4::ncdim_def("depth", "meters", c(0, 100)),
+  time = ncdf4::ncdim_def("time", "months since 0000-01-01 00:00:00", 6)
+)
+nv <- ncdf4::ncdim_def("nbounds", "", 1:2, create_dimvar = FALSE)
+vars <- list(
+  ncdf4::ncvar_def("t_an", "degrees_celsius", dims, -9999),
+  ncdf4::ncvar_def("t_sd", "degrees_celsius", dims, -9999),
+  ncdf4::ncvar_def("depth_bnds", "meters", list(nv, dims$depth))
+)
+f <- ncdf4::nc_create(nc, vars)
+ncdf4::ncvar_put(f, "t_an", 1:8)
+ncdf4::ncvar_put(f, "t_sd", 11:18)
+ncdf4::ncvar_put(f, "depth_bnds", c(0, 50, 50, 150))
+ncdf4::ncatt_put(f, "depth", "bounds", "depth_bnds")
+ncdf4::ncatt_put(f, "depth", "positive", "down")
+ncdf4::ncatt_put(f, "time", "climatology", "climatology_bounds")
+ncdf4::nc_close(f)
 
 # Objectively analyzed climatology (the default field)
 temp <- woa_load_nc(nc)
-names(temp)
+depths(temp)
+depth_bounds(temp)
 
 # Standard deviation layers from the same file
 names(woa_load_nc(nc, field = "sd"))

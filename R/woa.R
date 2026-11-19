@@ -405,10 +405,13 @@ woa_download <- function(variable,
 
 #' Load a WOA NetCDF file
 #'
-#' Load a WOA .nc file and select layers for a given statistical field.
-#' Returns a SpatRaster with layer names already following the
-#' `{variable}_depth={value}` convention used throughout this package
-#' (native to WOA NetCDFs).
+#' Load one statistical field of a World Ocean Atlas .nc file as a
+#' [SpatVoxel-class]. The file is read through [as_proxy()] and the voxel
+#' builder in [as_voxel()], so the CF metadata is applied once: depth in
+#' metres in [terra::depth()], WOA's own depth bounds as the voxel's depth
+#' edges ([depth_bounds()]), and the CRS set. A WOA file holds one period (a
+#' month, a season or the year), a climatology without a date, so the voxel
+#' has no [terra::time()].
 #'
 #' @param file_path Character. Path to a WOA .nc file.
 #' @param field Character. Statistical field to select. One of:
@@ -421,25 +424,41 @@ woa_download <- function(variable,
 #'   Documentation:
 #'   <https://repository.library.noaa.gov/view/noaa/70581>
 #'
-#' @returns SpatRaster with standardized depth layer names. Wrap it with
-#'   [as_voxel()] to use it with the `SpatVoxel` functions ([volume()],
-#'   [mask()], [extract_to_area()], ...). The point, buffer and track
-#'   extraction functions take the netCDF file itself, not this raster.
+#' @returns A [SpatVoxel-class] of the field's variable (for example `t_an`),
+#'   one layer per WOA standard depth, with layers named
+#'   `{variable}_{field}_depth={value}`. Use it with the `SpatVoxel`
+#'   functions ([volume()], [mask()], [extract_to_area()], ...). The point,
+#'   buffer and track extraction functions take the netCDF file itself.
 #' @examples
-#' # Build a small WOA-style NetCDF to demonstrate field selection.
-#' # Real files come from woa_download().
+#' # Build a small WOA-style NetCDF: temperature analysed and standard
+#' # deviation fields on two standard depths, with WOA's depth bounds and its
+#' # climatological time axis. Real files come from woa_download().
 #' nc <- file.path(tempdir(), "woa_demo.nc")
-#' demo <- terra::rast(nrows = 2, ncols = 2, nlyrs = 4,
-#'                     xmin = 0, xmax = 2, ymin = 0, ymax = 2,
-#'                     crs = "EPSG:4326")
-#' names(demo) <- c("t_an_depth=0", "t_an_depth=100",
-#'                  "t_sd_depth=0", "t_sd_depth=100")
-#' terra::values(demo) <- matrix(1:16, nrow = 4)
-#' terra::writeCDF(demo, nc, overwrite = TRUE, split = TRUE)
+#' dims <- list(
+#'   lon = ncdf4::ncdim_def("lon", "degrees_east", c(0.5, 1.5)),
+#'   lat = ncdf4::ncdim_def("lat", "degrees_north", c(0.5, 1.5)),
+#'   depth = ncdf4::ncdim_def("depth", "meters", c(0, 100)),
+#'   time = ncdf4::ncdim_def("time", "months since 0000-01-01 00:00:00", 6)
+#' )
+#' nv <- ncdf4::ncdim_def("nbounds", "", 1:2, create_dimvar = FALSE)
+#' vars <- list(
+#'   ncdf4::ncvar_def("t_an", "degrees_celsius", dims, -9999),
+#'   ncdf4::ncvar_def("t_sd", "degrees_celsius", dims, -9999),
+#'   ncdf4::ncvar_def("depth_bnds", "meters", list(nv, dims$depth))
+#' )
+#' f <- ncdf4::nc_create(nc, vars)
+#' ncdf4::ncvar_put(f, "t_an", 1:8)
+#' ncdf4::ncvar_put(f, "t_sd", 11:18)
+#' ncdf4::ncvar_put(f, "depth_bnds", c(0, 50, 50, 150))
+#' ncdf4::ncatt_put(f, "depth", "bounds", "depth_bnds")
+#' ncdf4::ncatt_put(f, "depth", "positive", "down")
+#' ncdf4::ncatt_put(f, "time", "climatology", "climatology_bounds")
+#' ncdf4::nc_close(f)
 #'
 #' # Objectively analyzed climatology (the default field)
 #' temp <- woa_load_nc(nc)
-#' names(temp)
+#' depths(temp)
+#' depth_bounds(temp)
 #'
 #' # Standard deviation layers from the same file
 #' names(woa_load_nc(nc, field = "sd"))
@@ -458,8 +477,6 @@ woa_load_nc <- function(file_path, field = "an") {
   if (!file.exists(file_path)) {
     stop("File not found: ", file_path)
   }
-  r <- terra::rast(file_path)
-  
   available_fields <- .woa_fields()$code
   if (!field %in% available_fields) {
     stop(
@@ -469,53 +486,32 @@ woa_load_nc <- function(file_path, field = "an") {
     )
   }
 
-  # WOA layers take the form of v_field_depth=123
-  # v is the abbreviated variable, which has to be one character
-  var_abr <- r[[1]] %>%
-    names() %>%
-    stringr::str_split_i(pattern = stringr::fixed("_"), 1)
-
-  # check that layer names follow convention
-  layer_name_split <- r[[1]] %>%
-    names() %>%
-    stringr::str_split(pattern = stringr::fixed("_"))
-  available_vars <- .woa_variables()$code
-  if (!layer_name_split[[1]][1] %in% available_vars) {
+  # WOA variables are named {variable code}_{field code}, such as t_an.
+  nc <- ncdf4::nc_open(file_path)
+  variables <- names(nc$var)
+  ncdf4::nc_close(nc)
+  woa <- paste0("^(", paste(.woa_variables()$code, collapse = "|"), ")_(",
+                paste(available_fields, collapse = "|"), ")$")
+  woa_vars <- grep(woa, variables, value = TRUE)
+  if (!length(woa_vars)) {
     stop(
-      "check raster layer names. For WOA data, oceanographic variable ",
-      "one-letter code must be one of: ",
-      toString(available_vars),
+      "No World Ocean Atlas variables in ", basename(file_path), ": ",
+      "expected names like t_an, a variable code (",
+      toString(.woa_variables()$code), ") and a field code (",
+      toString(available_fields), "). Found: ", toString(variables),
       ". See https://repository.library.noaa.gov/view/noaa/70581"
     )
   }
-  if (!layer_name_split[[1]][2] %in% available_fields) {
-    stop(
-      "check raster layer names. For WOA data, field code must be one of: ",
-      toString(available_fields),
-      ". See https://repository.library.noaa.gov/view/noaa/70581"
-    )
-  }
-
-  field_pattern <- paste0(var_abr, "_", field, "_depth=")
-  selected_names <- r %>%
-    names() %>%
-    stringr::str_subset(field_pattern)
 
   # `field` is a valid WOA code, but this particular file may not carry it:
   # NCEI ships some fields (e.g. "sea", "sdo") only for certain variables and
-  # periods. Report what the file does contain instead of letting the empty
-  # subset fail inside terra with "is.numeric(i) is not TRUE".
-  if (length(selected_names) == 0) {
-    present <- names(r) %>%
-      stringr::str_split_i(pattern = stringr::fixed("_"), 2) %>%
-      unique() %>%
-      sort()
+  # periods. Report what the file does contain.
+  fields <- sub("^[^_]+_", "", woa_vars)
+  if (!field %in% fields) {
     stop(
       "No layers for field '", field, "' in ", basename(file_path),
-      ". Fields present in this file: ", toString(present),
-      "."
+      ". Fields present in this file: ", toString(sort(unique(fields))), "."
     )
   }
-
-  r[[selected_names]]
+  as_voxel(as_proxy(file_path, var = woa_vars[fields == field][1L]))
 }

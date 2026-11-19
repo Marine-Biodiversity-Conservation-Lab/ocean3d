@@ -23,6 +23,15 @@ Code that set a voxel's depth by renaming its layers should pass `depths` to
 `as_voxel()` or set `terra::depth()` instead. To keep the depth when saving,
 use `terra::writeCDF()` or `saveRDS(terra::wrap(v))`; GeoTIFF drops it.
 
+`woa_load_nc()` now returns a `SpatVoxel` instead of a plain `SpatRaster`
+(#113). It reads the field's variable (such as `t_an`) through `as_proxy()`
+and `as_voxel()` rather than with `terra::rast()`, so the voxel carries WOA's
+own depth bounds (`depth_bounds()`), its depths in `terra::depth()` and its
+CRS. Layer names stay `t_an_depth=0` and so on. Code that wrapped the result
+in `as_voxel()` keeps working, since that returns the voxel as it is. The
+file must be a WOA netCDF, with variables named `{variable}_{field}`; files
+built by writing rasters with `terra::writeCDF()` no longer load.
+
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
 `calc_volume_overlap()`, `envelope_to_voxel()`, `intersect_3d()`,
 `intersects_3d()` and `mask()` (#138). The slab of water each depth level
