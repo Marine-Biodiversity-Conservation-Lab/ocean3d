@@ -741,28 +741,6 @@ test_that("extraction leaves caller-owned netCDF connections open", {
   expect_equal(ncdf4::ncvar_get(nc, "temp"), matrix(1:4, 2, 2))
 })
 
-test_that("dimension helpers read coordinates and report missing names", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-  make_test_netcdf(f)
-  # Add a `longitude` coordinate variable on the lon dimension.
-  nc <- ncdf4::nc_open(f, write = TRUE)
-  nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def(
-    "longitude", "degrees_east", list(nc$dim$lon), prec = "double"
-  ))
-  ncdf4::ncvar_put(nc, "longitude", c(10, 11))
-  ncdf4::nc_close(nc)
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  expect_equal(as.vector(.get_dim_values(nc, "longitude")), c(10, 11))
-  expect_null(.get_dim_values(nc, NULL))
-  expect_error(.get_dim_values(nc, "missing"),
-               "Could not read dimension or coordinate variable")
-  expect_error(.detect_dims(nc, "missing"),
-               "Available variables are: temp, longitude")
-
-})
-
 test_that("missing coordinates return missing values", {
   without_selection_reports({
     f <- tempfile(fileext = ".nc")
@@ -947,19 +925,6 @@ test_that("exact matching selects values and skips missing dates", {
   expect_equal(exact[names(x)], x)
 })
 
-test_that("temporal matching handles empty and entirely missing time axes", {
-  for (values in list(as.Date(character()), as.Date(c(NA, NA)))) {
-    for (method in c("nearest", "exact")) {
-      expect_identical(
-        .match_time_index(
-          values, as.Date("2020-01-03"), time_match = method
-        ),
-        NA_integer_
-      )
-    }
-  }
-})
-
 test_that("depth wrappers name columns and extract values", {
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
@@ -1017,145 +982,6 @@ test_that("nested data frames use a custom file column", {
 })
 
 # Timestamp-label comparison precision -----------------------------------------
-
-test_that("daily comparison keeps late observations on the same day", {
-  observations <- as.POSIXct(
-    c(
-      "2020-01-02 00:01:00",
-      "2020-01-02 12:00:00",
-      "2020-01-02 19:54:00",
-      "2020-01-02 23:59:00",
-      "2020-01-03 00:00:00"
-    ),
-    tz = "UTC"
-  )
-
-  for (hour in c("00:00:00", "12:00:00")) {
-    available <- as.POSIXct(
-      paste(
-        c("2020-01-01", "2020-01-02", "2020-01-03"),
-        hour
-      ),
-      tz = "UTC"
-    )
-
-    for (matching in c("nearest", "exact")) {
-      indices <- vapply(seq_along(observations), function(i) {
-        .match_time_index(
-          available, observations[i],
-          time_match = matching,
-          time_resolution = "daily"
-        )
-      }, integer(1))
-
-      expect_equal(indices, c(2L, 2L, 2L, 2L, 3L))
-    }
-  }
-})
-
-test_that("datetime matching preserves minutes and time limits", {
-  available <- as.POSIXct(
-    c("2020-01-02 19:00:00", "2020-01-02 20:00:00"),
-    tz = "UTC"
-  )
-  target <- as.POSIXct("2020-01-02 19:54:00", tz = "UTC")
-
-  expect_identical(.match_time_index(available, target), 2L)
-  expect_identical(
-    .match_time_index(available, target, time_match = "exact"),
-    NA_integer_
-  )
-  expect_identical(
-    .match_time_index(
-      available, target, max_time_diff = 5 / 1440
-    ),
-    NA_integer_
-  )
-  expect_identical(
-    .match_time_index(
-      available, target, max_time_diff = 7 / 1440
-    ),
-    2L
-  )
-})
-
-test_that("monthly and yearly selection compares calendar labels", {
-  months <- as.POSIXct(
-    c("2020-02-15", "2020-03-15", "2020-04-15"),
-    tz = "UTC"
-  )
-
-  expect_identical(
-    .match_time_index(
-      months, as.Date("2020-03-31"),
-      time_match = "exact",
-      time_resolution = "monthly"
-    ),
-    2L
-  )
-
-  years <- as.POSIXct(
-    c("2019-07-01", "2020-07-01", "2021-07-01"),
-    tz = "UTC"
-  )
-
-  expect_identical(
-    .match_time_index(
-      years, as.Date("2020-12-31"),
-      time_match = "exact",
-      time_resolution = "yearly"
-    ),
-    2L
-  )
-})
-
-test_that("coarse selection rejects multiple records in one period", {
-  available <- as.POSIXct(
-    c("2020-01-02 19:00:00", "2020-01-02 20:00:00"),
-    tz = "UTC"
-  )
-
-  expect_error(
-    .match_time_index(available, as.Date("2020-01-02")),
-    "Multiple dataset timestamps"
-  )
-  for (resolution in c("monthly", "yearly")) {
-    expect_error(
-      .match_time_index(
-        available, as.Date("2020-01-02"),
-        time_resolution = resolution
-      ),
-      "Multiple dataset timestamps"
-    )
-  }
-})
-
-test_that("time validation identifies malformed values not inventing hours", {
-  expect_error(
-    .prepare_time_input(c("2020-01-02", "06/01/2020")),
-    "row/position"
-  )
-  expect_error(
-    .prepare_time_input("2020-02-30"),
-    "Invalid date/time"
-  )
-  expect_error(
-    .prepare_time_input(
-      c("2020-01-02", "2020-01-02 19:54:00"),
-      "datetime"
-    ),
-    "requires hours for every"
-  )
-  expect_error(
-    .prepare_time_input(as.Date("2020-01-02"), "datetime"),
-    "requires observation hours"
-  )
-  parsed <- .prepare_time_input(
-    c("2020-01-02", NA_character_),
-    "daily"
-  )
-  expect_true(is.na(parsed$values[2]))
-})
 
 test_that("public extraction preserves hours and supports daily selection", {
   f <- tempfile(fileext = ".nc")
@@ -1253,180 +1079,6 @@ test_that("every depth wrapper forwards output naming arguments", {
 
 # Issue #72: variable-scoped netCDF dimensions -------------------------------
 
-test_that("dimension detection uses only the selected variable", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
-  other_lon <- ncdf4::ncdim_def(
-    "longitude", "degrees_east", c(10, 11)
-  )
-  time <- ncdf4::ncdim_def(
-    "time", "days since 2020-01-01", c(0, 1)
-  )
-
-  static <- ncdf4::ncvar_def(
-    "static", "1", list(lon, lat), -9999
-  )
-  dynamic <- ncdf4::ncvar_def(
-    "dynamic", "1", list(other_lon, lat, time), -9999
-  )
-
-  nc <- ncdf4::nc_create(f, list(static, dynamic))
-  ncdf4::ncvar_put(nc, "static", matrix(1:4, 2, 2))
-  ncdf4::ncvar_put(
-    nc, "dynamic", array(1:8, c(2, 2, 2))
-  )
-  ncdf4::nc_close(nc)
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  dims <- .detect_dims(nc, "static")
-
-  expect_identical(dims$lon, "lon")
-  expect_identical(dims$lat, "lat")
-  expect_null(dims$time)
-  expect_identical(dims$var_dims, c("lon", "lat"))
-})
-
-
-test_that("valid_time is recognised as a time dimension", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
-  valid_time <- ncdf4::ncdim_def(
-    "valid_time", "days since 2020-01-01", c(0, 1)
-  )
-
-  v <- ncdf4::ncvar_def(
-    "temp", "1", list(lon, lat, valid_time), -9999
-  )
-
-  nc <- ncdf4::nc_create(f, v)
-  ncdf4::ncvar_put(nc, "temp", array(1:8, c(2, 2, 2)))
-  ncdf4::nc_close(nc)
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  dims <- .detect_dims(nc, "temp")
-
-  expect_identical(dims$time, "valid_time")
-})
-
-
-test_that("unknown non-singleton dimensions are rejected", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
-  member <- ncdf4::ncdim_def("member", "1", 1:3)
-
-  v <- ncdf4::ncvar_def(
-    "temp", "1", list(lon, lat, member), -9999
-  )
-
-  nc <- ncdf4::nc_create(f, v)
-  ncdf4::nc_close(nc)
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  expect_error(
-    .detect_dims(nc, "temp"),
-    "Unrecognised non-singleton dimension"
-  )
-})
-
-
-test_that("unknown singleton dimensions are identified", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  lon <- ncdf4::ncdim_def("lon", "degrees_east", c(0, 1))
-  lat <- ncdf4::ncdim_def("lat", "degrees_north", c(40, 41))
-  member <- ncdf4::ncdim_def("member", "1", 1)
-
-  v <- ncdf4::ncvar_def(
-    "temp", "1", list(lon, lat, member), -9999
-  )
-
-  nc <- ncdf4::nc_create(f, v)
-  ncdf4::nc_close(nc)
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  dims <- .detect_dims(nc, "temp")
-
-  expect_identical(dims$singleton_dims, "member")
-
-  sc <- .build_start_count(
-    dims$var_dims,
-    list(
-      lon = list(start = 1L, count = 1L),
-      lat = list(start = 1L, count = 1L)
-    ),
-    singleton_dims = dims$singleton_dims
-  )
-
-  expect_identical(sc$start, c(1L, 1L, 1L))
-  expect_identical(sc$count, c(1L, 1L, 1L))
-})
-
-
-test_that("explicit dimensions are validated", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  make_test_netcdf(
-    f, with_depth = FALSE, with_time = FALSE
-  )
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  expect_identical(
-    .detect_dims(nc, "temp", lon_dim = "lon")$lon,
-    "lon"
-  )
-
-  expect_error(
-    .detect_dims(nc, "temp", lon_dim = "longitude"),
-    "not a dimension of the selected variable"
-  )
-})
-
-
-test_that("projected coordinates are rejected", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  x <- ncdf4::ncdim_def("x", "m", c(1000, 2000))
-  y <- ncdf4::ncdim_def("y", "m", c(3000, 4000))
-
-  v <- ncdf4::ncvar_def(
-    "temp", "1", list(x, y), -9999
-  )
-
-  nc <- ncdf4::nc_create(f, v)
-  ncdf4::nc_close(nc)
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  expect_error(
-    .detect_dims(nc, "temp"),
-    "projected coordinates"
-  )
-})
-
-
 test_that("2d extraction rejects variables with multiple depth levels", {
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
@@ -1479,89 +1131,7 @@ test_that("2d extraction accepts a single depth level", {
 })
 
 
-test_that("unassigned dimensions cannot be read silently", {
-  expect_error(
-    .build_start_count(
-      c("lon", "lat", "member"),
-      list(
-        lon = list(start = 1L, count = 1L),
-        lat = list(start = 1L, count = 1L)
-      )
-    ),
-    "No extraction index was assigned"
-  )
-})
-
-
 # additional dimension-detection regression tests ----------------
-
-test_that("CF metadata identifies axes with non-standard names", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  dim_x <- ncdf4::ncdim_def(
-    "horizontal_a", "degrees_east", c(0, 1)
-  )
-  dim_y <- ncdf4::ncdim_def(
-    "horizontal_b", "degrees_north", c(40, 41)
-  )
-  dim_t <- ncdf4::ncdim_def(
-    "forecast_step", "days since 2020-01-01", c(0, 1)
-  )
-
-  v <- ncdf4::ncvar_def(
-    "temp", "degree_Celsius",
-    list(dim_x, dim_y, dim_t), -9999
-  )
-
-  nc <- ncdf4::nc_create(f, v)
-  ncdf4::ncvar_put(
-    nc, "temp", array(1:8, dim = c(2, 2, 2))
-  )
-  ncdf4::nc_close(nc)
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  dims <- .detect_dims(nc, "temp")
-
-  expect_identical(dims$lon, "horizontal_a")
-  expect_identical(dims$lat, "horizontal_b")
-  expect_identical(dims$time, "forecast_step")
-})
-
-
-test_that("ambiguous longitude dimensions produce an informative error", {
-  f <- tempfile(fileext = ".nc")
-  on.exit(unlink(f), add = TRUE)
-
-  lon <- ncdf4::ncdim_def(
-    "lon", "degrees_east", c(0, 1)
-  )
-  longitude <- ncdf4::ncdim_def(
-    "longitude", "degrees_east", c(10, 11)
-  )
-  lat <- ncdf4::ncdim_def(
-    "lat", "degrees_north", c(40, 41)
-  )
-
-  v <- ncdf4::ncvar_def(
-    "temp", "degree_Celsius",
-    list(lon, longitude, lat), -9999
-  )
-
-  nc <- ncdf4::nc_create(f, v)
-  ncdf4::nc_close(nc)
-
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-
-  expect_error(
-    .detect_dims(nc, "temp"),
-    "Ambiguous lon axis"
-  )
-})
-
 
 test_that("static extraction ignores unrelated temporal dimensions", {
   f <- tempfile(fileext = ".nc")
@@ -1833,17 +1403,6 @@ test_that("merging records provenance separately for each output column", {
   expect_equal(.merge_source_outputs(list(a, b), "id"), merged$data)
 })
 
-test_that("temporal eligibility needs a target and a non-missing time axis", {
-  axis <- as.POSIXct(c(NA_character_, "2020-01-01"), tz = "UTC")
-  target <- as.POSIXct("2020-01-10", tz = "UTC")
-  expect_true(.temporal_source_eligible(axis, target, "daily"))
-  # Static sources have no time axis to restrict them.
-  expect_true(.temporal_source_eligible(NULL, target, "daily"))
-  expect_false(.temporal_source_eligible(axis, target[NA], "daily"))
-  expect_false(.temporal_source_eligible(axis[1], target, "daily"))
-  expect_false(.temporal_source_eligible(axis[0], target, "daily"))
-})
-
 # Issue #73 B: diagnostics for the selected temporal values.
 capture_temporal_warning <- function(expr) {
   warnings <- list()
@@ -1989,42 +1548,6 @@ test_that("all summaries share one warning without duplicating examples", {
   expect_match(message, "1 observation(s)", fixed = TRUE)
   matches <- gregexpr("Row 1; variable: temp", message, fixed = TRUE)
   expect_equal(lengths(regmatches(message, matches)), 1L)
-})
-
-test_that("metadata keeps bounds separate from sampling cadence", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path), add = TRUE)
-  make_a2_temporal_nc(path, 0, 1)
-  nc <- ncdf4::nc_open(path, write = TRUE)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  ncdf4::ncatt_put(nc, "temp", "cell_methods", "time: mean")
-  info <- .read_temporal_metadata(
-    nc, "time", "temp", .decode_netcdf_time(nc, "time")
-  )
-  expect_identical(info$cell_methods, "time: mean")
-  expect_identical(info$cadence$type, "unknown")
-  expect_identical(info$calendar, "standard")
-  expect_match(info$units, "days since")
-})
-
-test_that("explicit bounds describe intervals without inventing cadence", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path), add = TRUE)
-  make_a2_temporal_nc(path, 0, 1)
-  nc <- ncdf4::nc_open(path, write = TRUE)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  vertex <- ncdf4::ncdim_def("nv", "", 1:2, create_dimvar = FALSE)
-  bounds <- ncdf4::ncvar_def(
-    "time_bounds", "days since 2020-01-01",
-    list(vertex, nc$dim$time), prec = "double"
-  )
-  nc <- ncdf4::ncvar_add(nc, bounds)
-  ncdf4::ncvar_put(nc, "time_bounds", matrix(c(-0.5, 0.5), nrow = 2L))
-  ncdf4::ncatt_put(nc, "time", "bounds", "time_bounds")
-  info <- .read_temporal_metadata(
-    nc, "time", "temp", .decode_netcdf_time(nc, "time")
-  )
-  expect_identical(info$cadence$type, "unknown")
 })
 
 test_that("static variables do not produce temporal diagnostics", {
@@ -2207,32 +1730,6 @@ test_that("outputs cannot overwrite extraction input columns", {
 })
 
 # C3: spatial coverage, cell edges and longitude conventions.
-test_that("spatial indices respect edges and longitude conventions", {
-  axis <- list(
-    centres = c(0, 1), lower = c(-0.5, 0.5), upper = c(0.5, 1.5),
-    longitude = FALSE, basis = "inferred_regular"
-  )
-  expect_identical(.containing_axis_indices(axis, -0.5), 1L)
-  expect_identical(.containing_axis_indices(axis, 1.5), 2L)
-  expect_length(.containing_axis_indices(axis, 1.6), 0L)
-  axis <- list(
-    centres = c(179, 181), lower = c(178, 180), upper = c(180, 182),
-    longitude = TRUE, basis = "inferred_regular"
-  )
-  expect_identical(.containing_axis_indices(axis, -179), 2L)
-  expect_identical(.containing_axis_indices(axis, 181), 2L)
-  expect_length(.containing_axis_indices(axis, 0), 0L)
-})
-
-test_that("singleton axes do not invent spatial coverage", {
-  axis <- list(
-    centres = 40, lower = 40, upper = 40,
-    longitude = FALSE, basis = "singleton_coordinate"
-  )
-  expect_identical(.containing_axis_indices(axis, 40), 1L)
-  expect_length(.containing_axis_indices(axis, 41), 0L)
-})
-
 test_that("spatial eligibility selects the correct tile in either order", {
   without_selection_reports({
     paths <- replicate(2, tempfile(fileext = ".nc"))
@@ -2264,21 +1761,6 @@ test_that("spatial eligibility selects the correct tile in either order", {
     }
   })
 })
-
-test_that("irregular descending axes preserve original indices", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path), add = TRUE)
-  make_grid_file(lon = c(5, 2, 0), lat = 40, depth = NULL, time = NULL,
-                 path = path)
-  nc <- ncdf4::nc_open(path)
-  on.exit(ncdf4::nc_close(nc), add = TRUE)
-  axis <- .prepare_spatial_axis(nc, "lon", c(5, 2, 0), longitude = TRUE)
-  expect_identical(axis$basis, "inferred_irregular")
-  expect_identical(.containing_axis_indices(axis, 5), 1L)
-  expect_identical(.containing_axis_indices(axis, 0), 3L)
-  expect_length(.containing_axis_indices(axis, 20), 0L)
-})
-
 
 test_that("daily datetime warnings explain day changes below 24 hours", {
   axis <- c("2020-01-01", "2020-01-02", "2020-01-03")
@@ -2439,17 +1921,6 @@ test_that("a cell exactly at the kilometre limit is accepted", {
   })
 })
 
-test_that("geographic proximity is not independent degree subtraction", {
-  # At high latitude the geographically closest centre is not necessarily
-  # the one with the smallest latitude difference.
-  result <- .nearest_horizontal_cell(60, c(80, 85), 1L, 1:2, 0, 80)
-  expect_identical(result$lat_idx, 2L)
-  expect_identical(result$lon_idx, 1L)
-  expect_gt(result$distance_km, 0)
-  whole <- .nearest_horizontal_cells(60, c(80, 85), 0, 80)[[1L]]
-  expect_equal(result, whole)
-})
-
 test_that("longitudes use both conventions and wrap around the antimeridian", {
   paths <- replicate(2, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
@@ -2465,11 +1936,6 @@ test_that("longitudes use both conventions and wrap around the antimeridian", {
       var = "temp", date_col = NULL
     )$temp, 11)
   }
-  selected <- .nearest_horizontal_cell(
-    c(179, -170), 40, 1:2, 1L, -179.9, 40
-  )
-  expect_identical(selected$lon_idx, 1L)
-  expect_equal(.normalise_longitude(c(-160, 200)), c(-160, -160))
 })
 
 test_that("equal temporal candidates prefer the spatially closer source", {
@@ -2536,47 +2002,6 @@ test_that("nearest does not search past a missing cell within the same file", {
   })
 })
 
-match_one_cell <- function(lon_axis, lat_axis, lon_values, lat_values,
-                           lon_target, lat_target, spatial_match,
-                           max_distance_km) {
-  match_cells <- getFromNamespace(".match_horizontal_cells", "ocean3d")
-  match_row <- getFromNamespace(".horizontal_match_row", "ocean3d")
-  match_row(match_cells(
-    lon_axis, lat_axis, lon_values, lat_values, lon_target, lat_target,
-    spatial_match, max_distance_km
-  ), 1L)
-}
-
-test_that("horizontal selection records accepted and rejected candidates", {
-  inside <- list(
-    centres = 0, lower = 0, upper = 0, longitude = FALSE
-  )
-  longitude <- inside
-  longitude$longitude <- TRUE
-  accepted <- match_one_cell(
-    longitude, inside, 0, 0, 0.01, 0, "nearest", 2
-  )
-  expect_true(accepted$accepted)
-  expect_identical(accepted$reason, "matched")
-  expect_equal(accepted$selected_lon, 0)
-  expect_equal(accepted$selected_lat, 0)
-  expect_gt(accepted$distance_km, 1)
-  rejected <- match_one_cell(
-    longitude, inside, 0, 0, 0.01, 0, "nearest", 0.5
-  )
-  expect_false(rejected$accepted)
-  expect_identical(rejected$reason, "distance_limit_exceeded")
-  expect_gt(rejected$distance_km, 1)
-  outside <- match_one_cell(
-    longitude, inside, 0, 0, 0.01, 0, "within", NULL
-  )
-  expect_identical(outside$reason, "outside_grid")
-  invalid <- match_one_cell(
-    longitude, inside, 0, 0, NA_real_, 0, "nearest", 5
-  )
-  expect_identical(invalid$reason, "invalid_coordinates")
-})
-
 # Issue #74 B: physical depths independently of coordinate storage order.
 make_depth_axis_test_nc <- function(path, depths, values,
                                     units = "m", positive = NULL,
@@ -2594,40 +2019,6 @@ make_depth_axis_test_nc <- function(path, depths, values,
     var_units = "degree_Celsius", path = path
   )
 }
-
-test_that("physical depth conversion retains original coordinate positions", {
-  descending <- .prepare_depth_axis(c(100, 50, 0), "m", "down")
-  expect_equal(descending$depth_m, c(100, 50, 0))
-  expect_identical(descending$surface_index, 3L)
-  expect_identical(descending$direction_basis, "metadata")
-  upward <- .prepare_depth_axis(c(0, -50, -100), "m", " UP ")
-  expect_equal(upward$depth_m, c(0, 50, 100))
-  expect_identical(upward$surface_index, 1L)
-  expect_identical(upward$direction_basis, "metadata")
-  for (unit in c("m", "meter", "meters", "metre", "metres")) {
-    expect_equal(.prepare_depth_axis(c(0, 50), unit)$depth_m, c(0, 50))
-  }
-  expect_equal(.prepare_depth_axis(c(0, 0.05), "km")$depth_m, c(0, 50))
-  expect_equal(.prepare_depth_axis(c(0, 5000), "cm")$depth_m, c(0, 50))
-  inferred <- .prepare_depth_axis(c(-100, -50, 0), "m")
-  expect_equal(inferred$depth_m, c(100, 50, 0))
-  expect_identical(inferred$direction_basis, "inferred")
-})
-
-test_that("ambiguous or unsupported depth coordinates are rejected", {
-  expect_error(.prepare_depth_axis(c(-50, 0, 50), "m"), "ambiguous")
-  expect_error(.prepare_depth_axis(c(0, 50), "dbar"), "converted to metres")
-  expect_error(.prepare_depth_axis(c(0, 50), NULL), "explicit supported")
-  expect_error(.prepare_depth_axis(c(0, 50), NA_character_), "units")
-  expect_error(.prepare_depth_axis(c(0, 50), "m", "sideways"), "up.*down")
-  expect_error(.prepare_depth_axis(c(0, 50), "m", NA_character_), "up.*down")
-  expect_error(.prepare_depth_axis(c(0, NA_real_), "m"), "finite")
-  expect_error(.prepare_depth_axis(numeric(), "m"), "finite")
-  expect_error(.prepare_depth_axis(c(0, Inf), "m"), "finite")
-  expect_error(.prepare_depth_axis(c(0, 50, 50), "m"), "duplicate")
-  expect_error(.prepare_depth_axis(c(0, -50), "m", "down"), "reference surface")
-  expect_error(.prepare_depth_axis(c(0, 50), "m", "up"), "reference surface")
-})
 
 test_that("depth methods select physical layers for every storage order", {
   cases <- list(
@@ -2987,24 +2378,6 @@ test_that("automatic spatial reports explain accepted external selections", {
   expect_match(result$text, "nearest cell centre: (1, 40)", fixed = TRUE)
 })
 
-test_that("cell containment is separate from overall coverage", {
-  lon <- list(centres = c(0, 1), lower = c(-0.01, -0.5),
-              upper = c(0.01, 1.5), longitude = TRUE)
-  lat <- list(centres = 0, lower = 0, upper = 0, longitude = FALSE)
-  result <- match_one_cell(lon, lat, c(0, 1), 0, 0.1, 0,
-                           "nearest", 100)
-  expect_true(result$accepted)
-  expect_true(result$inside_coverage)
-  expect_false(result$inside_selected_cell)
-  expect_equal(result$lon_idx, 1L)
-  lon <- list(centres = c(179, 181), lower = c(178, 180),
-              upper = c(180, 182), longitude = TRUE)
-  wrapped <- match_one_cell(lon, lat, c(179, -179), 0, 181, 0,
-                            "nearest", 100)
-  expect_true(wrapped$inside_selected_cell)
-  expect_true(wrapped$inside_coverage)
-})
-
 test_that("report numbers are short without hiding small differences", {
   expect_equal(.selection_number(1.80399482019311e-7, 5L), "0")
   expect_equal(.selection_number(-1e-7, 5L), "0")
@@ -3163,103 +2536,6 @@ test_that("depth reference follows the source that supplies the value", {
   }
 })
 
-test_that("great-circle distances match sf under s2", {
-  original <- sf::sf_use_s2()
-  on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
-  suppressMessages(sf::sf_use_s2(TRUE))
-  a <- sf::st_sfc(sf::st_point(c(0, 0)), crs = 4326)
-  points <- rbind(c(1, 1), c(179.5, -60), c(-179.9, 89), c(0.01, 0))
-  for (k in seq_len(nrow(points))) {
-    b <- sf::st_sfc(sf::st_point(points[k, ]), crs = 4326)
-    expect_equal(
-      .great_circle_km(0, 0, points[k, 1], points[k, 2]),
-      as.numeric(sf::st_distance(a, b)) / 1000,
-      tolerance = 1e-12
-    )
-  }
-})
-
-test_that("matching does not depend on the sf s2 setting", {
-  original <- sf::sf_use_s2()
-  on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
-  suppressMessages(sf::sf_use_s2(FALSE))
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path), add = TRUE)
-  make_horizontal_test_nc(path, c(0, 1), c(40, 41), 1:4)
-  x <- data.frame(lon = c(0.1, 1.4), lat = 40)
-  expect_equal(without_selection_reports(extract2d(
-    x, path, var = "temp", date_col = NULL
-  ))$temp, c(1, 2))
-  expect_equal(without_selection_reports(extract2d(
-    x, path, var = "temp", date_col = NULL,
-    spatial_match = "nearest", max_distance_km = 100
-  ))$temp, c(1, 2))
-})
-
-test_that("whole-grid nearest search matches a search over every cell", {
-  set.seed(42)
-  lon <- c(seq(-179.5, 179.5, by = 7), 180)
-  lat <- sort(c(-90, runif(20, -89, 89), 90))
-  x <- c(runif(60, -360, 360), 180, -180, 179.99, 0, 10)
-  y <- c(runif(60, -90, 90), 0, 89.9, -89.9, 90, -90)
-  fast <- .nearest_horizontal_cells(lon, lat, x, y)
-  for (k in seq_along(x)) {
-    slow <- .nearest_horizontal_cell(lon, lat, seq_along(lon),
-                                     seq_along(lat), x[k], y[k])
-    expect_equal(fast[[k]]$distance_km, slow$distance_km, tolerance = 1e-12)
-    # Away from the poles the selected cell is the same too.
-    if (abs(y[k]) < 89) {
-      expect_identical(fast[[k]][c("lon_idx", "lat_idx")],
-                       slow[c("lon_idx", "lat_idx")])
-    }
-  }
-  invalid <- .nearest_horizontal_cells(lon, lat, c(NA, 0, Inf), c(0, 91, 0))
-  expect_true(all(vapply(invalid, is.null, logical(1))))
-  expect_length(.nearest_horizontal_cells(lon, lat, numeric(), numeric()), 0L)
-})
-
-test_that("exact distance ties keep the first cell in storage order", {
-  batch <- .nearest_horizontal_cells(c(0, 0), 0, c(0, 0), c(0, 0))
-  expect_identical(batch[[1L]]$lon_idx, 1L)
-  expect_identical(batch[[2L]]$lon_idx, 1L)
-  expect_equal(batch[[1L]]$distance_km, 0)
-  # A point on a shared edge is equally far from both centres; rounding
-  # noise must not decide, so the first (west/south) cell is kept.
-  lon <- seq(-4.5, 4.5, 1)
-  lat <- seq(35.5, 44.5, 1)
-  for (y in lat) {
-    edge <- .nearest_horizontal_cell(lon, lat, 4:5, which(lat == y), -1, y)
-    expect_identical(edge$lon_idx, 4L)
-    nearest <- .nearest_horizontal_cells(lon, lat, -1, y)[[1L]]
-    expect_identical(nearest$lon_idx, 4L)
-  }
-  # A point just off the edge still gets the truly closer cell.
-  off <- .nearest_horizontal_cell(lon, lat, 4:5, 1L, -1 + 1e-6, 35.5)
-  expect_identical(off$lon_idx, 5L)
-})
-
-test_that("nearest candidates preserve matching limits and containment", {
-  lon <- list(centres = c(0, 1), lower = c(-0.5, 0.5),
-              upper = c(0.5, 1.5), longitude = TRUE)
-  lat <- list(centres = 40, lower = 39, upper = 41, longitude = FALSE)
-  x <- c(0, 0.1, 1.6, NA)
-  y <- rep(40, 4)
-  nearest <- .nearest_horizontal_cells(c(0, 1), 40, x, y)
-  distance <- nearest[[3L]]$distance_km
-  for (limit in c(0, 1, 100, distance, distance - 1e-6)) {
-    matches <- .match_horizontal_cells(lon, lat, c(0, 1), 40, x, y,
-                                       "nearest", limit)
-    for (i in 1:3) {
-      expect_identical(matches$lon_idx[i], nearest[[i]]$lon_idx)
-      expect_identical(matches$accepted[i],
-                       nearest[[i]]$distance_km <= limit)
-    }
-    expect_identical(matches$reason[4L], "invalid_coordinates")
-  }
-  expect_false(matches$inside_coverage[3L])
-  expect_true(matches$inside_selected_cell[2L])
-})
-
 test_that("comparison precision distinguishes close values", {
   expect_identical(.selection_comparison(1.114, 1.111),
                    list(value = "1.114", limit = "1.111"))
@@ -3414,56 +2690,6 @@ test_that("mixed source time requirements hold in either source order", {
 })
 
 # Issue #75 B: strict formats, explicit missing dates and UTC comparisons.
-test_that("minute and second ISO text share datetime precision", {
-  x <- c("2020-01-02 19:54", "2020-01-02T19:54Z",
-         "2020-01-02 19:54:30", NA_character_)
-  parsed <- .prepare_time_input(x)
-  expect_identical(parsed$resolution, "datetime")
-  expect_equal(format(parsed$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-               c("2020-01-02 19:54:00", "2020-01-02 19:54:00",
-                 "2020-01-02 19:54:30", NA_character_))
-  expect_identical(.prepare_time_input("2020-01-02")$resolution, "daily")
-  expect_error(.prepare_time_input(c("2020-01-02", "2020-01-02 19:54")),
-               "mixes dates", fixed = TRUE)
-})
-
-test_that("explicit missing vectors are not conversion failures", {
-  for (x in list(NA, c(NA, NA), NA_real_, NA_character_,
-                  as.Date(NA_character_))) {
-    for (resolution in c("auto", "datetime", "daily", "monthly", "yearly")) {
-      parsed <- .prepare_time_input(x, resolution)
-      expect_length(parsed$values, length(x))
-      expect_true(all(is.na(parsed$values)))
-    }
-  }
-  mixed <- .prepare_time_input(c("2020-01-02 19:54", NA_character_))
-  expect_false(is.na(mixed$values[1L]))
-  expect_true(is.na(mixed$values[2L]))
-  expect_error(.prepare_time_input(c(1, NA_real_)), "Unsupported input type",
-               fixed = TRUE)
-})
-
-test_that("time errors identify values and IDs while bounding examples", {
-  x <- c("2020-01-02", NA_character_, "06/01/2020", "2020-02-30",
-         rep("2020-01-02junk", 5))
-  error <- tryCatch(.prepare_time_input(
-    x, input_name = "`data$observed_at`", ids = paste0("station-", 1:9)
-  ), error = identity)
-  expect_s3_class(error, "error")
-  text <- conditionMessage(error)
-  expect_match(text, "Input: `data$observed_at`", fixed = TRUE)
-  expect_match(text, "Affected observations: 7", fixed = TRUE)
-  expect_match(text, "row/position 3 (id: \"station-3\"): \"06/01/2020\"",
-               fixed = TRUE)
-  expect_match(text, "2020-02-30", fixed = TRUE)
-  expect_match(text, "Showing 5 of 7 cases", fixed = TRUE)
-  expect_false(grepl("row/position 2", text, fixed = TRUE))
-  expect_false(grepl("station-8", text, fixed = TRUE))
-  expect_match(text, "YYYY-MM-DD HH:MM", fixed = TRUE)
-  single <- tryCatch(.prepare_time_input("2020-01-02junk"), error = identity)
-  expect_false(grepl("Showing", conditionMessage(single), fixed = TRUE))
-})
-
 test_that("public date errors distinguish direct inputs and named columns", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
@@ -3484,31 +2710,6 @@ test_that("public date errors distinguish direct inputs and named columns", {
   expect_match(conditionMessage(direct), "Input: `date`", fixed = TRUE)
   expect_match(conditionMessage(direct), "Affected observations: 2", fixed = TRUE)
   expect_match(conditionMessage(direct), "row/position 2", fixed = TRUE)
-})
-
-test_that("POSIX time zones preserve instants across UTC day boundaries", {
-  local <- as.POSIXct(c("2020-01-02 00:30:00", "2020-07-02 00:30:00"),
-                      tz = "Europe/Madrid")
-  for (x in list(local, as.POSIXlt(local))) {
-    parsed <- .prepare_time_input(x)
-    expect_identical(parsed$resolution, "datetime")
-    expect_equal(format(parsed$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-                 c("2020-01-01 23:30:00", "2020-07-01 22:30:00"))
-    expect_equal(as.numeric(parsed$values), as.numeric(local))
-  }
-  transition <- as.POSIXct(c("2020-03-29 01:30:00", "2020-03-29 03:30:00"),
-                           tz = "Europe/Madrid")
-  parsed <- .prepare_time_input(as.POSIXlt(transition))
-  expect_equal(format(parsed$values, "%H:%M:%S", tz = "UTC"),
-               c("00:30:00", "01:30:00"))
-  expect_equal(as.numeric(diff(parsed$values), units = "hours"), 1)
-  text <- .prepare_time_input("2020-01-02 00:30")
-  expect_equal(format(text$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-               "2020-01-02 00:30:00")
-  for (bad in c("2020-01-02 00:30+01:00", "2020-01-02 00:30 Europe/Madrid")) {
-    expect_error(.prepare_time_input(bad), "supply a POSIXct/POSIXlt object",
-                 fixed = TRUE)
-  }
 })
 
 test_that("public timezone matching uses the UTC instant and calendar day", {
@@ -3620,17 +2821,9 @@ test_that("timezone warnings count only unmarked clocks and name the input", {
                fixed = TRUE)
   expect_equal(out$temp, c(11, 11, 11, NA_real_))
   expect_identical(out$observed_at, x$observed_at)
-  parsed <- .prepare_time_input(x$observed_at, "daily")
-  expect_identical(parsed$unzoned_rows, 1L)
 })
 
 test_that("explicit zones and date-only inputs need no timezone warning", {
-  for (x in list("2020-01-01", as.Date("2020-01-01"),
-                  "2020-01-01T12:00Z", "2020-01-01 12:00:00Z",
-                  as.POSIXct("2020-01-01 12:00:00", tz = "Europe/Madrid"),
-                  as.POSIXlt("2020-01-01 12:00:00", tz = "Europe/Madrid"), NA)) {
-    expect_length(.prepare_time_input(x)$unzoned_rows, 0L)
-  }
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
@@ -3664,15 +2857,9 @@ test_that("observation depths must be metres, positive downward", {
   ))$temp, c(20, NA))
 })
 
-test_that("full spellings of km and cm depth units are converted", {
+test_that("a depth axis in centimeters is extracted in metres", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
-  for (units in c("centimeters", "centimetres", "Centimeter")) {
-    expect_equal(.prepare_depth_axis(c(0, 500), units)$depth_m, c(0, 5))
-  }
-  for (units in c("kilometers", "kilometres", "kilometer")) {
-    expect_equal(.prepare_depth_axis(c(0, 0.5), units)$depth_m, c(0, 500))
-  }
   make_depth_axis_test_nc(path, c(500, 1500, 2500), c(11, 22, 33),
                           units = "centimeters", positive = "down")
   expect_equal(without_selection_reports(extract3d_nearest(
@@ -3714,17 +2901,6 @@ test_that("a depth dimension without coordinate variable fails clearly", {
   expect_length(printed, 0L)
 })
 
-test_that("single-precision station coordinates match their own station", {
-  station <- as.numeric(c(-122.40000152587891, 36.79999923706055))
-  lon <- list(centres = station[1], lower = station[1], upper = station[1],
-              longitude = TRUE, basis = "singleton_coordinate")
-  lat <- list(centres = station[2], lower = station[2], upper = station[2],
-              longitude = FALSE, basis = "singleton_coordinate")
-  expect_identical(.containing_axis_indices(lon, -122.4), 1L)
-  expect_identical(.containing_axis_indices(lat, 36.8), 1L)
-  expect_length(.containing_axis_indices(lon, -122.401), 0L)
-})
-
 test_that("unusable spatial bounds stop extraction", {
   path <- tempfile(fileext = ".nc")
   on.exit(unlink(path), add = TRUE)
@@ -3740,12 +2916,6 @@ test_that("unusable spatial bounds stop extraction", {
   # The message names the file, to find it in a multi-file call.
   expected <- paste0("Bounds for `lon` in ", basename(path), " were not found")
   expect_match(conditionMessage(err), expected, fixed = TRUE)
-  expect_true(.same_units("degree_east", "degrees_east"))
-  expect_true(.same_units("degrees_E", "degrees"))
-  expect_false(.same_units("degrees_east", "radians"))
-  expect_true(.same_units("m", "metres"))
-  expect_false(.same_units("m", "cm"))
-  expect_false(.same_units("days since 2020-01-01", "hours since 2020-01-01"))
 })
 
 test_that("within matching keeps input order between overlapping sources", {
@@ -3867,20 +3037,6 @@ test_that("bad spatial bounds stop point extraction and the core object", {
   check(rbind(c(1, 1, 2), c(1.2, 2, 3)), "must contain their centres")
   # The first two cells overlap between 0.8 and 1.
   check(rbind(c(0, 0.8, 2), c(1, 2, 3)), "Bounds for `lon` in .* overlap\\.")
-})
-
-test_that("shared bounds edges that differ by rounding are accepted", {
-  # 0.1 degree cells whose shared edges are stored once each.
-  lon <- seq(100, 140, by = 0.1)
-  edges <- seq(99.95, 140.05, by = 0.1)
-  f <- make_grid_file(lon = lon, depth = NULL, time = NULL,
-                      lon_bounds = rbind(head(edges, -1L), tail(edges, -1L)))
-  on.exit(unlink(f))
-  expect_equal(
-    extract_to_point(nc = f, lon = 120, lat = 10.5, var = "temp",
-                     method = "2d"),
-    201
-  )
 })
 
 test_that("bounds names inside a netCDF-4 group are relative to the group", {

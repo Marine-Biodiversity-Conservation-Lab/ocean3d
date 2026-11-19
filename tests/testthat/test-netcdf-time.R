@@ -245,3 +245,280 @@ test_that("a single monthly step with bounds is read", {
   )
   expect_identical(as_proxy(f)@axes$time$edges, "bounds")
 })
+
+# Observation times (.prepare_time_input()) ------------------------------------
+
+test_that("time validation identifies malformed values not inventing hours", {
+  expect_error(
+    .prepare_time_input(c("2020-01-02", "06/01/2020")),
+    "row/position"
+  )
+  expect_error(
+    .prepare_time_input("2020-02-30"),
+    "Invalid date/time"
+  )
+  expect_error(
+    .prepare_time_input(
+      c("2020-01-02", "2020-01-02 19:54:00"),
+      "datetime"
+    ),
+    "requires hours for every"
+  )
+  expect_error(
+    .prepare_time_input(as.Date("2020-01-02"), "datetime"),
+    "requires observation hours"
+  )
+  parsed <- .prepare_time_input(
+    c("2020-01-02", NA_character_),
+    "daily"
+  )
+  expect_true(is.na(parsed$values[2]))
+})
+
+test_that("minute and second ISO text share datetime precision", {
+  x <- c("2020-01-02 19:54", "2020-01-02T19:54Z",
+         "2020-01-02 19:54:30", NA_character_)
+  parsed <- .prepare_time_input(x)
+  expect_identical(parsed$resolution, "datetime")
+  expect_equal(format(parsed$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+               c("2020-01-02 19:54:00", "2020-01-02 19:54:00",
+                 "2020-01-02 19:54:30", NA_character_))
+  expect_identical(.prepare_time_input("2020-01-02")$resolution, "daily")
+  expect_error(.prepare_time_input(c("2020-01-02", "2020-01-02 19:54")),
+               "mixes dates", fixed = TRUE)
+})
+
+test_that("explicit missing vectors are not conversion failures", {
+  for (x in list(NA, c(NA, NA), NA_real_, NA_character_,
+                  as.Date(NA_character_))) {
+    for (resolution in c("auto", "datetime", "daily", "monthly", "yearly")) {
+      parsed <- .prepare_time_input(x, resolution)
+      expect_length(parsed$values, length(x))
+      expect_true(all(is.na(parsed$values)))
+    }
+  }
+  mixed <- .prepare_time_input(c("2020-01-02 19:54", NA_character_))
+  expect_false(is.na(mixed$values[1L]))
+  expect_true(is.na(mixed$values[2L]))
+  expect_error(.prepare_time_input(c(1, NA_real_)), "Unsupported input type",
+               fixed = TRUE)
+})
+
+test_that("time errors identify values and IDs while bounding examples", {
+  x <- c("2020-01-02", NA_character_, "06/01/2020", "2020-02-30",
+         rep("2020-01-02junk", 5))
+  error <- tryCatch(.prepare_time_input(
+    x, input_name = "`data$observed_at`", ids = paste0("station-", 1:9)
+  ), error = identity)
+  expect_s3_class(error, "error")
+  text <- conditionMessage(error)
+  expect_match(text, "Input: `data$observed_at`", fixed = TRUE)
+  expect_match(text, "Affected observations: 7", fixed = TRUE)
+  expect_match(text, "row/position 3 (id: \"station-3\"): \"06/01/2020\"",
+               fixed = TRUE)
+  expect_match(text, "2020-02-30", fixed = TRUE)
+  expect_match(text, "Showing 5 of 7 cases", fixed = TRUE)
+  expect_false(grepl("row/position 2", text, fixed = TRUE))
+  expect_false(grepl("station-8", text, fixed = TRUE))
+  expect_match(text, "YYYY-MM-DD HH:MM", fixed = TRUE)
+  single <- tryCatch(.prepare_time_input("2020-01-02junk"), error = identity)
+  expect_false(grepl("Showing", conditionMessage(single), fixed = TRUE))
+})
+
+test_that("POSIX time zones preserve instants across UTC day boundaries", {
+  local <- as.POSIXct(c("2020-01-02 00:30:00", "2020-07-02 00:30:00"),
+                      tz = "Europe/Madrid")
+  for (x in list(local, as.POSIXlt(local))) {
+    parsed <- .prepare_time_input(x)
+    expect_identical(parsed$resolution, "datetime")
+    expect_equal(format(parsed$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+                 c("2020-01-01 23:30:00", "2020-07-01 22:30:00"))
+    expect_equal(as.numeric(parsed$values), as.numeric(local))
+  }
+  transition <- as.POSIXct(c("2020-03-29 01:30:00", "2020-03-29 03:30:00"),
+                           tz = "Europe/Madrid")
+  parsed <- .prepare_time_input(as.POSIXlt(transition))
+  expect_equal(format(parsed$values, "%H:%M:%S", tz = "UTC"),
+               c("00:30:00", "01:30:00"))
+  expect_equal(as.numeric(diff(parsed$values), units = "hours"), 1)
+  text <- .prepare_time_input("2020-01-02 00:30")
+  expect_equal(format(text$values, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+               "2020-01-02 00:30:00")
+  for (bad in c("2020-01-02 00:30+01:00", "2020-01-02 00:30 Europe/Madrid")) {
+    expect_error(.prepare_time_input(bad), "supply a POSIXct/POSIXlt object",
+                 fixed = TRUE)
+  }
+})
+
+test_that("only text clock times without a zone are unzoned", {
+  x <- c("2020-01-01 00:00", "2020-01-01T00:00Z", "2020-01-01", NA_character_)
+  expect_identical(.prepare_time_input(x, "daily")$unzoned_rows, 1L)
+  for (x in list("2020-01-01", as.Date("2020-01-01"),
+                  "2020-01-01T12:00Z", "2020-01-01 12:00:00Z",
+                  as.POSIXct("2020-01-01 12:00:00", tz = "Europe/Madrid"),
+                  as.POSIXlt("2020-01-01 12:00:00", tz = "Europe/Madrid"),
+                  NA)) {
+    expect_length(.prepare_time_input(x)$unzoned_rows, 0L)
+  }
+})
+
+# Matching one observation time (.match_time_index()) --------------------------
+
+test_that("temporal matching handles empty and entirely missing time axes", {
+  for (values in list(as.Date(character()), as.Date(c(NA, NA)))) {
+    for (method in c("nearest", "exact")) {
+      expect_identical(
+        .match_time_index(
+          values, as.Date("2020-01-03"), time_match = method
+        ),
+        NA_integer_
+      )
+    }
+  }
+})
+
+test_that("daily comparison keeps late observations on the same day", {
+  observations <- as.POSIXct(
+    c(
+      "2020-01-02 00:01:00",
+      "2020-01-02 12:00:00",
+      "2020-01-02 19:54:00",
+      "2020-01-02 23:59:00",
+      "2020-01-03 00:00:00"
+    ),
+    tz = "UTC"
+  )
+
+  for (hour in c("00:00:00", "12:00:00")) {
+    available <- as.POSIXct(
+      paste(
+        c("2020-01-01", "2020-01-02", "2020-01-03"),
+        hour
+      ),
+      tz = "UTC"
+    )
+
+    for (matching in c("nearest", "exact")) {
+      indices <- vapply(seq_along(observations), function(i) {
+        .match_time_index(
+          available, observations[i],
+          time_match = matching,
+          time_resolution = "daily"
+        )
+      }, integer(1))
+
+      expect_equal(indices, c(2L, 2L, 2L, 2L, 3L))
+    }
+  }
+})
+
+test_that("datetime matching preserves minutes and time limits", {
+  available <- as.POSIXct(
+    c("2020-01-02 19:00:00", "2020-01-02 20:00:00"),
+    tz = "UTC"
+  )
+  target <- as.POSIXct("2020-01-02 19:54:00", tz = "UTC")
+
+  expect_identical(.match_time_index(available, target), 2L)
+  expect_identical(
+    .match_time_index(available, target, time_match = "exact"),
+    NA_integer_
+  )
+  expect_identical(
+    .match_time_index(
+      available, target, max_time_diff = 5 / 1440
+    ),
+    NA_integer_
+  )
+  expect_identical(
+    .match_time_index(
+      available, target, max_time_diff = 7 / 1440
+    ),
+    2L
+  )
+})
+
+test_that("monthly and yearly selection compares calendar labels", {
+  months <- as.POSIXct(
+    c("2020-02-15", "2020-03-15", "2020-04-15"),
+    tz = "UTC"
+  )
+
+  expect_identical(
+    .match_time_index(
+      months, as.Date("2020-03-31"),
+      time_match = "exact",
+      time_resolution = "monthly"
+    ),
+    2L
+  )
+
+  years <- as.POSIXct(
+    c("2019-07-01", "2020-07-01", "2021-07-01"),
+    tz = "UTC"
+  )
+
+  expect_identical(
+    .match_time_index(
+      years, as.Date("2020-12-31"),
+      time_match = "exact",
+      time_resolution = "yearly"
+    ),
+    2L
+  )
+})
+
+test_that("coarse selection rejects multiple records in one period", {
+  available <- as.POSIXct(
+    c("2020-01-02 19:00:00", "2020-01-02 20:00:00"),
+    tz = "UTC"
+  )
+
+  expect_error(
+    .match_time_index(available, as.Date("2020-01-02")),
+    "Multiple dataset timestamps"
+  )
+  for (resolution in c("monthly", "yearly")) {
+    expect_error(
+      .match_time_index(
+        available, as.Date("2020-01-02"),
+        time_resolution = resolution
+      ),
+      "Multiple dataset timestamps"
+    )
+  }
+})
+
+test_that("temporal eligibility needs a target and a non-missing time axis", {
+  axis <- as.POSIXct(c(NA_character_, "2020-01-01"), tz = "UTC")
+  target <- as.POSIXct("2020-01-10", tz = "UTC")
+  expect_true(.temporal_source_eligible(axis, target, "daily"))
+  # Static sources have no time axis to restrict them.
+  expect_true(.temporal_source_eligible(NULL, target, "daily"))
+  expect_false(.temporal_source_eligible(axis, target[NA], "daily"))
+  expect_false(.temporal_source_eligible(axis[1], target, "daily"))
+  expect_false(.temporal_source_eligible(axis[0], target, "daily"))
+})
+
+# Time metadata for point extraction (.read_temporal_metadata()) ---------------
+
+test_that("metadata keeps bounds separate from sampling cadence", {
+  f <- make_grid_file(depth = NULL, time = 0)
+  on.exit(unlink(f), add = TRUE)
+  nc <- ncdf4::nc_open(f, write = TRUE)
+  ncdf4::ncatt_put(nc, "temp", "cell_methods", "time: mean")
+  ncdf4::nc_close(nc)
+
+  info <- read_metadata(f)
+  expect_identical(info$cell_methods, "time: mean")
+  expect_identical(info$cadence$type, "unknown")
+  expect_identical(info$calendar, "standard")
+  expect_match(info$units, "days since")
+})
+
+test_that("explicit bounds describe intervals without inventing cadence", {
+  f <- make_grid_file(depth = NULL, time = 0,
+                      time_bounds = matrix(c(-0.5, 0.5), nrow = 2L))
+  on.exit(unlink(f), add = TRUE)
+  expect_identical(read_metadata(f)$cadence$type, "unknown")
+})

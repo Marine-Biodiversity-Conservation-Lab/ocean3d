@@ -530,21 +530,6 @@ test_that("the query verbs reject a tagged object that is no longer valid", {
   expect_error(mask(make_field(), broken), "as_envelope\\(\\)")
 })
 
-test_that("constructors accept tagged input as a footprint or template", {
-  field <- make_field()
-  # A voxel layer used as a footprint is still tagged SpatVoxel.
-  e <- as_envelope(field[[1]], depth_min = 0, depth_max = 100)
-  expect_identical(class(e)[[1]], "SpatEnvelope")
-  expect_identical(terra::values(e)[, "depth_min"], rep(0, 9))
-
-  poly <- sf::st_as_sf(make_left_polygon())
-  e2 <- vect_to_envelope(poly, field, depth_min = 0, depth_max = 100)
-  expect_identical(class(e2)[[1]], "SpatEnvelope")
-  expect_identical(terra::values(e2)[, "depth_max"],
-                   c(100, 100, NA, 100, 100, NA, 100, 100, NA))
-})
-
-
 # ---- terra::intersect() guard -----------------------------------------------
 
 test_that("terra::intersect() on a 3D object errors and names replacements", {

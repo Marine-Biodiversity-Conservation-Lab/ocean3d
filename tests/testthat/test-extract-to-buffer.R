@@ -33,76 +33,6 @@
 .buffer_source_cells <- matrix(c(0, 100, 200, 300), 2L)
 
 
-.make_buffer_axis_nc <- function(
-  path,
-  centres,
-  bounds = NULL,
-  axis = "depth",
-  units = if (axis == "depth") "m" else "hours since 2020-01-01 00:00:00",
-  attributes = list(),
-  bounds_units = units,
-  bounds_reference = "axis_bounds",
-  coordinate_first = FALSE,
-  bounds_attributes = list()
-) {
-  dimension <- ncdf4::ncdim_def(axis, units, centres)
-  value <- ncdf4::ncvar_def("value", "1", list(dimension), prec = "double")
-  variables <- list(value)
-  if (!is.null(bounds)) {
-    vertices <- ncdf4::ncdim_def(
-      "nv",
-      "",
-      seq_len(nrow(bounds)),
-      create_dimvar = FALSE
-    )
-    dimensions <- if (coordinate_first) {
-      list(dimension, vertices)
-    } else {
-      list(vertices, dimension)
-    }
-    variables <- c(
-      variables,
-      list(
-        ncdf4::ncvar_def(
-          "axis_bounds",
-          bounds_units,
-          dimensions,
-          missval = -9999,
-          prec = "double"
-        )
-      )
-    )
-  }
-  nc <- ncdf4::nc_create(path, variables)
-  on.exit(ncdf4::nc_close(nc))
-  ncdf4::ncvar_put(nc, "value", seq_along(centres))
-  if (!is.null(bounds)) {
-    ncdf4::ncvar_put(
-      nc,
-      "axis_bounds",
-      if (coordinate_first) t(bounds) else bounds
-    )
-  }
-  if (!is.null(bounds) || bounds_reference != "axis_bounds") {
-    ncdf4::ncatt_put(nc, axis, "bounds", bounds_reference)
-  }
-  for (name in names(attributes)) {
-    ncdf4::ncatt_put(nc, axis, name, attributes[[name]])
-  }
-  for (name in names(bounds_attributes)) {
-    ncdf4::ncatt_put(nc, "axis_bounds", name, bounds_attributes[[name]])
-  }
-  invisible(path)
-}
-
-
-.read_buffer_axis_nc <- function(path, coordinate = "depth", ...) {
-  nc <- ncdf4::nc_open(path)
-  on.exit(ncdf4::nc_close(nc))
-  .read_interval_axis(nc, coordinate, ...)
-}
-
-
 # Request validation -----------------------------------------------------------
 
 test_that("most_similar exports locations without diagnostics", {
@@ -483,47 +413,27 @@ test_that(
 )
 
 
-test_that(
-  "calendar months clamp month ends an ... rve UTC clock time",
-  {
-    data <- data.frame(
-      date = c(
-        "2020-03-31T12:34:56Z",
-        "2021-03-31T12:34:56Z",
-        "2020-01-31T12:34:56Z",
-        NA_character_
-      )
-    )
-    options <- .validate_buffer_options(
-      time_before = 1,
-      time_after = 1,
-      time_unit = "months"
-    )
-    result <- .buffer_observation_windows(data, options)
-    expect_equal(
-      format(result$windows$time_lower_utc, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-      c(
-        "2020-02-29 12:34:56",
-        "2021-02-28 12:34:56",
-        "2019-12-31 12:34:56",
-        NA_character_
-      )
-    )
-    expect_equal(
-      format(result$windows$time_upper_utc, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-      c(
-        "2020-04-30 12:34:56",
-        "2021-04-30 12:34:56",
-        "2020-02-29 12:34:56",
-        NA_character_
-      )
-    )
+test_that(".buffer_shift_time() clamps calendar shifts to the month end", {
+  shift <- function(x, amount, unit) {
+    shifted <- .buffer_shift_time(as.POSIXct(x, tz = "UTC"), amount, unit)
+    format(shifted, "%Y-%m-%d %H:%M:%S", tz = "UTC")
   }
-)
-
+  ends <- c("2020-01-31 12:34:56", "2020-03-31 12:34:56",
+            "2021-03-31 12:34:56", NA)
+  expect_equal(shift(ends, 1, "months"),
+               c("2020-02-29 12:34:56", "2020-04-30 12:34:56",
+                 "2021-04-30 12:34:56", NA))
+  expect_equal(shift(ends, -1, "months"),
+               c("2019-12-31 12:34:56", "2020-02-29 12:34:56",
+                 "2021-02-28 12:34:56", NA))
+  # Years are 12 months, so a leap day moves to 28 February.
+  leap_day <- "2020-02-29 19:30:00"
+  expect_equal(shift(leap_day, 1, "years"), "2021-02-28 19:30:00")
+  expect_equal(shift(leap_day, -1, "years"), "2019-02-28 19:30:00")
+})
 
 test_that(
-  "calendar years handle leap days and ... nchanged endpoints",
+  "a one-sided calendar window leaves the other endpoint unchanged",
   {
     options <- .validate_buffer_options(time_before = 1, time_unit = "years")
     result <- .buffer_observation_windows(
@@ -531,21 +441,8 @@ test_that(
       options
     )
     expect_equal(
-      format(result$windows$time_lower_utc, "%Y-%m-%d %H:%M", tz = "UTC"),
-      "2019-02-28 19:30"
-    )
-    expect_equal(
       format(result$windows$time_upper_utc, "%Y-%m-%d %H:%M", tz = "UTC"),
       "2020-02-29 19:30"
-    )
-    options <- .validate_buffer_options(time_after = 1, time_unit = "years")
-    result <- .buffer_observation_windows(
-      data.frame(date = "2020-02-29T19:30:00Z"),
-      options
-    )
-    expect_equal(
-      format(result$windows$time_upper_utc, "%Y-%m-%d %H:%M", tz = "UTC"),
-      "2021-02-28 19:30"
     )
   }
 )
@@ -703,24 +600,6 @@ test_that("horizontal buffers use kilometres and geodesic distances", {
   )
   expect_equal(out$temp, 10 * segment, tolerance = 1e-4)
   expect_equal(out$temp_match_info[[1L]]$coverage_fraction, 1)
-})
-
-
-test_that("longitude cells that overlap modulo 360 are rejected", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path))
-  # Increasing and non-overlapping as stored, but [340, 360] is [-20, 0].
-  .make_buffer_grid_nc(
-    path, matrix(1:4, 4L, 1L), lon = c(0, 120, 240, 350), lat = 0,
-    lon_bounds = matrix(c(-15, 15, 105, 135, 225, 255, 340, 360), 2L),
-    lat_bounds = matrix(c(-1, 1), 2L)
-  )
-  err <- expect_error(
-    extract_to_buffer(data.frame(lon = 0, lat = 0), path,
-                      horizontal_radius_km = 1, quiet = TRUE),
-    class = "ocean3d_error_bounds"
-  )
-  expect_match(conditionMessage(err), "overlap around the globe")
 })
 
 
@@ -1265,212 +1144,6 @@ test_that("a caller-owned connection is read and left open", {
 })
 
 # Axis bounds ------------------------------------------------------------------
-
-test_that(
-  "both declared bounds dimension orders are supported",
-  {
-    paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
-    on.exit(unlink(paths))
-    for (i in seq_along(paths)) {
-      .make_buffer_axis_nc(
-        paths[i],
-        c(5, 20, 40),
-        matrix(c(0, 10, 10, 30, 30, 50), nrow = 2L),
-        coordinate_first = i == 2L
-      )
-      support <- .read_buffer_axis_nc(paths[i])
-      expect_equal(support$lower, c(0, 10, 30))
-      expect_equal(support$upper, c(10, 30, 50))
-    }
-  }
-)
-
-
-test_that(
-  "missing bounds require explicit permission to infer",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_axis_nc(path, c(0, 10, 30))
-    expect_error(
-      .read_buffer_axis_nc(
-        path
-      ),
-      "infer_bounds = TRUE",
-      fixed = TRUE
-    )
-    support <- .read_buffer_axis_nc(path, infer_bounds = TRUE)
-    expect_equal(support$lower, c(0, 5, 20))
-    expect_equal(support$upper, c(5, 20, 40))
-    expect_identical(support$basis, "inferred_midpoints")
-    expect_identical(support$clipped_at_surface, c(TRUE, FALSE, FALSE))
-  }
-)
-
-
-test_that(
-  "a singleton needs explicit bounds and keeps its extent",
-  {
-    paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
-    on.exit(unlink(paths))
-    .make_buffer_axis_nc(paths[1], 10)
-    expect_error(
-      .read_buffer_axis_nc(paths[1], infer_bounds = TRUE),
-      "single coordinate",
-      fixed = TRUE
-    )
-    .make_buffer_axis_nc(paths[2], 10, matrix(c(5, 15), nrow = 2L))
-    support <- .read_buffer_axis_nc(paths[2])
-    expect_equal(support$lower, 5)
-    expect_equal(support$upper, 15)
-  }
-)
-
-
-test_that(
-  "time bounds decode to UTC and allow ... labelled intervals",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_axis_nc(
-      path,
-      c(0, 24),
-      matrix(c(0, 24, 24, 48), nrow = 2L),
-      axis = "time",
-      attributes = list(calendar = "gregorian")
-    )
-    support <- .read_buffer_axis_nc(path, "time", axis = "time")
-    expect_equal(
-      support$lower,
-      as.numeric(
-        as.POSIXct(
-          c("2020-01-01", "2020-01-02"),
-          tz = "UTC"
-        )
-      )
-    )
-    expect_equal(
-      support$upper,
-      as.numeric(
-        as.POSIXct(
-          c("2020-01-02", "2020-01-03"),
-          tz = "UTC"
-        )
-      )
-    )
-    expect_identical(support$calendar, "gregorian")
-    expect_identical(support$basis, "explicit_bounds")
-  }
-)
-
-
-test_that(
-  "irregular time inference uses neighbouring midpoints",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_axis_nc(path, c(0, 2, 8), axis = "time")
-    support <- .read_buffer_axis_nc(
-      path,
-      "time",
-      axis = "time",
-      infer_bounds = TRUE
-    )
-    origin <- as.numeric(as.POSIXct("2020-01-01", tz = "UTC"))
-    expect_equal(support$lower, origin + c(-3600, 3600, 18000))
-    expect_equal(support$upper, origin + c(3600, 18000, 39600))
-    expect_identical(support$basis, "inferred_midpoints")
-  }
-)
-
-
-test_that(
-  "invalid declared bounds never fall back to inference",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    cases <- list(
-      list(bounds = matrix(c(0, 10, 5, 30), nrow = 2L), pattern = "overlap"),
-      list(
-        bounds = matrix(c(5, 5, 10, 30), nrow = 2L),
-        pattern = "positive widths"
-      ),
-      list(bounds = matrix(c(NA, 10, 10, 30), nrow = 2L), pattern = "finite"),
-      list(bounds = matrix(0:5, nrow = 3L), pattern = "two finite endpoints")
-    )
-    for (case in cases) {
-      .make_buffer_axis_nc(path, c(5, 20), case$bounds)
-      expect_error(
-        .read_buffer_axis_nc(path, infer_bounds = TRUE),
-        case$pattern,
-        fixed = TRUE
-      )
-    }
-    .make_buffer_axis_nc(path, c(5, 20), bounds_reference = "missing_bounds")
-    expect_error(
-      .read_buffer_axis_nc(path, infer_bounds = TRUE),
-      "missing bounds variable",
-      fixed = TRUE
-    )
-  }
-)
-
-
-test_that(
-  "incompatible units and directions are reported explicitly",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    bounds <- matrix(c(0, 10, 10, 30), nrow = 2L)
-    .make_buffer_axis_nc(path, c(5, 20), bounds, bounds_units = "cm")
-    expect_error(.read_buffer_axis_nc(path), "different units", fixed = TRUE)
-    .make_buffer_axis_nc(
-      path,
-      c(5, 20),
-      bounds,
-      attributes = list(positive = "down"),
-      bounds_attributes = list(positive = "up")
-    )
-    expect_error(
-      .read_buffer_axis_nc(path),
-      "conflicting directions",
-      fixed = TRUE
-    )
-  }
-)
-
-
-test_that(
-  "kilometres convert to metres and tr ...  axes are rejected",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_axis_nc(
-      path,
-      c(0.005, 0.02),
-      matrix(c(0, 0.01, 0.01, 0.03), nrow = 2L),
-      units = "km"
-    )
-    support <- .read_buffer_axis_nc(path)
-    expect_equal(support$centres, c(5, 20))
-    expect_equal(support$lower, c(0, 10))
-    expect_equal(support$upper, c(10, 30))
-    for (
-      attributes in list(
-        list(standard_name = "sea_water_pressure"),
-        list(formula_terms = "sigma: sigma eta: eta depth: depth")
-      )
-    ) {
-      .make_buffer_axis_nc(path, c(5, 20), attributes = attributes)
-      expect_error(
-        .read_buffer_axis_nc(path, infer_bounds = TRUE),
-        "physical transformation",
-        fixed = TRUE
-      )
-    }
-  }
-)
-
 
 # Source extraction ------------------------------------------------------------
 

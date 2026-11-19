@@ -1124,6 +1124,24 @@ test_that("vect_to_envelope() keeps NA where a depth_max raster is NA", {
   expect_true(all(is.na(terra::values(new$depth_min)[gaps])))
 })
 
+test_that("constructors accept tagged input as a footprint or template", {
+  field <- make_voxel(matrix(seq_len(9 * 5), nrow = 9),
+                      c(0, 50, 100, 150, 200), varname = "temp")
+  # A voxel layer used as a footprint is still tagged SpatVoxel.
+  e <- as_envelope(field[[1]], depth_min = 0, depth_max = 100)
+  expect_identical(class(e)[[1]], "SpatEnvelope")
+  expect_identical(terra::values(e)[, "depth_min"], rep(0, 9))
+
+  # The left two columns of the 3 x 3 grid.
+  poly <- sf::st_as_sf(terra::vect(
+    "POLYGON ((0 0, 2000 0, 2000 3000, 0 3000, 0 0))", crs = terra::crs(field)
+  ))
+  e2 <- vect_to_envelope(poly, field, depth_min = 0, depth_max = 100)
+  expect_identical(class(e2)[[1]], "SpatEnvelope")
+  expect_identical(terra::values(e2)[, "depth_max"],
+                   c(100, 100, NA, 100, 100, NA, 100, 100, NA))
+})
+
 # ---- occupied() -------------------------------------------------------------
 
 # Local helper: a 1x3 voxel over two standard depths, named by variable.

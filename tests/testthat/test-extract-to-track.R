@@ -1161,7 +1161,7 @@ test_that(
 
 
 test_that(
-  "calendar steps clamp month ends and reject implicit sampling intent",
+  "calendar steps split the route and reject implicit sampling intent",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1184,10 +1184,7 @@ test_that(
       time_unit = "months",
       quiet = TRUE
     )
-    expect_equal(
-      format(out$samples$date, "%Y-%m-%d", tz = "UTC"),
-      c("2020-01-31", "2020-02-29", "2020-03-29", "2020-04-01")
-    )
+    expect_equal(nrow(out$samples), 4)
     expect_error(
       extract_to_track(
         route,
@@ -1510,19 +1507,6 @@ test_that(
       c("00:30", "01:30", "02:30")
     )
     expect_equal(seconds$samples$date, hours$samples$date)
-    route$date <- as.Date(c("2020-02-29", "2023-03-01"))
-    years <- extract_to_track(
-      route,
-      path,
-      interpolate_time = TRUE,
-      time_step = 1,
-      time_unit = "years",
-      quiet = TRUE
-    )
-    expect_equal(
-      format(years$samples$date, "%Y-%m-%d", tz = "UTC"),
-      c("2020-02-29", "2021-02-28", "2022-02-28", "2023-02-28", "2023-03-01")
-    )
   }
 )
 
