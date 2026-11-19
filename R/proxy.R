@@ -297,6 +297,67 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   if (is.null(wkt)) "EPSG:4326" else wkt
 }
 
+# Reads one index window of a SpatProxy's variable with a single ncdf4 call.
+# `window` is a named list with up to one element per axis (`lon`, `lat`,
+# `depth`, `time`): the first and last index to read, in storage order (so for
+# a deep-first depth axis, index 1 is the deepest level). An axis left out is
+# read whole. Returns the values, unpacked by ncdf4 (scale and offset applied,
+# fill values as NA), as a 4D array in the fixed order lon, lat, depth, time,
+# with length 1 for an axis the variable doesn't have.
+.read_proxy_window <- function(x, window = list()) {
+  variable <- x@variable
+  axes <- c("lon", "lat", "depth", "time")
+  unknown <- setdiff(names(window), axes)
+  if (length(window) && (is.null(names(window)) || length(unknown))) {
+    rlang::abort(glue::glue(
+      "The read window must name its axes, from lon, lat, depth and time."
+    ), class = "ocean3d_error_read_window", call = NULL)
+  }
+  index_list <- list()
+  shape <- stats::setNames(rep(1L, 4L), axes)
+  for (axis in axes) {
+    dim <- variable$axis_dims[[axis]]
+    if (is.null(dim)) next
+    n <- variable$dim_lengths[[dim]]
+    span <- if (is.null(window[[axis]])) c(1L, n) else window[[axis]]
+    if (!is.numeric(span) || length(span) != 2L || anyNA(span) ||
+          any(span != round(span)) || span[1L] < 1L || span[2L] > n ||
+          span[1L] > span[2L]) {
+      rlang::abort(glue::glue(
+        "The read window for `{axis}` must be a first and last index, ",
+        "whole numbers from 1 to {n}, with first <= last."
+      ), class = "ocean3d_error_read_window", call = NULL)
+    }
+    shape[[axis]] <- as.integer(span[2L] - span[1L] + 1L)
+    index_list[[dim]] <- list(start = as.integer(span[1L]),
+                              count = shape[[axis]])
+  }
+  sc <- .build_start_count(variable$dims, index_list, variable$singleton_dims)
+
+  opened <- .open_source(list(source = x@source$path, type = "path"))
+  on.exit(.close_source(opened), add = TRUE)
+  # The indices are only right for the file the proxy described.
+  info <- opened$nc$var[[variable$name]]
+  if (is.null(info) ||
+        !identical(as.integer(info$varsize), unname(variable$dim_lengths))) {
+    rlang::abort(glue::glue(
+      "Variable `{variable$name}` in {basename(x@source$path)} no longer ",
+      "has the dimensions this SpatProxy describes. Build it again with ",
+      "as_proxy()."
+    ), class = "ocean3d_error_proxy_source", call = NULL)
+  }
+  values <- ncdf4::ncvar_get(opened$nc, variable$name, start = sc$start,
+                             count = sc$count, collapse_degen = FALSE)
+  # Put the axes in fixed order, then the other (length 1) dimensions, and
+  # add length 1 for missing axes, which doesn't move any values.
+  present <- unlist(variable$axis_dims[axes])
+  dim(values) <- sc$count
+  values <- aperm(values, c(match(present, variable$dims),
+                            which(!variable$dims %in% present)))
+  dim(values) <- unname(shape)
+  values
+}
+
 #' @rdname SpatProxy-class
 #' @param object A `SpatProxy`.
 #' @export

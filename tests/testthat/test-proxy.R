@@ -335,3 +335,114 @@ test_that("the print shows each axis", {
   ))
   expect_identical(bare[7:8], c("depth      : none", "time       : none"))
 })
+
+# The index-window reader. The file must outlive the proxy, so each test
+# removes it at the end.
+proxy_and_file <- function(...) {
+  f <- make_grid_file(...)
+  list(proxy = as_proxy(f, var = "temp"), file = f)
+}
+
+stored_values <- function(f) {
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc))
+  ncdf4::ncvar_get(nc, "temp", collapse_degen = FALSE)
+}
+
+test_that("a window reads the same values as the whole variable", {
+  g <- proxy_and_file()
+  on.exit(unlink(g$file), add = TRUE)
+  full <- stored_values(g$file)
+
+  expect_identical(.read_proxy_window(g$proxy), full)
+  window <- .read_proxy_window(
+    g$proxy, list(lon = c(2, 3), depth = c(2, 2), time = c(1, 1))
+  )
+  expect_identical(window, full[2:3, , 2, 1, drop = FALSE])
+})
+
+test_that("values come back in lon, lat, depth, time order", {
+  g <- proxy_and_file(dim_order = c("time", "depth", "lat", "lon"))
+  on.exit(unlink(g$file), add = TRUE)
+  fixed <- aperm(stored_values(g$file), 4:1)
+
+  expect_identical(dim(.read_proxy_window(g$proxy)), c(3L, 2L, 2L, 2L))
+  expect_identical(.read_proxy_window(g$proxy), fixed)
+  expect_identical(
+    .read_proxy_window(g$proxy, list(lat = c(2, 2), time = c(2, 2))),
+    fixed[, 2, , 2, drop = FALSE]
+  )
+
+  # A deep-first depth axis is read in storage order: index 1 is deepest.
+  deep <- proxy_and_file(depth = c(15, 5))
+  on.exit(unlink(deep$file), add = TRUE)
+  expect_identical(
+    .read_proxy_window(deep$proxy, list(depth = c(1, 1))),
+    stored_values(deep$file)[, , 1, , drop = FALSE]
+  )
+})
+
+test_that("missing axes and other length-1 dimensions have length 1", {
+  flat <- proxy_and_file(depth = NULL, time = NULL)
+  on.exit(unlink(flat$file), add = TRUE)
+  expect_identical(dim(.read_proxy_window(flat$proxy)), c(3L, 2L, 1L, 1L))
+  no_depth <- proxy_and_file(depth = NULL)
+  on.exit(unlink(no_depth$file), add = TRUE)
+  expect_identical(dim(.read_proxy_window(no_depth$proxy)), c(3L, 2L, 1L, 2L))
+
+  # A length-1 `band` dimension between lon and lat.
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  dims <- list(
+    ncdf4::ncdim_def("lon", "degrees_east", c(0.5, 1.5, 2.5)),
+    ncdf4::ncdim_def("band", "", 1L, create_dimvar = FALSE),
+    ncdf4::ncdim_def("lat", "degrees_north", c(10.5, 11.5))
+  )
+  nc <- ncdf4::nc_create(f, ncdf4::ncvar_def("temp", "degC", dims, -9999))
+  ncdf4::ncvar_put(nc, "temp", array(1:6, c(3, 1, 2)))
+  ncdf4::nc_close(nc)
+  expect_identical(
+    .read_proxy_window(as_proxy(f), list(lat = c(2, 2))),
+    array(c(4, 5, 6), c(3, 1, 1, 1))
+  )
+})
+
+test_that("packed values are unpacked and fill values are NA", {
+  g <- proxy_and_file(prec = "short", chunksizes = c(1, 1, 1, 1))
+  on.exit(unlink(g$file), add = TRUE)
+  nc <- ncdf4::nc_open(g$file, write = TRUE)
+  ncdf4::ncvar_put(nc, "temp", NA, start = c(2, 1, 1, 1),
+                   count = c(1, 1, 1, 1))
+  ncdf4::nc_close(nc)
+
+  values <- .read_proxy_window(g$proxy, list(depth = c(1, 1), time = c(1, 1)))
+  expect_equal(as.vector(values), c(1, NA, 3, 4, 5, 6) * 0.1)
+})
+
+test_that("bad read windows and changed files stop", {
+  g <- proxy_and_file()
+  on.exit(unlink(g$file), add = TRUE)
+  bad <- list(
+    list(lon = c(0, 2)), list(lon = c(2, 4)), list(lon = c(3, 2)),
+    list(lon = 2), list(lon = c(1.5, 2)), list(lon = c(NA, 2)),
+    list(lon = c("1", "2"))
+  )
+  for (window in bad) {
+    err <- expect_error(.read_proxy_window(g$proxy, window),
+                        class = "ocean3d_error_read_window")
+    expect_match(conditionMessage(err), "`lon` must be .* from 1 to 3")
+  }
+  err <- expect_error(.read_proxy_window(g$proxy, list(x = c(1, 1))),
+                      class = "ocean3d_error_read_window")
+  expect_match(conditionMessage(err), "name its axes")
+  expect_error(.read_proxy_window(g$proxy, list(c(1, 1))),
+               class = "ocean3d_error_read_window")
+
+  # The file is rewritten with another grid after the proxy was built.
+  other <- make_grid_file(lon = c(0.5, 1.5))
+  on.exit(unlink(other), add = TRUE)
+  file.copy(other, g$file, overwrite = TRUE)
+  err <- expect_error(.read_proxy_window(g$proxy),
+                      class = "ocean3d_error_proxy_source")
+  expect_match(conditionMessage(err), "Build it again with as_proxy\\(\\)")
+})
