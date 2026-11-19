@@ -124,10 +124,14 @@ test_that("a proxy that can't be a voxel stops", {
                       class = "ocean3d_error_irregular_grid")
   expect_match(conditionMessage(err), "longitude axis isn't regular")
 
-  # float32 rounding is regular enough.
+  # float32 rounding is regular enough, including the drift that builds up
+  # along a 1/12 degree axis (about 0.02% of a cell on Copernicus Marine).
   rounded <- proxy_and_file(lon = c(0.5, 1.5000001, 2.4999999))
   on.exit(unlink(rounded$file), add = TRUE)
   expect_s4_class(as_voxel(rounded$proxy, time = 1), "SpatVoxel")
+  drift <- proxy_and_file(lon = c(1, 3, 5) / 24 + c(0, 0, 1.5e-5))
+  on.exit(unlink(drift$file), add = TRUE)
+  expect_s4_class(as_voxel(drift$proxy, time = 1), "SpatVoxel")
 
   # `depths` and `depth_bounds` come from the proxy; `time` needs one.
   g <- proxy_and_file()

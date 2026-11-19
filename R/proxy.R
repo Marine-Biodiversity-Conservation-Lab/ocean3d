@@ -508,9 +508,11 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 }
 
 # One horizontal axis as the extent of a regular grid: `min` and `max` from
-# the cell edges. Coordinates stored as float32 are rarely exactly regular,
-# so steps and centres are compared with a rounding tolerance; a truly
-# irregular axis can't be a terra raster and stops.
+# the cell edges. Coordinates stored as float32 are rarely exactly regular:
+# rounding builds up along the axis (about 0.02% of a cell on Copernicus
+# Marine's 1/12 degree grid), so each centre may sit up to 0.1% of a cell from
+# where a regular grid puts it. A truly irregular axis can't be a terra raster
+# and stops.
 .regular_axis <- function(axis, label) {
   centres <- sort(axis$centres)
   lower <- min(axis$lower)
@@ -524,7 +526,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   }
   step <- (upper - lower) / n
   expected <- lower + step * (seq_len(n) - 0.5)
-  tol <- max(4 * .interval_tolerance(axis$lower, axis$upper), 1e-6 * step)
+  tol <- max(4 * .interval_tolerance(axis$lower, axis$upper), 1e-3 * step)
   if (any(abs(centres - expected) > tol)) {
     rlang::abort(glue::glue(
       "The {label} axis isn't regular: its cells differ in width. A ",
