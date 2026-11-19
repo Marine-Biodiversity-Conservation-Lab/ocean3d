@@ -66,6 +66,11 @@ stop with an error when they are bad (#113):
   with a depth range and an optional time interval, such as a circle of
   10 km radius from 10 to 60 m deep around a detection at 35 m. `volume()`
   on points or lines now suggests it (#114).
+* New `vector3d_to_envelope()` puts `SpatVector3D` polygons onto a grid as
+  a `SpatEnvelope`, as `vect_to_envelope()` does for 2D polygons. Where
+  polygons overlap, a cell gets the shallowest top and deepest bottom of
+  the polygons covering it. Polygon times are dropped, with a message
+  (#114).
 
 ## Bug fixes
 

@@ -492,3 +492,82 @@ test_that("vertices stored out of order are buffered in line order", {
   expect_equal(as.data.frame(buffer_3d(shuffled, 5, 10)),
                as.data.frame(buffer_3d(tracks, 5, 10)))
 })
+
+# Envelopes ----------------------------------------------------------------
+
+# A 0.25-degree grid over both areas() squares and the gap between them.
+envelope_grid <- function() {
+  terra::rast(nrows = 4, ncols = 12, xmin = 150, xmax = 153, ymin = -21,
+              ymax = -20, crs = "EPSG:4326")
+}
+
+test_that("polygons with one depth range match vect_to_envelope()", {
+  p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
+  e <- vector3d_to_envelope(p, envelope_grid())
+  expected <- vect_to_envelope(terra::vect(areas()), envelope_grid(),
+                               depth_min = 0, depth_max = 200)
+  expect_s4_class(e, "SpatEnvelope")
+  expect_equal(terra::values(e), terra::values(expected),
+               ignore_attr = TRUE)
+})
+
+test_that("each cell gets the polygons' own depths, outer range on overlap", {
+  p <- as_vector3d(areas(), depth_min = "top", depth_max = "bottom")
+  v <- terra::values(vector3d_to_envelope(p, envelope_grid()))
+  expect_setequal(stats::na.omit(v[, "depth_min"]), c(0, 10))
+  expect_setequal(stats::na.omit(v[, "depth_max"]), c(200, 50))
+
+  # Two squares over the same cells, 0 to 50 m and 200 to 300 m.
+  stacked <- areas()
+  stacked$geometry[2] <- stacked$geometry[1]
+  stacked$top <- c(0, 200)
+  stacked$bottom <- c(50, 300)
+  s <- as_vector3d(stacked, depth_min = "top", depth_max = "bottom")
+  v <- stats::na.omit(terra::values(vector3d_to_envelope(s, envelope_grid())))
+  expect_true(nrow(v) > 0)
+  expect_true(all(v[, "depth_min"] == 0 & v[, "depth_max"] == 300))
+})
+
+test_that("polygon times are dropped with a message", {
+  timed <- as_vector3d(areas(), depth_min = 0, depth_max = 200,
+                       time = c("from", "to"))
+  expect_message(vector3d_to_envelope(timed, envelope_grid()),
+                 "times are dropped", class = "ocean3d_message_time_dropped")
+  untimed <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
+  expect_no_message(vector3d_to_envelope(untimed, envelope_grid()))
+})
+
+test_that("polygons are projected onto a template in another CRS", {
+  p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
+  grid <- terra::project(envelope_grid(), "EPSG:3857")
+  e <- vector3d_to_envelope(p, grid)
+  expected <- vect_to_envelope(terra::project(terra::vect(areas()), grid),
+                               grid, depth_min = 0, depth_max = 200)
+  expect_equal(terra::values(e), terra::values(expected),
+               ignore_attr = TRUE)
+})
+
+test_that("a buffered detection becomes an envelope with its depth window", {
+  obs <- data.frame(lon = 151.5, lat = -20.5, depth = 35)
+  b <- buffer_3d(as_vector3d(obs), radius_km = 20, depth_window = 25)
+  v <- stats::na.omit(terra::values(vector3d_to_envelope(b, envelope_grid())))
+  expect_true(nrow(v) > 0)
+  expect_true(all(v[, "depth_min"] == 10 & v[, "depth_max"] == 60))
+})
+
+test_that("vector3d_to_envelope() rejects inputs it can't convert", {
+  err <- "ocean3d_error_vector3d_to_envelope"
+  pts <- as_vector3d(data.frame(lon = 151, lat = -20.5, depth = 5))
+  expect_error(vector3d_to_envelope(pts, envelope_grid()),
+               "These are points; buffer_3d() turns them into polygons",
+               class = err, fixed = TRUE)
+  expect_error(vector3d_to_envelope(areas(), envelope_grid()),
+               "must be SpatVector3D polygons", class = err)
+  p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
+  expect_error(vector3d_to_envelope(p, matrix(1)),
+               "`template` must be a SpatRaster", class = err)
+  far <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 1, ymin = 0,
+                     ymax = 1, crs = "EPSG:4326")
+  expect_error(vector3d_to_envelope(p, far), "don't touch any cell",
+               class = err)
+})

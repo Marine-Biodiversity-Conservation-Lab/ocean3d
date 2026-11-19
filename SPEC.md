@@ -20,7 +20,7 @@ Technically, this means that `ocean3d` needs to be able to take points (0D), lin
 - **Three steps:** an analysis is build → intersect → summarise, and each analysis function belongs to one step ([Package design](#package-design-build-intersect-summarise)). The extraction functions don't follow this yet; they will either become wrappers over the three steps or be retired in favour of workflow vignettes (undecided).
 - **Now:** two data models. netCDF files are used for point, buffer and track extraction; `SpatVoxel` / `SpatEnvelope` for everything else ([Data model](#data-model)).
 - **Planned (#99):** one model with time as a dimension, reading only the data each step needs: the package's own core object, read with ncdf4 and CFtime, terra for slices in memory, and stars only for remote Zarr (agreed in #112; trial in [`dev/data-model-trial.md`](dev/data-model-trial.md)).
-- **In progress (#114):** one vector class, `SpatVector3D`, holding points, lines and polygons with depth.
+- **Done (#114):** one vector class, `SpatVector3D`, holding points, lines and polygons with depth.
 - **Done (#111):** CFtime decodes time on the standard calendars.
 
 ## Package design: build, intersect, summarise
@@ -33,7 +33,7 @@ An analysis in `ocean3d` has three steps, and each analysis function belongs to 
 
 | Step | Question | Exists now | Planned additions |
 |---|---|---|---|
-| Build | What is the 3D shape or grid? | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `envelope_to_voxel()`, `voxel_to_envelope()`, `occupied()`, `create_study_raster()`, `as_vector3d()`, `buffer_3d()`, data loaders (`woa_load_nc()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()`) | `vector3d_to_envelope()`, track sampling |
+| Build | What is the 3D shape or grid? | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `envelope_to_voxel()`, `voxel_to_envelope()`, `occupied()`, `create_study_raster()`, `as_vector3d()`, `buffer_3d()`, `vector3d_to_envelope()`, data loaders (`woa_load_nc()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()`) | track sampling |
 | Intersect | Where do they meet? | `intersect_3d()`, `intersects_3d()`, `mask()` | the same functions for `SpatVector3D`; a coverage function that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
 | Summarise | How much, and what values? | `volume()`, `calc_volume_overlap()` | `summarise_3d()` for statistics on intersect results |
 
@@ -187,7 +187,6 @@ None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on 
 
 - **Nearest depth with missing layers:** `extract_to_point()` skips missing layers when choosing the nearest depth. Whether the point rule in the coverage step keeps this (#115).
 - **Zarr layouts:** Copernicus Marine serves each product chunked by time step (for maps) and by location (for time series). How the core object records both and which one each step reads (#113).
-- **`SpatVector3D` polygons:** how they are stored (#114).
 - **Combined extraction functions:** keep each as a wrapper over the three steps, or retire it in favour of a workflow vignette (#116; see [Combined functions](#package-design-build-intersect-summarise)).
 - **ncdfCF:** revisit at its 1.0 release or if native model grids come into scope.
 
@@ -226,13 +225,13 @@ Rules:
 - **Polygon scope:** one depth interval per horizontal position (each vertical line enters the shape once and leaves once). This covers extruded shapes (cylinders, slabs, an MPA × a depth band), spheres, ellipsoids, cones, and shapes that follow the seafloor or mixed layer. Full 3D volumes (overhangs, several depth bands in one column) are out of scope.
 - **Polygon surfaces:** `top` and `bottom` are each a constant (first version); later, a named shape with parameters (e.g. an ellipsoid buffer), a raster (e.g. relative to GEBCO bathymetry), or, as a fallback, a function of position. Every form reduces to "depth interval at these positions", so adding a shape doesn't change extraction code. `top <= bottom` everywhere in the polygon.
 - **Volume** is defined for polygons only. `volume()` on points or lines is an error suggesting buffering, as area only makes sense for polygons in 2D.
-- **Conversion** of polygons to a `SpatEnvelope` (`vector3d_to_envelope()`) evaluates top and bottom at each cell of a template grid, like `vect_to_envelope()`.
-- **Storage:** points and lines are stored as a vertex table (lon, lat, depth, time, feature ID, order), the format `extract_to_track()` uses now, and convert to and from sf. sf isn't the storage because it treats Z as height and most of its operations drop depth and time. How polygons are stored is decided in #114.
+- **Conversion** of polygons to a `SpatEnvelope` (`vector3d_to_envelope()`) evaluates top and bottom at each cell of a template grid, like `vect_to_envelope()`. Where polygons overlap, a cell gets the shallowest top and the deepest bottom of the polygons covering it. Polygon times are dropped, with a message, because an envelope has no time interval.
+- **Storage:** points and lines are stored as a vertex table (lon, lat, depth, time, feature ID, order), the format `extract_to_track()` uses now, and are read from sf (there is no conversion back). sf isn't the storage because it treats Z as height and most of its operations drop depth and time. Polygons keep their outlines in an sf geometry column, with one depth range and time interval per polygon (#132).
 - `SpatVolume` extends to `c("SpatVoxel", "SpatEnvelope", "SpatVector3D")`; its docs note that only polygons have volume.
 
 #### Extraction on the three steps
 
-The three steps are the package design (see [Package design](#package-design-build-intersect-summarise)). This section plans the parts extraction still needs: the last `SpatVector3D` builder (`vector3d_to_envelope()`), a coverage function and `summarise_3d()`. Function names marked "planned" are working names, to be settled in the issue for each step.
+The three steps are the package design (see [Package design](#package-design-build-intersect-summarise)). This section plans the parts extraction still needs: a coverage function and `summarise_3d()`. Function names marked "planned" are working names, to be settled in the issue for each step.
 
 *1. Build.* `SpatVector3D` builders create shapes without reading the data they will be compared with.
 
@@ -284,7 +283,7 @@ Each step has its own issue, and each PR branches off `main`. Status as of 19 No
 3. **Move the shared CF/netCDF helpers** for sources, dimension detection, reading, longitude and latitude, depth and bounds out of `R/extract_to_points.R` into `R/netcdf-sources.R`, `R/netcdf-dims.R`, `R/netcdf-read.R`, `R/netcdf-horizontal.R`, `R/netcdf-depth.R` and `R/netcdf-bounds.R`, unchanged (#110). *Done.* They are the starting point for the core object's axis handling in step 5, so they are grouped by axis rather than by the extraction function that uses them. The time helpers stay in `R/extract_to_points.R` for step 4, which replaces them.
 4. **Replace the internal CF time decoding with CFtime and fix time matching** (#111), with the time tests from #71–#75 as reference behaviour, fixing #88–#92. The time helpers move out of `R/extract_to_points.R` into `R/netcdf-time.R`. *Done:* the decoder (#88, #90, #92) in #121, then matching (#89, #91 and the midnight case of #71) in #122. Non-standard calendars stay unsupported, with a clear error (see Direction, Time decoding). Must be done before step 5, because the core object's time axis is a CFtime object.
 5. **Build the core object** (#113). *In progress:* time bounds are decoded with CFtime's bounds support (#123), and the time tests call the shared helpers directly (#127). The first PR (#131) adds the experimental `SpatProxy` class and `as_proxy()`. It describes one variable of one netCDF file without reading values: its chunk sizes, the axes in fixed form, time running forwards only (see Direction, Time decoding) and the CRS. The second PR (#143) adds the internal reader for one read window, which returns the values with the axes in the order lon, lat, depth, time. Still to do: the other sources (series of files, Zarr, in-memory voxels), with their axes built at open. Then the voxel builder (depth in `terra::depth()` with old layer names read on input, CRS always set, float32 tolerance, `woa_load_nc()` moved to it), and time-aware volume, overlap and profiles, tiled when a time step is too large.
-6. **Add `SpatVector3D`** with `geomtype()`, `as_vector3d()` and sf conversion: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()` (#114). *In progress:* points and lines (#124), polygons (#132) and `buffer_3d()` (#144) done; `vector3d_to_envelope()` next. Can run in parallel with step 5, because it doesn't read gridded data.
+6. **Add `SpatVector3D`** with `geomtype()`, `as_vector3d()` and sf input: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()` (#114). *Done:* points and lines (#124), polygons (#132), `buffer_3d()` (#144) and `vector3d_to_envelope()`. Can run in parallel with step 5, because it doesn't read gridded data.
 7. **Add the coverage function** and `intersect_3d()` / `intersects_3d()` / `mask()` / `volume()` methods for `SpatVector3D` (#115), with block reads for many features. *Not started.* Needs steps 5 and 6. This is where the slow buffer reads measured in the trial are replaced.
 8. **Add `summarise_3d()` and workflow vignettes** for points, buffers, tracks and areas. Then, one function per PR, either reimplement each extraction function as a build → intersect → summarise wrapper or deprecate it in favour of its vignette (#116). *Not started.*
 9. **Add track sampling** as a build step and buffered tracks (#105); then named shapes, raster and function surfaces for polygons (#117). *Not started.*
@@ -302,7 +301,7 @@ Grouped by the step each function belongs to ([Package design](#package-design-b
 - **Convert between 2.5D and 3D rasters**. `envelope_to_voxel()` places an envelope on a set of standard depths; `voxel_to_envelope()` keeps the shallowest and deepest level per cell where a test on the values holds (by default, not `NA`), filling any gaps in between.
 - **Build a `SpatVector3D`**. `as_vector3d()` builds points or lines from a table or sf object with a depth (and time) per vertex, or polygons with a top and bottom (and time interval) per feature, without snapping them to a grid, e.g. tag detections at their depths, a dive track, or an MPA × a depth band.
 - **Buffer points and lines into polygons**. `buffer_3d()` adds a horizontal radius, depth window and time window, e.g. a 10 km × ±25 m × ±1 day buffer around each tag detection.
-- **Convert `SpatVector3D` polygons to 2.5D** *(planned)*. `vector3d_to_envelope(x, template)` evaluates the top and bottom at each cell of a template grid, like `vect_to_envelope()`. This loses the exact edges and the time interval, so use it only when the next step needs a grid (e.g. volume overlap with a species envelope).
+- **Convert `SpatVector3D` polygons to 2.5D**. `vector3d_to_envelope(x, template)` evaluates the top and bottom at each cell of a template grid, like `vect_to_envelope()`. This loses the exact edges and the time interval, so use it only when the next step needs a grid (e.g. volume overlap with a species envelope).
 
 ### Intersect: spatial query
 Three functions handle pairs of 3D objects (`SpatEnvelope`, `SpatVoxel`, and *(planned)* `SpatVector3D`), or a 3D object with a 2D one (a `SpatRaster` footprint, or polygons). A 2D object restricts the shape horizontally and leaves its depths alone.
