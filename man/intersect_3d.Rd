@@ -55,7 +55,8 @@ inputs are envelopes.}
 \item{bounds}{Only when one input is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: \code{"midpoint"}
 (default) or \code{"top"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel
-carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
+carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure the
+result, pass the same \code{bounds} to \code{\link[=volume]{volume()}}.}
 }
 \value{
 A \link[=SpatEnvelope-class]{SpatEnvelope} when both inputs are envelopes, or when one
@@ -130,6 +131,8 @@ terra::values(intersect_3d(a, poly))
 }
 \seealso{
 \code{\link[=intersects_3d]{intersects_3d()}} for the yes/no form; \code{\link[terra:mask]{mask()}} to keep a voxel's
-values inside a domain; \code{\link[=volume]{volume()}} for the volume of the result;
-\code{\link[=calc_volume_overlap]{calc_volume_overlap()}}, which is built on this function.
+values inside a domain; \code{\link[=volume]{volume()}} for the volume of the result, in
+total or per cell. Because an envelope is placed on the voxel's levels,
+compare the overlap with \code{volume(envelope_to_voxel(...))} rather than
+with the envelope's own volume.
 }

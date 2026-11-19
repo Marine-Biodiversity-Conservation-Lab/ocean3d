@@ -1314,13 +1314,12 @@ test_that("envelope_to_voxel() leaves out a slab the envelope only touches", {
   edged <- as_voxel(make_voxel(1, edge_depths), depth_bounds = edge_bounds)
   touching <- make_range_rast(rep(4, 9), rep(5, 9))
   expect_warning(
-    overlap <- calc_volume_overlap(touching, edged),
+    overlap <- intersect_3d(touching, edged),
     class = "ocean3d_warning_envelope_outside_slabs"
   )
-  # The promoted envelope is empty, so the overlap is NA (absent), never a
-  # positive volume.
-  shared <- terra::values(overlap[["volume_overlap"]])
-  expect_true(all(is.na(shared) | shared == 0))
+  # The converted envelope is empty, so the overlap is absent (NA) in every
+  # cell, never a positive volume.
+  expect_true(all(is.na(terra::values(volume(overlap, per_cell = TRUE)))))
 
   # An envelope in a gap between stored slabs gets the same warning, which
   # says it can fall between them.
