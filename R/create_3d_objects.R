@@ -90,18 +90,7 @@ as_envelope <- function(x, depth_min, depth_max) {
   out <- c(dmin, dmax)
   names(out) <- c("depth_min", "depth_max")
 
-  problem <- .envelope_depth_problem(out)
-  if (identical(problem, "negative")) {
-    stop("depths are positive metres increasing downward; `depth_min` has ",
-         "negative values. Flip the sign of elevation data first.",
-         call. = FALSE)
-  }
-  if (identical(problem, "inverted")) {
-    stop("`depth_max` must be at least `depth_min` in every cell.",
-         call. = FALSE)
-  }
-
-  # new() runs the validity method.
+  # new() runs the validity method, which checks the depth rules.
   methods::new("SpatEnvelope", out)
 }
 

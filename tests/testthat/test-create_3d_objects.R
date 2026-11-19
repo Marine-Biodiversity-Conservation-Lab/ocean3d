@@ -112,10 +112,10 @@ test_that("as_envelope() rejects unusable input and says what is wrong", {
          pattern = "must be a SpatRaster"),
     list(label = "inverted constant limits",
          args = list(fp, depth_min = 200, depth_max = 0),
-         pattern = "at least `depth_min`"),
+         pattern = "depth_max must be at least depth_min"),
     list(label = "inverted per-cell limit",
          args = list(fp, depth_min = 10, depth_max = inverted_dmax),
-         pattern = "at least `depth_min`"),
+         pattern = "depth_max must be at least depth_min"),
     # positive-down convention
     list(label = "depth_min of -50",
          args = list(fp, depth_min = -50, depth_max = 200),
@@ -1141,7 +1141,7 @@ test_that("envelope depth rules hold for file-backed rasters", {
          validity = "positive metres increasing downward"),
     list(label = "inverted cell", object = on_disk(c(0, 50, 0, NA),
                                                    c(10, 20, 10, NA)),
-         constructor = "at least `depth_min`",
+         constructor = "depth_max must be at least depth_min",
          validity = "depth_max must be at least depth_min")
   )
   for (case in cases) {
