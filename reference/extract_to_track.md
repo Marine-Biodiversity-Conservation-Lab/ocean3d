@@ -238,8 +238,10 @@ compare timestamp labels. Custom temporal precision and spatial nearest
 matching are currently unsupported in cells mode. Overlapping sources
 with different horizontal grids require explicit alignment or another
 sampling mode. Environmental values are selected using
-extract_to_point(), never interpolated. Missing coordinates are rejected
-and multipart lines must be split explicitly.
+extract_to_point(), never interpolated. The depth coordinate may be
+stored shallow to deep or deep to shallow; depths stored in any other
+order are rejected. Missing coordinates are rejected and multipart lines
+must be split explicitly.
 
 SD and SE use the same reliability-weight correction and effective
 sample size as extract_to_buffer(). Adjacent samples are usually

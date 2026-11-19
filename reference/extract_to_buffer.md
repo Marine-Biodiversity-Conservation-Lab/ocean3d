@@ -233,7 +233,8 @@ cell is weighted by the area of the circle it covers, measured on the
 WGS84 ellipsoid with terra. This is a polygonal approximation,
 independent of sf_use_s2(). Unsupported projections, calendars,
 climatologies or transformed vertical coordinates require explicit
-preprocessing.
+preprocessing. The depth coordinate may be stored shallow to deep or
+deep to shallow; depths stored in any other order are rejected.
 
 Complementary sources are combined before applying min_valid_fraction.
 Overlapping selected support is an error, including duplicate values or
