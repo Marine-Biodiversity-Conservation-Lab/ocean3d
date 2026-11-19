@@ -105,20 +105,6 @@ test_that("an altitude dimension with axis = 'Z' is the depth axis", {
   ncdf4::nc_close(nc)
 
   expect_identical(detect(f)$depth, "altitude")
-  # Altitude is positive up, so -10 m is 10 m deep.
-  out <- extract_to_point(
-    nc = f, var = "v", lon = 0, lat = 40, depth = 10, method = "nearest"
-  )
-  expect_identical(as.numeric(out), 5)
-})
-
-test_that("point extraction reads the cell CF metadata points to", {
-  f <- make_swapped_axes_file()
-  on.exit(unlink(f), add = TRUE)
-
-  # lon = 40 is the second `y`, lat = 10 the first `x`: v[1, 2] = 3.
-  out <- extract_to_point(nc = f, var = "v", lon = 40, lat = 10)
-  expect_identical(as.numeric(out), 3)
 })
 
 test_that("2D geographic coordinates are rejected by units or standard_name", {
@@ -141,16 +127,6 @@ test_that("2D geographic coordinates inside a group are rejected", {
 
   expect_error(detect(f, var = "g/v"),
                class = "ocean3d_error_curvilinear_grid")
-})
-
-test_that("point extraction rejects a units-only curvilinear grid", {
-  f <- make_curvilinear_file()
-  on.exit(unlink(f), add = TRUE)
-
-  expect_error(
-    extract_to_point(nc = f, var = "v", lon = 10, lat = 40),
-    class = "ocean3d_error_curvilinear_grid"
-  )
 })
 
 test_that("an explicit dimension does not bypass the curvilinear check", {

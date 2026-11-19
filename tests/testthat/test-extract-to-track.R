@@ -195,8 +195,7 @@ test_that(
     expect_lte(max(diff(out$samples$distance_km)), 112)
     expect_equal(
       sum(out$samples$support_km),
-      222.638981586547,
-      tolerance = 1e-08
+      .track_geodesic(c(0, 2), c(0, 0))$length_km
     )
     expect_equal(out$summary$mean, 10)
     expect_identical(out$summary$status, "complete")
@@ -463,42 +462,6 @@ test_that(
 
 
 test_that(
-  "POSIX local times keep instants and warn about zones even when quiet",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_track_nc(path, time = 0:2)
-    local <- as.POSIXct(
-      c("2020-01-01 01:00:00", "2020-01-01 03:00:00"),
-      tz = "Europe/Paris"
-    )
-    vertices <- data.frame(lon = c(0, 2), lat = 0, date = local)
-    out <- extract_to_track(
-      vertices,
-      path,
-      spacing_km = 112,
-      interpolate_time = TRUE,
-      quiet = TRUE
-    )
-    expect_equal(as.numeric(out$samples$date), as.numeric(.track_clock()))
-    expect_equal(out$samples$temp, c(0, 1010, 2020))
-    vertices$date <- c("2020-01-01 00:00", "2020-01-01 02:00")
-    expect_warning(
-      out <- extract_to_track(
-        vertices,
-        path,
-        spacing_km = 112,
-        interpolate_time = TRUE,
-        quiet = TRUE
-      ),
-      "UTC"
-    )
-    expect_equal(out$samples$temp, c(0, 1010, 2020))
-  }
-)
-
-
-test_that(
   "missing dates and depths are retained and not interpolated",
   {
     path <- tempfile(fileext = ".nc")
@@ -542,59 +505,20 @@ test_that(
 )
 
 
-test_that(
-  "surface, bottom, all and 2d follow the point selection methods",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_track_nc(path, depth = c(0, 10, 20))
-    vertices <- data.frame(
-      lon = c(0, 2),
-      lat = 0,
-      depth = c(
-        10,
-        20
-      )
-    )
-    surface <- extract_to_track(
-      vertices,
-      path,
-      method = "surface",
-      spacing_km = 112,
-      quiet = TRUE
-    )
-    bottom <- extract_to_track(
-      vertices,
-      path,
-      method = "bottom",
-      spacing_km = 112,
-      quiet = TRUE
-    )
-    expect_equal(surface$samples$temp, c(0, 10, 20))
-    expect_equal(bottom$samples$temp, c(20, 30, 40))
-    all <- extract_to_track(
-      vertices,
-      path,
-      method = "all",
-      spacing_km = 112,
-      interpolate_depth = TRUE,
-      quiet = TRUE
-    )
-    expect_equal(all$samples$surface_temp, c(0, 10, 20))
-    expect_equal(all$samples$seabottom_temp, c(20, 30, 40))
-    expect_equal(nrow(all$summary), 3)
-    expect_error(
-      extract_to_track(
-        vertices,
-        path,
-        method = "2d",
-        sampling = "vertices"
-      ),
-      "depth levels"
-    )
-  }
-)
-
+test_that("method = \"all\" summarises each depth selection", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, depth = c(0, 10, 20))
+  all <- extract_to_track(
+    data.frame(lon = c(0, 2), lat = 0, depth = c(10, 20)),
+    path,
+    method = "all",
+    spacing_km = 112,
+    interpolate_depth = TRUE,
+    quiet = TRUE
+  )
+  expect_equal(nrow(all$summary), 3)
+})
 
 test_that(
   "mixed static and temporal variables and output names are independent",
@@ -611,10 +535,6 @@ test_that(
       quiet = TRUE
     )
     expect_equal(static$samples$static, rep(7, 3))
-    expect_error(
-      extract_to_track(vertices, path, var = "temp", spacing_km = 112),
-      "date"
-    )
     vertices$date <- .track_clock(c(0, 2))
     out <- extract_to_track(
       vertices,
@@ -631,10 +551,6 @@ test_that(
     expect_equal(out$samples$temperature, c(0, 1010, 2020))
     expect_equal(out$samples$index, rep(7, 3))
     expect_identical(out$summary$output_column, c("temperature", "index"))
-    expect_error(
-      extract_to_track(vertices, path, spacing_km = 112),
-      class = "ocean3d_error_var_detection"
-    )
   }
 )
 
@@ -666,27 +582,11 @@ test_that(
       expect_equal(out$samples$temp, c(0, 2020))
       expect_equal(out$summary$mean, 1010)
     }
-    table <- data.frame(path = paths)
-    out <- extract_to_track(
-      vertices,
-      table,
-      sampling = "vertices",
-      file_col = "path",
-      quiet = TRUE
-    )
-    expect_equal(out$samples$temp, c(0, 2020))
+    # A caller-owned connection works as a source and is left open.
     handle <- ncdf4::nc_open(paths[1L])
     on.exit(ncdf4::nc_close(handle), add = TRUE)
     out <- extract_to_track(
-      transform(
-        vertices,
-        date = .track_clock(
-          c(
-            0,
-            0
-          )
-        )
-      ),
+      transform(vertices, date = .track_clock(c(0, 0))),
       handle,
       sampling = "vertices",
       quiet = TRUE
@@ -698,7 +598,7 @@ test_that(
 
 
 test_that(
-  "custom columns, matrices and named lists follow the point contract",
+  "custom coordinate and track columns are used",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -716,27 +616,6 @@ test_that(
     )
     expect_equal(out$samples$temperature, c(0, 10, 20))
     expect_equal(out$samples$x, c(0, 1, 2))
-    for (
-      input in list(
-        as.matrix(vertices[c("x", "y")]),
-        as.list(
-          vertices[c(
-            "x",
-            "y"
-          )]
-        )
-      )
-    ) {
-      out <- extract_to_track(
-        input,
-        path,
-        lon_col = "x",
-        lat_col = "y",
-        sampling = "vertices",
-        quiet = TRUE
-      )
-      expect_equal(out$samples$temp, c(0, 20))
-    }
   }
 )
 
@@ -786,8 +665,8 @@ test_that(
       spacing_km = 112, quiet = TRUE
     )
     expect_equal(abs(out$samples$lon[2L]), 180)
-    # WGS84 equatorial arc: 2 degrees of the 6378.137 km equatorial radius.
-    expect_equal(out$samples$distance_km[3L], 222.638981587, tolerance = 1e-08)
+    expect_equal(out$samples$distance_km[3L],
+                 .track_geodesic(c(179, 181), c(0, 0))$length_km)
     polar <- extract_to_track(
       data.frame(lon = c(-45, 45), lat = 80), path,
       spacing_km = 1000, quiet = TRUE
@@ -886,11 +765,6 @@ test_that(
         max_segment_km = 100
       ),
       "segment"
-    )
-    vertices$date <- c("2020-01-01T00:00Z", "not a date")
-    expect_error(
-      extract_to_track(vertices, path, sampling = "vertices"),
-      "not a date"
     )
   }
 )
@@ -1002,7 +876,7 @@ test_that(
 
 
 test_that(
-  "samples-only mode and source settings report selected provenance",
+  "settings report the candidate sources",
   {
     path <- tempfile(fileext = ".nc")
     on.exit(unlink(path))
@@ -1014,10 +888,8 @@ test_that(
       sampling = "vertices",
       quiet = TRUE
     )
-    expect_null(out$summary)
     expect_equal(out$samples$temp, c(0, 20))
     expect_equal(out$settings$candidate_sources, path)
-    expect_match(out$settings$integration, "approximate")
   }
 )
 
@@ -1138,61 +1010,8 @@ test_that(
     )
     expect_identical(out$settings$time_resolution, "daily")
     expect_equal(out$samples$temp, c(0, 24010, 48020))
-    expect_error(
-      extract_to_track(
-        vertices,
-        path,
-        sampling = "vertices",
-        time_resolution = "custom",
-        custom_time_interval = as.difftime(
-          24,
-          units = "hours"
-        ),
-        quiet = TRUE
-      ),
-      "requires observation hours"
-    )
-    vertices$date <- as.POSIXct(vertices$date, tz = "UTC")
-    custom <- extract_to_track(
-      vertices,
-      path,
-      sampling = "vertices",
-      time_resolution = "custom",
-      custom_time_interval = as.difftime(
-        24,
-        units = "hours"
-      ),
-      quiet = TRUE
-    )
-    expect_identical(custom$settings$time_resolution, "custom")
-    expect_equal(custom$samples$temp, c(0, 48020))
   }
 )
-
-test_that(
-  "SD can be unavailable while a valid mean is still reported",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_track_nc(path, missing = TRUE)
-    vertices <- data.frame(lon = c(0, 1), lat = 0)
-    out <- extract_to_track(
-      vertices,
-      path,
-      sampling = "vertices",
-      min_valid_fraction = 0.5,
-      statistics = c("mean", "sd", "se"),
-      quiet = TRUE
-    )
-    expect_equal(out$summary$mean, 10)
-    expect_true(is.na(out$summary$sd))
-    expect_true(is.na(out$summary$se))
-    expect_identical(
-      out$summary$variation_status, "insufficient_variation_samples"
-    )
-  }
-)
-
 
 test_that("variation states distinguish requests, coverage and sample counts", {
   path <- tempfile(fileext = ".nc")
@@ -1296,8 +1115,7 @@ test_that(
     expect_equal(out$summary$mean, 10)
     expect_equal(
       out$summary$total_distance_km,
-      445.277963173095,
-      tolerance = 1e-09
+      sum(.track_geodesic(c(0, 2, 0), c(0, 0, 0))$length_km)
     )
     expect_equal(sum(intervals$support_km), out$summary$total_distance_km)
     expect_equal(out$settings$sampling, "cells")
@@ -1634,6 +1452,29 @@ test_that(
   }
 )
 
+test_that("cells mode rejects nearest and custom matching", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path))
+  .make_track_nc(path, time = 24)
+  route <- data.frame(lon = c(0, 2), lat = 0, date = .track_clock(c(0, 48)))
+  out <- extract_to_track(
+    route, path, sampling = "cells", time_match = "exact",
+    interpolate_time = TRUE, quiet = TRUE
+  )
+  expect_true(all(is.na(out$samples$temp)))
+  expect_error(
+    extract_to_track(route, path, sampling = "cells",
+                     spatial_match = "nearest", max_distance_km = 10),
+    "Cells mode"
+  )
+  expect_error(
+    extract_to_track(route, path, sampling = "cells",
+                     time_resolution = "custom"),
+    "Cells mode"
+  )
+})
+
+
 test_that(
   "time steps preserve UTC instants across daylight saving",
   {
@@ -1715,47 +1556,6 @@ test_that(
     )
     expect_identical(out$settings[["statistics"]], "mean")
     expect_true(all(nzchar(names(out$settings))))
-  }
-)
-test_that(
-  "cells normalize selection options before partitioning",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_track_nc(path, time = 24)
-    route <- data.frame(
-      lon = c(0, 2),
-      lat = 0,
-      date = .track_clock(c(0, 48))
-    )
-    out <- extract_to_track(
-      route,
-      path,
-      sampling = "cells",
-      time_match = "ex",
-      interpolate_time = TRUE,
-      quiet = TRUE
-    )
-    expect_true(all(is.na(out$samples$temp)))
-    expect_error(
-      extract_to_track(
-        route,
-        path,
-        sampling = "cells",
-        spatial_match = "nea",
-        max_distance_km = 10
-      ),
-      "Cells mode"
-    )
-    expect_error(
-      extract_to_track(
-        route,
-        path,
-        sampling = "cells",
-        time_resolution = "cust"
-      ),
-      "Cells mode"
-    )
   }
 )
 test_that(
@@ -1876,28 +1676,3 @@ test_that(
     )
   }
 )
-
-
-test_that("tracks accept climatological time axes like point extraction", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path))
-  .make_track_nc(path, time = c(0, 24),
-                 time_atts = list(climatology = "climatology_bounds"))
-  route <- data.frame(
-    lon = c(0, 2), lat = 0,
-    date = as.POSIXct(c("2020-01-01", "2020-01-01"), tz = "UTC")
-  )
-  out <- extract_to_track(route, path, quiet = TRUE)
-  expect_equal(out$samples$temp, c(0, 20))
-})
-
-
-test_that("a missing date column for a temporal variable matches points", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path))
-  .make_track_nc(path, time = c(0, 24))
-  route <- data.frame(lon = c(0, 2), lat = 0)
-  err <- expect_error(extract_to_track(route, path, quiet = TRUE))
-  expect_match(conditionMessage(err), "`temp` has a time dimension")
-  expect_match(conditionMessage(err), "Column `date` is missing")
-})

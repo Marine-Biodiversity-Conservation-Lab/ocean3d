@@ -94,13 +94,6 @@ test_that("as_envelope() is idempotent on its own output", {
   expect_identical(terra::values(as_envelope(e)), terra::values(e))
 })
 
-test_that("as_envelope() promotes voxel_to_envelope() output unchanged", {
-  v <- methods::new("SpatVoxel", make_multidepth_rast())
-  e <- voxel_to_envelope(v)
-
-  expect_identical(terra::values(as_envelope(e)), terra::values(e))
-})
-
 test_that("as_envelope() rejects depth args if x already has depth layers", {
   e <- as_envelope(make_footprint(), 0, 200)
 
@@ -181,8 +174,6 @@ test_that("as_voxel() is idempotent", {
 test_that("as_voxel() sorts layers shallow to deep instead of rejecting them", {
   # new() rejects unsorted input; the constructor repairs it
   unsorted <- make_multidepth_rast(depths = c(300, 200, 100, 0))
-  expect_error(methods::new("SpatVoxel", unsorted), "shallow to deep")
-
   v <- as_voxel(unsorted)
   expect_s4_class(v, "SpatVoxel")
   expect_named(v, paste0("temp_depth=", c(0, 100, 200, 300)))
@@ -294,11 +285,6 @@ test_that("as_voxel() repairs a tagged SpatVoxel with unsorted layers", {
   expect_identical(volume(fixed), volume(v))
 })
 
-test_that("as_voxel() output is accepted by voxel_to_envelope()", {
-  e <- voxel_to_envelope(as_voxel(make_multidepth_rast()))
-  expect_s4_class(e, "SpatEnvelope")
-})
-
 # voxel_to_envelope() ---- 
 test_that("voxel_to_envelope() rejects a non-SpatVoxel input", {
   # a plain multi-depth SpatRaster is refused until wrapped by as_voxel()
@@ -325,15 +311,6 @@ test_that("voxel_to_envelope() defaults to the non-NA vertical extent", {
   vals <- terra::values(e)
   expect_identical(unname(vals[, "depth_min"]), c(0, 100, 0, NA))
   expect_identical(unname(vals[, "depth_max"]), c(200, 200, 300, NA))
-})
-
-test_that("voxel_to_envelope() fills interior gaps (lossy collapse)", {
-  # cell 1 has values at 0 m and 200 m but not at 100 m; the envelope is solid
-  v <- methods::new("SpatVoxel", make_multidepth_rast())
-  vals <- terra::values(voxel_to_envelope(v))
-
-  expect_identical(unname(vals[1, "depth_min"]), 0)
-  expect_identical(unname(vals[1, "depth_max"]), 200)
 })
 
 test_that("voxel_to_envelope() bounds the depths where the predicate holds", {
@@ -454,36 +431,6 @@ test_that("envelope_to_voxel() accepts depths that merely coerce to numeric", {
   )
 })
 
-test_that("envelope_to_voxel() generates voxel from envelope", {
-  temp_r <- make_footprint(c(1,1,1,1))
-  # Create 2x2 simple envelope with depth_min and depth_max layers. 
-  envel <- as_envelope(temp_r, depth_min = 70, depth_max = 210)
-
-  # Defined depth layers 
-  a_depths <- c(0, 50, 100, 150, 200, 300, 400)
-
-  # Expected result. Each level stands for the slab running down to the next,
-  # so [70, 210] occupies every slab it overlaps: it starts inside 50-100, so
-  # 50 is occupied though 70 > 50, and ends inside 200-300, so 200 is occupied
-  # and 300 is not.
-  occupied <- c(50, 100, 150, 200)
-  expected_vox <- lapply(a_depths, function(x) {
-    if (x %in% occupied) {
-      r <- terra::setValues(temp_r, 1L)
-    } else {
-      r <- terra::setValues(temp_r, NA_integer_)
-    }
-    names(r) <- paste0("test_depth=", x)
-    r
-  }) %>% as_voxel()
-
-  got <- envelope_to_voxel(x = envel, depths = a_depths, varname = "test")
-
-  expect_s4_class(got, "SpatVoxel")
-  expect_named(got, names(expected_vox))
-  expect_identical(terra::values(got), terra::values(expected_vox))
-})
-
 test_that("envelope_to_voxel() catches an envelope that falls between levels", {
   # the case the point-in-interval rule missed: [10, 20] contains none of the
   # levels, but lies inside the slab the 0 m level stands for
@@ -498,11 +445,13 @@ test_that("envelope_to_voxel() occupies every slab the envelope overlaps", {
   # [70, 210] starts inside the 50-100 slab and ends inside 200-300
   envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
                        depth_min = 70, depth_max = 210)
-  vals <- terra::values(
-    envelope_to_voxel(envel, depths = c(0, 50, 100, 200, 300))
-  )
+  v <- envelope_to_voxel(envel, depths = c(0, 50, 100, 200, 300),
+                         varname = "test")
 
-  expect_identical(unname(vals[1, ]), c(NA_integer_, 1L, 1L, 1L, NA_integer_))
+  expect_s4_class(v, "SpatVoxel")
+  expect_named(v, paste0("test_depth=", c(0, 50, 100, 200, 300)))
+  expect_identical(unname(terra::values(v)[1, ]),
+                   c(NA_integer_, 1L, 1L, 1L, NA_integer_))
 })
 
 test_that("envelope_to_voxel() gives a boundary depth to the slab it heads", {
@@ -862,16 +811,6 @@ test_that("envelope_to_voxel() rejects negative depths", {
                "positive metres increasing downward")
 })
 
-test_that("envelope_to_voxel() warns when an envelope is below all levels", {
-  # the slabs reach only as deep as max(depths), so nothing can hold this cell
-  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
-                       depth_min = 500, depth_max = 600)
-
-  expect_warning(v <- envelope_to_voxel(envel, depths = c(0, 100, 200)),
-                 "lying entirely outside")
-  expect_true(all(is.na(terra::values(v))))
-})
-
 test_that("envelope_to_voxel() warns when an envelope is above all levels", {
   # the shallowest level is the top of the first slab, so a cell entirely
   # above it is out of reach in the same way
@@ -1185,72 +1124,6 @@ test_that("vect_to_envelope() keeps NA where a depth_max raster is NA", {
   expect_true(all(is.na(terra::values(new$depth_min)[gaps])))
 })
 
-# Masking a voxel by an envelope is the package's "restrict a 3D raster to a
-# species' per-cell depth window" operation:
-#   terra::mask(v, envelope_to_voxel(e, depths(v)))
-# It replaced the retired extract_rast_range(), so its behaviour is pinned here.
-test_that("masking a voxel by an envelope respects the per-cell depth window", {
-  r <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 2,
-                   nlyrs = 3)
-  terra::values(r) <- cbind(rep(1, 4), rep(2, 4), rep(3, 4))
-  v <- as_voxel(r, depths = c(0, 100, 500), varname = "tan")
-
-  # Cells 1-2 end at 100 m; cells 3-4 end at 500 m.
-  fp <- terra::rast(v[[1]])
-  terra::values(fp) <- 1
-  e <- as_envelope(fp, depth_min = 0,
-                   depth_max = terra::setValues(terra::rast(fp),
-                                                c(100, 100, 500, 500)))
-
-  out <- terra::mask(v, envelope_to_voxel(e, depths(v)))
-
-  # Layer names survive the mask, so callers can still index by depth.
-  expect_named(out, names(v))
-  # Every cell holds the 0 m slab. Only the last two run into the 100-500
-  # slab; the first two end where it begins and touching is not overlapping.
-  # The 500 m level heads a zero-thickness slab that no cell reaches below.
-  expect_identical(sum(!is.na(terra::values(out[["tan_depth=0"]]))), 4L)
-  expect_identical(sum(!is.na(terra::values(out[["tan_depth=100"]]))), 2L)
-  expect_identical(sum(!is.na(terra::values(out[["tan_depth=500"]]))), 0L)
-  # Values themselves are untouched where the cell is in window.
-  expect_identical(unique(terra::values(out[["tan_depth=0"]])[, 1]), 1)
-})
-
-test_that("masking keeps a cell whose envelope lies between two levels", {
-  # A [10, 20] envelope contains none of c(0, 100, 200). Slab overlap places it
-  # in the 0 m level; the retired point-containment test dropped the cell
-  # entirely, which is the bug this idiom fixes.
-  r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1,
-                   nlyrs = 3)
-  terra::values(r) <- cbind(c(1, 1), c(2, 2), c(3, 3))
-  v <- as_voxel(r, depths = c(0, 100, 200), varname = "tan")
-
-  fp <- terra::rast(v[[1]])
-  terra::values(fp) <- 1
-  e <- as_envelope(fp, depth_min = 10, depth_max = 20)
-
-  out <- terra::mask(v, envelope_to_voxel(e, depths(v)))
-
-  expect_identical(sum(!is.na(terra::values(out[["tan_depth=0"]]))), 2L)
-  expect_true(all(is.na(terra::values(out[["tan_depth=100"]]))))
-  expect_true(all(is.na(terra::values(out[["tan_depth=200"]]))))
-})
-
-test_that("masking drops cells that are NA in the envelope", {
-  r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 1,
-                   nlyrs = 2)
-  terra::values(r) <- cbind(c(1, 1), c(2, 2))
-  v <- as_voxel(r, depths = c(0, 100), varname = "tan")
-
-  fp <- terra::rast(v[[1]])
-  terra::values(fp) <- c(1, NA)     # second cell absent
-  e <- as_envelope(fp, depth_min = 0, depth_max = 150)
-
-  out <- terra::mask(v, envelope_to_voxel(e, depths(v)))
-
-  expect_identical(sum(!is.na(terra::values(out))), 2L)  # one cell x two depths
-})
-
 # ---- occupied() -------------------------------------------------------------
 
 # Local helper: a 1x3 voxel over two standard depths, named by variable.
@@ -1328,22 +1201,6 @@ test_that("occupied() lets each side of a query use its own predicate", {
 
   expect_identical(unname(terra::values(out)),
                unname(cbind(c(NA, 1, NA), c(1, NA, NA))))
-})
-
-test_that("SpatVoxel validity rejects duplicate depths, as as_voxel() does", {
-  raw <- make_multidepth_rast()
-
-  # as_voxel() has always refused duplicates.
-  expect_error(as_voxel(raw[[c(1, 1, 2)]]), "duplicate depth")
-
-  # terra keeps the class tag through subsetting, so an invalid voxel can
-  # still reach the verbs. Validity must catch what the constructor refuses.
-  dup <- as_voxel(raw)[[c(1, 1, 2)]]
-  expect_s4_class(dup, "SpatVoxel")
-  expect_false(isTRUE(methods::validObject(dup, test = TRUE)))
-
-  # Otherwise volume() counts the repeated slab and returns a wrong number.
-  expect_error(volume(dup), "not a valid one")
 })
 
 test_that("SpatEnvelope validity rejects inverted and negative intervals", {

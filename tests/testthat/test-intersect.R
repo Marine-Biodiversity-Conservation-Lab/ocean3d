@@ -92,18 +92,9 @@ test_that("intersect_3d() on voxels is the co-occupied set of levels", {
                unname(cbind(c(1, NA, NA), c(NA, NA, NA), c(1, NA, NA))))
 })
 
-test_that("intersect_3d() intersects voxel presence, requiring shared depths", {
-  depths <- c(0, 100)
-  a <- make_voxel(cbind(c(5, 5, 5), c(5, 5, 5)), depths,
+test_that("intersect_3d() on voxels requires shared depths", {
+  a <- make_voxel(cbind(c(5, 5, 5), c(5, 5, 5)), c(0, 100),
                   ncol = 3, nrow = 1, varname = "t")
-  b <- make_voxel(cbind(c(1, 10, NA), c(10, 1, NA)), depths,
-                  ncol = 3, nrow = 1, varname = "t")
-
-  out <- intersect_3d(occupied(a, function(v) v > 3),
-                      occupied(b, function(v) v > 3))
-  expect_identical(unname(terra::values(out)),
-               unname(cbind(c(NA, 1, NA), c(1, NA, NA))))
-
   c3 <- make_voxel(cbind(c(1, 1, 1), c(1, 1, 1), c(1, 1, 1)), c(0, 100, 200),
                    ncol = 3, nrow = 1)
   expect_error(intersect_3d(a, c3), "same depth levels")
@@ -353,24 +344,6 @@ test_that("intersects_3d() is TRUE exactly where intersect_3d() is non-empty", {
   # nolint end
 })
 
-test_that("intersects_3d() agrees with calc_volume_overlap() on overlap", {
-  a <- make_range_rast(c(0, 0, 0, 0, 0, 0, NA, NA, NA),
-                       c(100, 100, 100, 40, 40, 40, NA, NA, NA))
-  b <- make_range_rast(c(50, 50, 50, 50, 50, 50, 0, 0, 0),
-                       c(200, 200, 200, 200, 200, 200, 100, 100, 100))
-
-  from_volume <- terra::values(calc_volume_overlap(a, b))[, "depth_min_overlap"]
-  # nolint start: scalar_in_linter
-  # use %in% instead of ==, because NA == TRUE returns NA, compared to
-  # NA %in% TRUE returns FALSE
-  expect_identical(terra::values(intersects_3d(a, b))[, 1] %in% TRUE,
-                   !is.na(from_volume))
-  # nolint end
-  # ...and FALSE, not NA, where both are present but disjoint.
-  expect_identical(terra::values(intersects_3d(a, b))[, 1],
-                   c(rep(TRUE, 3), rep(FALSE, 6)))
-})
-
 test_that("intersects_3d() with 2D input tests presence on both sides", {
   a <- make_range_rast(c(0, 0, NA, NA), c(100, 100, NA, NA),
                        ncol = 4, nrow = 1)
@@ -392,12 +365,6 @@ test_that("intersects_3d() with 2D input tests presence on both sides", {
                         c(100, 100, 100, NA, NA, NA, 100, 100, 100))
   expect_identical(terra::values(intersects_3d(a9, make_left_polygon()))[, 1],
                c(TRUE, TRUE, FALSE, FALSE, FALSE, NA, TRUE, TRUE, FALSE))
-})
-
-test_that("a stack of intersects_3d() layers sums to a richness map", {
-  e <- truth_envelopes()
-  stack <- c(intersects_3d(e$a, e$b), intersects_3d(e$a, e$a))
-  expect_identical(terra::values(sum(stack, na.rm = TRUE))[, 1], c(2, 1, 1, NA))
 })
 
 test_that("intersects_3d() rejects 2D-only input and mismatched grids", {

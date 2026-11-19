@@ -126,6 +126,11 @@ test_that("midnight date-times keep their day on noon-stamped files (#71)", {
   axis <- decode_time(f)
   expect_equal(axis, times + 12 * 3600)
   expect_identical(match_times(axis, times), 1:3)
+  # Dates compare by day, so a noon time step is no time away.
+  for (time_match in c("nearest", "exact")) {
+    expect_identical(match_times(axis, as.Date(times), time_match = time_match,
+                                 max_time_diff = 0), 1:3)
+  }
 })
 
 # Monthly means stamped mid-month, with back-to-back bounds: January and

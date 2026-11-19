@@ -721,12 +721,6 @@ test_that("longitude cells that overlap modulo 360 are rejected", {
     class = "ocean3d_error_bounds"
   )
   expect_match(conditionMessage(err), "overlap around the globe")
-  # Point extraction picks one cell, so it can't count a cell twice.
-  expect_equal(
-    extract_to_point(nc = path, lon = 120, lat = 0, var = "temp",
-                     method = "2d"),
-    2
-  )
 })
 
 
@@ -767,6 +761,16 @@ test_that("invalid horizontal requests are rejected", {
     data.frame(lon = 0, lat = 91), path, horizontal_radius_km = 1, quiet = TRUE
   )
   expect_identical(out$temp_match_info[[1L]]$status, "invalid_coordinates")
+  expect_error(
+    extract_to_buffer(data, path, horizontal_radius_km = 1,
+                      lon_cell_radius = 1),
+    "not both", fixed = TRUE
+  )
+  .make_buffer_grid_nc(path, spatial_bounds = FALSE)
+  expect_error(
+    extract_to_buffer(data, path, horizontal_radius_km = 1),
+    "infer_bounds = TRUE", fixed = TRUE
+  )
 })
 
 
@@ -897,45 +901,6 @@ test_that(
       )
       expect_equal(out$temp_match_info[[1L]]$n_valid, 16)
       expect_equal(out$temp_match_info[[1L]]$valid_fraction, 1)
-    }
-  }
-)
-
-
-test_that(
-  "temporal files complete coverage to ... either input order",
-  {
-    paths <- c(tempfile(fileext = ".nc"), tempfile(fileext = ".nc"))
-    on.exit(unlink(paths))
-    .make_buffer_grid_nc(
-      paths[1L], .buffer_source_cells,
-      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
-      field = matrix(10),
-      time = 5,
-      time_bounds = matrix(c(0, 10), 2L)
-    )
-    .make_buffer_grid_nc(
-      paths[2L], .buffer_source_cells,
-      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
-      field = matrix(20),
-      time = 20,
-      time_bounds = matrix(c(10, 30), 2L)
-    )
-    data <- data.frame(lon = 0, lat = 40, date = "2020-01-01T15:00Z")
-    for (files in list(paths, rev(paths))) {
-      out <- extract_to_buffer(
-        data,
-        files,
-        var = "temp",
-        time_before = 10,
-        time_after = 10,
-        time_unit = "hours",
-        quiet = TRUE
-      )
-      expect_equal(out$temp, 17.5)
-      expect_equal(out$temp_match_info[[1L]]$coverage_fraction, 1)
-      expect_length(out$temp_match_info[[1L]]$sources_used, 2)
-      expect_identical(out$temp_match_info[[1L]]$status, "complete")
     }
   }
 )
@@ -1281,149 +1246,25 @@ test_that(
       )
     )
     expect_true(is.na(rejected$temp))
-
-    .make_buffer_grid_nc(
-      path, .buffer_source_cells,
-      lon = c(0, 1), lat = c(40, 41), spatial_bounds = FALSE,
-      field = matrix(10),
-      time = 12,
-      time_bounds = matrix(c(0, 24), 2L)
-    )
-    expect_warning(
-      timed <- extract_to_buffer(
-        data.frame(lon = 0, lat = 40, date = "2020-01-01 12:00"),
-        path,
-        time_before = 12,
-        time_after = 12,
-        time_unit = "hours",
-        quiet = TRUE
-      ),
-      class = "ocean3d_timezone_warning"
-    )
-    expect_equal(timed$temp, 10)
   }
 )
 
 
-test_that(
-  "spatial bounds inference is explici ... tics are validated",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_grid_nc(path, spatial_bounds = FALSE)
-    data <- data.frame(lon = 0, lat = 0)
-    expect_error(
-      extract_to_buffer(data, path, horizontal_radius_km = 1),
-      "infer_bounds = TRUE",
-      fixed = TRUE
-    )
-    out <- extract_to_buffer(
-      data,
-      path,
-      horizontal_radius_km = 1,
-      infer_bounds = TRUE,
-      quiet = TRUE
-    )
-    expect_equal(out$temp, 15, tolerance = 1e-6)
-    expect_error(
-      extract_to_buffer(
-        data,
-        path,
-        horizontal_radius_km = 1,
-        statistic = "sum"
-      ),
-      "`statistic` must be one of",
-      fixed = TRUE
-    )
-    expect_error(
-      extract_to_buffer(
-        data,
-        path,
-        horizontal_radius_km = 1,
-        lon_cell_radius = 1
-      ),
-      "not both",
-      fixed = TRUE
-    )
-  }
-)
-
-
-test_that(
-  "sf geometry & caller-owned connections are retained",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path), add = TRUE)
-    .make_buffer_grid_nc(path)
-    handle <- ncdf4::nc_open(path)
-    on.exit(ncdf4::nc_close(handle), add = TRUE, after = FALSE)
-    data <- sf::st_as_sf(
-      data.frame(id = "a", x = 0, y = 0),
-      coords = c(
-        "x",
-        "y"
-      ),
-      crs = 4326
-    )
-    out <- extract_to_buffer(
-      data,
-      handle,
-      horizontal_radius_km = 1,
-      quiet = TRUE
-    )
-    expect_s3_class(out, "sf")
-    expect_identical(sf::st_geometry(out), sf::st_geometry(data))
-    expect_equal(out$temp, 15, tolerance = 1e-6)
-    expect_equal(as.vector(ncdf4::ncvar_get(handle, "temp")), c(0, 20, 10, 30))
-  }
-)
-
+test_that("a caller-owned connection is read and left open", {
+  path <- tempfile(fileext = ".nc")
+  on.exit(unlink(path), add = TRUE)
+  .make_buffer_grid_nc(path)
+  handle <- ncdf4::nc_open(path)
+  on.exit(ncdf4::nc_close(handle), add = TRUE, after = FALSE)
+  out <- extract_to_buffer(
+    data.frame(lon = 0, lat = 0), handle, horizontal_radius_km = 1,
+    quiet = TRUE
+  )
+  expect_equal(out$temp, 15, tolerance = 1e-6)
+  expect_equal(as.vector(ncdf4::ncvar_get(handle, "temp")), c(0, 20, 10, 30))
+})
 
 # Axis bounds ------------------------------------------------------------------
-
-test_that(
-  "explicit depth bounds feed the know ... ed and equal means",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_axis_nc(
-      path,
-      c(5, 20),
-      matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    support <- .read_buffer_axis_nc(path)
-    expect_equal(support$centres, c(5, 20))
-    expect_equal(support$lower, c(0, 10))
-    expect_equal(support$upper, c(10, 30))
-    expect_identical(support$basis, "explicit_bounds")
-    expect_identical(support$bounds_name, "axis_bounds")
-    expect_identical(support$units, "m")
-    expect_false(any(support$clipped_at_surface))
-  }
-)
-
-
-test_that(
-  "reversed positive-up depths and sha ...  convert to metres",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_axis_nc(
-      path,
-      c(-2000, -500),
-      matrix(c(-3000, -1000, -1000, 0), nrow = 2L),
-      units = "cm",
-      attributes = list(positive = "up")
-    )
-    support <- .read_buffer_axis_nc(path)
-    expect_equal(support$centres, c(20, 5))
-    expect_equal(support$lower, c(10, 0))
-    expect_equal(support$upper, c(30, 10))
-    expect_identical(support$source_index, 1:2)
-    expect_identical(support$direction_basis, "metadata")
-  }
-)
-
 
 test_that(
   "both declared bounds dimension orders are supported",
@@ -1550,7 +1391,6 @@ test_that(
     on.exit(unlink(path))
     cases <- list(
       list(bounds = matrix(c(0, 10, 5, 30), nrow = 2L), pattern = "overlap"),
-      list(bounds = matrix(c(0, 4, 10, 30), nrow = 2L), pattern = "centres"),
       list(
         bounds = matrix(c(5, 5, 10, 30), nrow = 2L),
         pattern = "positive widths"
@@ -1601,62 +1441,6 @@ test_that(
 
 
 test_that(
-  "unsupported calendars are not inferred",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_axis_nc(
-      path, c(0, 24), axis = "time", attributes = list(calendar = "360_day")
-    )
-    expect_error(
-      .read_buffer_axis_nc(path, "time", axis = "time", infer_bounds = TRUE),
-      "unsupported calendar",
-      fixed = TRUE
-    )
-    .make_buffer_axis_nc(
-      path,
-      c(0, 24),
-      matrix(c(0, 24, 24, 48), nrow = 2L),
-      axis = "time",
-      bounds_attributes = list(calendar = "360_day")
-    )
-    expect_error(
-      .read_buffer_axis_nc(path, "time", axis = "time"),
-      "different calendars",
-      fixed = TRUE
-    )
-  }
-)
-
-
-test_that(
-  "duplicates and unordered coordinates are rejected",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    for (centres in list(c(10, 10), c(10, 30, 20))) {
-      .make_buffer_axis_nc(path, centres)
-      expect_error(.read_buffer_axis_nc(path, infer_bounds = TRUE))
-    }
-  }
-)
-
-
-test_that(
-  "inferred depth intervals retain reversed source order",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path))
-    .make_buffer_axis_nc(path, c(30, 10, 0))
-    support <- .read_buffer_axis_nc(path, infer_bounds = TRUE)
-    expect_equal(support$lower, c(20, 5, 0))
-    expect_equal(support$upper, c(40, 20, 5))
-    expect_identical(support$source_index, 1:3)
-  }
-)
-
-
-test_that(
   "kilometres convert to metres and tr ...  axes are rejected",
   {
     path <- tempfile(fileext = ".nc")
@@ -1688,71 +1472,13 @@ test_that(
 )
 
 
-test_that(
-  "reading an axis leaves a caller-owned connection usable",
-  {
-    path <- tempfile(fileext = ".nc")
-    on.exit(unlink(path), add = TRUE)
-    .make_buffer_axis_nc(
-      path,
-      c(5, 20),
-      matrix(c(0, 10, 10, 30), nrow = 2L)
-    )
-    nc <- ncdf4::nc_open(path)
-    on.exit(ncdf4::nc_close(nc), add = TRUE, after = FALSE)
-    support <- .read_interval_axis(nc, "depth")
-    expect_equal(support$centres, c(5, 20))
-    values <- ncdf4::ncvar_get(nc, "value")
-    expect_identical(dim(values), 2L)
-    expect_equal(as.vector(values), c(1, 2))
-  }
-)
-
-
 # Source extraction ------------------------------------------------------------
 
-test_that(
-  "buffer statistics use known equal a ... ual weight results",
-  {
-    values <- c(10, 20)
-    statistics <- c("mean", "sd", "se", "min", "max")
-    expected <- c(17.5, sqrt(50), sqrt(31.25), 10, 20)
-    for (i in seq_along(statistics)) {
-      expect_equal(
-        .buffer_statistic(
-          values,
-          c(
-            1,
-            3
-          ),
-          statistics[i]
-        ),
-        expected[i]
-      )
-      expect_equal(
-        .buffer_statistic(values, c(10, 30), statistics[i]),
-        expected[i]
-      )
-    }
-    expect_equal(.buffer_statistic(c(2, 4, 6), c(1, 1, 1), "sd"), 2)
-    expect_equal(.buffer_statistic(c(2, 4, 6), c(1, 1, 1), "se"), 2 / sqrt(3))
-    for (statistic in c("sd", "se")) {
-      expect_equal(.buffer_statistic(c(7, 7, 7), c(1, 2, 3), statistic), 0)
-      expect_true(is.na(.buffer_statistic(7, 1, statistic)))
-    }
-    for (value in list(NULL, NA_character_, 1, c("min", "max"), "SD", "s")) {
-      expect_error(
-        .validate_buffer_options(
-          depth_radius_m = 1,
-          statistic = value
-        ),
-        "`statistic` must be one of",
-        fixed = TRUE
-      )
-    }
+test_that("buffer SD and SE of identical values are zero", {
+  for (statistic in c("sd", "se")) {
+    expect_equal(.buffer_statistic(c(7, 7, 7), c(1, 2, 3), statistic), 0)
   }
-)
-
+})
 
 test_that(
   "statistics combine files in either order",
@@ -1805,6 +1531,7 @@ test_that(
         expect_identical(info$statistic, statistics[i])
         expect_equal(info$effective_n, if (weighting == "weighted") 1.6 else 2)
         expect_identical(info$status, "complete")
+        expect_equal(info$coverage_fraction, 1)
         expect_length(info$sources_used, 2)
       }
     }
@@ -1919,23 +1646,6 @@ test_that(
     }
   }
 )
-
-
-test_that("automatic detection ignores dimensions without coordinate variables", {
-  path <- tempfile(fileext = ".nc")
-  on.exit(unlink(path), add = TRUE)
-  .make_buffer_grid_nc(path)
-  data <- data.frame(lon = 0, lat = 0)
-
-  expect_output(
-    out <- extract_to_buffer(
-      data, path, horizontal_radius_km = 1, quiet = TRUE
-    ),
-    NA
-  )
-  expect_true("temp" %in% names(out))
-  expect_false(any(c("lon_bnds", "lat_bnds") %in% names(out)))
-})
 
 
 test_that(

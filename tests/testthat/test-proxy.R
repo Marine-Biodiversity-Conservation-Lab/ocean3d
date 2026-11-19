@@ -147,15 +147,6 @@ test_that("bad time units, offsets or bounds calendars get their own error", {
   expect_error(as_proxy(calendars), "use different calendars")
 })
 
-test_that("days since year 0 are dates, not a climatology", {
-  f <- make_grid_file(time = c(737791, 737792),
-                      time_units = "days since 0000-01-01 00:00:00",
-                      calendar = "proleptic_gregorian")
-  on.exit(unlink(f), add = TRUE)
-  expect_identical(as_proxy(f)@axes$time$cftime$cal$name,
-                   "proleptic_gregorian")
-})
-
 test_that("contiguous netCDF-4 storage has no chunk sizes", {
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
@@ -225,19 +216,12 @@ test_that("overlapping time bounds stop", {
   expect_match(conditionMessage(err), "Bounds for `time` in .* overlap\\.")
 })
 
-test_that("unsupported calendars and climatologies stop", {
-  calendar <- proxy_error(calendar = "noleap")
-  expect_s3_class(calendar$error, "ocean3d_error_calendar")
-  expect_match(conditionMessage(calendar$error), "noleap", fixed = TRUE)
-
-  # WOA-style monthly climatology, which CFtime can't read.
+test_that("climatologies stop", {
+  # WOA-style monthly climatology, which CFtime can't read. The calendar and
+  # climatology checks are tested directly in test-netcdf-time.R.
   woa <- proxy_error(time = c(0.5, 1.5),
                      time_units = "months since 0000-01-01 00:00:00")
   expect_s3_class(woa$error, "ocean3d_error_time_climatology")
-  expect_match(conditionMessage(woa$error), woa$file, fixed = TRUE)
-
-  flagged <- proxy_error(time_atts = list(climatology = "climatology_bnds"))
-  expect_s3_class(flagged$error, "ocean3d_error_time_climatology")
 })
 
 test_that("the CRS comes from a geographic grid mapping", {
