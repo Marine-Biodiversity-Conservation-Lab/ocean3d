@@ -181,6 +181,8 @@ test_that("points and lines have no volume but are 3D shapes", {
   expect_true(methods::is(tr, "SpatVolume"))
   expect_error(volume(tr), "lines, which have no volume",
                class = "ocean3d_error_volume_type")
+  expect_error(volume(tr), "buffer_3d() turns lines into polygons",
+               class = "ocean3d_error_volume_type", fixed = TRUE)
 })
 
 # Polygons ------------------------------------------------------------------
@@ -338,4 +340,119 @@ test_that("volume() on polygons says it isn't supported yet", {
   p <- as_vector3d(areas(), depth_min = 0, depth_max = 50)
   expect_error(volume(p), "doesn't support SpatVector3D polygons yet",
                class = "ocean3d_error_volume_type")
+})
+
+# Buffers -------------------------------------------------------------------
+
+area_km2 <- function(polygons) {
+  as.numeric(sf::st_area(as.data.frame(polygons)$geometry)) / 1e6
+}
+
+test_that("a point becomes a circle with the depth and time window", {
+  obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(35, 10),
+                    date = as.Date(c("2020-01-01", "2020-01-02")),
+                    species = "shark")
+  b <- buffer_3d(as_vector3d(obs, time = "date"), radius_km = 10,
+                 depth_window = 25, time_window = 1)
+
+  expect_identical(geomtype(b), "polygons")
+  f <- as.data.frame(b)
+  expect_identical(f$feature_id, c("1", "2"))
+  expect_equal(area_km2(b), rep(pi * 10^2, 2), tolerance = 0.01)
+  centres <- sf::st_sfc(sf::st_point(c(150, -20)), sf::st_point(c(151, -21)),
+                        crs = 4326)
+  expect_true(all(sf::st_within(centres, f$geometry, sparse = FALSE)[
+    cbind(1:2, 1:2)
+  ]))
+  # The second top would be -15 m, so it stops at the surface.
+  expect_equal(f$depth_min, c(10, 0))
+  expect_equal(f$depth_max, c(60, 35))
+  expect_equal(f$time_start,
+               as.POSIXct(c("2019-12-31", "2020-01-01"), tz = "UTC"))
+  expect_equal(f$time_end,
+               as.POSIXct(c("2020-01-02", "2020-01-03"), tz = "UTC"))
+  expect_identical(b@time_resolution, "daily")
+  expect_identical(f$species, c("shark", "shark"))
+})
+
+test_that("without a time window, polygons keep the features' own times", {
+  obs <- data.frame(lon = 150, lat = -20, depth = 35,
+                    when = as.POSIXct("2020-01-01 06:00", tz = "UTC"))
+  f <- as.data.frame(buffer_3d(as_vector3d(obs, time = "when"), 1, 0))
+  expect_equal(f$time_start, obs$when)
+  expect_equal(f$time_end, obs$when)
+  expect_equal(c(f$depth_min, f$depth_max), c(35, 35))
+
+  untimed <- buffer_3d(as_vector3d(obs[1:3]), 1, 5)
+  expect_true(is.na(as.data.frame(untimed)$time_start))
+  expect_true(is.na(untimed@time_resolution))
+})
+
+test_that("a line's polygon covers its whole depth and time range", {
+  tracks <- as_vector3d(dive(), type = "lines", id = "tag", time = "when")
+  b <- buffer_3d(tracks, radius_km = 5, depth_window = 10,
+                 time_window = as.difftime(30, units = "mins"))
+  f <- as.data.frame(b)
+
+  expect_identical(f$feature_id, c("A", "B"))
+  expect_equal(f$depth_min, c(0, 0))
+  expect_equal(f$depth_max, c(130, 60))
+  t0 <- as.POSIXct("2020-01-01", tz = "UTC")
+  expect_equal(f$time_start, rep(t0 - 1800, 2))
+  expect_equal(f$time_end, rep(t0 + 2 * 3600 + 1800, 2))
+  # Area within 5 km of a line: about 2 r L + pi r^2.
+  length_km <- as.numeric(sf::st_length(sf::st_sfc(
+    sf::st_linestring(cbind(c(150, 150.1, 150.2), -20)), crs = 4326
+  ))) / 1000
+  expect_equal(area_km2(b)[1], 2 * 5 * length_km + pi * 25, tolerance = 0.01)
+  # speed changes along each line, so it has no one value per polygon.
+  expect_false("speed" %in% names(f))
+})
+
+test_that("line attributes with one value per line are kept", {
+  d <- dive()
+  d$ship <- rep(c("X", "Y"), each = 3)
+  f <- as.data.frame(buffer_3d(as_vector3d(d, type = "lines", id = "tag"),
+                               5, 10))
+  expect_identical(f$ship, c("X", "Y"))
+})
+
+test_that("buffers across the antimeridian go the short way", {
+  short <- data.frame(id = "a", lon = c(179.9, -179.9), lat = 0, depth = 0)
+  b <- buffer_3d(as_vector3d(short, type = "lines", id = "id"), 5, 0)
+  length_km <- 0.2 * 111.32
+  expect_equal(area_km2(b), 2 * 5 * length_km + pi * 25, tolerance = 0.02)
+
+  point <- data.frame(lon = 180, lat = 0, depth = 0)
+  circle <- buffer_3d(as_vector3d(point), 10, 0)
+  expect_equal(area_km2(circle), pi * 100, tolerance = 0.01)
+  expect_true(all(sf::st_is_valid(as.data.frame(circle)$geometry)))
+})
+
+test_that("buffer_3d() rejects inputs it can't buffer", {
+  pts <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 5))
+  err <- "ocean3d_error_vector3d"
+  expect_error(buffer_3d(data.frame(lon = 1, lat = 1, depth = 1), 1, 1),
+               "must be SpatVector3D points or lines", class = err)
+  polygons <- buffer_3d(pts, 1, 1)
+  expect_error(buffer_3d(polygons, 1, 1), "already have a depth range",
+               class = err)
+  for (radius in list(0, -1, 10000, c(1, 2), "5", NA_real_)) {
+    expect_error(buffer_3d(pts, radius, 1), "`radius_km` must be",
+                 class = err)
+  }
+  for (window in list(-1, c(1, 2), NA_real_, "5")) {
+    expect_error(buffer_3d(pts, 1, window), "`depth_window` must be",
+                 class = err)
+  }
+  expect_error(buffer_3d(pts, 1, 1, time_window = 1),
+               "needs a time at every vertex. Feature 1 of `x` has none",
+               class = err)
+  expect_error(buffer_3d(pts, 1, 1, time_window = -1),
+               "`time_window` must be", class = err)
+  dated <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 5,
+                                  date = as.Date("2020-01-01")),
+                       time = "date")
+  expect_error(buffer_3d(dated, 1, 1, time_window = 0.5),
+               "must be whole days", class = err)
 })

@@ -120,7 +120,7 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #' @slot time_resolution `"daily"` or `"datetime"` for the precision of the
 #'   times, as for [extract_to_point()], or `NA` when there is no time.
 #'
-#' @seealso [as_vector3d()], [geomtype()]
+#' @seealso [as_vector3d()], [buffer_3d()], [geomtype()]
 #' @examples
 #' obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35))
 #' pts <- as_vector3d(obs)

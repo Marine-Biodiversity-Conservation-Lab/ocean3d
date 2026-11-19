@@ -62,6 +62,11 @@ stop with an error when they are bad (#113):
   a depth range, `depth_min` to `depth_max`, and an optional time interval
   per feature, such as a protected area from 0 to 200 m. `geomtype()`
   reports the type (#114).
+* New `buffer_3d()` draws a polygon around each `SpatVector3D` point or
+  line: a geodesic circle or corridor of `radius_km`, a depth range
+  `depth_window` metres above and below the feature's depths, and an
+  optional `time_window` before and after its times. `volume()` on points
+  or lines now suggests it (#114).
 
 ## Bug fixes
 

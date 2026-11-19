@@ -11,7 +11,7 @@ reference:
   desc: >
     3D objects. A `SpatVoxel` holds values by depth level; a `SpatEnvelope`
     holds a depth range per cell; a `SpatVector3D` holds points or lines
-    with a depth and time at each vertex.
+    with a depth and time at each vertex, or polygons with a depth range.
   contents:
   - SpatVoxel-class
   - SpatEnvelope-class
@@ -24,6 +24,7 @@ reference:
   - as_voxel
   - as_envelope
   - as_vector3d
+  - buffer_3d
   - vect_to_envelope
   - envelope_to_voxel
   - voxel_to_envelope
