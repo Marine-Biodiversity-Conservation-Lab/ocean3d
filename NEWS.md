@@ -184,11 +184,18 @@ message says how many cells have the limits swapped (or a seafloor above
 
 ## Minor improvements
 
-* The 3D verbs check their inputs faster. Checking a `SpatEnvelope` is
-  valid now reads an in-memory raster once instead of building a difference
-  raster and summarising it twice, which takes about 1 ms instead of 33 ms on
-  a 9-cell grid. `as_envelope()` is about 5 times faster, `intersect_3d()`
-  and `volume()` about 1.6 to 2 times, and `calc_volume_overlap()` about 20%.
+* Functions that take a `SpatEnvelope` check it faster when it is held in
+  memory. Envelopes read from a file, or with more than a million cells, are
+  checked as before. On 9-cell test grids, `as_envelope()` is about 5 times
+  faster, `intersect_3d()` about 2 times, `volume()` about 1.6 times and
+  `calc_volume_overlap()` about 1.2 times (#154).
+
+* `as_envelope()`'s depth errors now come from the `SpatEnvelope` validity
+  check, so they start with `invalid class "SpatEnvelope" object:` and use
+  its wording: "depth_max must be at least depth_min in every cell", and for
+  negative depths "depths are positive metres increasing downward, but
+  `depth_min` has negative values; if these are elevations, flip their sign
+  first" (#154).
 
 ## Dependencies
 
