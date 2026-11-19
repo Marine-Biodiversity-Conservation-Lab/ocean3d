@@ -12,20 +12,21 @@ layer names.}
 }
 \value{
 Numeric vector, one depth per layer of \code{x} (or per element, when \code{x}
-is character). \code{NA} for any name that does not follow the convention; an
-error when no name does.
+is character). When depths come from names: \code{NA} for any name that doesn't
+follow the pattern, and an error when no name does.
 }
 \description{
 Read the depth axis of a \link[=SpatVoxel-class]{SpatVoxel}. Depth is the layer index in a
-voxel, and the depth itself is carried in the layer name following the
-\verb{\{variable\}_depth=\{value\}} convention used throughout the package; this
-parses it back out.
+voxel, and each layer's depth is stored in terra's own per-layer field,
+\code{\link[terra:depth]{terra::depth()}}. Layer names are free.
 }
 \details{
-\code{x} is normally a \code{SpatVoxel}, but any \link[terra:SpatRaster]{terra::SpatRaster} whose layer names
-follow the convention works, as does a bare character vector of layer names —
-useful for the row names of a \code{\link[terra:global]{terra::global()}} result, which carry the layer
-names but not the raster.
+\code{x} is normally a \code{SpatVoxel}. A plain \link[terra:SpatRaster]{terra::SpatRaster} works too: its
+\code{\link[terra:depth]{terra::depth()}} when set, otherwise the depths in layer names that follow
+the \verb{\{variable\}_depth=\{value\}} pattern (the names \code{\link[=as_voxel]{as_voxel()}} gives, and
+that terra gives layers read from netCDF). A bare character vector of layer
+names is parsed the same way, which is useful for the row names of a
+\code{\link[terra:global]{terra::global()}} result.
 
 Depths are positive metres increasing downward.
 }
@@ -47,5 +48,5 @@ depths(rownames(per_depth))
 depths(c("temp_depth=0", "not_a_depth_layer"))
 }
 \seealso{
-\code{\link[=as_voxel]{as_voxel()}}, which builds those layer names.
+\code{\link[=as_voxel]{as_voxel()}}, which sets the depths.
 }

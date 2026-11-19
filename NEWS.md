@@ -2,6 +2,27 @@
 
 ## Breaking changes
 
+A `SpatVoxel` now stores each layer's depth in terra's own per-layer field,
+`terra::depth()`, instead of in its layer names (#113). Before, the depth was
+read from names like `temp_depth=100`, so renaming a layer broke the voxel.
+Now:
+
+* Layer names are free. `as_voxel()` still names layers
+  `{varname}_depth={value}` when it sets the depths, but renaming them
+  changes nothing.
+* `as_voxel()` takes the depths from `depths`, then from the raster's
+  `terra::depth()`, then from layer names that follow the old pattern, such
+  as those terra gives layers read from netCDF. So existing code that builds
+  voxels from named layers keeps working.
+* `depths()` reads `terra::depth()`.
+* `c()` of voxels keeps each layer's depth, and leaves its inputs unchanged.
+  It returns a plain `SpatRaster` when the layers don't make a valid voxel,
+  for example two layers at the same depth.
+
+Code that set a voxel's depth by renaming its layers should pass `depths` to
+`as_voxel()` or set `terra::depth()` instead. To keep the depth when saving,
+use `terra::writeCDF()` or `saveRDS(terra::wrap(v))`; GeoTIFF drops it.
+
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
 `calc_volume_overlap()`, `envelope_to_voxel()`, `intersect_3d()`,
 `intersects_3d()` and `mask()` (#138). The slab of water each depth level

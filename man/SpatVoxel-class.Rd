@@ -10,15 +10,20 @@
 }
 \arguments{
 \item{x, ...}{For \code{c()}: a \code{SpatVoxel} and further rasters to combine, as
-with terra's \code{c()}. The result keeps the depth edges of every \code{SpatVoxel}
-among them.}
+with terra's \code{c()}. The result is a \code{SpatVoxel} with each layer's depth
+and the depth edges of every \code{SpatVoxel} among them, or a plain
+\code{SpatRaster} when the layers don't make a valid voxel (for example two
+layers at the same depth).}
 }
 \description{
 A \code{SpatVoxel} is a \link[terra:SpatRaster]{terra::SpatRaster} in which \strong{depth is the layer index}
 and the cell values are the variable (temperature, oxygen, presence, ...).
-Layer names follow the \verb{\{variable\}_depth=\{value\}} convention and must be
-distinct and ordered shallow to deep. The depth axis is grid-wide: every
-cell is sampled at the same set of standard depths.
+Each layer's depth is stored in terra's own per-layer field,
+\code{\link[terra:depth]{terra::depth()}}, in metres positive down; depths must be distinct and
+ordered shallow to deep. Read them with \code{\link[=depths]{depths()}}. Layer names are free:
+\code{\link[=as_voxel]{as_voxel()}} names layers \verb{\{variable\}_depth=\{value\}} when it sets the
+depths, for readability, but renaming them changes nothing. The depth axis
+is grid-wide: every cell is sampled at the same set of standard depths.
 }
 \details{
 A voxel may have interior gaps — a cell can be NA at one depth and non-NA
@@ -53,13 +58,13 @@ depth, so the table may hold rows for depths the voxel no longer has.}
 
 \examples{
 # Two cells sampled at three standard depths. Build one with as_voxel(),
-# which names the layers for you and sorts them shallow to deep.
+# which sets the depths and sorts the layers shallow to deep.
 r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
                  ymax = 1, nlyrs = 3)
 terra::values(r) <- cbind(c(12, 11), c(9, NA), c(6, 5))
 v <- as_voxel(r, depths = c(0, 100, 200), varname = "temp")
 
-names(v)          # depth lives in the layer name
+depths(v)         # depth is stored per layer, in terra::depth()
 terra::values(v)  # ...and the variable in the cell values
 
 # Note cell 2: NA at 100 m, but with values above and below it. A voxel can
@@ -70,13 +75,15 @@ terra::values(v)  # ...and the variable in the cell values
 # constructor is idempotent.
 methods::is(v, "SpatRaster")
 terra::nlyr(terra::crop(v, terra::ext(0, 1, 0, 1)))
-identical(names(as_voxel(v)), names(v))
+identical(depths(as_voxel(v)), depths(v))
 
-# Validity is enforced on construction: every layer name must carry its
-# depth, and the layers must run shallow to deep.
-bad <- r
-names(bad) <- c("a", "b", "c")
-try(methods::new("SpatVoxel", bad))
+# Layer names are free: renaming keeps the depths.
+names(v) <- c("surface", "mid", "deep")
+depths(v)
+
+# Validity is enforced on construction: the depths must be distinct and run
+# shallow to deep. A raster whose depths were never set reads as all 0 m.
+try(methods::new("SpatVoxel", r))
 }
 \seealso{
 \link[=SpatEnvelope-class]{SpatEnvelope}, \link[=SpatVolume-class]{SpatVolume}
