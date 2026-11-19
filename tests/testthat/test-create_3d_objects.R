@@ -1,5 +1,5 @@
 test_that("SpatVoxel and SpatEnvelope are SpatRasters and SpatVolumes", {
-  v <- methods::new("SpatVoxel", make_multidepth_rast())
+  v <- as_voxel(make_multidepth_rast())
 
   expect_s4_class(v, "SpatVoxel")
   expect_s4_class(v, "SpatRaster")
@@ -9,17 +9,17 @@ test_that("SpatVoxel and SpatEnvelope are SpatRasters and SpatVolumes", {
 })
 
 test_that("new() refuses an object that breaks the class rules", {
-  bad_names <- make_multidepth_rast()
-  names(bad_names) <- c("a", "b", "c", "d")
+  # A raster whose depths were never set reads as all 0 m.
+  unsorted <- make_multidepth_rast()
+  terra::depth(unsorted) <- c(300, 200, 100, 0)
   no_values <- terra::rast(nrows = 2, ncols = 2, nlyrs = 2)
   names(no_values) <- c("depth_min", "depth_max")
 
   cases <- list(
-    list(label = "voxel with non-conforming names", class = "SpatVoxel",
-         object = bad_names, pattern = "\\{variable\\}_depth="),
+    list(label = "voxel without depths", class = "SpatVoxel",
+         object = make_multidepth_rast(), pattern = "must be distinct"),
     list(label = "voxel with unsorted layers", class = "SpatVoxel",
-         object = make_multidepth_rast(depths = c(300, 200, 100, 0)),
-         pattern = "shallow to deep"),
+         object = unsorted, pattern = "shallow to deep"),
     list(label = "envelope without the two depth layers",
          class = "SpatEnvelope", object = make_multidepth_rast(),
          pattern = "exactly: depth_min, depth_max"),
@@ -30,6 +30,14 @@ test_that("new() refuses an object that breaks the class rules", {
     expect_error(methods::new(case$class, case$object), case$pattern,
                  label = case$label)
   }
+})
+
+test_that("a voxel's layer names are free", {
+  # Only terra::depth() counts, whatever the names.
+  free <- make_multidepth_rast()
+  terra::depth(free) <- c(0, 100, 200, 300)
+  names(free) <- c("a", "b", "c", "d")
+  expect_true(methods::validObject(methods::new("SpatVoxel", free)))
 })
 
 # as_envelope() ----
@@ -195,16 +203,31 @@ test_that("as_voxel() accepts a list of single-depth SpatRasters", {
   expect_s4_class(as_voxel(lst), "SpatVoxel")
 })
 
+test_that("as_voxel() reads depths from terra::depth() or old layer names", {
+  # terra::depth() first, whatever the names.
+  r <- make_multidepth_rast()
+  terra::depth(r) <- c(5, 15, 25, 35)
+  v <- as_voxel(r)
+  expect_identical(depths(v), c(5, 15, 25, 35))
+  expect_identical(names(v), names(r))
+
+  # Old `{variable}_depth={value}` names when terra::depth() isn't set, read
+  # once into terra::depth().
+  old <- as_voxel(make_multidepth_rast(depths = c(0, 100, 200, 300)))
+  expect_identical(terra::depth(old), c(0, 100, 200, 300))
+
+  # Neither: an error that says how to fix it.
+  bare <- make_multidepth_rast()
+  names(bare) <- c("a", "b", "c", "d")
+  err <- expect_error(as_voxel(bare), class = "ocean3d_error_no_depths")
+  expect_match(conditionMessage(err), "a, b, c, d have no depth")
+  expect_match(conditionMessage(err), "Pass `depths`")
+})
+
 test_that("as_voxel() rejects unusable input and says how to fix it", {
   r <- make_multidepth_rast()
-  unnamed <- r
-  names(unnamed) <- c("a", "b", "c", "d")
 
   cases <- list(
-    list(label = "non-conforming names", args = list(unnamed),
-         pattern = "do not follow"),
-    list(label = "non-conforming names, the fix", args = list(unnamed),
-         pattern = "Pass `depths`"),
     # rejected rather than negated
     list(label = "negative depths",
          args = list(r, depths = c(0, -100, -200, -300)),
@@ -249,12 +272,12 @@ test_that("voxel_to_envelope() rejects a non-SpatVoxel or a non-function fun", {
   expect_error(voxel_to_envelope(not_voxel), "must be a SpatVoxel")
   expect_s4_class(as_voxel(not_voxel), "SpatVoxel")
 
-  v <- methods::new("SpatVoxel", make_multidepth_rast())
+  v <- as_voxel(make_multidepth_rast())
   expect_error(voxel_to_envelope(v, "extent"), "must be a function")
 })
 
 test_that("voxel_to_envelope() bounds the depths where `fun` holds", {
-  v <- methods::new("SpatVoxel", make_multidepth_rast())
+  v <- as_voxel(make_multidepth_rast())
 
   cases <- list(
     list(label = "default: the non-NA vertical extent", v = v, fun = NULL,
@@ -267,9 +290,8 @@ test_that("voxel_to_envelope() bounds the depths where `fun` holds", {
          min = rep(NA_real_, 4), max = rep(NA_real_, 4)),
     # a one-layer voxel collapses to a zero-thickness envelope at that depth
     list(label = "single-depth voxel",
-         v = methods::new("SpatVoxel",
-                          make_multidepth_rast(depths = 50,
-                                               vals = list(c(10, NA, 5, NA)))),
+         v = as_voxel(make_multidepth_rast(depths = 50,
+                                           vals = list(c(10, NA, 5, NA)))),
          fun = NULL, min = c(50, NA, 50, NA), max = c(50, NA, 50, NA))
   )
   for (case in cases) {
@@ -1093,8 +1115,6 @@ test_that("tagged 3D objects that a terra operation broke are refused", {
     # refuses it with the message a plain raster would get
     list(label = "voxel with a repeated layer", object = v[[c(1, 1, 2)]],
          class = "SpatVoxel", call = as_voxel, pattern = "duplicate depth"),
-    list(label = "voxel whose names lost the depth", object = renamed,
-         class = "SpatVoxel", call = as_voxel, pattern = "_depth="),
     # a reversed voxel would otherwise collapse to an inverted envelope
     list(label = "reversed voxel", object = as_voxel(r4)[[c(3, 2, 1)]],
          class = "SpatVoxel", call = voxel_to_envelope,
@@ -1109,7 +1129,10 @@ test_that("tagged 3D objects that a terra operation broke are refused", {
     }
   }
 
-  # a lost name is recoverable by supplying `depths`, which rebuilds the names
+  # Renaming doesn't break a voxel: the depths are in terra::depth(). Passing
+  # `depths` gives readable names again.
+  expect_true(methods::validObject(renamed, test = TRUE))
+  expect_identical(depths(as_voxel(renamed)), c(0, 100, 200))
   rebuilt <- as_voxel(renamed, depths = c(0, 100, 200), varname = "presence")
   expect_true(methods::validObject(rebuilt, test = TRUE))
   expect_named(rebuilt, names(v))
@@ -1190,6 +1213,27 @@ test_that("as_voxel() stores depth edges keyed by depth", {
                      depths = (0:3) * 0.1,
                      depth_bounds = cbind((0:3) * 0.1, c((1:3) * 0.1, 0.4)))
   expect_equal(edges_of(tenths), cbind((0:3) * 0.1, c((1:3) * 0.1, 0.4)))
+})
+
+test_that("terra operations keep a voxel's depths", {
+  v <- make_voxel(1, c(0, 100, 200))
+  expect_identical(depths(v[[2:3]]), c(100, 200))
+  expect_identical(depths(terra::crop(v, terra::ext(0, 1000, 0, 1000))),
+                   depths(v))
+  expect_identical(depths(v * 2), depths(v))
+  expect_identical(depths(terra::ifel(v > 0, 1, NA)), depths(v))
+
+  # terra's own c() resets depths to 0 and edits its inputs' depths in place;
+  # the SpatVoxel method puts them back and leaves the inputs alone.
+  shallow <- v[[1]]
+  deep <- v[[2:3]]
+  joined <- c(shallow, deep)
+  expect_s4_class(joined, "SpatVoxel")
+  expect_identical(depths(joined), c(0, 100, 200))
+  expect_identical(depths(shallow), 0)
+  expect_identical(depths(deep), c(100, 200))
+  # Two layers at one depth aren't a voxel: c() returns a plain raster.
+  expect_false(methods::is(c(shallow, shallow), "SpatVoxel"))
 })
 
 test_that("depth edges survive terra operations that keep the class", {
