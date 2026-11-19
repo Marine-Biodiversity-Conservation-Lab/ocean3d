@@ -143,5 +143,21 @@ exported function rather than deleting them.
   (e.g. "Fixed in e860cb3: ...").
 - Commits and PR descriptions written with an agent include AI attribution,
   e.g. a `Co-Authored-By:` trailer naming the model.
-- Before handing back: `devtools::document()`, `devtools::test()`,
-  `devtools::check()`, and `lintr::lint()` on changed files with no new lints.
+- Before handing back: `devtools::document()`, then a check that skips the
+  vignettes and the PDF manual, as CI does (`.github/workflows/R-CMD-check.yaml`):
+
+  ```r
+  Sys.setenv(TESTTHAT_CPUS = 6)
+  devtools::check(
+    document = FALSE, vignettes = FALSE, cran = FALSE,
+    args = "--no-manual"
+  )
+  ```
+
+  `cran = FALSE` drops `--as-cran`, which limits testthat to two workers and
+  adds checks that CI runs on every PR anyway. This takes about 6 minutes,
+  against 9 to 12 with `--as-cran`. The check runs the tests, so don't also
+  run `devtools::test()` before it; use `devtools::test()` or
+  `devtools::test_active_file()` while iterating. Build the vignettes with
+  `devtools::build_vignettes()` only when the PR changes them or the functions
+  they call. Then run `lintr::lint()` on changed files, with no new lints.
