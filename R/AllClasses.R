@@ -5,6 +5,13 @@
 #' @importClassesFrom terra SpatRaster
 NULL
 
+# terra keeps the SpatVoxel / SpatEnvelope subclass through `mask()`, `[[`,
+# arithmetic, `ifel()` and `c()`. A result that isn't a valid 3D object (a
+# single depth layer, a footprint, an overlap stack) must have the class
+# removed with `methods::as(x, "SpatRaster")`, which copies, or it comes back
+# wearing a class it doesn't satisfy. Calls that do this are marked
+# "remove the 3D class".
+
 #' 3D voxel model: one layer per standard depth level
 #'
 #' A `SpatVoxel` is a [terra::SpatRaster] in which **depth is the layer index**
@@ -340,7 +347,7 @@ setValidity("SpatEnvelope", function(object) {
   # cheaper than two terra::global() calls and a difference raster. A
   # file-backed raster is summarised by terra::global(), which reads it in
   # blocks, so a large file is never loaded whole.
-  x <- .as_plain_raster(object)
+  x <- methods::as(object, "SpatRaster")  # remove the 3D class
   if (all(terra::inMemory(x))) {
     v <- terra::values(x, mat = TRUE)
     negative <- any(v[, 1] < 0, na.rm = TRUE)
