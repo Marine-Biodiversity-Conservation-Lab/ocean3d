@@ -127,6 +127,36 @@
   invisible(values)
 }
 
+# Shared edges and outer edges can differ by rounding, up to single precision
+# for values stored as float32.
+.interval_tolerance <- function(lower, upper) {
+  max(1e-8, max(abs(c(lower, upper)), na.rm = TRUE) * 2^-23)
+}
+
+# Why cell intervals `lower` to `upper` don't fit their `centres`, as the end
+# of a sentence starting "Bounds for ...", or NULL when they do: each needs a
+# positive width (or zero, when `zero_width`), must contain its centre and
+# mustn't overlap another, allowing for rounding. Returns the problem rather
+# than stopping, so the SpatVoxel validity method can report it too; readers
+# stop through .axis_intervals().
+.interval_problem <- function(centres, lower, upper, zero_width = FALSE) {
+  if (any(!is.finite(lower)) || any(!is.finite(upper)) ||
+        any(!is.finite(upper - lower))) {
+    return("need positive widths and must contain their centres")
+  }
+  tol <- .interval_tolerance(lower, upper)
+  if ((!zero_width && any(upper <= lower)) ||
+        any(centres < lower - tol | centres > upper + tol)) {
+    return("need positive widths and must contain their centres")
+  }
+  index <- order(lower)
+  if (length(index) > 1L &&
+        any(tail(lower[index], -1L) < head(cummax(upper[index]), -1L) - tol)) {
+    return("overlap. Resolve overlapping cells first")
+  }
+  NULL
+}
+
 # Cell intervals of one axis: `centres` with `bounds` (a 2 x n matrix of
 # edges, or NULL to infer them halfway between centres, cut at the surface for
 # depth). Checks that the centres run one way without duplicates and that the
@@ -170,25 +200,13 @@
     basis <- "explicit_bounds"
   }
 
-  # Shared edges and outer edges can differ by rounding, up to single
-  # precision for values stored as float32.
-  tol <- max(1e-8, max(abs(c(lower, upper)), na.rm = TRUE) * 2^-23)
-  if (any(!is.finite(lower)) || any(!is.finite(upper)) ||
-        (basis != "singleton_coordinate" && any(upper <= lower)) ||
-        any(!is.finite(upper - lower)) ||
-        any(centres < lower - tol | centres > upper + tol)) {
-    .abort_bounds(coordinate, file,
-                  "need positive widths and must contain their centres")
-  }
-  index <- order(lower)
-  if (length(index) > 1L &&
-        any(tail(lower[index], -1L) < head(cummax(upper[index]), -1L) - tol)) {
-    .abort_bounds(coordinate, file,
-                  "overlap. Resolve overlapping cells first")
-  }
-  if (periodic && length(index) > 1L) {
+  problem <- .interval_problem(centres, lower, upper,
+                               zero_width = basis == "singleton_coordinate")
+  if (!is.null(problem)) .abort_bounds(coordinate, file, problem)
+  if (periodic && length(centres) > 1L) {
     # Longitude cells must not overlap modulo 360 either (e.g. 350 to 370
     # and 0 to 20), or a cell would be counted twice.
+    tol <- .interval_tolerance(lower, upper)
     start <- lower %% 360
     end <- start + upper - lower
     sorted <- order(start)

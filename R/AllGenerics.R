@@ -38,12 +38,13 @@ NULL
 #' @param ... Arguments for the [SpatVoxel-class] method, which are an error
 #'   for an envelope.
 #' @param bounds SpatVoxel only. What each depth level stands for vertically:
-#'   `"top"` (default) treats the level as the top of its slab, so the slab
-#'   runs down to the next level; `"midpoint"` puts the level in the middle,
-#'   with edges halfway to each neighbour (the World Ocean Atlas convention).
-#'   Under `"top"` the deepest level has no next level and contributes no
-#'   volume. Outer edges are clamped to `range(depths)` under both. Same
-#'   argument, same meaning, as in [envelope_to_voxel()].
+#'   `"midpoint"` (default) puts the slab edges halfway to each neighbouring
+#'   level (the World Ocean Atlas convention);
+#'   `"top"` treats the level as the top of its slab, so the slab runs down to
+#'   the next level. Under `"top"` the deepest level has no next level and
+#'   contributes no volume. Outer edges are clamped to `range(depths)` under
+#'   both. Same argument, same meaning, as in [envelope_to_voxel()]. Not used
+#'   for a voxel that carries its own depth edges (see [SpatVoxel-class]).
 #'
 #' @returns Numeric of length 1. Total volume in km³.
 #'
@@ -61,8 +62,8 @@ NULL
 #' e <- as_envelope(fp, depth_min = 0, depth_max = 200)
 #' volume(e)
 #'
-#' # 3D: the same domain on three levels. Under "top" the slabs are 100 m,
-#' # 100 m and 0 m, so the discretized volume matches exactly here.
+#' # 3D: the same domain on three levels. The slabs are 50 m, 100 m and 50 m,
+#' # so the discretized volume matches exactly here.
 #' v <- envelope_to_voxel(e, depths = c(0, 100, 200))
 #' volume(v)
 #'
@@ -117,8 +118,9 @@ setGeneric("volume", function(x, ...) standardGeneric("volume"))
 #' @param ... Arguments for the voxel methods. They are an error when both
 #'   inputs are envelopes.
 #' @param bounds Only when one input is an envelope and the other a voxel. How
-#'   the envelope is placed on the voxel's depth levels: `"top"` (default) or
-#'   `"midpoint"`. See [envelope_to_voxel()].
+#'   the envelope is placed on the voxel's depth levels: `"midpoint"`
+#'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
+#'   carries its own depth edges (see [SpatVoxel-class]).
 #'
 #' @returns A [SpatEnvelope-class] when both inputs are envelopes, or when one
 #'   is an envelope and the other is 2D. Otherwise a [SpatVoxel-class] of
@@ -229,7 +231,8 @@ setGeneric("intersects_3d",
 #' @param ... Arguments for the voxel methods, which are an error for a pair
 #'   of envelopes.
 #' @param bounds Voxel methods only. See [volume()]. Also governs how an
-#'   envelope is discretized when the two inputs differ.
+#'   envelope is discretized when the two inputs differ. Not used when a voxel
+#'   carries its own depth edges; two voxels whose edges differ are an error.
 #'
 #' @returns Multi-layer SpatRaster with 9 layers:
 #'   \describe{
@@ -244,7 +247,9 @@ setGeneric("intersects_3d",
 #'   }
 #'
 #'   For voxel inputs the depth layers are *summary bounds* — the shallowest
-#'   and deepest occupied level. A voxel with an interior gap is not solid
+#'   and deepest occupied level, or the top and bottom of their slabs when the
+#'   voxels carry depth edges (as [voxel_to_envelope()] gives them). A voxel
+#'   with an interior gap is not solid
 #'   between them, so read the volume layers, not the depth layers, for
 #'   occupied volume. The result is a plain SpatRaster: it is neither an
 #'   envelope nor a voxel.

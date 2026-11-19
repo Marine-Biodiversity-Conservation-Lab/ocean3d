@@ -74,19 +74,12 @@
   .as_plain_raster(occ)
 }
 
-# Internal: vertical extent each depth level stands for, in metres.
-# .depth_slabs() (create_3d_objects.R) owns the top/midpoint conventions; this
-# is only their height, so the two stay in step by construction.
-.slab_thickness <- function(depths, bounds) {
-  slab <- .depth_slabs(depths, bounds)
-  slab$upper - slab$lower
-}
-
-# Internal: per-cell occupied volume of a voxel, km^3. Summing thickness over
-# occupied layers is what makes an interior gap cost volume, which is the whole
-# reason the voxel path is not just voxel_to_envelope() plus the 2.5D formula.
-.voxel_cell_volume <- function(occ, depths, bounds, area_km2) {
-  thickness_m <- .slab_thickness(depths, bounds)
+# Internal: per-cell occupied volume of a voxel, km^3, from the slab each
+# layer stands for. Summing thickness over occupied layers is what makes an
+# interior gap cost volume, which is the whole reason the voxel path is not
+# just voxel_to_envelope() plus the 2.5D formula.
+.voxel_cell_volume <- function(occ, slab, area_km2) {
+  thickness_m <- slab$upper - slab$lower
   # The raster stays on the left of the operator: terra mishandles
   # `numeric <op> SpatRaster`. The vector is recycled layer-wise.
   occupied_m <- sum(occ * thickness_m)
@@ -99,32 +92,38 @@
   terra::ifel(sum(occ) > 0, 1, NA)
 }
 
-# Internal: shallowest and deepest occupied level of an occupancy stack.
-# These are summary bounds only: a voxel with an interior gap is not solid
-# between them, which is why volumes are computed from the occupancy itself.
-.occupancy_bounds <- function(occ) {
-  voxel_to_envelope(as_voxel(occ), fun = function(v) v > 0)
-}
-
-# Internal: the shared depth levels of two voxels. Resampling one onto the
-# other would be a guess about the vertical axis the caller is better placed to
-# make, so a mismatch is an error.
+# Internal: the shared depth levels of two voxels, and their shared depth
+# edges: whichever voxel carries them, or NULL when neither does. Resampling
+# one onto the other would be a guess about the vertical axis the caller is
+# better placed to make, so different levels, or different edges for the same
+# levels, are an error.
 .shared_depths <- function(x, y) {
-  dx <- .parse_depth_layers(x)
-  dy <- .parse_depth_layers(y)
+  dx <- depths(x)
+  dy <- depths(y)
   if (!isTRUE(all.equal(dx, dy))) {
     stop("`x` and `y` must be sampled at the same depth levels; got ",
          toString(dx), " and ", toString(dy),
          ". Rebuild one on the other's depths.", call. = FALSE)
   }
-  dx
+  bx <- depth_bounds(x)
+  by <- depth_bounds(y)
+  if (!is.null(bx) && !is.null(by) &&
+        !isTRUE(all.equal(bx[c("lower", "upper")], by[c("lower", "upper")]))) {
+    rlang::abort(glue::glue(
+      "`x` and `y` carry different depth edges for the same depth levels. ",
+      "Rebuild one with the other's edges (`depth_bounds` in as_voxel())."
+    ), class = "ocean3d_error_depth_edges_differ", call = NULL)
+  }
+  list(depths = dx, depth_bounds = if (is.null(bx)) by else bx)
 }
 
 # Internal: bring an envelope up to a voxel's depth levels. This direction, not
 # the reverse: envelope_to_voxel() quantizes, but voxel_to_envelope() fills
 # interior gaps, which would overstate an overlap.
 .promote_to_voxel <- function(e, v, bounds) {
-  envelope_to_voxel(e, depths = .parse_depth_layers(v), bounds = bounds)
+  # The envelope takes the voxel's edges when it carries them.
+  envelope_to_voxel(e, depths = depths(v), bounds = bounds,
+                    depth_bounds = depth_bounds(v))
 }
 
 # Internal: the class boundary is the contract. A raster that merely happens to

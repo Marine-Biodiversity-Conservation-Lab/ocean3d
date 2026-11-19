@@ -16,6 +16,29 @@ NULL
 #' A voxel may have interior gaps — a cell can be NA at one depth and non-NA
 #' at the depths above and below it.
 #'
+#' Each layer stands for a slab of water around its depth. A voxel can carry
+#' the top and bottom of each slab, for example a netCDF file's depth bounds,
+#' set with the `depth_bounds` argument of [as_voxel()] or
+#' [envelope_to_voxel()] and read with [depth_bounds()]. [volume()],
+#' [calc_volume_overlap()],
+#' [envelope_to_voxel()], [voxel_to_envelope()], [intersect_3d()],
+#' [intersects_3d()] and [mask()] use these edges when the voxel has them for
+#' every layer, and work the edges out from the depths with their `bounds`
+#' argument when it doesn't. Each slab must contain its depth and have a
+#' positive height, and slabs must not overlap; gaps between them are allowed.
+#'
+#' terra operations that keep the `SpatVoxel` class (`[[`, `crop()`,
+#' `mask()`, arithmetic, `c()`) keep the edges; an operation that returns a
+#' plain `SpatRaster` (`app()`, writing to a file) drops them. Combining a
+#' voxel that has edges with one that doesn't, with `c()`, leaves some layers
+#' without edges, so `bounds` applies to the result.
+#'
+#' @slot depth_edges A data frame with columns `depth`, `lower` and `upper`,
+#'   in metres positive down: the slab each depth stands for, from `lower`
+#'   (its top) to `upper` (its bottom), as in [SpatProxy-class]. It has no
+#'   rows when the voxel carries no edges. Each layer finds its slab by its
+#'   depth, so the table may hold rows for depths the voxel no longer has.
+#'
 #' @seealso [SpatEnvelope-class], [SpatVolume-class]
 #'
 #' @examples
@@ -45,7 +68,14 @@ NULL
 #' names(bad) <- c("a", "b", "c")
 #' try(methods::new("SpatVoxel", bad))
 #' @export
-setClass("SpatVoxel", contains = "SpatRaster")
+setClass(
+  "SpatVoxel", contains = "SpatRaster",
+  slots = c(depth_edges = "data.frame"),
+  # A voxel without edges has the empty table.
+  prototype = list(depth_edges = data.frame(
+    depth = numeric(0), lower = numeric(0), upper = numeric(0)
+  ))
+)
 
 #' 2.5D min-max envelope: exactly depth_min, depth_max
 #'
@@ -256,13 +286,45 @@ setValidity("SpatVector3D", function(object) {
 setClassUnion("SpatVolume", c("SpatVoxel", "SpatEnvelope", "SpatVector3D"))
 
 setValidity("SpatVoxel", function(object) {
-  d <- .parse_depth_layers(object, error = FALSE)
+  d <- .parse_depth_layers_names(names(object), error = FALSE)
   if (anyNA(d)) return("every layer name must follow {variable}_depth={value}")
   if (is.unsorted(d)) return("depth layers must be ordered shallow to deep")
   if (anyDuplicated(d)) return("depth layers must be distinct")
   if (any(d < 0)) return("depths are positive metres increasing downward")
+  edges <- object@depth_edges
+  if (!identical(names(edges), c("depth", "lower", "upper")) ||
+        !all(vapply(edges, is.numeric, logical(1)))) {
+    return("depth_edges must have the numeric columns depth, lower and upper")
+  }
+  if (anyDuplicated(edges$depth)) {
+    return("depth_edges must have one row per depth")
+  }
+  # The layers that have a row; the rest have no stored edges.
+  row <- .edge_rows(edges$depth, d)
+  has <- !is.na(row)
+  if (any(has)) {
+    lower <- edges$lower[row[has]]
+    upper <- edges$upper[row[has]]
+    problem <- .interval_problem(d[has], lower, upper)
+    if (!is.null(problem)) return(paste("depth_edges", problem))
+    if (any(lower < 0)) {
+      return("depth_edges are positive metres increasing downward")
+    }
+  }
   TRUE
 })
+
+# Internal: the row of a depth_edges table for each depth, or NA for a depth
+# it doesn't hold. Depths are matched with .depth_tolerance(), because a depth
+# read back from a layer name (`temp_depth=0.494025`) can differ from the
+# stored one in the last digits.
+.edge_rows <- function(edge_depths, depths) {
+  tol <- .depth_tolerance(depths)
+  vapply(seq_along(depths), function(i) {
+    hit <- which(abs(edge_depths - depths[i]) <= tol[i])
+    if (length(hit) == 1L) hit else NA_integer_
+  }, integer(1))
+}
 
 setValidity("SpatEnvelope", function(object) {
   if (!identical(names(object), c("depth_min", "depth_max")))

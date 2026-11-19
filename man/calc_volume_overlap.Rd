@@ -13,11 +13,11 @@ calc_volume_overlap(x, y, ...)
 
 \S4method{calc_volume_overlap}{SpatEnvelope,SpatEnvelope}(x, y, ...)
 
-\S4method{calc_volume_overlap}{SpatVoxel,SpatVoxel}(x, y, bounds = c("top", "midpoint"))
+\S4method{calc_volume_overlap}{SpatVoxel,SpatVoxel}(x, y, bounds = c("midpoint", "top"))
 
-\S4method{calc_volume_overlap}{SpatEnvelope,SpatVoxel}(x, y, bounds = c("top", "midpoint"), ...)
+\S4method{calc_volume_overlap}{SpatEnvelope,SpatVoxel}(x, y, bounds = c("midpoint", "top"), ...)
 
-\S4method{calc_volume_overlap}{SpatVoxel,SpatEnvelope}(x, y, bounds = c("top", "midpoint"), ...)
+\S4method{calc_volume_overlap}{SpatVoxel,SpatEnvelope}(x, y, bounds = c("midpoint", "top"), ...)
 
 \S4method{calc_volume_overlap}{SpatRaster,SpatRaster}(x, y, ...)
 }
@@ -30,7 +30,8 @@ and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 of envelopes.}
 
 \item{bounds}{Voxel methods only. See \code{\link[=volume]{volume()}}. Also governs how an
-envelope is discretized when the two inputs differ.}
+envelope is discretized when the two inputs differ. Not used when a voxel
+carries its own depth edges; two voxels whose edges differ are an error.}
 }
 \value{
 Multi-layer SpatRaster with 9 layers:
@@ -46,7 +47,9 @@ absent.}
 }
 
 For voxel inputs the depth layers are \emph{summary bounds} — the shallowest
-and deepest occupied level. A voxel with an interior gap is not solid
+and deepest occupied level, or the top and bottom of their slabs when the
+voxels carry depth edges (as \code{\link[=voxel_to_envelope]{voxel_to_envelope()}} gives them). A voxel
+with an interior gap is not solid
 between them, so read the volume layers, not the depth layers, for
 occupied volume. The result is a plain SpatRaster: it is neither an
 envelope nor a voxel.

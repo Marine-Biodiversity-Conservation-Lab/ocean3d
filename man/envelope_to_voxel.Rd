@@ -9,8 +9,9 @@ envelope_to_voxel(
   depths,
   values = NULL,
   profile = NULL,
-  bounds = c("top", "midpoint"),
-  varname = "presence"
+  bounds = c("midpoint", "top"),
+  varname = "presence",
+  depth_bounds = NULL
 )
 }
 \arguments{
@@ -34,13 +35,20 @@ the depths a cell occupies. Any function meeting the contract in
 \link{voxel_profiles} works, including your own.}
 
 \item{bounds}{How to place the edges of the slab each depth level stands for.
-\code{"top"} (the default) runs the slab from the level down to the next, so the
-level is its shallow edge; \code{"midpoint"} puts the edges halfway between
-neighbouring levels. Under both, the outer edges are clamped to
-\code{range(depths)} rather than extrapolated.}
+\code{"midpoint"} (the default) puts the edges halfway between neighbouring
+levels; \code{"top"} runs the slab from the level down to the next, so the
+level is its shallow edge. Under both, the outer edges are clamped to
+\code{range(depths)} rather than extrapolated. Not used when \code{depth_bounds}
+is given.}
 
 \item{varname}{Name to use for depth layer, taking on form of
 \verb{\{varname\}_depth=\{depths[i]\}}}
+
+\item{depth_bounds}{Optional two-column matrix or data frame: the top and
+bottom of the slab of water each depth stands for, in metres, one row per
+element of \code{depths} (or a \code{depth}, \code{lower}, \code{upper} table, as in
+\code{\link[=as_voxel]{as_voxel()}}). When given, these slabs are used instead of \code{bounds}, the
+returned voxel carries them, and \code{depths} must not repeat a depth.}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} with one layer per depth in \code{depths}, on the
@@ -81,14 +89,19 @@ Where a slab's edges fall is a property of the dataset the levels came from,
 not of the levels themselves, so \code{bounds} selects the convention:
 
 \itemize{
-\item \code{"top"} (the default) runs each slab from its level down to the next,
-so a level names the top of what it stands for. Levels \code{c(0, 100, 200)}
-give slabs \code{0-100}, \code{100-200}.
-\item \code{"midpoint"} puts the edges halfway between neighbouring levels, so a
-level sits in the middle of what it stands for. This is the World Ocean
-Atlas convention: \verb{0, 5, 10, ...} the 0 m layer covers \code{0-2.5} m, the
-5 m layer \code{2.5-7.5} m, the 10 m layer \code{7.5-12.5} m, and so on.
+\item \code{"midpoint"} (the default) puts the edges halfway between
+neighbouring levels. This is the World Ocean Atlas convention:
+\verb{0, 5, 10, ...} the 0 m layer covers \code{0-2.5} m, the 5 m layer
+\code{2.5-7.5} m, the 10 m layer \code{7.5-12.5} m, and so on. It is close for
+model output such as Copernicus Marine, but leaves out the water above
+the shallowest level and below the deepest.
+\item \code{"top"} runs each slab from its level down to the next, so a level
+names the top of what it stands for. Levels \code{c(0, 100, 200)} give slabs
+\code{0-100}, \code{100-200}.
 }
+
+When the dataset gives the real edges (a netCDF file's depth bounds), pass
+them as \code{depth_bounds} instead.
 
 Under either convention the slabs cover the span from the shallowest level to
 the deepest and no further: outer edges are clamped to \code{range(depths)} rather
@@ -125,12 +138,19 @@ terra::values(
                     varname = "time")
 )
 
-# the same envelope read against WOA-style layer bounds: [60, 70] sits in the
-# 50-150 m slab of the 100 m level, where the default puts it at 0-100 m
+# where a slab's edges fall decides the level: [60, 70] sits in the 50-150 m
+# slab of the 100 m level by default (WOA-style), but in the 0-100 m slab of
+# the 0 m level under "top"
 shallow <- as_envelope(fp, depth_min = 60, depth_max = 70)
 terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200)))
 terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200),
-                                bounds = "midpoint"))
+                                bounds = "top"))
+
+# or give the dataset's own edges
+terra::values(envelope_to_voxel(
+  shallow, depths = c(0, 100, 200),
+  depth_bounds = cbind(c(0, 65, 150), c(65, 150, 250))
+))
 
 # a per-cell magnitude comes in as a raster: split each cell's effort evenly
 # over the depths it occupies, conserving the cell total
