@@ -43,7 +43,7 @@
 # `nc$dim`, not `nc$var`, and ncatt_get() reads their attributes by name too,
 # including group-qualified names such as "grp/lon" (#93). Used for axis,
 # depth, bounds and time metadata alike.
-.read_time_attribute <- function(nc, coordinate, attribute) {
+.read_attribute <- function(nc, coordinate, attribute) {
   # ncdf4 prints warnings to stdout for dimensions without a coordinate
   # variable, so return early instead of asking it for their attributes.
   if (!.has_coordinate_variable(nc, coordinate)) return(NULL)
@@ -67,13 +67,13 @@
 # Detect CF axis metadata associated with a dimension.
 .axis_from_metadata <- function(nc, dim_name) {
   axis <- toupper(.normalise_axis_attribute(
-    .read_time_attribute(nc, dim_name, "axis")
+    .read_attribute(nc, dim_name, "axis")
   ))
   standard_name <- .normalise_axis_attribute(
-    .read_time_attribute(nc, dim_name, "standard_name")
+    .read_attribute(nc, dim_name, "standard_name")
   )
   units <- .normalise_axis_attribute(
-    .read_time_attribute(nc, dim_name, "units")
+    .read_attribute(nc, dim_name, "units")
   )
   lon_units <- c(
                  "degrees_east", "degree_east",
@@ -195,7 +195,7 @@
 # grids are out of scope (SPEC.md, "Grids in scope"), so this runs before any
 # axis is resolved by name (#93).
 .check_auxiliary_coordinates <- function(nc, var, var_dims) {
-  coordinates <- .read_time_attribute(nc, var, "coordinates")
+  coordinates <- .read_attribute(nc, var, "coordinates")
 
   if (is.null(coordinates)) return(invisible(TRUE))
 
@@ -335,7 +335,7 @@
     list(name = lat_name, axis = "latitude")
   )) {
     units <- .normalise_axis_attribute(
-      .read_time_attribute(nc, axis_info$name, "units")
+      .read_attribute(nc, axis_info$name, "units")
     )
 
     if (units %in% projected_units) {

@@ -239,7 +239,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   file <- basename(path)
   .check_climatology(nc, dim, file)
   offsets <- as.vector(.get_dim_values(nc, dim))
-  units <- .read_time_attribute(nc, dim, "units")
+  units <- .read_attribute(nc, dim, "units")
   usable <- is.numeric(offsets) && all(is.finite(offsets)) &&
     is.character(units) && length(units) == 1L && nzchar(trimws(units))
   # Without usable units or offsets, the axis builder gives the error.
@@ -280,7 +280,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 
 # EPSG:4326, or the geographic CRS the variable's grid mapping gives as WKT.
 .proxy_crs <- function(nc, var) {
-  mapping <- .read_time_attribute(nc, var, "grid_mapping")
+  mapping <- .read_attribute(nc, var, "grid_mapping")
   if (is.null(mapping) || !mapping %in% names(nc$var)) return("EPSG:4326")
   read <- function(name) {
     att <- ncdf4::ncatt_get(nc, mapping, name)

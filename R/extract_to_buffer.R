@@ -384,7 +384,7 @@
       checks[[length(checks) + 1L]] <- list(
         variable = variable, method = record$method,
         temporal = !is.null(dims$time),
-        units = .read_time_attribute(handle, variable, "units")
+        units = .read_attribute(handle, variable, "units")
       )
     }
   }
@@ -463,7 +463,7 @@
   list(
     nc = nc, var = var, source_index = source_index, dims = dims,
     source_file = nc$filename,
-    variable_units = .read_time_attribute(nc, var, "units"),
+    variable_units = .read_attribute(nc, var, "units"),
     lon = lon, lat = lat, lon_axis = lon_axis, lat_axis = lat_axis,
     method = selected_method,
     depth_axis = if (!is.null(dims$depth) && selected_method != "2d") {

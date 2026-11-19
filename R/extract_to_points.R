@@ -173,15 +173,15 @@
 # extraction and the core object, which use them, read and check them.
 .read_temporal_metadata <- function(nc, time_dim, var, timestamps) {
   if (is.null(time_dim)) return(list(static = TRUE, variable = var))
-  climatology <- .read_time_attribute(nc, time_dim, "climatology")
-  calendar <- .read_time_attribute(nc, time_dim, "calendar")
+  climatology <- .read_attribute(nc, time_dim, "climatology")
+  calendar <- .read_attribute(nc, time_dim, "calendar")
   if (is.null(calendar)) calendar <- "standard"
   list(
     static = FALSE, variable = var,
-    units = .read_time_attribute(nc, time_dim, "units"),
+    units = .read_attribute(nc, time_dim, "units"),
     calendar = tolower(calendar),
-    variable_units = .read_time_attribute(nc, var, "units"),
-    cell_methods = .read_time_attribute(nc, var, "cell_methods"),
+    variable_units = .read_attribute(nc, var, "units"),
+    cell_methods = .read_attribute(nc, var, "cell_methods"),
     climatology = climatology,
     timestamps = timestamps,
     cadence = .infer_temporal_cadence(timestamps)

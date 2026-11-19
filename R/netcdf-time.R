@@ -28,9 +28,9 @@
 # Time bounds (from .read_bounds()) must use the coordinate's calendar.
 # Shared by buffer extraction and the core object, which read time bounds.
 .check_time_bounds_calendar <- function(nc, time_dim, bounds) {
-  calendar <- .read_time_attribute(nc, time_dim, "calendar")
+  calendar <- .read_attribute(nc, time_dim, "calendar")
   if (is.null(calendar)) calendar <- "standard"
-  bounds_calendar <- .read_time_attribute(nc, bounds$name, "calendar")
+  bounds_calendar <- .read_attribute(nc, bounds$name, "calendar")
   if (!is.null(bounds_calendar) &&
         !identical(tolower(bounds_calendar), tolower(calendar))) {
     stop("Time bounds and coordinate use different calendars.",
@@ -47,11 +47,11 @@
 # instead.
 # `file` names the file in the message.
 .check_climatology <- function(nc, time_dim, file = NULL) {
-  units <- .read_time_attribute(nc, time_dim, "units")
+  units <- .read_attribute(nc, time_dim, "units")
   units_ok <- is.character(units) && length(units) == 1L && !is.na(units)
   year_zero <- units_ok &&
     grepl("^\\s*(months?|years?)\\s+since\\s+0+-", units, ignore.case = TRUE)
-  flagged <- !is.null(.read_time_attribute(nc, time_dim, "climatology"))
+  flagged <- !is.null(.read_attribute(nc, time_dim, "climatology"))
   if (!flagged && !year_zero) return(invisible(NULL))
   where <- if (is.null(file)) "" else glue::glue(" in {file}")
   shown <- if (units_ok) glue::glue(" (units '{units}')") else ""
@@ -71,7 +71,7 @@
 # Bounds must contain their time step. Used by the decoder below and by the
 # core object's time axis (as_proxy()).
 .netcdf_time_axis <- function(nc, time_dim, bounds = NULL) {
-  units <- .read_time_attribute(nc, time_dim, "units")
+  units <- .read_attribute(nc, time_dim, "units")
 
   if (!is.character(units) || length(units) != 1L ||
         is.na(units) || !nzchar(trimws(units))) {
@@ -85,7 +85,7 @@
   }
 
   calendar <- .check_time_calendar(
-    .read_time_attribute(nc, time_dim, "calendar"), time_dim
+    .read_attribute(nc, time_dim, "calendar"), time_dim
   )
 
   values <- as.vector(.get_dim_values(nc, time_dim))
