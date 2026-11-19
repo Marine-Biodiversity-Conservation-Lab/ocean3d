@@ -732,7 +732,7 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 #### Order of work
 
 Each step has its own issue, and each PR branches off `main`. Status as
-of 18 November 2026.
+of 19 November 2026.
 
 1.  **Document the current split:** which functions take netCDF and
     which take `SpatVoxel` (README function overview and each function’s
@@ -770,11 +770,11 @@ of 18 November 2026.
     [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
     It describes one variable of one netCDF file without reading values:
     its chunk sizes, the axes in fixed form, time running forwards only
-    (see Direction, Time decoding) and the CRS. The internal reader for
-    index windows comes in the next PR. Still to do: the other sources
-    (series of files, Zarr, in-memory voxels), with their axes built at
-    open; the lazy ncdf4 reader with chunk-aligned block reads. Then the
-    voxel builder (depth in
+    (see Direction, Time decoding) and the CRS. The second PR (#143)
+    adds the internal reader for one read window, which returns the
+    values with the axes in the order lon, lat, depth, time. Still to
+    do: the other sources (series of files, Zarr, in-memory voxels),
+    with their axes built at open. Then the voxel builder (depth in
     [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
     with old layer names read on input, CRS always set, float32
     tolerance,
