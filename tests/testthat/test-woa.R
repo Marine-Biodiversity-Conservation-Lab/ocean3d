@@ -39,18 +39,6 @@ test_that("woa_download errors on unknown resolution", {
   )
 })
 
-test_that("woa_download does not prompt when output_dir is user-supplied", {
-  # User-supplied output_dir is already explicit opt-in; no consent prompt.
-  # We simulate non-interactive + unknown variable so the variable check
-  # fires before any network call.
-  tmp <- tempfile("woa_no_prompt_"); dir.create(tmp)
-  on.exit(unlink(tmp, recursive = TRUE))
-  expect_error(
-    woa_download("nonsense", output_dir = tmp),
-    "Unknown variable"
-  )
-})
-
 test_that("woa_download errors on invalid period", {
   expect_error(
     woa_download("temperature", period = "yearly"),
@@ -63,27 +51,41 @@ test_that("woa_download errors on invalid period", {
 })
 
 test_that("woa_download caches files and skips re-download", {
-  skip_if_offline("www.ncei.noaa.gov")
-  skip_on_cran()
-  tmp <- tempfile("woa_cache_"); dir.create(tmp)
+  # curl is mocked, so no request reaches NCEI.
+  downloads <- 0L
+  testthat::local_mocked_bindings(
+    curl_download = function(url, destfile, ...) {
+      downloads <<- downloads + 1L
+      writeBin(raw(1024), destfile)
+      invisible(destfile)
+    },
+    curl_fetch_memory = function(url, handle, ...) {
+      list(headers = charToRaw(
+        "HTTP/1.1 200 OK\r\nContent-Length: 1024\r\n\r\n"
+      ))
+    },
+    .package = "curl"
+  )
+  tmp <- tempfile("woa_cache_")
   on.exit(unlink(tmp, recursive = TRUE))
 
-  # Use 1-degree resolution for a smaller test file
-  path <- tryCatch(
-    woa_download("temperature", period = "annual",
-                 resolution = "1", output_dir = tmp, quiet = TRUE),
-    error = function(e) {
-      skip(paste("WOA server unreachable:", conditionMessage(e)))
-    }
+  expect_message(
+    path <- woa_download("temperature", period = "annual", resolution = "1",
+                         output_dir = tmp),
+    "Downloading (0.0 MB): woa23_decav_t00_01.nc", fixed = TRUE
   )
+  expect_identical(basename(path), "woa23_decav_t00_01.nc")
   expect_true(file.exists(path))
-  mtime1 <- file.info(path)$mtime
+  expect_identical(downloads, 1L)
 
-  # Second call should skip download (cached)
-  path2 <- woa_download("temperature", period = "annual",
-                        resolution = "1", output_dir = tmp, quiet = TRUE)
-  expect_identical(path, path2)
-  expect_identical(mtime1, file.info(path)$mtime)
+  # The second call finds the file cached at the remote size.
+  expect_message(
+    path2 <- woa_download("temperature", period = "annual", resolution = "1",
+                          output_dir = tmp),
+    "Cached: woa23_decav_t00_01.nc", fixed = TRUE
+  )
+  expect_identical(path2, path)
+  expect_identical(downloads, 1L)
 })
 
 test_that("woa_load_nc errors when file missing", {
@@ -93,18 +95,12 @@ test_that("woa_load_nc errors when file missing", {
 test_that(paste("woa_load_nc catches layer names that do not match WOA",
                 "one-letter code for oceanographic variables"), {
   # Build two tiny synthetic NetCDFs matching the WOA layer-naming convention.
-  # Skips cleanly on systems without NetCDF write support in terra.
   tmp <- tempfile("woa_mon_"); dir.create(tmp)
   on.exit(unlink(tmp, recursive = TRUE))
 
   f1 <- file.path(tmp, "m01.nc")
-  ok <- tryCatch({
-    make_file(f1, list(`do_sea_depth=0` = c(1, 2, 3, 4),
-                       `do_sea_depth=100` = c(5, 6, 7, 8)))
-    TRUE
-  }, error = function(e) FALSE)
-  skip_if_not(ok, paste("error making netCDF test object,",
-                        "check if terra::writeCDF is available"))
+  make_file(f1, list(`do_sea_depth=0` = c(1, 2, 3, 4),
+                     `do_sea_depth=100` = c(5, 6, 7, 8)))
 
   expect_error(
     woa_load_nc(file.path(tmp, "m01.nc"), field = "sea"),
@@ -116,18 +112,12 @@ test_that(paste("woa_load_nc catches layer names that do not match WOA",
 test_that(paste("woa_load_nc catches layer names that do not match WOA code",
                 "for abbreviated fields"), {
   # Build two tiny synthetic NetCDFs matching the WOA layer-naming convention.
-  # Skips cleanly on systems without NetCDF write support in terra.
   tmp <- tempfile("woa_mon_"); dir.create(tmp)
   on.exit(unlink(tmp, recursive = TRUE))
 
   f1 <- file.path(tmp, "m01.nc")
-  ok <- tryCatch({
-    make_file(f1, list(`o_inc_depth=0` = c(1, 2, 3, 4),
-                       `o_inc_depth=100` = c(5, 6, 7, 8)))
-    TRUE
-  }, error = function(e) FALSE)
-  skip_if_not(ok, paste("error making netCDF test object,",
-                        "check if terra::writeCDF is available"))
+  make_file(f1, list(`o_inc_depth=0` = c(1, 2, 3, 4),
+                     `o_inc_depth=100` = c(5, 6, 7, 8)))
 
   expect_error(
     woa_load_nc(file.path(tmp, "m01.nc")),
@@ -139,17 +129,12 @@ test_that(paste("woa_load_nc catches layer names that do not match WOA code",
 test_that(paste("woa_load_nc provides descriptive error if standard field",
                 "is missing from input netCDF"), {
   # Build a tiny synthetic NetCDF carrying only "an" layers.
-  # Skips cleanly on systems without NetCDF write support in terra.
   tmp <- tempfile("woa_mon_"); dir.create(tmp)
   on.exit(unlink(tmp, recursive = TRUE))
 
   f1 <- file.path(tmp, "m01.nc")
-  ok <- tryCatch({
-    make_file(f1, list(`t_an_depth=0` = c(1, 2, 3, 4),
-                       `t_an_depth=100` = c(5, 6, 7, 8)))
-    TRUE
-  }, error = function(e) FALSE)
-  skip_if_not(ok, "terra::writeCDF unavailable")
+  make_file(f1, list(`t_an_depth=0` = c(1, 2, 3, 4),
+                     `t_an_depth=100` = c(5, 6, 7, 8)))
 
   # "sea" is a valid WOA field code, so it clears the `field` argument check,
   # but this file has no sea layers. Without the guard the empty subset fails
