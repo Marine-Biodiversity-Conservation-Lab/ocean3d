@@ -299,8 +299,8 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 }
 
 # The one producer of `ocean3d_error_vector3d`: input that can't become a
-# SpatVector3D. Every check in as_vector3d() and the class's validity
-# rules report through it.
+# SpatVector3D. Every check in as_vector3d() and buffer_3d() and the class's
+# validity rules report through it.
 .abort_vector3d <- function(message) {
   rlang::abort(message, class = "ocean3d_error_vector3d", call = NULL)
 }
@@ -365,7 +365,8 @@ setMethod("volume", "SpatVector3D", function(x, ...) {
   } else {
     glue::glue(
       "These are {x@type}, which have no volume. Volume is defined for ",
-      "shapes with a depth range: voxels, envelopes and polygons."
+      "shapes with a depth range: voxels, envelopes and polygons. ",
+      "buffer_3d() turns {x@type} into polygons."
     )
   }
   rlang::abort(message, class = "ocean3d_error_volume_type", call = NULL)
