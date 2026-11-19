@@ -77,30 +77,16 @@ Several R packages and other tools handle depth or 3D data, and `ocean3d`
 builds on terra, sf, ncdf4 and CFtime. None of the tools below answers 3D
 spatial queries on gridded marine data on its own: which cells and depths a
 species, fishery or other layer occupies above the seafloor, where two of them
-overlap in 3D, and what environmental values fall inside. This list is from
-the packages we checked and those named in the rOpenSci editor's comments;
-tell us if we've missed one.
+overlap in 3D, and what environmental values fall inside.
 
 | Tool | What it does | Limitations for 3D spatial analysis |
 |---|---|---|
-| [terra](https://rspatial.github.io/terra/) | Raster and vector analysis. A multi-layer `SpatRaster` can record one depth per layer with `terra::depth()`. | Functions such as `mask()`, `extract()` and `zonal()` treat layers as a stack and don't use their depths. A raster can't store a depth range per cell, and there is no 3D intersect, overlap or volume. In our trial, terra read 19 of 29 netCDF test cases correctly, and its errors were silent. |
+| [terra](https://rspatial.github.io/terra/) | Raster and vector analysis. A multi-layer `SpatRaster` can record one depth per layer with `terra::depth()`. | Functions such as `mask()`, `extract()` and `zonal()` treat layers as a stack and don't use their depths. A raster can't store a depth range per cell, and there is no 3D intersect, overlap or volume. In [our trial](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/112), terra read 19 of 29 netCDF test cases correctly, and its errors were silent. |
 | [sf](https://r-spatial.github.io/sf/) | Vector geometry and spatial queries (buffers, clips, intersections). | Geometries can carry Z coordinates, but operations such as `st_intersection()`, `st_buffer()` and `st_area()` work in 2D and ignore them. No raster data. |
-| [stars](https://r-spatial.github.io/stars/) | Arrays with any number of dimensions (data cubes), including depth and time. | No class for a depth range per cell, and no 3D intersect or volume. In our trial, extracting 2 points from a large file through a stars proxy took 198–243 s or tried to allocate 51–56 GB, and slicing a proxy dropped the decoded time. |
+| [stars](https://r-spatial.github.io/stars/) | Arrays with any number of dimensions (data cubes), including depth and time. | No class for a depth range per cell, and no 3D intersect or volume. In [our trial](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/112), extracting 2 points from a large file through a stars proxy took 198–243 s or tried to allocate 51–56 GB, and slicing a proxy dropped the decoded time. |
 | [rgl](https://dmurdoch.github.io/rgl/), [rayshader](https://www.rayshader.com/) | 3D visualisation. | They draw 3D scenes. They don't do spatial queries or calculate volumes. |
 | [lidR](https://r-lidar.github.io/lidRbook/), [rTLS](https://github.com/Antguz/rTLS) | 3D point clouds from LiDAR and terrestrial laser scanning. | Built for dense point clouds of land surfaces and vegetation. They don't work on gridded ocean data with depth levels, a seafloor and time. |
 | [PostGIS](https://postgis.net/docs/PostGIS_Special_Functions_Index.html#PostGIS_3D_Functions) | 3D functions on vector geometry in a PostgreSQL database. | Its 3D functions are for vector geometry, and its rasters have bands but no depth. Using it means running a database outside R. |
-
-The trial compared stars, ncdfCF, terra and the package's own ncdf4 reader
-([#112](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/112);
-[`dev/data-model-trial.md`](dev/data-model-trial.md)). Its results set the
-planned data model
-([#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99)):
-ocean3d reads netCDF with ncdf4, uses terra for the spatial work on data in
-memory, and uses stars only to read remote Zarr stores.
-
-For a worked example of what `ocean3d` adds to terra, see
-[What ocean3d adds to terra](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/ocean3d-and-terra.html)
-(`vignette("ocean3d-and-terra")`).
 
 ## Installation
 

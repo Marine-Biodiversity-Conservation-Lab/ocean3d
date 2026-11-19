@@ -76,7 +76,6 @@ articles:
   navbar: ~
   contents:
   - ocean3d
-  - ocean3d-and-terra
   - articles/bangladesh-fisheries-3d-overlap
   - depth-levels
   - articles/gfw-fishing-effort-3d
