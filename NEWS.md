@@ -39,11 +39,12 @@ stop with an error when they are bad (#113):
   `bounds` attribute so edges are inferred from the centres (for example
   with NCO: `ncatted -a bounds,lon,d,, file.nc`).
 
-`vect_to_envelope()` now stops with an error when no cell has `depth_max`
-deeper than `depth_min`, because the envelope would be empty. It used to warn
-("you may have swapped these two") and return an envelope with no cells. The
-error says whether the limits are swapped, equal (no thickness) or missing
-(#114).
+`vect_to_envelope()` now stops with an error when the envelope would have no
+cells: no cell the polygons cover has `depth_max` deeper than `depth_min`.
+It used to warn and return an empty envelope, so code that loops over
+polygons and drops empty results has to handle the error instead. The
+message says how many cells have the limits swapped (or a seafloor above
+`depth_min`), equal, or missing (#114).
 
 ## New features
 

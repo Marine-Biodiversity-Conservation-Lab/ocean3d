@@ -16,7 +16,9 @@ or a raster from \code{\link[=create_study_raster]{create_study_raster()}}. Poly
 CRS if it isn't WGS84. Longitudes from 0 to 360 work too.}
 }
 \value{
-A \link[=SpatEnvelope-class]{SpatEnvelope} on the grid of \code{template}.
+A \link[=SpatEnvelope-class]{SpatEnvelope} on the grid of \code{template}. Stops with an
+error if it would have no cells: when the polygons don't overlap
+\code{template}, or none of them has \code{depth_max} deeper than \code{depth_min}.
 }
 \description{
 Puts \link[=SpatVector3D-class]{SpatVector3D} polygons onto the grid of \code{template} as a

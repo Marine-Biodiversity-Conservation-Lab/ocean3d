@@ -21,13 +21,14 @@ SpatEnvelope depth_min layer cell value.}
 \item{depth_max}{List. Can contain both numeric and SpatRasters that match
 CRS, resolution, extent of \code{template} and contain numeric values. For each
 cell, the minimum across the \code{depth_max} list parameters is used as output
-SpatEnvelope depth_max layer cell value. Note that when \code{depth_min} is
-exactly \code{depth_max}, these cell values are dropped and replaced with NA.}
+SpatEnvelope depth_max layer cell value. Cells where it isn't deeper
+than \code{depth_min} are \code{NA}.}
 }
 \value{
-SpatEnvelope, with depth_min and depth_max layers. It stops with
-an error if no cell is left: the polygons miss \code{template}, or no cell
-has \code{depth_max} deeper than \code{depth_min}.
+SpatEnvelope, with depth_min and depth_max layers. Stops with an
+error if the envelope would have no cells: when the polygons don't
+overlap \code{template}, or no cell they cover has \code{depth_max} deeper than
+\code{depth_min}.
 }
 \description{
 Rasterize polygons onto a template raster grid and assign per-cell depth

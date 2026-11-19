@@ -24,7 +24,9 @@
 #'   or a raster from [create_study_raster()]. Polygons are projected to its
 #'   CRS if it isn't WGS84. Longitudes from 0 to 360 work too.
 #'
-#' @return A [SpatEnvelope-class] on the grid of `template`.
+#' @return A [SpatEnvelope-class] on the grid of `template`. Stops with an
+#'   error if it would have no cells: when the polygons don't overlap
+#'   `template`, or none of them has `depth_max` deeper than `depth_min`.
 #' @seealso [vect_to_envelope()] for 2D polygons, [as_envelope()]
 #' @examples
 #' template <- terra::rast(nrows = 4, ncols = 4, xmin = 150, xmax = 154,
@@ -66,6 +68,16 @@ vector3d_to_envelope <- function(x, template) {
     ))
   }
   f <- x@features
+  if (nrow(f) == 0L) {
+    .abort_envelope_input("`x` has no polygons to put on the grid.")
+  }
+  if (all(f$depth_min == f$depth_max)) {
+    .abort_envelope_empty(paste0(
+      "Every polygon has `depth_min` equal to `depth_max`, so the envelope ",
+      "would be empty. Give them a depth range, for example a ",
+      "`depth_window` above 0 in buffer_3d()."
+    ))
+  }
   if (any(!is.na(f$time_start))) {
     rlang::inform(
       paste0("The polygons' times are dropped: an envelope keeps only their ",
@@ -83,15 +95,13 @@ vector3d_to_envelope <- function(x, template) {
   if (!terra::same.crs(polygons, grid)) {
     polygons <- terra::project(polygons, terra::crs(grid))
   }
-  # Outlines are stored in [-180, 180]. On a longitude grid that runs past
-  # 180 (0 to 360) or below -180, copies shifted by 360 degrees put them, and
-  # both halves of a shape split at the antimeridian, where the grid is.
+  # Grids and outlines can each use longitudes from -180 to 180 or from 0 to
+  # 360 (an sf polygon from 178 to 182 is kept as given). Copies shifted by
+  # 360 degrees either way put every outline, and both halves of one split at
+  # the antimeridian, wherever the grid is; copies off the grid touch no cell.
   if (terra::is.lonlat(grid)) {
-    grid_x <- terra::ext(grid)[1:2]
-    shifts <- c(if (grid_x[2] > 180) 360, if (grid_x[1] < -180) -360)
-    polygons <- do.call(rbind, c(list(polygons), lapply(shifts, function(dx) {
-      terra::shift(polygons, dx = dx)
-    })))
+    polygons <- rbind(polygons, terra::shift(polygons, dx = 360),
+                      terra::shift(polygons, dx = -360))
   }
   # Each cell's shallowest top and deepest bottom over the polygons touching
   # it, picked as terra::mask() picks cells in vect_to_envelope(). Depths stay

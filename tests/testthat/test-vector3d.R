@@ -569,15 +569,20 @@ test_that("vector3d_to_envelope() rejects inputs it can't convert", {
                "`template` must be a SpatRaster", class = err)
   far <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 1, ymin = 0,
                      ymax = 1, crs = "EPSG:4326")
-  expect_error(vector3d_to_envelope(p, far), "may not spatially overlap",
+  expect_error(vector3d_to_envelope(p, far), "don't overlap any cell",
                class = empty)
+  none <- p
+  none@features <- p@features[0, ]
+  expect_error(vector3d_to_envelope(none, envelope_grid()),
+               "`x` has no polygons", class = err)
   no_crs <- terra::rast(nrows = 2, ncols = 2, xmin = 150, xmax = 153,
                         ymin = -21, ymax = -20, crs = "")
   expect_error(vector3d_to_envelope(p, no_crs), "`template` has no CRS",
                class = err)
   flat <- buffer_3d(pts, radius_km = 20, depth_window = 0)
   expect_error(vector3d_to_envelope(flat, envelope_grid()),
-               "Every cell has depth_min equal to depth_max", class = empty)
+               "Every polygon has `depth_min` equal to `depth_max`.*buffer_3d",
+               class = empty)
 })
 
 test_that("cells with no thickness are dropped", {
@@ -619,4 +624,15 @@ test_that("polygons land on grids with longitudes past 180", {
   expect_gt(expected, 0)
   expect_identical(cells(b, 170), expected)
   expect_identical(cells(b, -190), expected)
+
+  # An outline stored past 180 lands on a -180 to 180 grid too.
+  past <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(rbind(
+    c(178, -1), c(182, -1), c(182, 1), c(178, 1), c(178, -1)
+  ))), crs = 4326))
+  p <- as_vector3d(past, depth_min = 0, depth_max = 10)
+  west <- terra::rast(nrows = 2, ncols = 10, xmin = -180, xmax = -170,
+                      ymin = -1, ymax = 1, crs = "EPSG:4326")
+  # It covers -180 to -178 on this 1-degree grid: 2 columns by 2 rows.
+  v <- terra::values(vector3d_to_envelope(p, west))[, "depth_min"]
+  expect_identical(sum(!is.na(v)), 4L)
 })
