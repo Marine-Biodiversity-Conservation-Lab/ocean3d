@@ -94,6 +94,8 @@ test_that("fetch_species_assessments resolves species names to assessments", {
     "upper_depth_limit", "lower_depth_limit", "citation", "url"
   ))
   # Depth limits and systems_code are filled from the assessment record.
+  expect_true(is.numeric(out$upper_depth_limit))
+  expect_true(is.numeric(out$lower_depth_limit))
   expect_false(is.na(out$upper_depth_limit))
   expect_false(is.na(out$lower_depth_limit))
   expect_gte(out$lower_depth_limit, out$upper_depth_limit)

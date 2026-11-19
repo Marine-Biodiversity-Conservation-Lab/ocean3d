@@ -476,7 +476,7 @@ test_that("coarse selection rejects multiple records in one period", {
 
   expect_error(
     .match_time_index(available, as.Date("2020-01-02")),
-    "Multiple dataset timestamps"
+    "Multiple dataset timestamps", class = "ocean3d_error_repeated_time"
   )
   for (resolution in c("monthly", "yearly")) {
     expect_error(
@@ -484,7 +484,7 @@ test_that("coarse selection rejects multiple records in one period", {
         available, as.Date("2020-01-02"),
         time_resolution = resolution
       ),
-      "Multiple dataset timestamps"
+      "Multiple dataset timestamps", class = "ocean3d_error_repeated_time"
     )
   }
 })

@@ -193,10 +193,8 @@ test_that(
     expect_equal(out$samples$source_row, c(1, NA, 2))
     expect_identical(out$samples$note, c("start", NA, "end"))
     expect_lte(max(diff(out$samples$distance_km)), 112)
-    expect_equal(
-      sum(out$samples$support_km),
-      .track_geodesic(c(0, 2), c(0, 0))$length_km
-    )
+    expect_equal(sum(out$samples$support_km), 222.638981586547,
+                 tolerance = 1e-08)
     expect_equal(out$summary$mean, 10)
     expect_identical(out$summary$status, "complete")
   }
@@ -1093,6 +1091,14 @@ test_that(
       tolerance = 1e-10
     )
     expect_equal(.track_geodesic(c(1, 1), c(0, 0))$length_km, 0)
+    # 2 degrees of the 6378.137 km WGS84 equatorial radius, also across the
+    # antimeridian, and a route out and back.
+    expect_equal(.track_geodesic(c(0, 2), c(0, 0))$length_km,
+                 222.638981586547, tolerance = 1e-10)
+    expect_equal(.track_geodesic(c(179, -179), c(0, 0))$length_km,
+                 222.638981586547, tolerance = 1e-10)
+    expect_equal(.track_geodesic(c(0, 2, 0), c(0, 0, 0))$length_km,
+                 rep(222.638981586547, 2), tolerance = 1e-10)
   }
 )
 
