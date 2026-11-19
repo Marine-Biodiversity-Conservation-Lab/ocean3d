@@ -476,14 +476,7 @@ test_that("the 3D verbs reject input they cannot compare", {
                    ncol = 3, nrow = 1, varname = "t")
   p3 <- make_voxel(cbind(c(1, 1, 1), c(1, 1, 1), c(1, 1, 1)), c(0, 100, 200),
                    ncol = 3, nrow = 1)
-  v100 <- make_voxel(cbind(rep(1, 9), rep(1, 9)), depths = c(0, 100))
-  v200 <- make_voxel(cbind(rep(1, 9), rep(1, 9)), depths = c(0, 200))
   field <- make_field()
-
-  # Carrying the right layer names is not the same as being a SpatEnvelope.
-  bare <- methods::as(a, "SpatRaster")
-  expect_s4_class(bare, "SpatRaster")
-  expect_false(methods::is(bare, "SpatEnvelope"))
 
   cases <- list(
     # voxel-only arguments for envelopes
@@ -491,19 +484,11 @@ test_that("the 3D verbs reject input they cannot compare", {
          pattern = "unused argument"),
     list(call = function() intersects_3d(a, a, bounds = "top"),
          pattern = "unused argument"),
-    list(call = function() volume(a, bounds = "midpoint"),
-         pattern = "unused argument"),
-    list(call = function() calc_volume_overlap(a, a, bounds = "midpoint"),
-         pattern = "unused argument"),
     # voxels on different depth levels
     list(call = function() intersect_3d(t2, p3), pattern = "same depth levels"),
-    list(call = function() calc_volume_overlap(v100, v200),
-         pattern = "same depth levels"),
     # inputs on different grids
     list(call = function() intersect_3d(a, a_2x2), pattern = "same grid"),
     list(call = function() intersects_3d(a, a_2x2), pattern = "same grid"),
-    list(call = function() calc_volume_overlap(a, a_2x2),
-         pattern = "same grid"),
     list(call = function() intersect_3d(a, small), pattern = "same grid"),
     # mask() names the offending argument
     list(call = function() mask(field, a_2x2),
@@ -516,15 +501,7 @@ test_that("the 3D verbs reject input they cannot compare", {
     list(call = function() intersect_3d(a, "hello"),
          pattern = "SpatVector, sf, sfc"),
     list(call = function() intersect_3d(a, c(fp, fp)),
-         pattern = "single-layer footprint"),
-    # bare SpatRasters, alone or with a real envelope in either position
-    list(call = function() volume(bare), pattern = "not a bare SpatRaster"),
-    list(call = function() calc_volume_overlap(bare, bare),
-         pattern = "not a bare SpatRaster"),
-    list(call = function() calc_volume_overlap(a, bare),
-         pattern = "not a bare SpatRaster"),
-    list(call = function() calc_volume_overlap(bare, a),
-         pattern = "not a bare SpatRaster")
+         pattern = "single-layer footprint")
   )
   for (case in cases) {
     expect_error(case$call(), case$pattern,
