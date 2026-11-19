@@ -19,8 +19,8 @@ calls that used to return a value now return `NA` or stop with an error:
   chosen by physical depth, whether the coordinate is stored shallow to
   deep or deep to shallow. The depth coordinate must have length units,
   including for `extract3d_surface()` and `extract3d_bottom()`; files
-  without them stop with an error (a file with a single depth level can be
-  read with `extract2d()`).
+  without them stop with an error. A file with a single depth level can be
+  read with `extract2d()`.
 * With several files, a temporal tie between sources keeps input order under
   `"within"` matching, and goes to the closer cell centre under `"nearest"`
   matching.
@@ -41,9 +41,10 @@ stop with an error when they are bad (#113):
   with NCO: `ncatted -a bounds,lon,d,, file.nc`).
 
 Point, buffer and track extraction now stop with an error when a netCDF
-file's depth coordinate isn't strictly increasing or decreasing, such as
-depths stored as 50, 0, 100 m, as `as_proxy()` already did. The error names
-the coordinate and the file. Sort the depth axis before extraction.
+file's depths aren't stored in order, shallow to deep or deep to shallow
+(for example 50, 0, 100 m). The error names the coordinate and the file.
+Sort the depth axis before extraction. The error for longitude or latitude
+stored out of order now names the coordinate and the file too (#147).
 
 ## New features
 
