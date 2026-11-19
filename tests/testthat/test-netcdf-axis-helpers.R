@@ -343,6 +343,22 @@ test_that("ambiguous or unsupported depth coordinates are rejected", {
   expect_error(.prepare_depth_axis(c(0, 50), "m", "up"), "reference surface")
 })
 
+test_that("a stored depth axis must run one way", {
+  f <- make_grid_file(depth = c(50, 0, 100), time = NULL)
+  on.exit(unlink(f), add = TRUE)
+  nc <- ncdf4::nc_open(f)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  err <- expect_error(.read_depth_axis(nc, "depth", c(50, 0, 100)),
+                      class = "ocean3d_error_axis_order")
+  expect_match(conditionMessage(err), glue::glue(
+    "`depth` in {basename(f)} must be strictly increasing or decreasing"
+  ))
+  # Duplicates are caught first, with their own message.
+  expect_error(.read_depth_axis(nc, "depth", c(0, 50, 50)), "duplicate")
+  expect_equal(.read_depth_axis(nc, "depth", c(100, 50, 0))$depth_m,
+               c(100, 50, 0))
+})
+
 # Bounds -----------------------------------------------------------------------
 
 test_that("unit spellings are compared by meaning", {

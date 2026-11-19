@@ -85,7 +85,8 @@ test_that("depth is metres positive down in its storage order", {
   f <- make_grid_file(depth = c(5, 15, 10))
   on.exit(unlink(f), add = TRUE)
   err <- expect_error(as_proxy(f), class = "ocean3d_error_axis_order")
-  expect_match(conditionMessage(err), "`depth` must be strictly increasing")
+  expect_match(conditionMessage(err),
+               "`depth` in .*\\.nc must be strictly increasing")
 })
 
 test_that("depth bounds that don't contain their centres are rejected", {

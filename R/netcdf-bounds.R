@@ -110,6 +110,22 @@
   list(name = name, values = raw)
 }
 
+# Stops with `ocean3d_error_axis_order` unless `values` run strictly one way,
+# so that each value is one cell. The only producer of that class: the core
+# object's axes (.axis_intervals()) and extraction's depth axis
+# (.read_depth_axis()) apply the same rule.
+.check_axis_order <- function(values, coordinate, file = NULL) {
+  steps <- diff(values)
+  if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
+    where <- if (is.null(file)) "" else glue::glue(" in {file}")
+    rlang::abort(glue::glue(
+      "Coordinate `{coordinate}`{where} must be strictly increasing or ",
+      "decreasing, without duplicates."
+    ), class = "ocean3d_error_axis_order", call = NULL)
+  }
+  invisible(values)
+}
+
 # Cell intervals of one axis: `centres` with `bounds` (a 2 x n matrix of
 # edges, or NULL to infer them halfway between centres, cut at the surface for
 # depth). Checks that the centres run one way without duplicates and that the
@@ -128,13 +144,7 @@
   if (!length(centres) || any(!is.finite(centres))) {
     stop("Coordinates must contain finite values.", call. = FALSE)
   }
-  steps <- diff(centres)
-  if (length(steps) && !(all(steps > 0) || all(steps < 0))) {
-    rlang::abort(glue::glue(
-      "Coordinate `{coordinate}` must be strictly increasing or ",
-      "decreasing, without duplicates."
-    ), class = "ocean3d_error_axis_order", call = NULL)
-  }
+  .check_axis_order(centres, coordinate, file)
 
   clipped_at_surface <- rep(FALSE, length(centres))
   if (is.null(bounds) && length(centres) < 2L) {

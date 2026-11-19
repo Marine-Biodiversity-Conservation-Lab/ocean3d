@@ -1705,7 +1705,9 @@
 #' Surface means the physically shallowest layer, even if its value is missing.
 #' Bottom means the deepest non-missing layer. Nearest selects the valid layer
 #' closest to the observation depth; ties select the shallower layer.
-#' Selection does not depend on the storage order of the depth coordinate.
+#' The depth coordinate may be stored shallow to deep or deep to shallow, and
+#' selection does not depend on which. A depth coordinate that is not strictly
+#' increasing or decreasing is rejected.
 #' Duplicate physical depths, unsupported units, coordinates above the assumed
 #' reference surface, and sigma, formula-based or pressure coordinates require
 #' explicit correction or conversion before extraction.
@@ -2319,7 +2321,8 @@ extract2d <- function(data, nc, var = NULL, ...) {
 #' Extract the surface layer from a 3D netCDF variable
 #'
 #' The surface layer is defined as the physically shallowest depth layer in the
-#' netCDF file, whatever the storage order of the depth coordinate.
+#' netCDF file, whether the depth coordinate is stored shallow to deep
+#' or deep to shallow.
 #'
 #' @param data Object containing observation points. Can be a data frame,
 #'   tibble, `sf` object with POINT geometries, matrix with column names, or

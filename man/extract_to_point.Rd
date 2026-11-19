@@ -275,7 +275,9 @@ extraction; a file with a single depth level can be read with extract2d().
 Surface means the physically shallowest layer, even if its value is missing.
 Bottom means the deepest non-missing layer. Nearest selects the valid layer
 closest to the observation depth; ties select the shallower layer.
-Selection does not depend on the storage order of the depth coordinate.
+The depth coordinate may be stored shallow to deep or deep to shallow, and
+selection does not depend on which. A depth coordinate that is not strictly
+increasing or decreasing is rejected.
 Duplicate physical depths, unsupported units, coordinates above the assumed
 reference surface, and sigma, formula-based or pressure coordinates require
 explicit correction or conversion before extraction.
