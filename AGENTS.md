@@ -43,6 +43,21 @@ before adding new ones.
 - A new exported function, class or data representation needs a reason the
   existing ones can't serve. Say what you checked in the PR description.
 
+## Breaking changes
+
+Changing what an exported function does is fine when it makes the package
+more correct or consistent. Don't keep old behaviour only so that existing
+code keeps working.
+
+- In the same PR, update every vignette and article that uses the changed
+  function, so it works with the new behaviour or uses the new function.
+  Most articles in `vignettes/articles/` have `eval = FALSE`, so
+  `devtools::check()` doesn't run them: find the calls
+  (`grep -rn "<function>(" vignettes/`) and run the changed chunks, for
+  example on synthetic data.
+- List the change under "Breaking changes" in NEWS.md: what used to happen,
+  what happens now, and what callers need to change.
+
 ## Internal helpers
 
 Don't create an internal function unless it earns its place (#97).

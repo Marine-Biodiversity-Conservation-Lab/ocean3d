@@ -199,8 +199,9 @@
 # 1 where present and NA elsewhere. A SpatRaster is read by its non-NA pattern
 # and must be single-layer and already on the grid. Polygons (SpatVector, sf,
 # sfc) are projected onto the template's CRS when they differ, then rasterised
-# with the same cell-centre rule vect_to_envelope() uses: a cell is inside when
-# its centre is. Anything else is rejected with the list of accepted types.
+# with the rule vect_to_envelope() uses: terra::mask()'s default, under which
+# every cell a polygon touches is inside. Anything else is rejected with the
+# list of accepted types.
 .footprint_of <- function(y, template, arg = "y") {
   if (inherits(y, c("sf", "sfc"))) y <- terra::vect(y)
 

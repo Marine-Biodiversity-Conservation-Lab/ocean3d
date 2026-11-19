@@ -262,18 +262,35 @@ shallowest depth the animal occupies.
 `vect_to_envelope()` works one polygon at a time and does not reproject, so we
 transform the ranges onto the grid's CRS once and loop with `lapply()`.
 
+If the seafloor is shallower than a species' or fishery's `depth_min` across
+its whole range, no water is left for it, and `vect_to_envelope()` stops with
+an error saying so. `envelope_or_skip()` prints that message, skips the polygon
+and lets the loop carry on, so the later steps use the others.
+
 ```{r rasterize-species}
+envelope_or_skip <- function(polygon, depth_min, depth_max, label) {
+  tryCatch(
+    vect_to_envelope(
+      polygon   = polygon,
+      template  = study_grid,
+      depth_min = depth_min,
+      depth_max = list(depth_max, seafloor)
+    ),
+    error = function(e) {
+      message("Skipping ", label, ": ", conditionMessage(e))
+      NULL
+    }
+  )
+}
+
 species_proj <- sf::st_transform(bangladesh_species, bangladesh_crs)
 
 species_rasters <- lapply(seq_len(nrow(species_proj)), function(i) {
-  vect_to_envelope(
-    polygon   = species_proj[i, ],
-    template  = study_grid,
-    depth_min = species_proj$depth_min_sel[i],
-    depth_max = list(species_proj$depth_max_sel[i], seafloor)
-  )
+  envelope_or_skip(species_proj[i, ], species_proj$depth_min_sel[i],
+                   species_proj$depth_max_sel[i], species_proj$sci_name[i])
 })
 names(species_rasters) <- species_proj$sci_name
+species_rasters <- Filter(Negate(is.null), species_rasters)
 ```
 
 ### 2c: Rasterize fisheries
@@ -282,14 +299,12 @@ names(species_rasters) <- species_proj$sci_name
 fisheries_proj <- sf::st_transform(fisheries, bangladesh_crs)
 
 fishery_rasters <- lapply(seq_len(nrow(fisheries_proj)), function(i) {
-  vect_to_envelope(
-    polygon   = fisheries_proj[i, ],
-    template  = study_grid,
-    depth_min = fisheries_proj$depth_min[i],
-    depth_max = list(fisheries_proj$depth_max[i], seafloor)
-  )
+  envelope_or_skip(fisheries_proj[i, ], fisheries_proj$depth_min[i],
+                   fisheries_proj$depth_max[i],
+                   fisheries_proj$fishery_type[i])
 })
 names(fishery_rasters) <- fisheries_proj$fishery_type
+fishery_rasters <- Filter(Negate(is.null), fishery_rasters)
 ```
 
 ## Step 3: Calculate 3D Volume Overlap
