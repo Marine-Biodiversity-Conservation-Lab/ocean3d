@@ -34,17 +34,16 @@ test_that("as_envelope() builds a SpatEnvelope on the footprint's grid", {
   # each depth limit is a constant or a single-layer raster on the footprint's
   # grid, and only the footprint's cells carry it
   fp <- make_footprint()
-  per_cell <- function(vals) terra::setValues(terra::rast(fp), vals)
 
   cases <- list(
     list(label = "constant limits", fp = fp, dmin = 0, dmax = 200,
          min = c(0, 0, 0, NA), max = c(200, 200, 200, NA)),
     list(label = "per-cell limits", fp = fp,
-         dmin = per_cell(c(0, 50, 100, 150)),
-         dmax = per_cell(c(100, 200, 300, 400)),
+         dmin = make_footprint(c(0, 50, 100, 150)),
+         dmax = make_footprint(c(100, 200, 300, 400)),
          min = c(0, 50, 100, NA), max = c(100, 200, 300, NA)),
     list(label = "a constant and a per-cell limit", fp = fp, dmin = 10,
-         dmax = per_cell(c(100, 200, 300, 400)),
+         dmax = make_footprint(c(100, 200, 300, 400)),
          min = c(10, 10, 10, NA), max = c(100, 200, 300, NA)),
     list(label = "empty footprint", fp = make_footprint(c(NA, NA, NA, NA)),
          dmin = 0, dmax = 200, min = rep(NA_real_, 4), max = rep(NA_real_, 4))
@@ -286,14 +285,15 @@ test_that("voxel_to_envelope() bounds the depths where `fun` holds", {
 
 # envelope_to_voxel() ----
 
-# Local helper: an envelope on make_footprint()'s 2x2 grid. A depth limit with
-# one value per cell becomes a per-cell raster.
-make_case_envelope <- function(dmin, dmax, fp = c(1, 1, 1, 1)) {
-  footprint <- make_footprint(fp) # nolint: object_usage_linter.
-  per_cell <- function(x) {
-    if (length(x) > 1) terra::setValues(terra::rast(footprint), x) else x
-  }
-  as_envelope(footprint, depth_min = per_cell(dmin), depth_max = per_cell(dmax))
+# Local helper: runs one row of a table. An error that isn't a failed
+# expectation would end the test without saying which row raised it, so the
+# row's label is added to its message.
+in_case <- function(label, code) {
+  withCallingHandlers(code, error = function(e) {
+    if (!inherits(e, "expectation")) {
+      stop("in row \"", label, "\": ", conditionMessage(e), call. = FALSE)
+    }
+  })
 }
 
 test_that("envelope_to_voxel() rejects invalid input", {
@@ -394,96 +394,103 @@ test_that("envelope_to_voxel() occupies every slab the envelope overlaps", {
   # level is a point in both. A level is occupied when its slab shares water
   # with the envelope. Touching is not overlapping. `expected` holds the first
   # rows of the voxel's values, one row per cell; NULL bounds is the default.
+  # `env` holds the as_envelope() arguments.
+  full <- make_footprint(c(1, 1, 1, 1))
   cases <- list(
     # the case the point-in-interval rule missed: [10, 20] contains none of
     # the levels, but lies inside the slab the 0 m level stands for
-    list(label = "between two levels", env = list(10, 20),
+    list(label = "between two levels", env = list(full, 10, 20),
          depths = c(0, 100), expected = rbind(c(1L, NA))),
     # starts inside the 50-100 slab and ends inside 200-300
-    list(label = "across several slabs", env = list(70, 210),
+    list(label = "across several slabs", env = list(full, 70, 210),
          depths = c(0, 50, 100, 200, 300),
          expected = rbind(c(NA, 1L, 1L, 1L, NA))),
     # wholly inside one slab: the level below owns its own top
-    list(label = "inside one slab", env = list(60, 99),
+    list(label = "inside one slab", env = list(full, 60, 99),
          depths = c(0, 50, 100, 200), expected = rbind(c(NA, 1L, NA, NA))),
     # ending exactly at 100 only touches the 100-200 slab
-    list(label = "ending on a level", env = list(60, 100),
+    list(label = "ending on a level", env = list(full, 60, 100),
          depths = c(0, 50, 100, 200), expected = rbind(c(NA, 1L, NA, NA))),
     # reaching past 100 by any amount brings that level in
-    list(label = "reaching past a level", env = list(60, 101),
+    list(label = "reaching past a level", env = list(full, 60, 101),
          depths = c(0, 50, 100, 200), expected = rbind(c(NA, 1L, 1L, NA))),
     # Adjacent ranges [0, 100] and [100, 200] share the boundary at 100 m and
     # nothing else, so they occupy no common level whenever a slab edge falls
     # at 100 m: under "top" the 100 level itself, under "midpoint" halfway
     # between 50 and 150. Under "top" the shared level goes to the deeper range
     # alone, and the deepest level is a point, so [100, 200] holds 100 only.
-    list(label = "upper of two adjacent ranges, top", env = list(0, 100),
+    list(label = "upper of two adjacent ranges, top",
+         env = list(full, 0, 100),
          depths = c(0, 100, 200), expected = rbind(c(1L, NA, NA))),
-    list(label = "lower of two adjacent ranges, top", env = list(100, 200),
+    list(label = "lower of two adjacent ranges, top",
+         env = list(full, 100, 200),
          depths = c(0, 100, 200), expected = rbind(c(NA, 1L, NA))),
     list(label = "upper of two adjacent ranges, midpoint edge at 100",
-         env = list(0, 100), depths = c(0, 50, 150, 200), bounds = "midpoint",
+         env = list(full, 0, 100), depths = c(0, 50, 150, 200),
+         bounds = "midpoint",
          expected = rbind(c(1L, 1L, NA, NA))),
     list(label = "lower of two adjacent ranges, midpoint edge at 100",
-         env = list(100, 200), depths = c(0, 50, 150, 200), bounds = "midpoint",
+         env = list(full, 100, 200), depths = c(0, 50, 150, 200),
+         bounds = "midpoint",
          expected = rbind(c(NA, NA, 1L, 1L))),
     # With evenly spaced levels under "midpoint" the 100 m boundary falls
     # inside the 100 m slab, so both ranges share water with it and both
     # occupy it. That is the discretisation, not a touch.
     list(label = "upper of two adjacent ranges, even midpoint",
-         env = list(0, 100), depths = c(0, 50, 100, 150, 200),
+         env = list(full, 0, 100), depths = c(0, 50, 100, 150, 200),
          bounds = "midpoint", expected = rbind(c(1L, 1L, 1L, NA, NA))),
     list(label = "lower of two adjacent ranges, even midpoint",
-         env = list(100, 200), depths = c(0, 50, 100, 150, 200),
+         env = list(full, 100, 200), depths = c(0, 50, 100, 150, 200),
          bounds = "midpoint", expected = rbind(c(NA, NA, 1L, 1L, 1L))),
     # overlap widens the old point rule and never narrows it: every level
     # whose own value lies inside the envelope (50, 100, 200) is occupied
-    list(label = "levels inside the envelope", env = list(50, 250),
+    list(label = "levels inside the envelope", env = list(full, 50, 250),
          depths = c(0, 50, 100, 200, 300),
          expected = rbind(c(NA, 1L, 1L, 1L, NA))),
     # 50 heads the slab 50-100, which the envelope runs through; 200 heads
     # 200-300, which it only touches
     list(label = "a level at the envelope's top, not its bottom",
-         env = list(50, 200), depths = c(0, 50, 100, 200, 300),
+         env = list(full, 50, 200), depths = c(0, 50, 100, 200, 300),
          expected = rbind(c(NA, 1L, 1L, NA, NA))),
     # reaching the deepest level is enough to be recorded at it
-    list(label = "reaching the deepest level", env = list(290, 400),
+    list(label = "reaching the deepest level", env = list(full, 290, 400),
          depths = c(0, 100, 200, 300), expected = rbind(c(NA, NA, 1L, 1L))),
     # the deepest slab is closed at max(depths), so an envelope sitting
     # exactly on the last level is caught rather than falling off the bottom
-    list(label = "on the deepest level, midpoint", env = list(300, 300),
+    list(label = "on the deepest level, midpoint", env = list(full, 300, 300),
          depths = c(0, 100, 200, 300), bounds = "midpoint",
          expected = rbind(c(NA, NA, NA, 1L))),
     # [60, 70] sits in the 0-100 slab under "top", but in the 50-150 slab of
     # the 100 m level once the edges move to the midpoints
-    list(label = "[60, 70] under top", env = list(60, 70),
+    list(label = "[60, 70] under top", env = list(full, 60, 70),
          depths = c(0, 100, 200),
          expected = rbind(c(1L, NA, NA))),
-    list(label = "[60, 70] under midpoint", env = list(60, 70),
+    list(label = "[60, 70] under midpoint", env = list(full, 60, 70),
          depths = c(0, 100, 200), bounds = "midpoint",
          expected = rbind(c(NA, 1L, NA))),
-    list(label = "default bounds", env = list(60, 210),
+    list(label = "default bounds", env = list(full, 60, 210),
          depths = c(0, 100, 200, 300), expected = rbind(c(1L, 1L, 1L, NA))),
     # cell 4 of make_footprint() is NA, so it is NA at every depth
     list(label = "a cell absent from the envelope",
-         env = list(0, 200, fp = c(1, 5, 0, NA)), depths = c(0, 100, 200),
+         env = list(make_footprint(), 0, 200), depths = c(0, 100, 200),
          expected = rbind(c(1L, 1L, NA), c(1L, 1L, NA), c(1L, 1L, NA),
                           c(NA, NA, NA))),
     # each range holds the slabs it runs through and not the one it ends on:
     # [0, 100], [100, 300], [200, 300] and an absent cell
     list(label = "per-cell depth limits",
-         env = list(c(0, 100, 200, 0), c(100, 300, 300, 300),
-                    fp = c(1, 5, 0, NA)),
+         env = list(make_footprint(), make_footprint(c(0, 100, 200, 0)),
+                    make_footprint(c(100, 300, 300, 300))),
          depths = c(0, 100, 200, 300),
          expected = rbind(c(1L, NA, NA, NA), c(NA, 1L, 1L, NA),
                           c(NA, NA, 1L, NA), c(NA, NA, NA, NA)))
   )
-  for (case in cases) {
-    envel <- do.call(make_case_envelope, case$env)
+  for (case in cases) in_case(case$label, {
+    envel <- do.call(as_envelope, case$env)
     # a NULL bounds is left out, so the default applies
     args <- Filter(Negate(is.null),
                    list(envel, depths = case$depths, bounds = case$bounds))
-    expect_no_warning(v <- do.call(envelope_to_voxel, args))
+    warnings <- capture_warnings(v <- do.call(envelope_to_voxel, args))
+    expect_identical(warnings, character(), label = case$label)
 
     expect_true(methods::is(v, "SpatVoxel"), label = case$label)
     expect_named(v, paste0("presence_depth=", case$depths), label = case$label)
@@ -495,7 +502,7 @@ test_that("envelope_to_voxel() occupies every slab the envelope overlaps", {
       top <- envelope_to_voxel(envel, depths = case$depths, bounds = "top")
       expect_identical(vals, terra::values(top), label = case$label)
     }
-  }
+  })
 })
 
 test_that("envelope_to_voxel() warns about an envelope outside the levels", {
@@ -503,25 +510,26 @@ test_that("envelope_to_voxel() warns about an envelope outside the levels", {
   # report it as resolved; keeping it a point leaves the gap visible. The
   # shallowest level is the top of the first slab, so a cell entirely above it
   # is out of reach in the same way.
+  full <- make_footprint(c(1, 1, 1, 1))
   cases <- list(
-    list(label = "below the deepest level", env = list(310, 400),
+    list(label = "below the deepest level", env = list(full, 310, 400),
          depths = c(0, 100, 200, 300)),
-    list(label = "far below, top", env = list(500, 600),
+    list(label = "far below, top", env = list(full, 500, 600),
          depths = c(0, 100, 200), bounds = "top"),
-    list(label = "far below, midpoint", env = list(500, 600),
+    list(label = "far below, midpoint", env = list(full, 500, 600),
          depths = c(0, 100, 200), bounds = "midpoint"),
-    list(label = "above the shallowest level", env = list(5, 40),
+    list(label = "above the shallowest level", env = list(full, 5, 40),
          depths = c(50, 100, 200))
   )
-  for (case in cases) {
-    envel <- do.call(make_case_envelope, case$env)
+  for (case in cases) in_case(case$label, {
+    envel <- do.call(as_envelope, case$env)
     # a NULL bounds is left out, so the default applies
     args <- Filter(Negate(is.null),
                    list(envel, depths = case$depths, bounds = case$bounds))
     expect_warning(v <- do.call(envelope_to_voxel, args),
                    "lying entirely outside", label = case$label)
     expect_true(all(is.na(terra::values(v))), label = case$label)
-  }
+  })
 })
 
 test_that(".depth_slabs() gives each level the slab it stands for", {
@@ -564,41 +572,45 @@ test_that(".depth_slabs() tiles the depth span without gaps or overlaps", {
 test_that("envelope_to_voxel() writes `values` and spreads them by `profile`", {
   # `values` replaces presence at occupied levels; a profile divides it across
   # them. `expected` holds rows `at` of the voxel's values, and `sums` each
-  # cell's total over depth.
+  # cell's total over depth. `env` holds the as_envelope() arguments.
   depths <- c(0, 100, 200, 300)
+  full <- make_footprint(c(1, 1, 1, 1))
   cases <- list(
     # same occupancy as presence, carrying 5 instead of 1
     list(label = "scalar values",
-         env = list(0, c(150, 350, 350, 350), fp = c(1, 5, 0, NA)),
+         env = list(make_footprint(), 0,
+                    make_footprint(c(150, 350, 350, 350))),
          depths = depths, values = 5, varname = "score",
          at = 1:2, expected = rbind(c(5L, 5L, NA, NA), rep(5L, 4))),
-    list(label = "per-cell values", env = list(50, 250),
+    list(label = "per-cell values", env = list(full, 50, 250),
          depths = c(0, 50, 100, 200, 300), values = c(10, 20, 30, 40),
          varname = "effort", at = c(1, 4),
          expected = rbind(c(NA, 10, 10, 10, NA), c(NA, 40, 40, 40, NA))),
     # the two distinct intervals occupy 2 and 4 levels, so get different
     # shares
     list(label = "profile_equal splits presence",
-         env = list(0, c(150, 350, 350, 350), fp = c(1, 5, 0, NA)),
+         env = list(make_footprint(), 0,
+                    make_footprint(c(150, 350, 350, 350))),
          depths = depths, profile = profile_equal, varname = "time",
          at = 1:2, expected = rbind(c(0.5, 0.5, NA, NA), rep(0.25, 4))),
     # cells occupy 2, 3, 4 and 4 levels; each still sums to its input
     list(label = "profile_equal conserves each cell's value",
-         env = list(0, c(150, 250, 350, 350)), depths = depths,
+         env = list(full, 0, make_footprint(c(150, 250, 350, 350))),
+         depths = depths,
          values = c(10, 20, 30, 40), profile = profile_equal,
          varname = "effort", at = 1, expected = rbind(c(5, 5, NA, NA)),
          sums = c(10, 20, 30, 40)),
     # full value at all four levels: a footprint map, not a conserved total
     list(label = "no profile does not divide the value",
-         env = list(0, 350), depths = depths, values = c(10, 20, 30, 40),
+         env = list(full, 0, 350), depths = depths, values = c(10, 20, 30, 40),
          varname = "presence", at = 1, expected = rbind(rep(10, 4)),
          sums = c(40, 80, 120, 160))
   )
-  for (case in cases) {
-    envel <- do.call(make_case_envelope, case$env)
+  for (case in cases) in_case(case$label, {
+    envel <- do.call(as_envelope, case$env)
     values <- case$values
     if (length(values) > 1) {
-      values <- terra::setValues(terra::rast(make_footprint()), values)
+      values <- make_footprint(values)
     }
     args <- list(envel, depths = case$depths, values = values,
                  profile = case$profile, varname = case$varname)
@@ -613,7 +625,7 @@ test_that("envelope_to_voxel() writes `values` and spreads them by `profile`", {
       expect_identical(unname(rowSums(vals, na.rm = TRUE)), case$sums,
                        label = case$label)
     }
-  }
+  })
 })
 
 test_that("envelope_to_voxel() presence is the same as values = 1", {
