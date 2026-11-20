@@ -182,6 +182,21 @@ message says how many cells have the limits swapped (or a seafloor above
   and latitude. Regrid such data to a regular longitude/latitude grid
   first (#93).
 
+## Minor improvements
+
+* Functions that take a `SpatEnvelope` check it faster when it is held in
+  memory. Envelopes read from a file, or with more than a million cells, are
+  checked as before. On 9-cell test grids, `as_envelope()` is about 5 times
+  faster, `intersect_3d()` about 2 times, `volume()` about 1.6 times and
+  `calc_volume_overlap()` about 1.2 times (#154).
+
+* `as_envelope()`'s depth errors now come from the `SpatEnvelope` validity
+  check, so they start with `invalid class "SpatEnvelope" object:` and use
+  its wording: "depth_max must be at least depth_min in every cell", and for
+  negative depths "depths are positive metres increasing downward, but
+  `depth_min` has negative values; if these are elevations, flip their sign
+  first" (#154).
+
 ## Dependencies
 
 * CFtime (>= 1.7.3) is now imported, for decoding CF time units.

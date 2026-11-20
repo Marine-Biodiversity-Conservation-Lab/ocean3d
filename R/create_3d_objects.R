@@ -57,7 +57,7 @@ as_envelope <- function(x, depth_min, depth_max) {
   # Work on a plain raster whatever class tag `x` arrived with: a footprint
   # taken from a voxel is still tagged SpatVoxel, and a tagged intermediate
   # would dispatch to the depth-aware mask() methods in R/intersect.R.
-  x <- .as_plain_raster(x)
+  x <- methods::as(x, "SpatRaster")  # remove the 3D class
 
   # A raster already carrying the two depth layers is promoted, not rebuilt.
   already_envelope <- identical(names(x), c("depth_min", "depth_max"))
@@ -87,29 +87,11 @@ as_envelope <- function(x, depth_min, depth_max) {
     dmax <- terra::mask(.as_depth_layer(depth_max, "depth_max", x), present)
   }
 
-  # Check dmin and dmax layers 
-  min_of <- function(r) {
-    v <- terra::global(r, "min", na.rm = TRUE)[1, 1]
-    if (is.null(v) || is.na(v)) NA_real_ else v
-  }
-  shallowest <- min_of(dmin)
-  if (!is.na(shallowest) && shallowest < 0) {
-    stop("depths are positive metres increasing downward; `depth_min` has ",
-         "negative values. Flip the sign of elevation data first.",
-         call. = FALSE)
-  }
-  thinnest <- min_of(dmax - dmin)
-  if (!is.na(thinnest) && thinnest < 0) {
-    stop("`depth_max` must be at least `depth_min` in every cell.",
-         call. = FALSE)
-  }
-
   out <- c(dmin, dmax)
   names(out) <- c("depth_min", "depth_max")
 
-  out <- methods::new("SpatEnvelope", out)
-  methods::validObject(out)
-  out
+  # new() runs the validity method, which checks the depth rules.
+  methods::new("SpatEnvelope", out)
 }
 
 # Internal: resolve a depth limit given either as a single number or as a
@@ -211,7 +193,7 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     # Edges are keyed by depth, so they still apply unless the layers are
     # renamed to other depths.
     if (is.null(depths)) edges <- x@depth_edges
-    x <- .as_plain_raster(x)
+    x <- methods::as(x, "SpatRaster")  # remove the 3D class
   }
 
   if (is.list(x)) x <- terra::rast(x)
@@ -525,12 +507,9 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   # Raster stays left: terra mishandles `scalar <op> raster`.
   slab <- .depth_slabs(depths, bounds, depth_bounds)
   closed <- is.null(depth_bounds)
-  # Plain layers, so the occupancy stack and everything derived from it is a
-  # plain SpatRaster rather than an object still tagged SpatEnvelope. terra
-  # propagates the class through `[[` and arithmetic, and a tagged
-  # intermediate would reach the depth-aware mask() methods in R/intersect.R.
-  lower <- .as_plain_raster(x[["depth_min"]])
-  upper <- .as_plain_raster(x[["depth_max"]])
+  # Plain layers, so the occupancy stack built from them is a plain SpatRaster.
+  lower <- .envelope_layer(x, "depth_min")
+  upper <- .envelope_layer(x, "depth_max")
   deepest <- length(depths)
   ind <- terra::rast(lapply(seq_along(depths), function(i) {
     if (closed && i == deepest) {
@@ -758,13 +737,15 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
   depth_min[never] <- NA_real_
   depth_max[never] <- NA_real_
 
-  out <- terra::setValues(terra::rast(.as_plain_raster(v[[1]]), nlyrs = 2),
-                          cbind(depth_min, depth_max))
+  # remove the 3D class
+  out <- terra::setValues(
+    terra::rast(methods::as(v[[1]], "SpatRaster"), nlyrs = 2),
+    cbind(depth_min, depth_max)
+  )
   names(out) <- c("depth_min", "depth_max")
 
-  out <- methods::new("SpatEnvelope", out)
-  methods::validObject(out)
-  out
+  # new() runs the validity method.
+  methods::new("SpatEnvelope", out)
 }
 
 #' Reduce a variable voxel to a presence voxel
@@ -1001,7 +982,7 @@ vect_to_envelope <- function(polygon, template, depth_min, depth_max) {
   }
   # Only the grid is used. Drop any class tag so a voxel can serve as the
   # template without its layers reaching the depth-aware mask() methods.
-  template <- .as_plain_raster(template[[1]])
+  template <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
   if (!terra::same.crs(crs(polygon), crs(template))) {
     .abort_envelope_input(paste0(
       "`polygon` and `template` have different CRS. Project `polygon` onto ",

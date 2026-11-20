@@ -14,9 +14,9 @@
 # else with the list of accepted types.
 #
 # terra propagates the subclass through its operations, so every result that
-# is not a 3D domain is stripped with .as_plain_raster() before it is returned,
-# and every 3D result is rebuilt through as_envelope() or as_voxel() so the
-# validity rules run.
+# is not a 3D domain has the class removed with methods::as(x, "SpatRaster")
+# before it is returned (see R/AllClasses.R), and every 3D result is rebuilt
+# through as_envelope() or as_voxel() so the validity rules run.
 
 # Internal: the error for a query in which neither side is a 3D object.
 .stop_neither_3d <- function() {
@@ -29,8 +29,9 @@
 # elsewhere, on the depth levels of `x`, carrying `depth_bounds` if given.
 .presence_voxel <- function(occ, depths, depth_bounds = NULL) {
   out <- terra::ifel(occ > 0, 1, NA)
-  as_voxel(.as_plain_raster(out), depths = depths, varname = "presence",
-           depth_bounds = depth_bounds)
+  # remove the 3D class
+  as_voxel(methods::as(out, "SpatRaster"), depths = depths,
+           varname = "presence", depth_bounds = depth_bounds)
 }
 
 # ---- intersect_3d -----------------------------------------------------------
@@ -115,7 +116,8 @@ setMethod(
     .no_extra_args(...)
     .check_3d(x, "x")
     fp <- .footprint_of(y, x)
-    as_envelope(terra::mask(.as_plain_raster(x), fp))
+    # remove the 3D class
+    as_envelope(terra::mask(methods::as(x, "SpatRaster"), fp))
   }
 )
 
@@ -160,7 +162,7 @@ setMethod("intersect_3d", c("ANY", "ANY"),
   # ifel() yields 1/0/NA; only as.bool() makes values() give TRUE/FALSE/NA.
   out <- terra::as.bool(out)
   names(out) <- "intersects"
-  .as_plain_raster(out)
+  methods::as(out, "SpatRaster")  # remove the 3D class
 }
 
 #' @rdname intersects_3d
@@ -348,7 +350,9 @@ NULL
 # Internal: terra's own mask(), reached on plain copies so a method here never
 # dispatches back to itself.
 .mask_plain <- function(x, keep, ...) {
-  terra::mask(.as_plain_raster(x), .as_plain_raster(keep), ...)
+  # remove the 3D class
+  terra::mask(methods::as(x, "SpatRaster"), methods::as(keep, "SpatRaster"),
+              ...)
 }
 
 #' @rdname mask-3d

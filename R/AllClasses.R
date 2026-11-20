@@ -5,6 +5,15 @@
 #' @importClassesFrom terra SpatRaster
 NULL
 
+# terra keeps the SpatVoxel / SpatEnvelope subclass through `mask()`, `[[`,
+# arithmetic, `ifel()` and `c()`. A result that isn't a valid 3D object (a
+# single depth layer, a footprint, an overlap stack) must have the class
+# removed with `methods::as(x, "SpatRaster")`, or it comes back wearing a
+# class it doesn't satisfy. The cast drops the 3D class but shares terra's
+# data: replacement functions such as `names<-` copy, but in-place
+# `terra::set.*()` calls on the result change the original too. Calls that
+# remove the class are marked "remove the 3D class".
+
 #' 3D voxel model: one layer per standard depth level
 #'
 #' A `SpatVoxel` is a [terra::SpatRaster] in which **depth is the layer index**
@@ -335,16 +344,32 @@ setValidity("SpatEnvelope", function(object) {
   # grid, which the sibling class avoids because its depths live in the layer
   # names. It is worth paying: without it a tagged raster that terra produced
   # passes as a valid envelope, and volume() returns a negative number.
-  min_of <- function(r) {
-    v <- terra::global(r, "min", na.rm = TRUE)[1, 1]
-    if (is.null(v) || is.na(v)) NA_real_ else v
+  #
+  if (!all(terra::hasValues(object)))
+    return("depth_min and depth_max must have values")
+
+  # A small in-memory raster is read once with terra::values(), which is much
+  # cheaper than two terra::global() calls and a difference raster. Up to
+  # 1e6 cells that copy is at most 16 MB, plus a few vectors of the same
+  # length for the comparisons. A larger or file-backed raster is summarised
+  # by terra::global(), which works in C++ and reads a file in blocks, so it
+  # is never copied into R whole.
+  if (all(terra::inMemory(object)) && terra::ncell(object) <= 1e6) {
+    v <- terra::values(object, mat = TRUE)
+    negative <- any(v[, "depth_min"] < 0, na.rm = TRUE)
+    inverted <- any(v[, "depth_max"] < v[, "depth_min"], na.rm = TRUE)
+  } else {
+    min_of <- function(r) terra::global(r, "min", na.rm = TRUE)[1, 1]
+    dmin <- .envelope_layer(object, "depth_min")
+    negative <- isTRUE(min_of(dmin) < 0)
+    inverted <- isTRUE(min_of(.envelope_layer(object, "depth_max") - dmin) < 0)
   }
-  shallowest <- min_of(.envelope_layer(object, "depth_min"))
-  if (!is.na(shallowest) && shallowest < 0)
-    return("depths are positive metres increasing downward")
-  thinnest <- min_of(.envelope_layer(object, "depth_max") -
-                       .envelope_layer(object, "depth_min"))
-  if (!is.na(thinnest) && thinnest < 0)
-    return("depth_max must be at least depth_min in every cell")
+  # No full stop at the end: .check_3d() appends its own sentence.
+  if (negative) {
+    return(paste("depths are positive metres increasing downward, but",
+                 "`depth_min` has negative values; if these are elevations,",
+                 "flip their sign first"))
+  }
+  if (inverted) return("depth_max must be at least depth_min in every cell")
   TRUE
 })

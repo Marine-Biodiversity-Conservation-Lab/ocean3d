@@ -96,8 +96,9 @@ setMethod(
     vol_overlap <- cell_area_km2 * (overlap_depth / 1000)
     names(vol_overlap) <- "volume_overlap"
 
-    .as_plain_raster(c(dmin_a, dmax_a, dmin_b, dmax_b, overlap_min, overlap_max,
-                       vol_a, vol_b, vol_overlap))
+    # remove the 3D class
+    methods::as(c(dmin_a, dmax_a, dmin_b, dmax_b, overlap_min, overlap_max,
+                  vol_a, vol_b, vol_overlap), "SpatRaster")
   }
 )
 
@@ -161,8 +162,9 @@ setMethod(
       both_mask)
     names(vol_overlap) <- "volume_overlap"
 
-    .as_plain_raster(c(dmin_a, dmax_a, dmin_b, dmax_b, overlap_min, overlap_max,
-                       vol_a, vol_b, vol_overlap))
+    # remove the 3D class
+    methods::as(c(dmin_a, dmax_a, dmin_b, dmax_b, overlap_min, overlap_max,
+                  vol_a, vol_b, vol_overlap), "SpatRaster")
   }
 )
 

@@ -88,7 +88,7 @@ vector3d_to_envelope <- function(x, template) {
 
   # Only the grid is used. Dropping the class tag keeps a voxel template's
   # layers away from the depth-aware methods in R/intersect.R.
-  grid <- .as_plain_raster(template[[1]])
+  grid <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
   polygons <- terra::vect(sf::st_sf(depth_min = f$depth_min,
                                     depth_max = f$depth_max,
                                     geometry = f$geometry))
