@@ -32,11 +32,26 @@ test_that("extract_to_area() selects the correct depth range", {
   v <- make_area_voxel()
   a <- sf::st_sf(geometry = make_area_polygon())
 
-  out <- extract_to_area(a, v, min_depth = 40, max_depth = 600)
+  # `depths` are the layers kept from v's 0, 50, 100, 500 and 1000 m.
+  cases <- list(
+    # 50, 100 and 500 m are the nearest standard layers bracketing 40-600 m.
+    list(label = "40 to 600 m", min = 40, max = 600, depths = c(50, 100, 500)),
+    list(label = "no bounds", min = NULL, max = NULL,
+         depths = c(0, 50, 100, 500, 1000)),
+    # From the nearest layer to 90 m down to the deepest layer.
+    list(label = "min only", min = 90, max = NULL, depths = c(100, 500, 1000)),
+    # From the shallowest layer down to the nearest layer to 90 m.
+    list(label = "max only", min = NULL, max = 90, depths = c(0, 50, 100))
+  )
+  for (case in cases) {
+    out <- extract_to_area(a, v, min_depth = case$min, max_depth = case$max)
 
-  # depths 50, 100, 500 are the nearest standard layers bracketing 40-600
-  expect_identical(terra::nlyr(out), 3)
-  expect_true(all(grepl("depth=(50|100|500)$", names(out))))
+    expect_identical(terra::nlyr(out), as.numeric(length(case$depths)),
+                     label = case$label)
+    expect_identical(depths(out), case$depths, label = case$label)
+    expect_identical(names(out), paste0("tan_depth=", case$depths),
+                     label = case$label)
+  }
 })
 
 test_that("extract_to_area() returns a SpatVoxel", {
@@ -46,71 +61,47 @@ test_that("extract_to_area() returns a SpatVoxel", {
   expect_true(methods::validObject(out))
 })
 
-test_that("extract_to_area() crops to area", {
-  v <- make_area_voxel()
-  a <- sf::st_sf(geometry = make_area_polygon())
-
-  out <- extract_to_area(a, v, min_depth = 0, max_depth = 0)
-
-  # Extent should shrink from -10..10 to roughly -5..5
-  e <- terra::ext(out)
-  expect_lt(e[2] - e[1], 20)
-})
-
-test_that("extract_to_area() keeps every layer when depth bounds are NULL", {
-  v <- make_area_voxel()
-  out <- extract_to_area(sf::st_sf(geometry = make_area_polygon()), v)
-
-  expect_identical(terra::nlyr(out), terra::nlyr(v))
-  expect_identical(depths(out), depths(v))
-})
-
-test_that("extract_to_area() honours a single open depth bound", {
-  v <- make_area_voxel()
-  a <- sf::st_sf(geometry = make_area_polygon())
-
-  # min only: from the nearest layer to 90 m down to the deepest layer
-  expect_identical(depths(extract_to_area(a, v, min_depth = 90)),
-                   c(100, 500, 1000))
-  # max only: from the shallowest layer down to the nearest layer to 90 m
-  expect_identical(depths(extract_to_area(a, v, max_depth = 90)), c(0, 50, 100))
-})
-
-test_that("extract_to_area() accepts sf, sfc and SpatVector areas", {
+test_that("extract_to_area() crops to sf, sfc and SpatVector areas", {
   v <- make_area_voxel()
   poly <- make_area_polygon()
-
   from_sfc <- extract_to_area(poly, v, min_depth = 0, max_depth = 0)
-  from_sf <- extract_to_area(sf::st_sf(geometry = poly), v,
-                             min_depth = 0, max_depth = 0)
-  from_vect <- extract_to_area(terra::vect(poly), v,
-                               min_depth = 0, max_depth = 0)
 
-  expect_identical(as.vector(terra::ext(from_sfc)),
-                   as.vector(terra::ext(from_sf)))
-  expect_identical(as.vector(terra::ext(from_sfc)),
-                   as.vector(terra::ext(from_vect)))
+  # Rows with `same_extent` give the same extent as the sfc polygon. An area
+  # in another CRS is reprojected onto the voxel's.
+  cases <- list(
+    list(label = "sfc", area = poly, same_extent = TRUE),
+    list(label = "sf", area = sf::st_sf(geometry = poly), same_extent = TRUE),
+    list(label = "SpatVector", area = terra::vect(poly), same_extent = TRUE),
+    list(label = "sfc in EPSG:3857",
+         area = sf::st_transform(poly, "EPSG:3857"), same_extent = FALSE)
+  )
+  for (case in cases) {
+    out <- extract_to_area(case$area, v, min_depth = 0, max_depth = 0)
+
+    expect_true(terra::same.crs(out, v), label = case$label)
+    # The extent shrinks from -10..10 to roughly -5..5.
+    e <- terra::ext(out)
+    expect_lt(e[2] - e[1], 20, label = case$label)
+    if (case$same_extent) {
+      expect_identical(as.vector(e), as.vector(terra::ext(from_sfc)),
+                       label = case$label)
+    }
+  }
 })
 
-test_that("extract_to_area() reprojects an area in another CRS", {
-  v <- make_area_voxel()
-  a <- sf::st_transform(make_area_polygon(), "EPSG:3857")
-
-  out <- extract_to_area(a, v, min_depth = 0, max_depth = 0)
-
-  expect_true(terra::same.crs(out, v))
-  expect_lt(terra::ext(out)[2] - terra::ext(out)[1], 20)
-})
-
-test_that("extract_to_area() rejects a rast_3d that is not a SpatVoxel", {
+test_that("extract_to_area() rejects input it can't use", {
   r <- terra::rast(nrows = 4, ncols = 4)
   terra::values(r) <- 1:16
   names(r) <- "not_a_depth_layer"
-  # The voxel is checked before `area`, so a NULL area still surfaces this.
-  expect_error(extract_to_area(NULL, r), "SpatVoxel")
-})
-
-test_that("extract_to_area() rejects an area that is not vector geometry", {
-  expect_error(extract_to_area("nope", make_area_voxel()),
-               "sf, sfc, or SpatVector")
+  cases <- list(
+    # The voxel is checked before `area`, so a NULL area still surfaces this.
+    list(label = "rast_3d that is not a SpatVoxel", area = NULL, rast_3d = r,
+         pattern = "SpatVoxel"),
+    list(label = "area that is not vector geometry", area = "nope",
+         rast_3d = make_area_voxel(), pattern = "sf, sfc, or SpatVector")
+  )
+  for (case in cases) {
+    expect_error(extract_to_area(case$area, case$rast_3d), case$pattern,
+                 label = case$label)
+  }
 })
