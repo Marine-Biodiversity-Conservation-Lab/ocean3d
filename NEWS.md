@@ -152,12 +152,16 @@ message says how many cells have the limits swapped (or a seafloor above
   300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
   are polygon times, with a message (#114).
 * `volume()` measures `SpatVector3D` polygons: the sum of each polygon's
-  area times its depth range, in km³ (#115).
-* `intersect_3d()`, `intersects_3d()` and `mask()` accept `SpatVector3D`
-  polygons with a `SpatEnvelope` or `SpatVoxel`, in either order. The
-  polygons are put on the raster's grid with `vector3d_to_envelope()` and
-  compared as an envelope, so `mask(voxel, polygons)` keeps the voxel's
-  values in the cells and depth levels the polygons reach (#115).
+  area times its depth range, in km³. Space where polygons overlap is
+  counted once for each polygon, so the total isn't the volume of their
+  union (#115).
+* `intersect_3d()` and `intersects_3d()` accept `SpatVector3D` polygons
+  with a `SpatEnvelope` or `SpatVoxel`, in either order, and `mask()`
+  accepts them as the mask. The polygons are first put on the raster's
+  grid, so a depth gap between overlapping polygons over one cell is filled
+  in. `mask(voxel, polygons)` keeps the voxel's values in the cells and
+  depth levels the polygons reach. Polygons that miss the grid give an
+  empty result, not an error (#115).
 * `intersect_3d()` of two sets of `SpatVector3D` polygons gives a polygon
   for each pair whose outlines, depth ranges and time intervals overlap,
   with columns `feature_id_x` and `feature_id_y` naming the pair. Measure

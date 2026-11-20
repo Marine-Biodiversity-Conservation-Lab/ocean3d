@@ -165,17 +165,20 @@ Input: `SpatRaster` layers, tables of points or lines, and polygons (`sf`,
 Input: `SpatVoxel` or `SpatEnvelope`, compared with another 3D object,
 `SpatVector3D` polygons, or a 2D object: a `SpatRaster` footprint or
 polygons (`SpatVector`, `sf`). A 2D object restricts the domain
-horizontally without restricting the depths. `SpatVector3D` polygons are
-put on the raster's grid with `vector3d_to_envelope()` and compared as an
-envelope. `intersect_3d()` also takes two sets of `SpatVector3D` polygons
-and returns the polygons they share in outline, depth and time;
+horizontally without restricting the depths. Polygons compared with an
+envelope or voxel are first put on its grid, as `vector3d_to_envelope()`
+does.
+
+Two sets of `SpatVector3D` polygons can also be compared: `intersect_3d()`
+returns the polygons they share in outline, depth and time, and
 `intersects_3d()` lists, for each polygon of the first set, the polygons of
 the second it shares space with.
 
-- `intersect_3d(x, y)` — the shared 3D space between the two inputs. Returns an envelope with the shared depth interval or a presence voxel, depending on inputs.
-- `intersects_3d(x, y)` — whether inputs share any 3D space, cell by cell:
-  `TRUE`, `FALSE` (both present but disjoint, or only one present), or
-  `NA` (neither present). 
+- `intersect_3d(x, y)` — the shared 3D space between the two inputs. Returns an envelope with the shared depth interval, a presence voxel, or (for two polygon sets) `SpatVector3D` polygons, depending on inputs.
+- `intersects_3d(x, y)` — whether inputs share any 3D space. For rasters,
+  cell by cell: `TRUE`, `FALSE` (both present but disjoint, or only one
+  present), or `NA` (neither present). For two polygon sets, a list of the
+  polygons of `y` each polygon of `x` meets.
 - `mask(x, mask)` — `terra::mask()` made depth-aware. Keeps the values of `x` where the mask domain reaches that cell *at that depth*.
 
 ### Summarise: 3D volume
