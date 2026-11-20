@@ -162,6 +162,9 @@ message says how many cells have the limits swapped (or a seafloor above
   for each pair whose outlines, depth ranges and time intervals overlap,
   with columns `feature_id_x` and `feature_id_y` naming the pair. Measure
   the overlap with `volume(intersect_3d(x, y))` (#115).
+* `intersects_3d()` of two sets of `SpatVector3D` polygons gives, for each
+  polygon of `x`, the feature IDs of the polygons of `y` it shares 3D space
+  with, as a list named by the IDs of `x` (#115).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`, and read them with the new

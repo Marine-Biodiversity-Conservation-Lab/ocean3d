@@ -599,6 +599,25 @@ setMethod(
   }
 )
 
+# Two sets of polygons: for each polygon of `x`, the polygons of `y` it
+# shares 3D space with. The pairs come from intersect_3d(), so the two always
+# agree. That builds every shared outline, which a yes/no answer doesn't
+# need; testing outlines with a predicate that ignores shared edges, then
+# depths and times, would be faster for large sets.
+#' @rdname intersects_3d
+#' @export
+setMethod(
+  "intersects_3d", c("SpatVector3D", "SpatVector3D"),
+  function(x, y, ...) {
+    shared <- as.data.frame(intersect_3d(x, y, ...))
+    ids_x <- as.data.frame(x)$feature_id
+    ids_y <- as.data.frame(y)$feature_id
+    hits <- split(shared$feature_id_y, factor(shared$feature_id_x, ids_x))
+    # In the order of `y`, as sf::st_intersects() lists them.
+    lapply(hits, function(h) ids_y[ids_y %in% h])
+  }
+)
+
 # One signature serves voxels, envelopes and plain rasters: the polygons go
 # on the grid of `x`, and mask() then dispatches to the envelope methods
 # above for that class of `x`.

@@ -731,6 +731,33 @@ test_that("intersect_3d() of two polygon sets shares outline, depth and time", {
                tolerance = 1e-4)
 })
 
+test_that("intersects_3d() of polygon sets lists the pairs that share space", {
+  square <- function(x0, x1) {
+    sf::st_polygon(list(rbind(c(x0, 0), c(x1, 0), c(x1, 1), c(x0, 1),
+                              c(x0, 0))))
+  }
+  a <- sf::st_sf(id = c("a1", "a2", "a3"),
+                 geometry = sf::st_sfc(square(0, 2), square(5, 6),
+                                       square(10, 11), crs = 4326))
+  a <- as_vector3d(a, id = "id", depth_min = 0, depth_max = 100)
+  # b1 and b3 overlap a1 in outline and depth; b2 overlaps a1 but only
+  # touches its depth range; b4 only shares an edge with a2; nothing meets
+  # a3.
+  b <- sf::st_sf(id = c("b3", "b2", "b1", "b4"), top = c(0, 100, 50, 0),
+                 geometry = sf::st_sfc(square(1, 3), square(0, 1),
+                                       square(1.5, 2), square(6, 7),
+                                       crs = 4326))
+  b <- as_vector3d(b, id = "id", depth_min = "top", depth_max = 200)
+
+  expect_identical(intersects_3d(a, b),
+                   list(a1 = c("b3", "b1"), a2 = character(0),
+                        a3 = character(0)))
+  # The other way round lists the same pairs from b's side.
+  expect_identical(intersects_3d(b, a),
+                   list(b3 = "a1", b2 = character(0), b1 = "a1",
+                        b4 = character(0)))
+})
+
 test_that("intersect_3d() of polygon sets compares time intervals", {
   on_days <- function(start, end) {
     p <- sf::st_sf(start = as.Date(start), end = as.Date(end),

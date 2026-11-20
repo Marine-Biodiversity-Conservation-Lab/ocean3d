@@ -168,7 +168,9 @@ polygons (`SpatVector`, `sf`). A 2D object restricts the domain
 horizontally without restricting the depths. `SpatVector3D` polygons are
 put on the raster's grid with `vector3d_to_envelope()` and compared as an
 envelope. `intersect_3d()` also takes two sets of `SpatVector3D` polygons
-and returns the polygons they share in outline, depth and time.
+and returns the polygons they share in outline, depth and time;
+`intersects_3d()` lists, for each polygon of the first set, the polygons of
+the second it shares space with.
 
 - `intersect_3d(x, y)` — the shared 3D space between the two inputs. Returns an envelope with the shared depth interval or a presence voxel, depending on inputs.
 - `intersects_3d(x, y)` — whether inputs share any 3D space, cell by cell:

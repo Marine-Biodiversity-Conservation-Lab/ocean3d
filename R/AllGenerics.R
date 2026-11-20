@@ -288,12 +288,24 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' [SpatVector3D-class] polygons have depths, so they are compared as an
 #' envelope, after being put on the 3D object's grid as in [intersect_3d()].
 #'
+#' Two sets of [SpatVector3D-class] polygons have no grid to answer on, so
+#' the answer is a list instead, as [sf::st_intersects()] gives in 2D: for
+#' each polygon of `x`, the polygons of `y` it shares 3D space with. A pair
+#' is listed exactly when [intersect_3d()] gives it a polygon, so outlines
+#' that only share an edge, depth ranges that only touch and times that
+#' don't overlap aren't listed. Swapping `x` and `y` gives the same pairs
+#' listed the other way round.
+#'
 #' The order of `x` and `y` does not matter.
 #'
 #' @inheritParams intersect_3d
 #'
 #' @returns A single-layer boolean `SpatRaster` named `intersects`, on the
-#'   grid of the 3D input: `TRUE`, `FALSE` or `NA` per cell as above.
+#'   grid of the 3D input: `TRUE`, `FALSE` or `NA` per cell as above. For two
+#'   sets of [SpatVector3D-class] polygons, a list with one element per
+#'   polygon of `x`, named by its feature ID: the feature IDs of the
+#'   polygons of `y` it shares space with, in the order of `y`, or
+#'   `character(0)` for none.
 #'
 #' @seealso [intersect_3d()] for the shared space itself; [mask()] to keep a
 #'   voxel's values inside a domain.
