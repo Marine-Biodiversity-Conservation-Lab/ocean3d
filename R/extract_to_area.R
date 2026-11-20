@@ -83,8 +83,5 @@ extract_to_area <- function(area, rast_3d, min_depth = NULL, max_depth = NULL) {
     area <- terra::project(area, terra::crs(selected))
   }
 
-  out <- terra::crop(selected, area, mask = TRUE, touches = TRUE)
-  # terra resets every layer's depth to 0 when it crops to a polygon.
-  terra::depth(out) <- terra::depth(selected)
-  as_voxel(out)
+  as_voxel(terra::crop(selected, area, mask = TRUE, touches = TRUE))
 }

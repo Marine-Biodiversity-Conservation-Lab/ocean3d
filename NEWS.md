@@ -40,23 +40,35 @@ Other changes to callers:
 A `SpatVoxel` now stores each layer's depth in terra's own per-layer field,
 `terra::depth()`, instead of in its layer names (#113). Before, the depth was
 read from names like `temp_depth=100`, so renaming a layer broke the voxel.
-Now:
+Now the package never reads depths from layer names:
 
-* Layer names are free. `as_voxel()` still names layers
-  `{varname}_depth={value}` when it sets the depths, but renaming them
-  changes nothing.
-* `as_voxel()` takes the depths from `depths`, then from the raster's
-  `terra::depth()`, then from layer names that follow the old pattern, such
-  as those terra gives layers read from netCDF. So existing code that builds
-  voxels from named layers keeps working.
-* `depths()` reads `terra::depth()`.
-* `c()` of voxels keeps each layer's depth, and leaves its inputs unchanged.
-  It returns a plain `SpatRaster` when the layers don't make a valid voxel,
-  for example two layers at the same depth.
+* Renaming a layer doesn't change its depth. `as_voxel()` still names layers
+  `{varname}_depth={value}` when it sets the depths, as labels.
+* `as_voxel()` takes the depths from `depths`, or else from the raster's
+  `terra::depth()`, which terra also sets when it reads a netCDF file. A
+  raster with neither is an error, even if its layers are named
+  `{variable}_depth={value}`. Before, such names were read as depths.
+* `depths()` reads `terra::depth()`, and is an error for a raster without
+  depths. It no longer takes a character vector of layer names. To label a
+  per-layer summary such as `terra::global(v, ...)`, use `depths(v)`: the
+  summary has one row per layer, in layer order.
+* Selecting layers (`v[[2:3]]`, `v$name`, `subset()`) and replacing one with
+  `[[<-` keep each layer's depth through later operations. Without the
+  `SpatVoxel` methods for these, terra would reset the depths to 0, for
+  example in `v[[2:3]] * 2` or a crop of `v[[3]]`.
+* `c()` of voxels keeps each layer's depth. When the layers don't make a
+  valid voxel, for example two layers at the same depth, it returns a plain
+  `SpatRaster`; before, it returned an invalid `SpatVoxel`.
+* A few terra operations, such as `app()`, drop the depths and return a
+  plain `SpatRaster`; the package's functions then stop with an error. Set
+  the depths again with `as_voxel(x, depths = ...)`.
 
-Code that set a voxel's depth by renaming its layers should pass `depths` to
-`as_voxel()` or set `terra::depth()` instead. To keep the depth when saving,
-use `terra::writeCDF()` or `saveRDS(terra::wrap(v))`; GeoTIFF drops it.
+Code that set a voxel's depth through its layer names, or read depths back
+from names, should pass `depths` to `as_voxel()` or set `terra::depth()`,
+and read them with `depths()`. `terra::writeCDF()` and
+`saveRDS(terra::wrap(v))` keep the depths. GeoTIFF doesn't, so a voxel read
+back from GeoTIFF needs `depths`. All three return a plain `SpatRaster`, so
+re-wrap with `as_voxel()` after reading.
 
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
 `envelope_to_voxel()`, `intersect_3d()`,

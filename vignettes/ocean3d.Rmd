@@ -877,9 +877,9 @@ cells contributing to these calculations.
 # Calculate the mean, minimum and maximum temperature within the species' potential distribution at each depth.
 per_depth <- terra::global(in_range, c("mean", "min", "max"), na.rm = TRUE)
 
-# Extract the numerical depth associated with each layer.
-per_depth$depth <- depths(rownames(per_depth))
-#`depths()` accepts a character vector, making a per-layer
+# Label each row with its layer's depth: terra::global() gives one row per
+# layer, in layer order.
+per_depth$depth <- depths(in_range)
 
 # Count how many cells contain temperature data at each depth (excluding cells outside the species' potential distribution).
 per_depth$n_cells <- terra::global(!is.na(in_range), "sum", na.rm = TRUE)[, 1]

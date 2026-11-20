@@ -611,7 +611,7 @@ total_exposed
 
 # Per-depth exposure profile (effort-hours summed across cells, per layer).
 per_depth <- terra::global(exposed_effort, "sum", na.rm = TRUE)
-per_depth$depth <- depths(rownames(per_depth))
+per_depth$depth <- depths(exposed_effort)
 per_depth[!is.na(per_depth$sum) & per_depth$sum > 0,
           c("depth", "sum")]
 ```

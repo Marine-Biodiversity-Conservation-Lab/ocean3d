@@ -122,45 +122,43 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'
 #' Wrap a multi-depth raster as a [SpatVoxel-class]: the validated 3D form used
 #' throughout the package, with one layer per standard depth. Each layer's
-#' depth is stored in [terra::depth()].
+#' depth is stored in [terra::depth()]. Given a [SpatProxy-class],
+#' `as_voxel()` reads one time step of it into memory instead.
 #'
-#' The depths come from, in order: `depths`; the raster's own
-#' [terra::depth()], when set; or layer names following the
-#' `{variable}_depth={value}` pattern, which terra gives layers read from
-#' netCDF and which voxels had before their depths moved to
-#' [terra::depth()]. Names are read only to fill [terra::depth()]; after that
-#' they are free.
+#' The depths come from `depths` when it is given, and otherwise from the
+#' raster's own [terra::depth()], which terra also sets when it reads a netCDF
+#' file. A raster with neither is an error: layer names are labels, never
+#' read as depths.
 #'
-#' Most terra operations (`crop()`, `mask()`, `[[`, arithmetic, `c()`)
-#' propagate the class and the depths, so a `SpatVoxel` normally survives
-#' them; a few, such as `mean()`, return a plain `SpatRaster` instead.
-#' Re-wrapping is cheap either way, since `as_voxel()` is idempotent — given a
-#' valid `SpatVoxel` and no `depths` it returns it untouched.
+#' Most terra operations (`crop()`, `mask()`, `[[`, arithmetic, `c()`) keep
+#' the class and the depths; a few, such as `mean()`, return a plain
+#' `SpatRaster` instead. Re-wrapping is cheap either way: given a valid
+#' `SpatVoxel` and no `depths`, `as_voxel()` returns it untouched.
 #'
-#' Propagating the class does not re-run the validity rules, so an operation
-#' that changes the raster layer set can leave an object still labelled
-#' `SpatVoxel` even if invalid (for example `v[[c(1, 1)]]`, two layers at the
-#' same depth). Passing an invalid `SpatVoxel` to `as_voxel()` checks it as it
-#' would a plain raster: unsorted layers are sorted, and the rest is an error.
-#' Some terra operations reset depths to 0 (`crop()` or `mask()` with a
-#' polygon, replacing a layer with `[[<-`, `app()`), so they repeat;
-#' `as_voxel()` then reads the depths back from the `{varname}_depth={value}`
-#' names it gave the layers, if they're still there.
+#' Keeping the class doesn't re-run the class checks, so an operation that
+#' changes the layers can leave an object labelled `SpatVoxel` that isn't a
+#' valid one (for example `v[[c(1, 1)]]`, two layers at the same depth).
+#' `as_voxel()` checks such an object as it would a plain raster: unsorted
+#' layers are sorted, and the rest is an error. A voxel whose depths terra
+#' dropped, for example in `app()`, needs `depths` again (see
+#' [SpatVoxel-class]).
 #'
 #' Depths are positive metres increasing downward, matching the World Ocean
 #' Atlas convention. Negative depths are an error rather than being silently
 #' negated, since flipping the sign would change what the data mean.
 #'
-#' @param x A [SpatProxy-class], a SpatRaster with its depths in
-#'   [terra::depth()] or in `{variable}_depth={value}` layer names, a list of
-#'   single-depth SpatRasters, or an existing [SpatVoxel-class]. This is how
-#'   gridded data enter the `SpatVoxel` model: describe a netCDF file with
-#'   [as_proxy()] and pass the proxy here, which reads one time step. netCDF
-#'   paths aren't accepted directly.
+#' @param x A [SpatProxy-class], a SpatRaster, a list of SpatRasters (one per
+#'   depth, combined with [terra::rast()], which keeps their depths only when
+#'   each has them set; otherwise pass `depths`), or an existing
+#'   [SpatVoxel-class]. This is how gridded data
+#'   enter the `SpatVoxel` model: describe a netCDF file with [as_proxy()] and
+#'   pass the proxy here, which reads one time step. netCDF paths aren't
+#'   accepted directly.
 #' @param depths Optional numeric vector, one depth per layer, in metres. When
 #'   supplied, it sets the depths, and the layers are named
 #'   `{varname}_depth={value}`, replacing any existing names. Required if `x`
-#'   has neither [terra::depth()] nor depths in its layer names.
+#'   has no depths in [terra::depth()]. Leave it out, and `depth_bounds` too,
+#'   for a [SpatProxy-class], which gives its own.
 #' @param varname Character. Variable name used in the layer names built from
 #'   `depths`, or from a proxy's depths, where it defaults to the proxy's
 #'   variable name. Ignored otherwise.
@@ -194,10 +192,11 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' terra::depth(r) <- c(200, 0, 100)
 #' depths(as_voxel(r))
 #'
-#' # old-style names are read when terra::depth() isn't set
-#' old <- terra::rast(nrows = 2, ncols = 2, nlyrs = 2, vals = 1)
-#' names(old) <- c("temp_depth=0", "temp_depth=50")
-#' depths(as_voxel(old))
+#' # layer names aren't read as depths: a raster without terra::depth() needs
+#' # `depths`
+#' named <- terra::rast(nrows = 2, ncols = 2, nlyrs = 2, vals = 1)
+#' names(named) <- c("temp_depth=0", "temp_depth=50")
+#' try(as_voxel(named))
 #'
 #' # carry each layer's slab of water, as a netCDF file's depth bounds give it
 #' v <- as_voxel(r, depth_bounds = cbind(c(150, 0, 50), c(250, 50, 150)))
@@ -247,42 +246,30 @@ as_voxel <- function(x, depths = NULL, varname = "value",
          paste(class(x), collapse = "/"), ".", call. = FALSE)
   }
 
-  # Where the depths come from: `depths`; else the raster's own
-  # terra::depth(), always for a voxel; else, for input that predates
-  # terra::depth(), layer names following the old
-  # `{variable}_depth={value}` pattern, read once here.
+  # The depths come from `depths`, else from terra::depth(); layer names are
+  # labels and never read. terra::depth() is set only on a copy of `x`,
+  # because terra sets it in place and `x` may still be the caller's raster.
   if (!is.null(depths)) {
-    if (length(depths) != terra::nlyr(x)) {
-      stop("`depths` must have one value per layer: got ", length(depths),
-           " for ", terra::nlyr(x), " layers.", call. = FALSE)
+    problem <- if (length(depths) != terra::nlyr(x)) {
+      glue::glue("must have one value per layer: got {length(depths)} for ",
+                 "{terra::nlyr(x)} layers")
+    } else if (!is.numeric(depths)) {
+      "must be numeric metres"
+    } else if (anyNA(depths)) {
+      "must give every layer a depth; some are NA"
     }
-    if (!is.numeric(depths)) {
-      stop("`depths` must be numeric metres.", call. = FALSE)
+    if (!is.null(problem)) {
+      rlang::abort(glue::glue("`depths` {problem}."),
+                   class = "ocean3d_error_voxel_input", call = NULL)
     }
     d <- as.numeric(depths)
-    # Readable names; the depth itself lives in terra::depth().
+    # Readable names; `names<-` copies the raster first.
     names(x) <- paste0(varname, "_depth=", d)
-  } else if (was_voxel || .depth_set(x)) {
+    terra::depth(x) <- d
+  } else if (.depth_set(x)) {
     d <- terra::depth(x)
-    # Some terra operations reset depths to 0 (crop() or mask() with a
-    # polygon, replacing a layer with `[[<-`, app()), leaving repeats. The
-    # names as_voxel() wrote still hold them.
-    named <- .parse_depth_layers_names(names(x), error = FALSE)
-    if (anyDuplicated(d) && !anyNA(named) && !anyDuplicated(named)) {
-      d <- named
-    }
   } else {
-    d <- .parse_depth_layers_names(names(x), error = FALSE)
-    if (anyNA(d)) {
-      rlang::abort(glue::glue(
-        "Layer(s) {toString(names(x)[is.na(d)])} have no depth. Pass ",
-        "`depths`, set them with terra::depth(), or name the layers ",
-        "{{variable}}_depth={{value}}."
-      ), class = "ocean3d_error_no_depths", call = NULL)
-    }
-  }
-  if (anyNA(d)) {
-    stop("every layer needs a depth; got NA.", call. = FALSE)
+    .abort_no_depths()
   }
   if (any(d < 0)) {
     stop("depths are positive metres increasing downward; got ",
@@ -303,12 +290,14 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     edges <- edges[row[!is.na(row)], , drop = FALSE]
   }
 
-  # Repair what is unambiguously repairable rather than rejecting it.
+  # Repair what is unambiguously repairable rather than rejecting it. The
+  # subset is a new raster, and a layer subset clears terra's depth flag, so
+  # the depths are set again.
   if (is.unsorted(d)) {
     x <- x[[order(d)]]
     d <- sort(d)
+    terra::depth(x) <- d
   }
-  terra::depth(x) <- d
 
   # Without edges, the class prototype gives the empty table.
   if (is.null(edges)) return(methods::new("SpatVoxel", x))
@@ -317,11 +306,12 @@ as_voxel <- function(x, depths = NULL, varname = "value",
 }
 
 #' @rdname SpatVoxel-class
-#' @param x,... For `c()`: a `SpatVoxel` and further rasters to combine, as
-#'   with terra's `c()`. The result is a `SpatVoxel` with each layer's depth
-#'   and the depth edges of every `SpatVoxel` among them, or a plain
-#'   `SpatRaster` when the layers don't make a valid voxel (for example two
-#'   layers at the same depth).
+#' @param x A `SpatVoxel`.
+#' @param ... For `c()`: further rasters to combine with `x`, as with terra's
+#'   `c()`. The result is a `SpatVoxel` with each layer's depth and the depth
+#'   edges of every `SpatVoxel` among them, or a plain `SpatRaster` when the
+#'   layers don't make a valid voxel (for example two layers at the same
+#'   depth). For `subset()`: passed to terra's `subset()`.
 #' @export
 setMethod("c", "SpatVoxel", function(x, ...) {
   args <- list(x, ...)
@@ -352,6 +342,61 @@ setMethod("c", "SpatVoxel", function(x, ...) {
   tryCatch(methods::new("SpatVoxel", out, depth_edges = edges),
            error = function(e) out)
 })
+
+#' @rdname SpatVoxel-class
+#' @param subset,negate,NSE For `subset()`, which `[[` and `$` also call: the
+#'   layers to keep, as with terra's `subset()`. The result is a `SpatVoxel`
+#'   that keeps each layer's depth through later operations.
+#' @export
+# `NSE` keeps terra's argument name.
+setMethod("subset", "SpatVoxel", function(x, subset, negate = FALSE,
+                                          NSE = FALSE, ...) { # nolint
+  # terra's method reads a non-standard expression with substitute(), which
+  # would see only this method's argument, so the layers are found here, as
+  # terra does, and passed on as indices.
+  if (isTRUE(NSE)) {
+    layers <- stats::setNames(as.list(seq_len(terra::nlyr(x))), names(x))
+    subset <- if (missing(subset)) unlist(layers) else
+      eval(substitute(subset), layers, parent.frame())
+  }
+  out <- methods::callNextMethod(x, subset = subset, negate = negate,
+                                 NSE = FALSE, ...)
+  # A layer subset of a raster in memory keeps the depths but clears terra's
+  # depth flag, so the next operation (arithmetic, crop(), mask(), ...) would
+  # reset them to 0. The subset is a new raster, so setting its depths again
+  # doesn't touch `x`.
+  if (.depth_set(x) && !.depth_set(out)) terra::depth(out) <- terra::depth(out)
+  out
+})
+
+#' @rdname SpatVoxel-class
+#' @param i,j,value For `[[<-`: the layer to replace, by number or name, and
+#'   its new values, as with terra. A replaced layer keeps its depth.
+#' @export
+setReplaceMethod("[[", c("SpatVoxel", "numeric"), function(x, i, j, value) {
+  .replace_layer(x, methods::callNextMethod())
+})
+
+#' @rdname SpatVoxel-class
+#' @export
+setReplaceMethod("[[", c("SpatVoxel", "character"), function(x, i, j, value) {
+  .replace_layer(x, methods::callNextMethod())
+})
+
+# Internal: the result `out` of terra's `[[<-` on voxel `x`, with x's depths
+# and class back. terra gives a replaced layer the depth of the new values,
+# which is 0 when they have none, so each replaced layer keeps its own depth
+# instead. Replacing by name returns a plain SpatRaster, so the result goes
+# back into `x`, whose only other slot is depth_edges; like terra's own
+# operations, this doesn't re-run the class checks. A layer added by name has
+# no depth to keep, so that result is left as terra returns it.
+.replace_layer <- function(x, out) {
+  d <- if (.depth_set(x)) terra::depth(x)
+  if (length(d) != terra::nlyr(out)) return(out)
+  terra::depth(out) <- d
+  x@pntr <- out@pntr
+  x
+}
 
 # Internal: a depth_edges table (depth, lower, upper) from `depth_bounds`: a
 # two-column matrix or data frame of top and bottom with one row per depth, in
