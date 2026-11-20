@@ -7,7 +7,7 @@
 #' @importFrom methods setGeneric setMethod
 NULL
 
-#' 3D volume of a rasterized domain
+#' 3D volume of a domain
 #'
 #' Measures the occupied volume of a [SpatEnvelope-class], a
 #' [SpatVoxel-class] or [SpatVector3D-class] polygons, as a total, or cell by
@@ -149,26 +149,30 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'     is in the result where both voxels occupy it.}
 #'   \item{An envelope and a voxel}{The envelope is first placed on the
 #'     voxel's depth levels with [envelope_to_voxel()]. The result is a voxel.}
-#'   \item{A 3D object and a `SpatRaster`}{The raster is a footprint. Its
-#'     non-`NA` cells are inside; its values are not read. It must have one
-#'     layer and be on the same grid.}
-#'   \item{A 3D object and polygons}{A `SpatVector`, `sf` or `sfc` object. The
-#'     polygons are rasterised onto the 3D object's grid. A cell is inside when
-#'     its centre is. Polygons in another CRS are projected first.}
-#'   \item{A 3D object and [SpatVector3D-class] polygons}{The polygons are
-#'     first put on the 3D object's grid with [vector3d_to_envelope()], then
-#'     compared as an envelope. Each cell a polygon touches gets its depth
-#'     range; where polygons overlap, a cell gets the shallowest top and the
-#'     deepest bottom, so a depth gap between two polygons over one cell is
-#'     filled. The polygons' time intervals are dropped, with a message.
-#'     Polygons that miss the grid give an empty result. Points and lines
-#'     aren't supported yet; [buffer_3d()] turns them into polygons.}
+#'   \item{An envelope or voxel and a `SpatRaster`}{The raster is a
+#'     footprint. Its non-`NA` cells are inside; its values are not read. It
+#'     must have one layer and be on the same grid.}
+#'   \item{An envelope or voxel and 2D polygons}{A `SpatVector`, `sf` or
+#'     `sfc` object. The polygons are rasterised onto the 3D object's grid. A
+#'     cell is inside when a polygon touches it. Polygons in another CRS are
+#'     projected first.}
+#'   \item{An envelope or voxel and [SpatVector3D-class] polygons}{The
+#'     polygons are first put on the envelope's or voxel's grid with
+#'     [vector3d_to_envelope()], then compared as an envelope. Each cell a
+#'     polygon touches gets its depth range; where polygons overlap, a cell
+#'     gets the shallowest top and the deepest bottom, so a depth gap between
+#'     two polygons over one cell is filled. The polygons' time intervals are
+#'     dropped, with a message. Polygons that miss the grid, or a set with no
+#'     polygons, give an empty result. Points and lines aren't supported yet;
+#'     [buffer_3d()] turns them into polygons.}
 #'   \item{Two sets of [SpatVector3D-class] polygons}{Each pair of polygons,
 #'     one from `x` and one from `y`, whose outlines, depth ranges and times
 #'     overlap gives one polygon: the shared outline (as
 #'     [sf::st_intersection()]), the shared depth range, and the shared time
 #'     interval. Depth ranges that only touch share no water. Time intervals
-#'     include both ends, so with dates, two that share a day overlap on it.
+#'     include both ends, so with dates, two that share a day overlap on it,
+#'     and with hours, two that meet at one instant overlap at that instant
+#'     (so a polygon at a single time can meet another).
 #'     A polygon without a time overlaps any time and passes on the other's
 #'     interval. One set can't have dates while the other has hours. The
 #'     result's feature IDs are numbers; columns `feature_id_x` and
@@ -185,10 +189,10 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' shared, `NA` elsewhere, in layers named `presence_depth=<value>`. The cell
 #' values of a voxel input are not carried over. To keep them, use [mask()].
 #'
-#' @param x,y The two objects. At least one must be a [SpatEnvelope-class] or
-#'   a [SpatVoxel-class]. The other can be either of those, a single-layer
-#'   `SpatRaster` footprint, 2D polygons (`SpatVector`, `sf`, `sfc`), or
-#'   [SpatVector3D-class] polygons. Rasters
+#' @param x,y The two objects: two of [SpatEnvelope-class],
+#'   [SpatVoxel-class] and [SpatVector3D-class] polygons, in any pairing, or
+#'   an envelope or voxel with a 2D object (a single-layer `SpatRaster`
+#'   footprint or 2D polygons: `SpatVector`, `sf`, `sfc`). Rasters
 #'   must share one grid (CRS, extent, resolution). netCDF files aren't
 #'   accepted; load them with terra and wrap them with [as_voxel()] first.
 #' @param ... Arguments for the voxel methods. They are an error when both

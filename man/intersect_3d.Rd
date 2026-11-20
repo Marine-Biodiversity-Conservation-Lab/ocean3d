@@ -58,10 +58,10 @@ intersect_3d(x, y, ...)
 \S4method{intersect_3d}{SpatVector3D,SpatVector3D}(x, y, ...)
 }
 \arguments{
-\item{x, y}{The two objects. At least one must be a \link[=SpatEnvelope-class]{SpatEnvelope} or
-a \link[=SpatVoxel-class]{SpatVoxel}. The other can be either of those, a single-layer
-\code{SpatRaster} footprint, 2D polygons (\code{SpatVector}, \code{sf}, \code{sfc}), or
-\link[=SpatVector3D-class]{SpatVector3D} polygons. Rasters
+\item{x, y}{The two objects: two of \link[=SpatEnvelope-class]{SpatEnvelope},
+\link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatVector3D-class]{SpatVector3D} polygons, in any pairing, or
+an envelope or voxel with a 2D object (a single-layer \code{SpatRaster}
+footprint or 2D polygons: \code{SpatVector}, \code{sf}, \code{sfc}). Rasters
 must share one grid (CRS, extent, resolution). netCDF files aren't
 accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
@@ -101,26 +101,30 @@ share no water, so that cell is empty (\code{NA}).}
 is in the result where both voxels occupy it.}
 \item{An envelope and a voxel}{The envelope is first placed on the
 voxel's depth levels with \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. The result is a voxel.}
-\item{A 3D object and a \code{SpatRaster}}{The raster is a footprint. Its
-non-\code{NA} cells are inside; its values are not read. It must have one
-layer and be on the same grid.}
-\item{A 3D object and polygons}{A \code{SpatVector}, \code{sf} or \code{sfc} object. The
-polygons are rasterised onto the 3D object's grid. A cell is inside when
-its centre is. Polygons in another CRS are projected first.}
-\item{A 3D object and \link[=SpatVector3D-class]{SpatVector3D} polygons}{The polygons are
-first put on the 3D object's grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then
-compared as an envelope. Each cell a polygon touches gets its depth
-range; where polygons overlap, a cell gets the shallowest top and the
-deepest bottom, so a depth gap between two polygons over one cell is
-filled. The polygons' time intervals are dropped, with a message.
-Polygons that miss the grid give an empty result. Points and lines
-aren't supported yet; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
+\item{An envelope or voxel and a \code{SpatRaster}}{The raster is a
+footprint. Its non-\code{NA} cells are inside; its values are not read. It
+must have one layer and be on the same grid.}
+\item{An envelope or voxel and 2D polygons}{A \code{SpatVector}, \code{sf} or
+\code{sfc} object. The polygons are rasterised onto the 3D object's grid. A
+cell is inside when a polygon touches it. Polygons in another CRS are
+projected first.}
+\item{An envelope or voxel and \link[=SpatVector3D-class]{SpatVector3D} polygons}{The
+polygons are first put on the envelope's or voxel's grid with
+\code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then compared as an envelope. Each cell a
+polygon touches gets its depth range; where polygons overlap, a cell
+gets the shallowest top and the deepest bottom, so a depth gap between
+two polygons over one cell is filled. The polygons' time intervals are
+dropped, with a message. Polygons that miss the grid, or a set with no
+polygons, give an empty result. Points and lines aren't supported yet;
+\code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
 \item{Two sets of \link[=SpatVector3D-class]{SpatVector3D} polygons}{Each pair of polygons,
 one from \code{x} and one from \code{y}, whose outlines, depth ranges and times
 overlap gives one polygon: the shared outline (as
 \code{\link[sf:st_intersection]{sf::st_intersection()}}), the shared depth range, and the shared time
 interval. Depth ranges that only touch share no water. Time intervals
-include both ends, so with dates, two that share a day overlap on it.
+include both ends, so with dates, two that share a day overlap on it,
+and with hours, two that meet at one instant overlap at that instant
+(so a polygon at a single time can meet another).
 A polygon without a time overlaps any time and passes on the other's
 interval. One set can't have dates while the other has hours. The
 result's feature IDs are numbers; columns \code{feature_id_x} and

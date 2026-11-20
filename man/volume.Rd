@@ -6,7 +6,7 @@
 \alias{volume,SpatVoxel-method}
 \alias{volume,SpatVector3D-method}
 \alias{volume,SpatRaster-method}
-\title{3D volume of a rasterized domain}
+\title{3D volume of a domain}
 \usage{
 volume(x, per_cell = FALSE, ...)
 
