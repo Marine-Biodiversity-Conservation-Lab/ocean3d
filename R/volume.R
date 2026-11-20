@@ -1,6 +1,6 @@
 # R/volume.R
 #
-# Volume for the package's two 3D representations. The generic is declared in
+# Volume for the package's 3D representations. The generic is declared in
 # R/AllGenerics.R; this file holds the arithmetic.
 #
 # SpatEnvelope and SpatVoxel both describe a 3D domain over a 2D grid, but they
@@ -65,6 +65,35 @@ setMethod(
     .volume_result(vol_rast, per_cell)
   }
 )
+
+# SpatVector3D polygons are measured from their outlines, not a grid
+# (SPEC.md, "Summarise: volume calculations"): geodesic area times the depth
+# range, with terra::expanse(). It agrees with terra::cellSize() for a polygon
+# drawn along a cell's edges to within about 0.02% at low latitudes: the
+# polygon's edges are geodesics, while cells are bounded by parallels.
+# Points and lines have no volume.
+#' @rdname volume
+#' @export
+setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {
+  .no_extra_args(...)
+  if (x@type != "polygons") {
+    rlang::abort(glue::glue(
+      "These are {x@type}, which have no volume. Volume is defined for ",
+      "shapes with a depth range: voxels, envelopes and polygons. ",
+      "buffer_3d() turns {x@type} into polygons."
+    ), class = "ocean3d_error_volume_type", call = NULL)
+  }
+  if (per_cell) {
+    rlang::abort(
+      "Polygons have no cells, so `per_cell = TRUE` doesn't apply.",
+      class = "ocean3d_error_volume_per_cell", call = NULL
+    )
+  }
+  f <- x@features
+  if (nrow(f) == 0L) return(0)
+  area_km2 <- terra::expanse(terra::vect(f$geometry), unit = "km")
+  sum(area_km2 * (f$depth_max - f$depth_min) / 1000)
+})
 
 # Rejected here rather than by S4's default "unable to find an inherited
 # method", which says nothing about how to build the right object.

@@ -8,6 +8,7 @@
 \alias{mask,SpatEnvelope,SpatVoxel-method}
 \alias{mask,SpatRaster,SpatEnvelope-method}
 \alias{mask,SpatRaster,SpatVoxel-method}
+\alias{mask,SpatRaster,SpatVector3D-method}
 \title{Keep a raster's values inside a 3D domain}
 \usage{
 \S4method{mask}{SpatVoxel,SpatEnvelope}(x, mask, bounds = c("midpoint", "top"), ...)
@@ -21,6 +22,8 @@
 \S4method{mask}{SpatRaster,SpatEnvelope}(x, mask, ...)
 
 \S4method{mask}{SpatRaster,SpatVoxel}(x, mask, ...)
+
+\S4method{mask}{SpatRaster,SpatVector3D}(x, mask, ...)
 }
 \arguments{
 \item{x}{The raster whose values are kept: a \link[=SpatVoxel-class]{SpatVoxel}, a
@@ -29,7 +32,8 @@ accepted: load it as a \code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{wo
 it with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{mask}{The 3D domain to keep \code{x} inside: a \link[=SpatEnvelope-class]{SpatEnvelope} or a
-\link[=SpatVoxel-class]{SpatVoxel} on the same grid as \code{x}.}
+\link[=SpatVoxel-class]{SpatVoxel} on the same grid as \code{x}, or \link[=SpatVector3D-class]{SpatVector3D}
+polygons, which are put on that grid.}
 
 \item{bounds}{Only when one side is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: \code{"midpoint"}
@@ -68,6 +72,12 @@ interval is kept whole. To narrow the interval instead, use
 \item{plain \code{SpatRaster} masked by an envelope or a voxel}{A cell is kept
 where the mask domain is present at any depth. Without this method
 terra would read the mask's first layer only.}
+\item{anything masked by \link[=SpatVector3D-class]{SpatVector3D} polygons}{The polygons
+are put on the grid of \code{x} with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then used as
+an envelope mask as above. A voxel keeps its values in the cells and
+levels the polygons reach. Where polygons overlap, a cell gets the
+shallowest top and the deepest bottom, so a depth gap between them is
+kept too. The time intervals are dropped, with a message.}
 }
 
 A voxel or envelope masked by a plain \code{SpatRaster} or by polygons is

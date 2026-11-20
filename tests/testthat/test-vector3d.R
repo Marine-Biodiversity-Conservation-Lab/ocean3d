@@ -334,12 +334,6 @@ test_that("depth_min and depth_max are only for polygons", {
                "are for polygons", class = "ocean3d_error_vector3d")
 })
 
-test_that("volume() on polygons says it isn't supported yet", {
-  p <- as_vector3d(areas(), depth_min = 0, depth_max = 50)
-  expect_error(volume(p), "doesn't support SpatVector3D polygons yet",
-               class = "ocean3d_error_volume_type")
-})
-
 # Buffers -------------------------------------------------------------------
 
 area_km2 <- function(polygons) {
@@ -560,8 +554,8 @@ test_that("vector3d_to_envelope() rejects inputs it can't convert", {
   empty <- "ocean3d_error_envelope_empty"
   pts <- as_vector3d(data.frame(lon = 151, lat = -20.5, depth = 5))
   expect_error(vector3d_to_envelope(pts, envelope_grid()),
-               "These are points; buffer_3d() turns them into polygons",
-               class = err, fixed = TRUE)
+               "these are points. buffer_3d() turns points into polygons",
+               class = "ocean3d_error_vector3d_type", fixed = TRUE)
   expect_error(vector3d_to_envelope(areas(), envelope_grid()),
                "must be SpatVector3D polygons", class = err)
   p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)

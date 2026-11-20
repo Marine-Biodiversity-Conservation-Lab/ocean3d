@@ -27,6 +27,20 @@ make_polygon <- function() {
   )
   sf::st_sf(geometry = poly)
 }
+# Helpers for SpatVector3D polygon queries (#115): make_polygon() covers the
+# middle 3 x 3 cells of the 5 x 5 make_template() grid, here from 0 to 100 m;
+# the envelope covers every cell from 50 to 200 m; inside() marks the cells
+# the polygon covers.
+polygons_0_100 <- function() {
+  as_vector3d(make_polygon(), depth_min = 0, depth_max = 100)
+}
+envelope_50_200 <- function() {
+  as_envelope(make_template(1), depth_min = 50, depth_max = 200)
+}
+inside <- function() {
+  !is.na(terra::values(terra::mask(make_template(1), make_polygon()))[, 1])
+}
+
 # Helpers for intersect and volume tests. The LAEA projection makes every cell
 # 1 km x 1 km, so volumes are hand-computable. With `vals`, make_grid() is a
 # single-layer footprint (NA = outside).
