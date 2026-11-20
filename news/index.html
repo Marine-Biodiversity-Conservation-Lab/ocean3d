@@ -91,6 +91,11 @@
 <li>Curvilinear grids, such as native NEMO output with two-dimensional <code>nav_lon</code> / <code>nav_lat</code> coordinates, now stop with an error when those coordinates are identified only by their units (<code>degrees_east</code>, <code>degrees_north</code>). They used to be read with the grid indices as longitude and latitude. Regrid such data to a regular longitude/latitude grid first (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/93" class="external-link">#93</a>).</li>
 </ul></div>
 <div class="section level3">
+<h3 id="minor-improvements-development-version">Minor improvements<a class="anchor" aria-label="anchor" href="#minor-improvements-development-version"></a></h3>
+<ul><li><p>Functions that take a <code>SpatEnvelope</code> check it faster when it is held in memory. Envelopes read from a file, or with more than a million cells, are checked as before. On 9-cell test grids, <code><a href="../reference/as_envelope.html">as_envelope()</a></code> is about 5 times faster, <code><a href="../reference/intersect_3d.html">intersect_3d()</a></code> about 2 times, <code><a href="../reference/volume.html">volume()</a></code> about 1.6 times and <code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> about 1.2 times (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/154" class="external-link">#154</a>).</p></li>
+<li><p><code><a href="../reference/as_envelope.html">as_envelope()</a></code>’s depth errors now come from the <code>SpatEnvelope</code> validity check, so they start with <code>invalid class "SpatEnvelope" object:</code> and use its wording: “depth_max must be at least depth_min in every cell”, and for negative depths “depths are positive metres increasing downward, but <code>depth_min</code> has negative values; if these are elevations, flip their sign first” (<a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/154" class="external-link">#154</a>).</p></li>
+</ul></div>
+<div class="section level3">
 <h3 id="dependencies-development-version">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies-development-version"></a></h3>
 <ul><li>CFtime (&gt;= 1.7.3) is now imported, for decoding CF time units.</li>
 </ul></div>
