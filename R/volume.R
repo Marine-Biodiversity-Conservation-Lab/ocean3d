@@ -83,11 +83,10 @@ setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {
     ), class = "ocean3d_error_volume_type", call = NULL)
   }
   if (per_cell) {
-    rlang::abort(paste0(
-      "Polygons have no cells, so `per_cell = TRUE` doesn't apply. Put them ",
-      "on a grid first: volume(vector3d_to_envelope(x, template), ",
-      "per_cell = TRUE)."
-    ), class = "ocean3d_error_volume_per_cell", call = NULL)
+    rlang::abort(
+      "Polygons have no cells, so `per_cell = TRUE` doesn't apply.",
+      class = "ocean3d_error_volume_per_cell", call = NULL
+    )
   }
   f <- x@features
   if (nrow(f) == 0L) return(0)
