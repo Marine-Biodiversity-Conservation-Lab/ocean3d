@@ -777,8 +777,8 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 #' satisfies `fun` at 0 m and 200 m but not at 100 m still yields the envelope
 #' `[0, 200]`. Use [SpatVoxel-class] directly where interior gaps matter.
 #'
-#' @param v A [SpatVoxel-class]. A netCDF file isn't accepted: load it as a
-#'   `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with [as_voxel()].
+#' @param v A [SpatVoxel-class]. A netCDF file isn't accepted: describe it
+#'   with [as_proxy()] and read one time step with [as_voxel()].
 #' @param fun Function taking a vector of cell values and returning a logical
 #'   vector of the same length. `NA` results are treated as `FALSE`. Defaults to
 #'   `\(x) !is.na(x)`.
@@ -899,8 +899,8 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
 #'
 #' Running `occupied()` on a presence voxel returns it unchanged.
 #'
-#' @param x A [SpatVoxel-class]. A netCDF file isn't accepted: load it as a
-#'   `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with [as_voxel()].
+#' @param x A [SpatVoxel-class]. A netCDF file isn't accepted: describe it
+#'   with [as_proxy()] and read one time step with [as_voxel()].
 #' @param fun Function taking a vector of cell values and returning a logical
 #'   vector of the same length. `NA` counts as `FALSE`. Defaults to
 #'   `function(v) !is.na(v)`, which treats any recorded value as occupied.
