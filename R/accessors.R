@@ -76,7 +76,9 @@ depths <- function(x) {
 #' Read the slab of water each layer of a [SpatVoxel-class] stands for, when
 #' the voxel carries its own depth edges. Set them with the `depth_bounds`
 #' argument of [as_voxel()] or [envelope_to_voxel()], for example from a
-#' netCDF file's depth bounds.
+#' netCDF file's depth bounds. A voxel read from a [SpatProxy-class] carries
+#' the proxy's edges, which are halfway between levels when the file has no
+#' depth bounds (see [as_voxel()]).
 #'
 #' [volume()], [envelope_to_voxel()],
 #' [voxel_to_envelope()], [intersect_3d()], [intersects_3d()] and [mask()]

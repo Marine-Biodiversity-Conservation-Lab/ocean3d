@@ -20,7 +20,9 @@ layer. The data frame can be passed back as \code{depth_bounds} to
 Read the slab of water each layer of a \link[=SpatVoxel-class]{SpatVoxel} stands for, when
 the voxel carries its own depth edges. Set them with the \code{depth_bounds}
 argument of \code{\link[=as_voxel]{as_voxel()}} or \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}, for example from a
-netCDF file's depth bounds.
+netCDF file's depth bounds. A voxel read from a \link[=SpatProxy-class]{SpatProxy} carries
+the proxy's edges, which are halfway between levels when the file has no
+depth bounds (see \code{\link[=as_voxel]{as_voxel()}}).
 }
 \details{
 \code{\link[=volume]{volume()}}, \code{\link[=envelope_to_voxel]{envelope_to_voxel()}},

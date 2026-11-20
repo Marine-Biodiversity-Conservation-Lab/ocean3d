@@ -125,6 +125,16 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' depth is stored in [terra::depth()]. Given a [SpatProxy-class],
 #' `as_voxel()` reads one time step of it into memory instead.
 #'
+#' A voxel read from a proxy carries the proxy's depth edges (see
+#' [depth_bounds()]): the file's depth bounds, or, for a file without them
+#' (such as Copernicus Marine), edges halfway between levels, from the
+#' surface to half a gap below the deepest level. Because the voxel has
+#' edges, the `bounds` argument of [volume()] and the other 3D functions
+#' doesn't apply to it, and each layer stands for the same slab of water
+#' whichever layers are selected. To use other edges, pass them with
+#' `as_voxel(v, depth_bounds = ...)`. A single level without bounds has no
+#' edges, so `bounds` applies.
+#'
 #' The depths come from `depths` when it is given, and otherwise from the
 #' raster's own [terra::depth()], which terra also sets when it reads a netCDF
 #' file. A raster with neither is an error: layer names are labels, never

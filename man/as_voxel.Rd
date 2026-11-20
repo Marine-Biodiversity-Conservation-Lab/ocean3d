@@ -51,6 +51,16 @@ depth is stored in \code{\link[terra:depth]{terra::depth()}}. Given a \link[=Spa
 \code{as_voxel()} reads one time step of it into memory instead.
 }
 \details{
+A voxel read from a proxy carries the proxy's depth edges (see
+\code{\link[=depth_bounds]{depth_bounds()}}): the file's depth bounds, or, for a file without them
+(such as Copernicus Marine), edges halfway between levels, from the
+surface to half a gap below the deepest level. Because the voxel has
+edges, the \code{bounds} argument of \code{\link[=volume]{volume()}} and the other 3D functions
+doesn't apply to it, and each layer stands for the same slab of water
+whichever layers are selected. To use other edges, pass them with
+\code{as_voxel(v, depth_bounds = ...)}. A single level without bounds has no
+edges, so \code{bounds} applies.
+
 The depths come from \code{depths} when it is given, and otherwise from the
 raster's own \code{\link[terra:depth]{terra::depth()}}, which terra also sets when it reads a netCDF
 file. A raster with neither is an error: layer names are labels, never

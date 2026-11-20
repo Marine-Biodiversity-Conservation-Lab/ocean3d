@@ -53,8 +53,10 @@ itself.
 \code{bounds} variable, or halfway between neighbouring centres.
 \item \strong{Depth:} converted to metres positive down from the coordinate's
 \code{units} and \code{positive} attributes. Edges come from the CF bounds, or
-halfway between centres, cut at the surface. A depth axis stored deep to
-shallow is kept in that order and recorded as such.
+halfway between centres, cut at the surface and running half a gap
+below the deepest centre. A voxel read with \code{\link[=as_voxel]{as_voxel()}} keeps these
+edges. A depth axis stored deep to shallow is kept in that order and
+recorded as such.
 \item \strong{Time:} decoded with CFtime. Bounds are attached when the file has
 them; otherwise the axis has none (they aren't inferred). The time axis
 must be strictly increasing; a backwards or out-of-order axis is an
