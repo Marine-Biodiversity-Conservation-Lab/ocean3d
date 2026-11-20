@@ -325,6 +325,8 @@ setMethod("show", "SpatVector3D", function(object) {
   cat("class      : SpatVector3D\n")
   cat("geometry   :", object@type, "\n")
   cat("features   :", length(object), "\n")
+  # An empty result, such as intersect_3d() of polygons that share nothing.
+  if (length(object) == 0L) return(invisible(object))
   if (object@type == "polygons") {
     f <- object@features
     depths <- c(min(f$depth_min), max(f$depth_max))

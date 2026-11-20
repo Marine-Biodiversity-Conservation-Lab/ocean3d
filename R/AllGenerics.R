@@ -136,10 +136,10 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' "do they share anything?", use [intersects_3d()]. To keep one object's
 #' values where the other is present, use [mask()].
 #'
-#' At least one of `x` and `y` must be a 3D object: a [SpatEnvelope-class] or
-#' a [SpatVoxel-class]. The other can be a 3D object too, [SpatVector3D-class]
-#' polygons, or a 2D object. A 2D object restricts the result horizontally and
-#' leaves its depths alone.
+#' At least one of `x` and `y` must be a 3D object: a [SpatEnvelope-class], a
+#' [SpatVoxel-class] or [SpatVector3D-class] polygons. The other can be a 3D
+#' object too, or, with an envelope or voxel, a 2D object. A 2D object
+#' restricts the result horizontally and leaves its depths alone.
 #'
 #' \describe{
 #'   \item{Two envelopes}{Cell by cell, the result runs from the deeper
@@ -163,6 +163,19 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'     filled. The polygons' time intervals are dropped, with a message.
 #'     Polygons that miss the grid give an empty result. Points and lines
 #'     aren't supported yet; [buffer_3d()] turns them into polygons.}
+#'   \item{Two sets of [SpatVector3D-class] polygons}{Each pair of polygons,
+#'     one from `x` and one from `y`, whose outlines, depth ranges and times
+#'     overlap gives one polygon: the shared outline (as
+#'     [sf::st_intersection()]), the shared depth range, and the shared time
+#'     interval. Depth ranges that only touch share no water. Time intervals
+#'     include both ends, so with dates, two that share a day overlap on it.
+#'     A polygon without a time overlaps any time and passes on the other's
+#'     interval. One set can't have dates while the other has hours. The
+#'     result's feature IDs are numbers; columns `feature_id_x` and
+#'     `feature_id_y` say which polygons each came from, and the inputs'
+#'     other columns are dropped. Pairs that share nothing give no polygon,
+#'     so the result can have none. To measure the overlap, use
+#'     `volume(intersect_3d(x, y))`.}
 #' }
 #'
 #' The order of `x` and `y` does not matter.
@@ -175,7 +188,7 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' @param x,y The two objects. At least one must be a [SpatEnvelope-class] or
 #'   a [SpatVoxel-class]. The other can be either of those, a single-layer
 #'   `SpatRaster` footprint, 2D polygons (`SpatVector`, `sf`, `sfc`), or
-#'   [SpatVector3D-class] polygons with a 3D object. Rasters
+#'   [SpatVector3D-class] polygons. Rasters
 #'   must share one grid (CRS, extent, resolution). netCDF files aren't
 #'   accepted; load them with terra and wrap them with [as_voxel()] first.
 #' @param ... Arguments for the voxel methods. They are an error when both
@@ -186,7 +199,8 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'   carries its own depth edges (see [SpatVoxel-class]). To measure the
 #'   result, pass the same `bounds` to [volume()].
 #'
-#' @returns A [SpatEnvelope-class] when both inputs are envelopes, or when one
+#' @returns [SpatVector3D-class] polygons when both inputs are polygons. A
+#'   [SpatEnvelope-class] when both inputs are envelopes, or when one
 #'   is an envelope and the other is 2D or [SpatVector3D-class] polygons.
 #'   Otherwise a [SpatVoxel-class] of
 #'   presence. Either is on the grid of the 3D input.
@@ -231,6 +245,24 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'   depth_min = 80, depth_max = 300
 #' )
 #' terra::values(intersect_3d(a, deep))
+#'
+#' # Two sets of SpatVector3D polygons give the polygons they share.
+#' square <- function(x0) {
+#'   sf::st_polygon(list(rbind(c(x0, 0), c(x0 + 2, 0), c(x0 + 2, 2),
+#'                             c(x0, 2), c(x0, 0))))
+#' }
+#' mpa <- as_vector3d(
+#'   sf::st_sf(geometry = sf::st_sfc(square(150), crs = 4326)),
+#'   depth_min = 0, depth_max = 200
+#' )
+#' habitat <- as_vector3d(
+#'   sf::st_sf(geometry = sf::st_sfc(square(151), crs = 4326)),
+#'   depth_min = 100, depth_max = 500
+#' )
+#' shared <- intersect_3d(mpa, habitat)
+#' as.data.frame(shared)[c("feature_id_x", "feature_id_y", "depth_min",
+#'                         "depth_max")]
+#' volume(shared)
 #' @export
 setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 

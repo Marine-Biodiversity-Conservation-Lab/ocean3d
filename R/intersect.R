@@ -441,6 +441,19 @@ setMethod(
 
 # ---- SpatVector3D polygons --------------------------------------------------
 
+# Internal: the one producer of `ocean3d_error_vector3d_type`. The queries
+# take SpatVector3D polygons only, for now; points and lines come later
+# (#115).
+.check_polygons <- function(x) {
+  if (x@type != "polygons") {
+    rlang::abort(glue::glue(
+      "The 3D queries don't support SpatVector3D {x@type} yet. ",
+      "buffer_3d() turns {x@type} into polygons."
+    ), class = "ocean3d_error_vector3d_type", call = NULL)
+  }
+  invisible(x)
+}
+
 # Internal: SpatVector3D polygons on the grid of `template` as an envelope,
 # so the queries above compare them with an envelope or voxel cell by cell,
 # as SPEC.md ("Intersect: spatial query") plans. Polygons that miss the grid
@@ -449,12 +462,7 @@ setMethod(
 # is for two envelopes. Callers assign its result before passing it on: an
 # error raised while S4 evaluates an argument for dispatch loses its class.
 .polygons_on_grid <- function(x, template) {
-  if (x@type != "polygons") {
-    rlang::abort(glue::glue(
-      "Comparing SpatVector3D {x@type} with an envelope or voxel isn't ",
-      "supported yet. buffer_3d() turns {x@type} into polygons."
-    ), class = "ocean3d_error_vector3d_type", call = NULL)
-  }
+  .check_polygons(x)
   tryCatch(
     vector3d_to_envelope(x, template),
     ocean3d_error_envelope_empty = function(e) {
@@ -518,6 +526,78 @@ setMethod("intersects_3d", c("SpatEnvelope", "SpatVector3D"),
 #' @export
 setMethod("intersects_3d", c("SpatVoxel", "SpatVector3D"),
           function(x, y, ...) intersects_3d(y, x, ...))
+
+# Two sets of polygons: every pair whose outlines, depth ranges and times
+# overlap gives one polygon, as sf::st_intersection() does in 2D.
+#' @rdname intersect_3d
+#' @export
+setMethod(
+  "intersect_3d", c("SpatVector3D", "SpatVector3D"),
+  function(x, y, ...) {
+    .no_extra_args(...)
+    .check_polygons(x)
+    .check_polygons(y)
+    resolution <- unique(stats::na.omit(c(x@time_resolution,
+                                          y@time_resolution)))
+    if (length(resolution) > 1L) {
+      rlang::abort(paste0(
+        "One set of polygons has dates and the other has hours, so their ",
+        "times can't be compared. Rebuild one with as_vector3d() from ",
+        "times of the same kind."
+      ), class = "ocean3d_error_time_resolution_differ", call = NULL)
+    }
+    as_pieces <- function(v, suffix) {
+      f <- v@features
+      out <- sf::st_sf(f[c("feature_id", "depth_min", "depth_max",
+                           "time_start", "time_end")],
+                       geometry = f$geometry)
+      names(out)[1:5] <- paste0(names(out)[1:5], suffix)
+      # Depths and times hold for the whole polygon, which tells sf not to
+      # warn that they might not.
+      sf::st_agr(out) <- "constant"
+      out
+    }
+    pairs <- sf::st_intersection(as_pieces(x, "_x"), as_pieces(y, "_y"))
+
+    depth_min <- pmax(pairs$depth_min_x, pairs$depth_min_y)
+    depth_max <- pmin(pairs$depth_max_x, pairs$depth_max_y)
+    # A polygon without a time is there at any time, so the pair takes the
+    # other polygon's interval. Intervals are closed: with dates, both
+    # include their end day, so two that share a day overlap on it.
+    time_start <- pmax(pairs$time_start_x, pairs$time_start_y, na.rm = TRUE)
+    time_end <- pmin(pairs$time_end_x, pairs$time_end_y, na.rm = TRUE)
+    # Outlines that only share an edge or corner give lines or points,
+    # which have no area; a collection keeps its polygon parts.
+    geometry <- lapply(sf::st_geometry(pairs), function(g) {
+      if (inherits(g, "GEOMETRYCOLLECTION")) {
+        g <- sf::st_union(sf::st_collection_extract(g, "POLYGON"))[[1]]
+      }
+      g
+    })
+    geometry <- sf::st_sfc(geometry, crs = 4326)
+    polygonal <- sf::st_geometry_type(geometry) %in%
+      c("POLYGON", "MULTIPOLYGON") & !sf::st_is_empty(geometry)
+    # Strict `>`, as for envelopes: depth ranges that only touch share no
+    # water.
+    keep <- polygonal & depth_max > depth_min &
+      (is.na(time_start) | time_start <= time_end)
+
+    features <- data.frame(
+      feature_id = as.character(seq_len(sum(keep))),
+      depth_min = depth_min[keep],
+      depth_max = depth_max[keep],
+      time_start = time_start[keep],
+      time_end = time_end[keep],
+      feature_id_x = pairs$feature_id_x[keep],
+      feature_id_y = pairs$feature_id_y[keep],
+      stringsAsFactors = FALSE
+    )
+    features$geometry <- geometry[keep]
+    .new_vector3d("polygons",
+                  if (length(resolution)) resolution else NA_character_,
+                  features = features)
+  }
+)
 
 # One signature serves voxels, envelopes and plain rasters: the polygons go
 # on the grid of `x`, and mask() then dispatches to the envelope methods

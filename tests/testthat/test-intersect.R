@@ -682,9 +682,95 @@ test_that("points and lines aren't compared with a grid yet", {
   for (call in list(function() intersect_3d(points, envelope_50_200()),
                     function() intersects_3d(envelope_50_200(), points),
                     function() mask(envelope_50_200(), points))) {
-    expect_error(call(), "points with an envelope or voxel isn't supported",
+    expect_error(call(), "don't support SpatVector3D points yet",
                  class = "ocean3d_error_vector3d_type")
     expect_error(call(), "buffer_3d() turns points into polygons",
                  class = "ocean3d_error_vector3d_type", fixed = TRUE)
   }
+})
+
+test_that("intersect_3d() of two polygon sets shares outline, depth and time", {
+  square <- function(x0, x1) {
+    sf::st_polygon(list(rbind(c(x0, 0), c(x1, 0), c(x1, 1), c(x0, 1),
+                              c(x0, 0))))
+  }
+  # a1 and a2: 0-100 m, 1 to 15 January.
+  a <- sf::st_sf(id = c("a1", "a2"),
+                 start = as.Date("2020-01-01"), end = as.Date("2020-01-15"),
+                 geometry = sf::st_sfc(square(0, 2), square(5, 6), crs = 4326))
+  a <- as_vector3d(a, id = "id", time = c("start", "end"),
+                   depth_min = 0, depth_max = 100)
+  # b1 overlaps a1 in outline and depth; b2 overlaps a1 in outline but only
+  # touches its depth range; b3 overlaps a2. No times.
+  b <- sf::st_sf(id = c("b1", "b2", "b3"), top = c(50, 100, 0),
+                 geometry = sf::st_sfc(square(1, 3), square(0, 1),
+                                       square(5.5, 7), crs = 4326))
+  b <- as_vector3d(b, id = "id", depth_min = "top", depth_max = 200)
+
+  shared <- intersect_3d(a, b)
+  expect_s4_class(shared, "SpatVector3D")
+  f <- as.data.frame(shared)
+  expect_identical(f$feature_id_x, c("a1", "a2"))
+  expect_identical(f$feature_id_y, c("b1", "b3"))
+  expect_identical(f$depth_min, c(50, 0))
+  expect_identical(f$depth_max, c(100, 100))
+  # b has no times, so the pairs keep a's interval.
+  expect_identical(f$time_start, a@features$time_start)
+  expect_identical(shared@time_resolution, "daily")
+  # a1 and b1 share a 1 x 1 degree square over 50-100 m.
+  one_square <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(square(1, 2),
+                                                            crs = 4326)),
+                            depth_min = 50, depth_max = 100)
+  expect_equal(volume(intersect_3d(a, b)),
+               volume(one_square) + volume(as_vector3d(
+                 sf::st_sf(geometry = sf::st_sfc(square(5.5, 6), crs = 4326)),
+                 depth_min = 0, depth_max = 100
+               )),
+               # s2 puts the new corners where the geodesic edges cross, a
+               # little off the parallels.
+               tolerance = 1e-4)
+})
+
+test_that("intersect_3d() of polygon sets compares time intervals", {
+  on_days <- function(start, end) {
+    p <- sf::st_sf(start = as.Date(start), end = as.Date(end),
+                   geometry = sf::st_geometry(make_polygon()))
+    as_vector3d(p, time = c("start", "end"), depth_min = 0, depth_max = 100)
+  }
+  january <- on_days("2020-01-01", "2020-01-15")
+  cases <- list(
+    list(label = "overlapping days", y = on_days("2020-01-10", "2020-01-20"),
+         n = 1L, start = "2020-01-10", end = "2020-01-15"),
+    # Dates include their end day, so sharing 15 January is an overlap.
+    list(label = "one shared day", y = on_days("2020-01-15", "2020-01-31"),
+         n = 1L, start = "2020-01-15", end = "2020-01-15"),
+    list(label = "next day", y = on_days("2020-01-16", "2020-01-31"),
+         n = 0L)
+  )
+  for (case in cases) {
+    shared <- intersect_3d(january, case$y)
+    expect_identical(length(shared), case$n, label = case$label)
+    if (case$n > 0L) {
+      f <- as.data.frame(shared)
+      expect_identical(format(f$time_start), case$start, label = case$label)
+      expect_identical(format(f$time_end), case$end, label = case$label)
+    }
+  }
+  # Sharing nothing is an empty result, with no volume.
+  expect_identical(volume(intersect_3d(january,
+                                       on_days("2021-01-01", "2021-01-02"))),
+                   0)
+
+  hourly <- sf::st_sf(time = as.POSIXct("2020-01-05 06:00", tz = "UTC"),
+                      geometry = sf::st_geometry(make_polygon()))
+  hourly <- as_vector3d(hourly, time = "time", depth_min = 0, depth_max = 10)
+  expect_error(intersect_3d(january, hourly), "dates and the other has hours",
+               class = "ocean3d_error_time_resolution_differ")
+})
+
+test_that("intersect_3d() of polygon sets rejects points and lines", {
+  points <- as_vector3d(data.frame(lon = 2.5, lat = 2.5, depth = 10))
+  expect_error(intersect_3d(polygons_0_100(), points),
+               "don't support SpatVector3D points yet",
+               class = "ocean3d_error_vector3d_type")
 })

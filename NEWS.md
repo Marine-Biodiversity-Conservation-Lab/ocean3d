@@ -158,6 +158,10 @@ message says how many cells have the limits swapped (or a seafloor above
   polygons are put on the raster's grid with `vector3d_to_envelope()` and
   compared as an envelope, so `mask(voxel, polygons)` keeps the voxel's
   values in the cells and depth levels the polygons reach (#115).
+* `intersect_3d()` of two sets of `SpatVector3D` polygons gives a polygon
+  for each pair whose outlines, depth ranges and time intervals overlap,
+  with columns `feature_id_x` and `feature_id_y` naming the pair. Measure
+  the overlap with `volume(intersect_3d(x, y))` (#115).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`, and read them with the new

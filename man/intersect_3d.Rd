@@ -15,6 +15,7 @@
 \alias{intersect_3d,SpatVector3D,SpatVoxel-method}
 \alias{intersect_3d,SpatEnvelope,SpatVector3D-method}
 \alias{intersect_3d,SpatVoxel,SpatVector3D-method}
+\alias{intersect_3d,SpatVector3D,SpatVector3D-method}
 \alias{intersect-guard}
 \alias{intersect,SpatEnvelope,SpatEnvelope-method}
 \alias{intersect,SpatEnvelope,SpatVoxel-method}
@@ -53,12 +54,14 @@ intersect_3d(x, y, ...)
 \S4method{intersect_3d}{SpatEnvelope,SpatVector3D}(x, y, ...)
 
 \S4method{intersect_3d}{SpatVoxel,SpatVector3D}(x, y, ...)
+
+\S4method{intersect_3d}{SpatVector3D,SpatVector3D}(x, y, ...)
 }
 \arguments{
 \item{x, y}{The two objects. At least one must be a \link[=SpatEnvelope-class]{SpatEnvelope} or
 a \link[=SpatVoxel-class]{SpatVoxel}. The other can be either of those, a single-layer
 \code{SpatRaster} footprint, 2D polygons (\code{SpatVector}, \code{sf}, \code{sfc}), or
-\link[=SpatVector3D-class]{SpatVector3D} polygons with a 3D object. Rasters
+\link[=SpatVector3D-class]{SpatVector3D} polygons. Rasters
 must share one grid (CRS, extent, resolution). netCDF files aren't
 accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
@@ -72,7 +75,8 @@ carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure
 result, pass the same \code{bounds} to \code{\link[=volume]{volume()}}.}
 }
 \value{
-A \link[=SpatEnvelope-class]{SpatEnvelope} when both inputs are envelopes, or when one
+\link[=SpatVector3D-class]{SpatVector3D} polygons when both inputs are polygons. A
+\link[=SpatEnvelope-class]{SpatEnvelope} when both inputs are envelopes, or when one
 is an envelope and the other is 2D or \link[=SpatVector3D-class]{SpatVector3D} polygons.
 Otherwise a \link[=SpatVoxel-class]{SpatVoxel} of
 presence. Either is on the grid of the 3D input.
@@ -84,10 +88,10 @@ presence. Either is on the grid of the 3D input.
 values where the other is present, use \code{\link[terra:mask]{mask()}}.
 }
 \details{
-At least one of \code{x} and \code{y} must be a 3D object: a \link[=SpatEnvelope-class]{SpatEnvelope} or
-a \link[=SpatVoxel-class]{SpatVoxel}. The other can be a 3D object too, \link[=SpatVector3D-class]{SpatVector3D}
-polygons, or a 2D object. A 2D object restricts the result horizontally and
-leaves its depths alone.
+At least one of \code{x} and \code{y} must be a 3D object: a \link[=SpatEnvelope-class]{SpatEnvelope}, a
+\link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons. The other can be a 3D
+object too, or, with an envelope or voxel, a 2D object. A 2D object
+restricts the result horizontally and leaves its depths alone.
 
 \describe{
 \item{Two envelopes}{Cell by cell, the result runs from the deeper
@@ -111,6 +115,19 @@ deepest bottom, so a depth gap between two polygons over one cell is
 filled. The polygons' time intervals are dropped, with a message.
 Polygons that miss the grid give an empty result. Points and lines
 aren't supported yet; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
+\item{Two sets of \link[=SpatVector3D-class]{SpatVector3D} polygons}{Each pair of polygons,
+one from \code{x} and one from \code{y}, whose outlines, depth ranges and times
+overlap gives one polygon: the shared outline (as
+\code{\link[sf:st_intersection]{sf::st_intersection()}}), the shared depth range, and the shared time
+interval. Depth ranges that only touch share no water. Time intervals
+include both ends, so with dates, two that share a day overlap on it.
+A polygon without a time overlaps any time and passes on the other's
+interval. One set can't have dates while the other has hours. The
+result's feature IDs are numbers; columns \code{feature_id_x} and
+\code{feature_id_y} say which polygons each came from, and the inputs'
+other columns are dropped. Pairs that share nothing give no polygon,
+so the result can have none. To measure the overlap, use
+\code{volume(intersect_3d(x, y))}.}
 }
 
 The order of \code{x} and \code{y} does not matter.
@@ -162,6 +179,24 @@ deep <- as_vector3d(
   depth_min = 80, depth_max = 300
 )
 terra::values(intersect_3d(a, deep))
+
+# Two sets of SpatVector3D polygons give the polygons they share.
+square <- function(x0) {
+  sf::st_polygon(list(rbind(c(x0, 0), c(x0 + 2, 0), c(x0 + 2, 2),
+                            c(x0, 2), c(x0, 0))))
+}
+mpa <- as_vector3d(
+  sf::st_sf(geometry = sf::st_sfc(square(150), crs = 4326)),
+  depth_min = 0, depth_max = 200
+)
+habitat <- as_vector3d(
+  sf::st_sf(geometry = sf::st_sfc(square(151), crs = 4326)),
+  depth_min = 100, depth_max = 500
+)
+shared <- intersect_3d(mpa, habitat)
+as.data.frame(shared)[c("feature_id_x", "feature_id_y", "depth_min",
+                        "depth_max")]
+volume(shared)
 }
 \seealso{
 \code{\link[=intersects_3d]{intersects_3d()}} for the yes/no form; \code{\link[terra:mask]{mask()}} to keep a voxel's
