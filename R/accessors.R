@@ -59,7 +59,7 @@ depths <- function(x) {
 #' argument of [as_voxel()] or [envelope_to_voxel()], for example from a
 #' netCDF file's depth bounds.
 #'
-#' [volume()], [calc_volume_overlap()], [envelope_to_voxel()],
+#' [volume()], [envelope_to_voxel()],
 #' [voxel_to_envelope()], [intersect_3d()], [intersects_3d()] and [mask()]
 #' use these edges before their `bounds` argument. A voxel without edges, or
 #' with edges for only some of its layers (for example after `c()` with a

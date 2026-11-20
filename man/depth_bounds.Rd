@@ -23,7 +23,7 @@ argument of \code{\link[=as_voxel]{as_voxel()}} or \code{\link[=envelope_to_voxe
 netCDF file's depth bounds.
 }
 \details{
-\code{\link[=volume]{volume()}}, \code{\link[=calc_volume_overlap]{calc_volume_overlap()}}, \code{\link[=envelope_to_voxel]{envelope_to_voxel()}},
+\code{\link[=volume]{volume()}}, \code{\link[=envelope_to_voxel]{envelope_to_voxel()}},
 \code{\link[=voxel_to_envelope]{voxel_to_envelope()}}, \code{\link[=intersect_3d]{intersect_3d()}}, \code{\link[=intersects_3d]{intersects_3d()}} and \code{\link[terra:mask]{mask()}}
 use these edges before their \code{bounds} argument. A voxel without edges, or
 with edges for only some of its layers (for example after \code{c()} with a

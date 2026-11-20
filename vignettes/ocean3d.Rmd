@@ -1246,12 +1246,12 @@ extent.
 
 `volume()` calculates the volume
 represented by a `SpatEnvelope` or
-`SpatVoxel`.
+`SpatVoxel`, as a total or, with
+`per_cell = TRUE`, cell by cell.
 
-Similarly, `calc_volume_overlap()`
-calculates the spatially explicit
-volumes of two distributions and
-their intersection.
+To measure the volume two
+distributions share, use
+`volume(intersect_3d(a, b))`.
 
 These tools can support research
 questions involving habitat availability,
@@ -1292,8 +1292,8 @@ potential distribution.
 
 **[3D Volume Overlap Between Species and Fisheries](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.html)**
 
-Discover how `calc_volume_overlap()`
-can be applied to species distributions
+Discover how `intersect_3d()` and
+`volume()` can be applied to species distributions
 and fishing footprints to quantify
 their three-dimensional overlap.
 

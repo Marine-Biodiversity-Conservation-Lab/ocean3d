@@ -35,7 +35,7 @@ An analysis in `ocean3d` has three steps, and each analysis function belongs to 
 |---|---|---|---|
 | Build | What is the 3D shape or grid? | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `envelope_to_voxel()`, `voxel_to_envelope()`, `occupied()`, `create_study_raster()`, `as_vector3d()`, `buffer_3d()`, `vector3d_to_envelope()`, data loaders (`woa_load_nc()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()`) | track sampling |
 | Intersect | Where do they meet? | `intersect_3d()`, `intersects_3d()`, `mask()` | the same functions for `SpatVector3D`; a coverage function that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
-| Summarise | How much, and what values? | `volume()`, `calc_volume_overlap()` | `summarise_3d()` for statistics on intersect results |
+| Summarise | How much, and what values? | `volume()` (total or per cell) | `summarise_3d()` for statistics on intersect results |
 
 The planned functions are added alongside the existing ones: every function in "Exists now" stays, and the existing intersect functions gain methods for `SpatVector3D`. Two existing functions change inside without changing what they are for: `woa_load_nc()` reads with ncdf4 instead of terra, and voxels store depth in `terra::depth()` rather than in layer names (see [Direction](#direction-a-hybrid)).
 
@@ -133,7 +133,7 @@ This needs only two rasters (min and max) rather than one per standard depth. Th
 
 | | netCDF model | `SpatVoxel` model |
 |---|---|---|
-| Functions | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_buffer()`, `extract_to_track()` | `extract_to_area()`, `volume()`, `calc_volume_overlap()`, `intersect_3d()`, `intersects_3d()`, `mask()`, voxel profiles, `as_voxel()`, `as_envelope()`, `woa_load_nc()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()` |
+| Functions | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_buffer()`, `extract_to_track()` | `extract_to_area()`, `volume()`, `intersect_3d()`, `intersects_3d()`, `mask()`, voxel profiles, `as_voxel()`, `as_envelope()`, `woa_load_nc()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()` |
 | Input | netCDF paths, connections or file tables | `SpatVoxel` / `SpatEnvelope`, S4 classes extending `terra::SpatRaster` |
 | Reads with | ncdf4, only the cells each observation needs | terra |
 | Depth | the netCDF depth coordinate: units converted to metres, `positive` direction, bounds | layer names (`{variable}_depth={value}`), one set of depths for the whole grid |
@@ -166,7 +166,7 @@ None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on 
   - **Not a `stars_proxy`:** the layout borrows stars' table of dimensions (values or offset and step, edges, reference system), but stars' proxy operations read far more than they needed, lost metadata when sliced, and couldn't hand real Copernicus data to terra, and stars has no place for the fields above.
 - **Reads:** ncdf4 reads every netCDF file with depth or time, including the slices that become voxels, and reads exactly the index windows it is given (see Block reads). terra's own netCDF reading (GDAL's driver) decodes some CF cases wrongly without warning, so it isn't used for these files.
 - **Remote Zarr:** an optional source read with `stars::read_mdim()` (Suggests); ncdf4 couldn't open the Copernicus Zarr store with the netCDF-C library used in the trial (Zarr needs a build with NCZarr and S3 support). The package corrects what `read_mdim()` returns: coordinates shifted by half a cell, time as `Date` (or not decoded without a `calendar` attribute), and Copernicus' `elevation` axis (`positive = "up"`) turned into depth.
-- **terra:** works only on 2D grids already in memory: cell areas, masks, crop, rasterising polygons and sums, so `volume()`, `calc_volume_overlap()`, `intersect_3d()`, `mask()` and `vect_to_envelope()` keep their terra code. It still reads files that have no depth or time, such as GEBCO bathymetry and GFW effort.
+- **terra:** works only on 2D grids already in memory: cell areas, masks, crop, rasterising polygons and sums, so `volume()`, `intersect_3d()`, `mask()` and `vect_to_envelope()` keep their terra code. It still reads files that have no depth or time, such as GEBCO bathymetry and GFW effort.
 - **ncdfCF:** not a dependency for now: its API changed in 4 of its last 8 releases. Its results are a reference for the reader's tests. Revisit at its 1.0 release, or if native model grids come into scope.
 - **Grids in scope:** regular lon/lat grids with fixed depth levels, as Copernicus Marine, WOA and OISST distribute them. Native model grids (NEMO-style curvilinear lon/lat, terrain-following sigma or s-coordinate depths as in ROMS) are out of scope for now; such output is regridded before use, and the package rejects it with a clear error (#93). Decided by Jay Matsushiba on 2 November 2026 (#112). If native output becomes an input, revisit ncdfCF, which interpolates curvilinear grids and computes some ocean sigma depths.
 - **Time decoding:** [CFtime](https://cran.r-project.org/package=CFtime) replaces the package's own CF time decoder (#111). It decodes CF time units, handles the calendars the CF conventions define (per its documentation; the trial tested `standard`, `proleptic_gregorian`, `noleap` and `360_day`), and matches dates to a time axis quickly. The time axis of the core object is a CFtime object.
@@ -220,6 +220,7 @@ Compared with the raster classes:
 
 Rules:
 
+- **Absent is `NA`:** in every raster that holds or measures an object (an envelope, a voxel, `intersect_3d()`, `mask()`, `volume(per_cell = TRUE)`), a cell the object doesn't reach is `NA`, never `0`. `0` is a measurement (e.g. a zero-thickness interval) and `FALSE` an answer to a per-cell question (`intersects_3d()`). A map with `0` where two inputs are present but share nothing is built from the inputs' presence, not returned by an intersect or summarise step.
 - **Depth by type:** points and lines have a depth at each vertex; polygons have a top and a bottom. A depth range (e.g. a buffer's depth window) makes it a polygon.
 - **Buffering** points or lines gives polygons, as `sf::st_buffer()` does in 2D, with a depth window and time window added.
 - **Polygon scope:** one depth interval per horizontal position (each vertical line enters the shape once and leaves once). This covers extruded shapes (cylinders, slabs, an MPA × a depth band), spheres, ellipsoids, cones, and shapes that follow the seafloor or mixed layer. Full 3D volumes (overhangs, several depth bands in one column) are out of scope.
@@ -272,7 +273,7 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 
 - One set of statistic names for every shape type: mean, sd, min, max, median, and `most_similar` with a target column. One `weighting` argument: `"weighted"` uses the coverage weights, `"equal"` ignores them.
 - `by` sets the grouping: per feature (one buffer), or across features (all samples along a track, weighted by distance or duration). This replaces the separate per-buffer and per-track summaries in the removed `extract_to_buffered_track()` (#105).
-- `volume()` and `calc_volume_overlap()` measure shapes rather than values, so they stay as they are; for polygons, the coverage weights sum to the volume.
+- `volume()` measures shapes rather than values, so it stays as it is; for polygons, the coverage weights sum to the volume.
 
 #### Order of work
 
@@ -332,7 +333,7 @@ The `extract_to_*()` functions below exist now and combine two or three steps; e
 ### Summarise: volume calculations
 - **Calculate the volume occupied by 2.5D representation**. Each rasterized range stores presence plus `depth_min/depth_max` per cell, clamped to the seafloor. Volume is the sum of `cell_area × (depth_max - depth_min)` over present cells. The overlap between two shapes is the volume of `intersect_3d()`'s result, measured the same way.
 - **Calculate the volume occupied by 3D representation**. Each layer's height is the distance to the next layer: with `t_an_depth=0` and `t_an_depth=100`, the 0 m layer is 100 m tall. 
-- **Calculate the volume of `SpatVector3D` polygons** *(planned)*. Measured from the geometry, not a grid: polygon area × (`bottom` - `top`) for constant surfaces, exact formulas for named shapes (sphere, ellipsoid), and sampling across the polygon for raster or function surfaces. The time interval doesn't change the volume. Points and lines have no volume, so `volume()` on them is an error suggesting `buffer_3d()`. `volume()` and `calc_volume_overlap()` gain `SpatVector3D` methods, with overlap measured on `intersect_3d()`'s result as for envelopes.
+- **Calculate the volume of `SpatVector3D` polygons** *(planned)*. Measured from the geometry, not a grid: polygon area × (`bottom` - `top`) for constant surfaces, exact formulas for named shapes (sphere, ellipsoid), and sampling across the polygon for raster or function surfaces. The time interval doesn't change the volume. Points and lines have no volume, so `volume()` on them is an error suggesting `buffer_3d()`. `volume()` gains a `SpatVector3D` method with the same `per_cell` argument, and overlap is measured on `intersect_3d()`'s result as for envelopes.
 
 ### Utilities 
 - **Download and prepare data.** Utilities for public data: WOA, GEBCO bathymetry, IUCN Red List and Global Fishing Watch. Copernicus Marine utilities were removed in #53 and are planned to return with a shared cache (#55). 
