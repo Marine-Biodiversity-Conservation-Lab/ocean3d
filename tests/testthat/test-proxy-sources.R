@@ -97,10 +97,60 @@ test_that("a voxel in memory is a source like a file", {
   expect_error(as_voxel(p, time = 2), class = "ocean3d_error_proxy_time")
 
   # A voxel without a date or stored edges: no time axis, and the slabs of
-  # its default `bounds`.
+  # its default `bounds`. (Its time, when it has one, is tested below.)
   plain <- make_voxel(1, c(0, 100, 300))
   q <- as_proxy(plain)
   expect_null(q@axes$time)
   expect_equal(q@axes$depth$lower, c(0, 50, 200))
   expect_equal(q@axes$depth$upper, c(50, 200, 300))
+})
+
+test_that("a voxel source's time must be a date or a date-time", {
+  timed <- function(set) set(make_voxel(1, c(0, 10)))
+  # A date-time is kept; a date is midnight UTC.
+  stamps <- list(
+    datetime = timed(function(v) {
+      terra::time(v) <- rep(as.POSIXct("2020-01-02 06:00", tz = "UTC"), 2)
+      v
+    }),
+    date = timed(function(v) {
+      terra::time(v) <- rep(as.Date("2020-01-02"), 2)
+      v
+    })
+  )
+  want <- list(datetime = as.POSIXct("2020-01-02 06:00", tz = "UTC"),
+               date = as.POSIXct("2020-01-02", tz = "UTC"))
+  for (kind in names(stamps)) {
+    p <- as_proxy(stamps[[kind]])
+    expect_equal(p@axes$time$cftime$as_timestamp(asPOSIX = TRUE),
+                 want[[kind]], label = kind)
+  }
+  # So the step is found by its date, and printed as one step.
+  date_proxy <- as_proxy(stamps$date)
+  expect_identical(as_voxel(date_proxy, time = "2020-01-02"), stamps$date)
+  expect_true(any(grepl("2020-01-02.*, 1 step,",
+                        capture.output(print(date_proxy)))))
+
+  # A year, a year and month, or a plain number has no date: an error that
+  # says how to fix the voxel, not a made-up date.
+  undated <- list(
+    list(set = function(v) {
+      terra::time(v, tstep = "years") <- rep(2020L, 2)
+      v
+    }, what = "a year \\(2020\\)"),
+    list(set = function(v) {
+      terra::time(v, tstep = "yearmonths") <- rep(as.Date("2020-06-01"), 2)
+      v
+    }, what = "a year and month"),
+    list(set = function(v) {
+      terra::time(v, tstep = "raw") <- rep(7, 2)
+      v
+    }, what = "a plain number \\(7\\)")
+  )
+  for (case in undated) {
+    err <- expect_error(as_proxy(timed(case$set)),
+                        class = "ocean3d_error_voxel_time")
+    expect_match(conditionMessage(err), case$what)
+    expect_match(conditionMessage(err), "terra::time\\(v\\) <- NULL")
+  }
 })

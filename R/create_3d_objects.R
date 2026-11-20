@@ -123,7 +123,9 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' Wrap a multi-depth raster as a [SpatVoxel-class]: the validated 3D form used
 #' throughout the package, with one layer per standard depth. Each layer's
 #' depth is stored in [terra::depth()]. Given a [SpatProxy-class],
-#' `as_voxel()` reads one time step of it into memory instead.
+#' `as_voxel()` reads one time step of it into memory instead. Reading a
+#' `SpatProxy` is experimental, like the class itself (see [SpatProxy-class]),
+#' and may change without notice while the core object is built.
 #'
 #' A voxel read from a proxy carries the proxy's depth edges (see
 #' [depth_bounds()]): the file's depth bounds, or, for a file without them

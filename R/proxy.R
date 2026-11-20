@@ -117,8 +117,11 @@ setValidity("SpatProxy", function(object) {
 #'   The time axis keeps its bounds only when every file has them.
 #' * **A [SpatVoxel-class] already in memory**: one time step (the voxel's
 #'   [terra::time()] when set), with the voxel's cells, depths and depth edges
-#'   (or the slabs its default `bounds` gives). [as_voxel()] returns the voxel
-#'   itself.
+#'   (or the slabs its default `bounds` gives). The time must be a date or a
+#'   date-time; a date is read as midnight UTC. A voxel whose time is a year,
+#'   a month or a plain number stops with an error: give it a date-time, or
+#'   remove its time with `terra::time(v) <- NULL`. [as_voxel()] returns the
+#'   voxel itself.
 #'
 #' * **Longitude and latitude:** cell edges come from the coordinate's CF
 #'   `bounds` variable, or halfway between neighbouring centres.
@@ -484,6 +487,26 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   stored <- depth_bounds(v)
   slabs <- .depth_slabs(d, "midpoint", stored)
   dated <- isTRUE(terra::timeInfo(v)$time)
+  # terra::time() is a date-time (step "seconds") or a date ("days"); a
+  # year, a year and month, a month of the year or a plain number has no
+  # date to place on the time axis, so it stops rather than being guessed
+  # or dropped.
+  step <- if (dated) terra::timeInfo(v)$step
+  if (dated && !step %in% c("seconds", "days")) {
+    what <- c(years = "a year", yearmonths = "a year and month",
+              months = "a month of the year")[step]
+    if (is.na(what)) what <- "a plain number"
+    rlang::abort(glue::glue(
+      "The voxel's time is {what} ({format(terra::time(v)[1L])}), not a ",
+      "date or date-time, so it can't be placed on a time axis. Give it a ",
+      "date-time with terra::time(), or remove it with ",
+      "`terra::time(v) <- NULL`."
+    ), class = "ocean3d_error_voxel_time", call = NULL)
+  }
+  # A date is midnight UTC.
+  seconds <- if (dated) {
+    as.numeric(as.POSIXct(terra::time(v)[1L], tz = "UTC"))
+  }
   dims <- c("lon", "lat", "depth", if (dated) "time")
   lengths <- c(lon = nc, lat = nr, depth = terra::nlyr(v),
                if (dated) c(time = 1L))
@@ -511,8 +534,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
                    storage = "shallow_first"),
       time = if (dated) {
         list(dim = "time", edges = "none", cftime = CFtime::CFtime(
-          "seconds since 1970-01-01 00:00:00", "standard",
-          as.numeric(terra::time(v)[1L])
+          "seconds since 1970-01-01 00:00:00", "standard", seconds
         ))
       }
     ),
@@ -829,10 +851,11 @@ setMethod("show", "SpatProxy", function(object) {
     } else if (isTRUE(axes$time$climatology)) {
       glue::glue("climatology, 1 step ({axes$time$units})")
     } else {
+      n_steps <- length(axes$time$cftime)
+      steps <- if (n_steps == 1L) "1 step" else glue::glue("{n_steps} steps")
       glue::glue(
-        "{paste(axes$time$cftime$range(), collapse = ' to ')}, ",
-        "{length(axes$time$cftime)} steps, {axes$time$cftime$cal$name} ",
-        "calendar, {time_bounds} bounds"
+        "{paste(axes$time$cftime$range(), collapse = ' to ')}, {steps}, ",
+        "{axes$time$cftime$cal$name} calendar, {time_bounds} bounds"
       )
     },
     crs = if (!nzchar(object@crs)) {

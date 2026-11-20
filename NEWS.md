@@ -161,12 +161,32 @@ message says how many cells have the limits swapped (or a seafloor above
   report now also explains outputs that are missing because no observation
   date was supplied for a file with a time dimension.
 * New experimental class `SpatProxy`, built with `as_proxy()`, describes one
-  variable of a netCDF file without reading its values (#113): its axes,
+  variable of gridded data without reading its values (#113): its axes,
   chunk sizes and coordinate reference system (CRS). Depth is in metres
-  positive down and time is a CFtime object. `as_proxy()` stops with an
-  error if the time axis isn't strictly increasing or is a climatology. No
-  other function accepts a `SpatProxy` yet, and it may change without
-  notice.
+  positive down with each level's edges, and time is a CFtime object. The
+  data can be:
+  * one netCDF file;
+  * a series of netCDF files, such as one per day, put in time order and
+    joined into one time axis. The files must hold the same variable on the
+    same grid and depths, and their time steps must not repeat or overlap;
+  * a `SpatVoxel` already in memory, as one time step. Its time must be a
+    date or a date-time.
+
+  A climatology with one time step, such as a World Ocean Atlas file, is
+  read without a date. `as_proxy()` stops with an error if a time axis
+  isn't strictly increasing or is a climatology with more than one step.
+* `as_voxel(proxy, time = ...)` reads one time step of a `SpatProxy` into a
+  `SpatVoxel` (#113), chosen by step number or date. The voxel's extent
+  comes from the cell edges, its CRS is always set, its depths and depth
+  edges come from the proxy, and its date is in `terra::time()`. For a file
+  without depth bounds, the depth edges are halfway between levels, so the
+  voxel's `bounds` argument doesn't apply. Grids that are regular apart from
+  rounding in the stored coordinates are treated as regular; other irregular
+  grids stop with an error.
+
+  `SpatProxy`, `as_proxy()` and reading a `SpatProxy` with `as_voxel()` are
+  experimental and may change without notice while the core object is
+  built.
 * New class `SpatVector3D` for 3D points, lines and polygons, built with
   `as_vector3d()` from a table, sf object or `terra::SpatVector`. Points
   and lines have a depth (positive metres down) and an optional time at

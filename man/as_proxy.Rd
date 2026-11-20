@@ -47,8 +47,11 @@ axis, and files on different grids (spatial tiles) stop with an error.
 The time axis keeps its bounds only when every file has them.
 \item \strong{A \link[=SpatVoxel-class]{SpatVoxel} already in memory}: one time step (the voxel's
 \code{\link[terra:time]{terra::time()}} when set), with the voxel's cells, depths and depth edges
-(or the slabs its default \code{bounds} gives). \code{\link[=as_voxel]{as_voxel()}} returns the voxel
-itself.
+(or the slabs its default \code{bounds} gives). The time must be a date or a
+date-time; a date is read as midnight UTC. A voxel whose time is a year,
+a month or a plain number stops with an error: give it a date-time, or
+remove its time with \code{terra::time(v) <- NULL}. \code{\link[=as_voxel]{as_voxel()}} returns the
+voxel itself.
 \item \strong{Longitude and latitude:} cell edges come from the coordinate's CF
 \code{bounds} variable, or halfway between neighbouring centres.
 \item \strong{Depth:} converted to metres positive down from the coordinate's
