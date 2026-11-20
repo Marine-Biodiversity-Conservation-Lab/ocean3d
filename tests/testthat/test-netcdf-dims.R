@@ -57,18 +57,13 @@ detect <- function(f, var = "v", ...) {
   .detect_dims(nc, var, ...)
 }
 
+
 # A file with one variable, `temp`, on `dims`: each a list of the dimension's
-# name, units and values. `atts` holds attributes for the dimensions, as
-# list(<dimension> = list(<attribute> = <value>)).
-make_dims_file <- function(dims, atts = list()) {
+# name, units and values.
+make_dims_file <- function(dims) {
   f <- tempfile(fileext = ".nc")
   defs <- lapply(dims, function(d) ncdf4::ncdim_def(d[[1]], d[[2]], d[[3]]))
   nc <- ncdf4::nc_create(f, ncdf4::ncvar_def("temp", "1", defs, -9999))
-  for (dim in names(atts)) {
-    for (name in names(atts[[dim]])) {
-      ncdf4::ncatt_put(nc, dim, name, atts[[dim]][[name]])
-    }
-  }
   ncdf4::nc_close(nc)
   f
 }
@@ -77,48 +72,58 @@ lon_dim <- list("lon", "degrees_east", c(0, 1))
 lat_dim <- list("lat", "degrees_north", c(40, 41))
 
 test_that("CF metadata and dimension names identify the axes", {
-  # `args` go to .detect_dims(); `dims` are the axes it should find.
+  # `make` builds the row's file, `args` go to .detect_dims() and `dims` are
+  # the axes it should find.
   cases <- list(
     list(label = "axis and standard_name on dimension coordinates",
-         file = make_swapped_axes_file(), var = "v",
+         make = function() make_swapped_axes_file(), var = "v",
          dims = list(lon = "y", lat = "x")),
     list(label = "axis attributes on dimensions inside a group",
-         file = make_swapped_axes_file(group = "g"), var = "g/v",
+         make = function() make_swapped_axes_file(group = "g"), var = "g/v",
          dims = list(lon = "g/y", lat = "g/x")),
     list(label = "an axis attribute alone",
-         file = make_dims_file(
-           list(list("a", "1", c(0, 1)), list("b", "1", c(40, 41))),
-           atts = list(a = list(axis = "X"), b = list(axis = "Y"))
-         ),
+         make = function() {
+           f <- make_dims_file(list(list("a", "1", c(0, 1)),
+                                    list("b", "1", c(40, 41))))
+           set_atts(f, "a", axis = "X")
+           set_atts(f, "b", axis = "Y")
+           f
+         },
          dims = list(lon = "a", lat = "b")),
     list(label = "an altitude dimension with axis = 'Z'",
-         file = make_dims_file(
-           list(lon_dim, lat_dim, list("altitude", "m", c(0, -10))),
-           atts = list(altitude = list(standard_name = "altitude", axis = "Z"))
-         ),
+         make = function() {
+           make_grid_file(lon = c(0, 1), lat = c(40, 41), depth = c(0, -10),
+                          depth_name = "altitude", time = NULL,
+                          depth_atts = list(standard_name = "altitude",
+                                            axis = "Z"))
+         },
          dims = list(depth = "altitude")),
     list(label = "valid_time",
-         file = make_dims_file(list(
-           lon_dim, lat_dim,
-           list("valid_time", "days since 2020-01-01", c(0, 1))
-         )),
+         make = function() {
+           make_dims_file(list(
+             lon_dim, lat_dim,
+             list("valid_time", "days since 2020-01-01", c(0, 1))
+           ))
+         },
          dims = list(time = "valid_time")),
     list(label = "non-standard names with CF units",
-         file = make_dims_file(list(
-           list("horizontal_a", "degrees_east", c(0, 1)),
-           list("horizontal_b", "degrees_north", c(40, 41)),
-           list("forecast_step", "days since 2020-01-01", c(0, 1))
-         )),
+         make = function() {
+           make_dims_file(list(
+             list("horizontal_a", "degrees_east", c(0, 1)),
+             list("horizontal_b", "degrees_north", c(40, 41)),
+             list("forecast_step", "days since 2020-01-01", c(0, 1))
+           ))
+         },
          dims = list(lon = "horizontal_a", lat = "horizontal_b",
                      time = "forecast_step")),
     list(label = "an explicit dimension",
-         file = make_grid_file(depth = NULL, time = NULL),
+         make = function() make_grid_file(depth = NULL, time = NULL),
          args = list(lon_dim = "lon"), dims = list(lon = "lon"))
   )
   for (case in cases) {
-    on.exit(unlink(case$file), add = TRUE)
-    dims <- do.call(detect, c(list(case$file, case$var %||% "temp"),
-                              case$args))
+    f <- case$make()
+    on.exit(unlink(f), add = TRUE)
+    dims <- do.call(detect, c(list(f, case$var %||% "temp"), case$args))
     for (axis in names(case$dims)) {
       expect_identical(dims[[axis]], case$dims[[axis]],
                        label = paste0(case$label, ": ", axis))
@@ -127,56 +132,66 @@ test_that("CF metadata and dimension names identify the axes", {
 })
 
 test_that("grids .detect_dims() can't read are rejected", {
-  # `args` go to .detect_dims(). The error contains each of `messages`, as
-  # fixed strings if `fixed` is TRUE.
+  # `make` builds the row's file and `args` go to .detect_dims(). The error
+  # contains each of `messages`, as fixed strings if `fixed` is TRUE.
   curvilinear <- "ocean3d_error_curvilinear_grid"
   curvilinear_messages <- c("two-dimensional geographic coordinate `nav_lon`",
                             "regular longitude/latitude grid")
   cases <- list(
     list(label = "2D coordinates identified by units",
-         file = make_curvilinear_file(), var = "v", class = curvilinear,
-         messages = curvilinear_messages, fixed = TRUE),
-    list(label = "2D coordinates identified by standard_name",
-         file = make_curvilinear_file(standard_name = TRUE), var = "v",
+         make = function() make_curvilinear_file(), var = "v",
          class = curvilinear, messages = curvilinear_messages, fixed = TRUE),
+    list(label = "2D coordinates identified by standard_name",
+         make = function() make_curvilinear_file(standard_name = TRUE),
+         var = "v", class = curvilinear, messages = curvilinear_messages,
+         fixed = TRUE),
     list(label = "2D coordinates inside a group",
-         file = make_curvilinear_file(group = "g"), var = "g/v",
+         make = function() make_curvilinear_file(group = "g"), var = "g/v",
          class = curvilinear),
     # An explicit dimension doesn't bypass the curvilinear check.
     list(label = "2D coordinates with explicit dimensions",
-         file = make_curvilinear_file(), var = "v",
+         make = function() make_curvilinear_file(), var = "v",
          args = list(lon_dim = "x", lat_dim = "y"), class = curvilinear),
     list(label = "an unknown non-singleton dimension",
-         file = make_dims_file(
-           list(lon_dim, lat_dim, list("member", "1", 1:3))
-         ),
+         make = function() {
+           make_dims_file(list(lon_dim, lat_dim, list("member", "1", 1:3)))
+         },
          messages = "Unrecognised non-singleton dimension"),
     list(label = "projected coordinates",
-         file = make_dims_file(list(list("x", "m", c(1000, 2000)),
-                                    list("y", "m", c(3000, 4000)))),
+         make = function() {
+           make_dims_file(list(list("x", "m", c(1000, 2000)),
+                               list("y", "m", c(3000, 4000))))
+         },
          messages = "projected coordinates"),
     list(label = "two longitude dimensions",
-         file = make_dims_file(list(
-           lon_dim, list("longitude", "degrees_east", c(10, 11)), lat_dim
-         )),
+         make = function() {
+           make_dims_file(list(
+             lon_dim, list("longitude", "degrees_east", c(10, 11)), lat_dim
+           ))
+         },
          messages = "Ambiguous lon axis"),
     list(label = "an explicit dimension the variable doesn't have",
-         file = make_grid_file(depth = NULL, time = NULL),
+         make = function() make_grid_file(depth = NULL, time = NULL),
          args = list(lon_dim = "longitude"),
          messages = "not a dimension of the selected variable")
   )
   for (case in cases) {
-    on.exit(unlink(case$file), add = TRUE)
+    f <- case$make()
+    on.exit(unlink(f), add = TRUE)
     err <- expect_error(
-      do.call(detect, c(list(case$file, case$var %||% "temp"), case$args)),
+      do.call(detect, c(list(f, case$var %||% "temp"), case$args)),
       class = case$class, label = case$label
     )
+    # A row that doesn't stop fails above; skip its message checks so the
+    # other rows still run.
+    if (!inherits(err, "condition")) next
     for (message in case$messages) {
       expect_match(conditionMessage(err), message,
                    fixed = isTRUE(case$fixed), label = case$label)
     }
   }
 })
+
 
 # Dimension detection and reading (.detect_dims(), .get_dim_values()) ----------
 
