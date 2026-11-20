@@ -220,6 +220,7 @@ Compared with the raster classes:
 
 Rules:
 
+- **Absent is `NA`:** in every raster that holds or measures an object (an envelope, a voxel, `intersect_3d()`, `mask()`, `volume(per_cell = TRUE)`), a cell the object doesn't reach is `NA`, never `0`. `0` is a measurement (e.g. a zero-thickness interval) and `FALSE` an answer to a per-cell question (`intersects_3d()`). A map with `0` where two inputs are present but share nothing is built from the inputs' presence, not returned by an intersect or summarise step.
 - **Depth by type:** points and lines have a depth at each vertex; polygons have a top and a bottom. A depth range (e.g. a buffer's depth window) makes it a polygon.
 - **Buffering** points or lines gives polygons, as `sf::st_buffer()` does in 2D, with a depth window and time window added.
 - **Polygon scope:** one depth interval per horizontal position (each vertical line enters the shape once and leaves once). This covers extruded shapes (cylinders, slabs, an MPA × a depth band), spheres, ellipsoids, cones, and shapes that follow the seafloor or mixed layer. Full 3D volumes (overhangs, several depth bands in one column) are out of scope.
