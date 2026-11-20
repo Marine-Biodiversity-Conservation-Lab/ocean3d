@@ -45,6 +45,9 @@ test_that("time units that can't be decoded are rejected (#88)", {
 
     err <- expect_error(decode_time(f), class = "ocean3d_error_time_units",
                         label = case$label)
+    # A row that doesn't stop fails above; skip its message checks so the
+    # other rows still run.
+    if (!inherits(err, "condition")) next
     for (message in case$messages) {
       expect_match(conditionMessage(err), message, fixed = TRUE,
                    label = case$label)
@@ -82,11 +85,9 @@ test_that("only the standard calendars are decoded, under each name", {
     f <- make_grid_file(depth = NULL, time = c(0, 2, 5), calendar = case$label)
     on.exit(unlink(f), add = TRUE)
     if (is.null(case$decoded)) {
-      err <- expect_error(decode_time(f), class = "ocean3d_error_calendar",
-                          label = case$label)
-      expect_match(conditionMessage(err),
+      expect_error(decode_time(f),
                    paste("unsupported calendar:", case$label), fixed = TRUE,
-                   label = case$label)
+                   class = "ocean3d_error_calendar", label = case$label)
     } else {
       expect_equal(decode_time(f), case$decoded, label = case$label)
     }
@@ -259,6 +260,9 @@ test_that("climatological time axes are recognised by attribute or year 0", {
     }
     err <- expect_error(check(f), class = "ocean3d_error_time_climatology",
                         label = case$label)
+    # A row that doesn't stop fails above; skip its message checks so the
+    # other rows still run.
+    if (!inherits(err, "condition")) next
     for (message in c(basename(f), case$messages)) {
       expect_match(conditionMessage(err), message, fixed = TRUE,
                    label = case$label)
