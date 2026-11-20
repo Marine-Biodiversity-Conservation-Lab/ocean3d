@@ -68,6 +68,8 @@ intersect_3d(x, y, ...)
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
   Not used when the voxel carries its own depth edges (see
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)).
+  To measure the result, pass the same `bounds` to
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md).
 
 ## Value
 
@@ -143,9 +145,10 @@ for the yes/no form;
 [`mask()`](https://rspatial.github.io/terra/reference/mask.html) to keep
 a voxel's values inside a domain;
 [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-for the volume of the result;
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md),
-which is built on this function.
+for the volume of the result, in total or per cell. When one input is a
+voxel, the envelope is placed on its levels, so compare the overlap with
+`volume(envelope_to_voxel(...))` rather than with the envelope's own
+volume.
 
 ## Examples
 

@@ -91,8 +91,7 @@
 </tr><tr><td>Summarise</td>
 <td>How much, and what values?</td>
 <td>
-<code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code>
-</td>
+<code><a href="reference/volume.html">volume()</a></code> (total or per cell)</td>
 <td>
 <code>summarise_3d()</code> for statistics on intersect results</td>
 </tr></tbody></table><p>The planned functions are added alongside the existing ones: every function in “Exists now” stays, and the existing intersect functions gain methods for <code>SpatVector3D</code>. Two existing functions change inside without changing what they are for: <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> reads with ncdf4 instead of terra, and voxels store depth in <code><a href="https://rspatial.github.io/terra/reference/depth.html" class="external-link">terra::depth()</a></code> rather than in layer names (see <a href="#direction-a-hybrid">Direction</a>).</p>
@@ -198,7 +197,7 @@
 <code><a href="reference/extract_to_point.html">extract_to_point()</a></code> and its <code><a href="reference/extract2d.html">extract2d()</a></code> / <code>extract3d_*()</code> wrappers, <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code>, <code><a href="reference/extract_to_track.html">extract_to_track()</a></code>
 </td>
 <td>
-<code><a href="reference/extract_to_area.html">extract_to_area()</a></code>, <code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code>, <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code><a href="reference/intersects_3d.html">intersects_3d()</a></code>, <code>mask()</code>, voxel profiles, <code><a href="reference/as_voxel.html">as_voxel()</a></code>, <code><a href="reference/as_envelope.html">as_envelope()</a></code>, <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code>, <code><a href="reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code>, <code><a href="reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code>
+<code><a href="reference/extract_to_area.html">extract_to_area()</a></code>, <code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code><a href="reference/intersects_3d.html">intersects_3d()</a></code>, <code>mask()</code>, voxel profiles, <code><a href="reference/as_voxel.html">as_voxel()</a></code>, <code><a href="reference/as_envelope.html">as_envelope()</a></code>, <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code>, <code><a href="reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code>, <code><a href="reference/gfw_effort_to_raster.html">gfw_effort_to_raster()</a></code>
 </td>
 </tr><tr><td>Input</td>
 <td>netCDF paths, connections or file tables</td>
@@ -256,7 +255,7 @@
 <li>
 <strong>Remote Zarr:</strong> an optional source read with <code>stars::read_mdim()</code> (Suggests); ncdf4 couldn’t open the Copernicus Zarr store with the netCDF-C library used in the trial (Zarr needs a build with NCZarr and S3 support). The package corrects what <code>read_mdim()</code> returns: coordinates shifted by half a cell, time as <code>Date</code> (or not decoded without a <code>calendar</code> attribute), and Copernicus’ <code>elevation</code> axis (<code>positive = "up"</code>) turned into depth.</li>
 <li>
-<strong>terra:</strong> works only on 2D grids already in memory: cell areas, masks, crop, rasterising polygons and sums, so <code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code>, <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code>mask()</code> and <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> keep their terra code. It still reads files that have no depth or time, such as GEBCO bathymetry and GFW effort.</li>
+<strong>terra:</strong> works only on 2D grids already in memory: cell areas, masks, crop, rasterising polygons and sums, so <code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code>mask()</code> and <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> keep their terra code. It still reads files that have no depth or time, such as GEBCO bathymetry and GFW effort.</li>
 <li>
 <strong>ncdfCF:</strong> not a dependency for now: its API changed in 4 of its last 8 releases. Its results are a reference for the reader’s tests. Revisit at its 1.0 release, or if native model grids come into scope.</li>
 <li>
@@ -357,6 +356,8 @@
 <td>per vertex (points, lines), or an interval (polygons)</td>
 </tr></tbody></table><p>Rules:</p>
 <ul><li>
+<strong>Absent is <code>NA</code>:</strong> in every raster that holds or measures an object (an envelope, a voxel, <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code>mask()</code>, <code>volume(per_cell = TRUE)</code>), a cell the object doesn’t reach is <code>NA</code>, never <code>0</code>. <code>0</code> is a measurement (e.g. a zero-thickness interval) and <code>FALSE</code> an answer to a per-cell question (<code><a href="reference/intersects_3d.html">intersects_3d()</a></code>). A map with <code>0</code> where two inputs are present but share nothing is built from the inputs’ presence, not returned by an intersect or summarise step.</li>
+<li>
 <strong>Depth by type:</strong> points and lines have a depth at each vertex; polygons have a top and a bottom. A depth range (e.g. a buffer’s depth window) makes it a polygon.</li>
 <li>
 <strong>Buffering</strong> points or lines gives polygons, as <code><a href="https://r-spatial.github.io/sf/reference/geos_unary.html" class="external-link">sf::st_buffer()</a></code> does in 2D, with a depth window and time window added.</li>
@@ -408,7 +409,7 @@
 <li>
 <code>by</code> sets the grouping: per feature (one buffer), or across features (all samples along a track, weighted by distance or duration). This replaces the separate per-buffer and per-track summaries in the removed <code>extract_to_buffered_track()</code> (#105).</li>
 <li>
-<code><a href="reference/volume.html">volume()</a></code> and <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> measure shapes rather than values, so they stay as they are; for polygons, the coverage weights sum to the volume.</li>
+<code><a href="reference/volume.html">volume()</a></code> measures shapes rather than values, so it stays as it is; for polygons, the coverage weights sum to the volume.</li>
 </ul></div>
 <div class="section level4">
 <h4 id="order-of-work">Order of work<a class="anchor" aria-label="anchor" href="#order-of-work"></a></h4>
@@ -488,7 +489,7 @@
 <li>
 <strong>Calculate the volume occupied by 3D representation</strong>. Each layer’s height is the distance to the next layer: with <code>t_an_depth=0</code> and <code>t_an_depth=100</code>, the 0 m layer is 100 m tall.</li>
 <li>
-<strong>Calculate the volume of <code>SpatVector3D</code> polygons</strong> <em>(planned)</em>. Measured from the geometry, not a grid: polygon area × (<code>bottom</code> - <code>top</code>) for constant surfaces, exact formulas for named shapes (sphere, ellipsoid), and sampling across the polygon for raster or function surfaces. The time interval doesn’t change the volume. Points and lines have no volume, so <code><a href="reference/volume.html">volume()</a></code> on them is an error suggesting <code><a href="reference/buffer_3d.html">buffer_3d()</a></code>. <code><a href="reference/volume.html">volume()</a></code> and <code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> gain <code>SpatVector3D</code> methods, with overlap measured on <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>’s result as for envelopes.</li>
+<strong>Calculate the volume of <code>SpatVector3D</code> polygons</strong> <em>(planned)</em>. Measured from the geometry, not a grid: polygon area × (<code>bottom</code> - <code>top</code>) for constant surfaces, exact formulas for named shapes (sphere, ellipsoid), and sampling across the polygon for raster or function surfaces. The time interval doesn’t change the volume. Points and lines have no volume, so <code><a href="reference/volume.html">volume()</a></code> on them is an error suggesting <code><a href="reference/buffer_3d.html">buffer_3d()</a></code>. <code><a href="reference/volume.html">volume()</a></code> gains a <code>SpatVector3D</code> method with the same <code>per_cell</code> argument, and overlap is measured on <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>’s result as for envelopes.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="utilities">Utilities<a class="anchor" aria-label="anchor" href="#utilities"></a></h3>

@@ -309,31 +309,34 @@ fishery_rasters <- Filter(Negate(is.null), fishery_rasters)
 ### Step 3: Calculate 3D Volume Overlap
 
 For each species-fishery pair,
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-computes the per-cell depth overlap and returns both the overlap raster
-and a summary with the overlap volume and proportion of each range’s
-total volume.
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+returns the water the two share: the shared depth interval in each cell.
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+measures that overlap, the species range and the fishery footprint, as
+totals or, with `per_cell = TRUE`, cell by cell.
 
 #### 3a: Single species-fishery example
 
 ``` r
 
 # Example: overlap between first species and first fishery
-overlap_rast <- calc_volume_overlap(
-  x = species_rasters[[1]],
-  y = fishery_rasters[[1]]
-)
+a <- species_rasters[[1]]
+b <- fishery_rasters[[1]]
+overlap_env <- intersect_3d(a, b)
 
 message(
   "Overlap between ", names(species_rasters)[1],
   " and ", names(fishery_rasters)[1]
 )
 
-# Per-cell volume raster stack (volume_a, volume_b, volume_overlap in km³)
-overlap_rast
+# The shared depth interval in each cell (NA where they share no water)
+overlap_env
 
-# Total volumes
-terra::global(overlap_rast, "sum", na.rm = TRUE)
+# Overlap volume in each cell (km³)
+overlap_map <- volume(overlap_env, per_cell = TRUE)
+
+# Total volumes (km³)
+c(species = volume(a), fishery = volume(b), overlap = volume(overlap_env))
 ```
 
 #### 3b: All species-fishery combinations
@@ -351,7 +354,7 @@ n_pairs <- nrow(pairs)
 message("Computing ", n_pairs, " species x fishery overlaps...")
 pb <- txtProgressBar(min = 0, max = n_pairs, style = 3)
 
-# Store rasters and summary table
+# Store the shared envelopes and summary table
 overlap_rasters <- vector("list", n_pairs)
 overlap_summaries <- vector("list", n_pairs)
 
@@ -359,19 +362,17 @@ for (i in seq_len(n_pairs)) {
   sp <- pairs$species[i]
   fi <- pairs$fishery[i]
 
-  ov <- calc_volume_overlap(
-    x = species_rasters[[sp]],
-    y = fishery_rasters[[fi]]
-  )
+  a <- species_rasters[[sp]]
+  b <- fishery_rasters[[fi]]
+  ov <- intersect_3d(a, b)
 
   overlap_rasters[[i]] <- ov
-  totals <- terra::global(ov, "sum", na.rm = TRUE)
   overlap_summaries[[i]] <- tibble::tibble(
     species = sp,
     fishery = fi,
-    volume_species_km3 = totals["volume_a", "sum"],
-    volume_fishery_km3 = totals["volume_b", "sum"],
-    volume_overlap_km3 = totals["volume_overlap", "sum"]
+    volume_species_km3 = volume(a),
+    volume_fishery_km3 = volume(b),
+    volume_overlap_km3 = volume(ov)
   )
 
   setTxtProgressBar(pb, i)
@@ -408,13 +409,15 @@ the species shares the map with the fishery but sits below it).
 depth_refuge <- lapply(seq_len(n_pairs), function(i) {
   sp <- pairs$species[i]
   fi <- pairs$fishery[i]
-  ov <- overlap_rasters[[i]]
+  a <- species_rasters[[sp]]
+  b <- fishery_rasters[[fi]]
 
-  cell_area_km2 <- terra::cellSize(ov[["depth_min_a"]], unit = "km")
-
-  # Horizontal footprints (presence, ignoring depth)
-  sp_present   <- !is.na(ov[["depth_min_a"]])
-  both_present <- sp_present & !is.na(ov[["depth_min_b"]])
+  # Per-cell volumes are NA where a range is absent, so they also give the
+  # horizontal footprints (presence, ignoring depth).
+  vol_a <- volume(a, per_cell = TRUE)
+  cell_area_km2 <- terra::cellSize(vol_a, unit = "km")
+  sp_present   <- !is.na(vol_a)
+  both_present <- sp_present & !is.na(volume(b, per_cell = TRUE))
 
   # 2D areas (km^2): species footprint and species x fishery intersection
   species_area_km2 <- terra::global(
@@ -425,9 +428,8 @@ depth_refuge <- lapply(seq_len(n_pairs), function(i) {
     "sum", na.rm = TRUE)$sum
 
   # 3D volumes (km^3): species volume and species x fishery overlap volume
-  totals <- terra::global(ov, "sum", na.rm = TRUE)
-  species_volume_km3 <- totals["volume_a", "sum"]
-  overlap_volume_km3 <- totals["volume_overlap", "sum"]
+  species_volume_km3 <- volume(a)
+  overlap_volume_km3 <- volume(overlap_rasters[[i]])
 
   # Exposure of the species to the fishery, measured two ways
   area_overlap_prop   <- overlap_area_km2 / species_area_km2
@@ -507,15 +509,15 @@ comparison <- overlap_results %>%
   left_join(reference, by = c("species", "fishery"))
 
 # Compute our area and mean depth for the overlap to compare with reference
-# (calc_volume_overlap returns volume rasters; extract area and depth
+# (the overlap envelope gives the per-cell volume; extract area and volume
 # separately)
 overlap_diagnostics <- lapply(seq_len(nrow(pairs)), function(i) {
   sp <- pairs$species[i]
   fi <- pairs$fishery[i]
   ov <- overlap_rasters[[i]]
 
-  # Overlap cells: where volume_overlap > 0
-  ov_vol <- ov[["volume_overlap"]]
+  # Overlap cells: where the overlap volume is > 0
+  ov_vol <- volume(ov, per_cell = TRUE)
   ov_present <- !is.na(ov_vol) & ov_vol > 0
 
   # Count overlapping cells and their area
@@ -524,7 +526,7 @@ overlap_diagnostics <- lapply(seq_len(nrow(pairs)), function(i) {
   our_area_m2 <- terra::global(area_rast, "sum", na.rm = TRUE)$sum
 
   # Total overlap volume in m³ for direct comparison
-  our_volume_m3 <- terra::global(ov_vol, "sum", na.rm = TRUE)$sum * 1e9
+  our_volume_m3 <- volume(ov) * 1e9
 
   tibble::tibble(
     species = sp,
@@ -599,9 +601,9 @@ par(mfrow = c(1, 1))
 |----|----|----|
 | Grid type | Hexagonal grid (1 km cells) | Raster grid (1 km cells) |
 | Depth handling | Uniform depth range across entire intersection footprint | Per-cell depth clamped to bathymetry via [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md) |
-| Volume formula | area × depth_range (single depth per pair) | Sum of per-cell (cell_area × clamped depth) via [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md) |
+| Volume formula | area × depth_range (single depth per pair) | Sum of per-cell (cell_area × clamped depth) via `volume(intersect_3d())` |
 | Fishery/species richness maps | Custom ggplot code | [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md) + ggplot2 |
-| Species × fishery overlap maps | Custom ggplot code | [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md) + ggplot2/patchwork |
+| Species × fishery overlap maps | Custom ggplot code | `volume(intersect_3d(), per_cell = TRUE)` + ggplot2/patchwork |
 | **Reproducibility** | **Single-use scripts** | **Reusable for any species x fishery** |
 
 `ocean3d` produces lower volume estimates than the original analysis
@@ -894,12 +896,14 @@ cr_overlap_rasters <- overlap_rasters[
 overlap_map_plots <- lapply(seq_len(nrow(cr_pairs)), function(i) {
   sp <- cr_pairs$species[i]
   fi <- cr_pairs$fishery[i]
-  ov <- cr_overlap_rasters[[i]]
+  vol_a <- volume(species_rasters[[sp]], per_cell = TRUE)
+  vol_b <- volume(fishery_rasters[[fi]], per_cell = TRUE)
+  vol_ov <- volume(cr_overlap_rasters[[i]], per_cell = TRUE)
 
   # Classify cells: 1 = species only, 2 = intersect, 3 = fishery only
-  has_a <- !is.na(ov[["volume_a"]]) & ov[["volume_a"]] > 0
-  has_b <- !is.na(ov[["volume_b"]]) & ov[["volume_b"]] > 0
-  has_ov <- !is.na(ov[["volume_overlap"]]) & ov[["volume_overlap"]] > 0
+  has_a <- !is.na(vol_a) & vol_a > 0
+  has_b <- !is.na(vol_b) & vol_b > 0
+  has_ov <- !is.na(vol_ov) & vol_ov > 0
   categ <- terra::ifel(has_ov, 2,
     terra::ifel(has_a & has_b, 2,
       terra::ifel(has_a, 1,
@@ -945,14 +949,14 @@ names(overlap_map_plots) <- paste(cr_pairs$species, cr_pairs$fishery,
 # Depth profile line plot for each species x fishery pair
 # Shows bathymetry cross-section with species/fishery depth ranges
 overlap_depth_plots <- lapply(seq_len(nrow(cr_pairs)), function(i) {
+  a <- species_rasters[[cr_pairs$species[i]]]
+  b <- fishery_rasters[[cr_pairs$fishery[i]]]
   ov <- cr_overlap_rasters[[i]]
 
-  # Stack overlap depth layers with bathymetry, extract all values at once
-  stack <- c(ov[["depth_min_a"]], ov[["depth_max_a"]],
-             ov[["depth_min_b"]], ov[["depth_max_b"]],
-             ov[["depth_min_overlap"]], ov[["depth_max_overlap"]],
-             seafloor)
-  df <- as.data.frame(terra::values(stack)) %>%
+  # Depth limits of the species, the fishery and their overlap, with
+  # bathymetry, one column each
+  df <- as.data.frame(cbind(terra::values(a), terra::values(b),
+                            terra::values(ov), terra::values(seafloor))) %>%
     setNames(c("sp_depth_min", "sp_depth_max", "fi_depth_min", "fi_depth_max",
                "intersect_min", "intersect_max", "seafloor_depth")) %>%
     filter(!is.na(sp_depth_min), !is.na(fi_depth_min)) %>%

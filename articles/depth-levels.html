@@ -166,11 +166,13 @@ each:</p>
 <span><span class="co">#&gt; [1,]                1                 NA                 NA</span></span>
 <span><span class="co">#&gt; [2,]                1                 NA                 NA</span></span></code></pre></div>
 <p>The same <code>bounds</code> argument is accepted by
-<code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code>, <code><a href="../reference/intersect_3d.html">intersect_3d()</a></code>,
-<code><a href="../reference/intersects_3d.html">intersects_3d()</a></code>, <code><a href="../reference/volume.html">volume()</a></code> and
-<code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> wherever they place an envelope on a
-voxel’s depth levels. See <code><a href="../reference/envelope_to_voxel.html">?envelope_to_voxel</a></code> for the full
-rule, including how the shallowest and deepest levels are clamped.</p>
+<code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code>, <code><a href="../reference/intersect_3d.html">intersect_3d()</a></code> and
+<code><a href="../reference/intersects_3d.html">intersects_3d()</a></code> wherever they place an envelope on a
+voxel’s depth levels, and by <code><a href="../reference/volume.html">volume()</a></code> to measure a voxel.
+Use the same value in <code><a href="../reference/intersect_3d.html">intersect_3d()</a></code> and in
+<code><a href="../reference/volume.html">volume()</a></code> when measuring its result. See
+<code><a href="../reference/envelope_to_voxel.html">?envelope_to_voxel</a></code> for the full rule, including how the
+shallowest and deepest levels are clamped.</p>
 </div>
 <div class="section level2">
 <h2 id="a-datasets-own-edges-depth_bounds">A dataset’s own edges: <code>depth_bounds</code><a class="anchor" aria-label="anchor" href="#a-datasets-own-edges-depth_bounds"></a>

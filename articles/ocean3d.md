@@ -1189,12 +1189,11 @@ Beyond identifying shared space, you may want to quantify its
 three-dimensional extent.
 
 [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-calculates the volume represented by a `SpatEnvelope` or `SpatVoxel`.
+calculates the volume represented by a `SpatEnvelope` or `SpatVoxel`, as
+a total or, with `per_cell = TRUE`, cell by cell.
 
-Similarly,
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-calculates the spatially explicit volumes of two distributions and their
-intersection.
+To measure the volume two distributions share, use
+`volume(intersect_3d(a, b))`.
 
 These tools can support research questions involving habitat
 availability, species interactions and potential exposure to human
@@ -1229,7 +1228,9 @@ with a species’ potential distribution.
 Fisheries](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.html)**
 
 Discover how
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+and
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
 can be applied to species distributions and fishing footprints to
 quantify their three-dimensional overlap.
 

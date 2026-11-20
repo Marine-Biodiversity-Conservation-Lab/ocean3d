@@ -1,29 +1,29 @@
-# Total 3D volume of a rasterized domain
+# 3D volume of a rasterized domain
 
-Sums the occupied volume of a
+Measures the occupied volume of a
 [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 or a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
-over the whole grid. Both representations describe a 3D domain over a 2D
-grid, but they store depth in dual roles, so each computes the vertical
-extent differently:
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
+as a total over the whole grid or cell by cell. Both representations
+describe a 3D domain over a 2D grid, but they store depth in dual roles,
+so each computes the vertical extent differently:
 
 ## Usage
 
 ``` r
-volume(x, ...)
+volume(x, per_cell = FALSE, ...)
 
 # S4 method for class 'SpatVector3D'
-volume(x, ...)
+volume(x, per_cell = FALSE, ...)
 
 # S4 method for class 'SpatEnvelope'
-volume(x, ...)
+volume(x, per_cell = FALSE, ...)
 
 # S4 method for class 'SpatVoxel'
-volume(x, bounds = c("midpoint", "top"))
+volume(x, per_cell = FALSE, bounds = c("midpoint", "top"))
 
 # S4 method for class 'SpatRaster'
-volume(x, ...)
+volume(x, per_cell = FALSE, ...)
 ```
 
 ## Arguments
@@ -44,6 +44,11 @@ volume(x, ...)
   [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md))
   and wrap it with
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
+
+- per_cell:
+
+  `FALSE` (default) for the total volume, `TRUE` for the volume of each
+  cell.
 
 - ...:
 
@@ -66,7 +71,10 @@ volume(x, ...)
 
 ## Value
 
-Numeric of length 1. Total volume in km³.
+With `per_cell = FALSE`, a number: the total volume in km³. With
+`per_cell = TRUE`, a single-layer `SpatRaster` named `volume` on the
+grid of `x`: the volume of each cell in km³, `NA` where `x` is absent
+(no depth interval, or no occupied level). Its sum is the total.
 
 ## Details
 
@@ -92,12 +100,28 @@ from. Coarse levels overstate; the error shrinks as the levels tighten
 around the range. Where an envelope's limits fall exactly on levels
 under `bounds = "top"`, the two agree.
 
+To measure the space two domains share, measure their intersection:
+`volume(intersect_3d(a, b))`.
+
+With one envelope and one voxel,
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+places the envelope on the voxel's depth levels, so the overlap is
+measured on those levels while `volume()` of the envelope uses its own
+depth limits. To compare the two on the same levels, measure the
+envelope on them too:
+`volume(envelope_to_voxel(a, depths(b), bounds = bounds,`
+`depth_bounds = depth_bounds(b)), bounds = bounds)`. Pass the same
+`bounds` to
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+and `volume()`; otherwise the overlap and the input volumes are measured
+on different slabs and don't add up.
+
 ## See also
 
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-for the volume two domains share, and
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
-for the shared domain itself;
+for the space two domains share, which `volume()` then measures;
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+for whether two domains share any depth in each cell;
 [SpatVolume](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVolume-class.md)
 for why the two representations dispatch separately.
 
@@ -128,4 +152,24 @@ volume(gappy)
 #> [1] 0.3
 volume(voxel_to_envelope(gappy))
 #> [1] 0.6
+
+# Per cell: the fourth cell is outside the domain, so it is NA.
+terra::values(volume(e, per_cell = TRUE))
+#>      volume
+#> [1,]    0.2
+#> [2,]    0.2
+#> [3,]    0.2
+#> [4,]     NA
+
+# Overlap with a second domain at 100-300 m: intersect, then measure.
+b <- as_envelope(fp, depth_min = 100, depth_max = 300)
+ov <- intersect_3d(e, b)
+volume(ov)
+#> [1] 0.3
+terra::values(volume(ov, per_cell = TRUE))
+#>      volume
+#> [1,]    0.1
+#> [2,]    0.1
+#> [3,]    0.1
+#> [4,]     NA
 ```

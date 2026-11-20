@@ -238,12 +238,10 @@
 <div class="section level3">
 <h3 id="summarise-3d-volume">Summarise: 3D volume<a class="anchor" aria-label="anchor" href="#summarise-3d-volume"></a>
 </h3>
-<p>Input: <code>SpatEnvelope</code> or <code>SpatVoxel</code>. A voxel’s volume sums the slab each occupied depth level stands for, so interior gaps cost volume instead of being filled in. Given one of each, the envelope is discretized onto the voxel’s depth levels.</p>
+<p>Input: <code>SpatEnvelope</code> or <code>SpatVoxel</code>. A voxel’s volume sums the slab each occupied depth level stands for, so interior gaps cost volume instead of being filled in.</p>
 <ul>
 <li>
-<code><a href="reference/volume.html">volume()</a></code> — total 3D volume (km³) of a rasterized domain.</li>
-<li>
-<code><a href="reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> — per-cell depth intervals and volumes for two rasterized domains and their intersection (returns a 9-layer stack). Built on <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>.</li>
+<code><a href="reference/volume.html">volume()</a></code> — 3D volume (km³) of a rasterized domain, as a total or per cell (<code>per_cell = TRUE</code>). Measure an overlap with <code>volume(intersect_3d(a, b))</code>.</li>
 </ul>
 </div>
 <div class="section level3">

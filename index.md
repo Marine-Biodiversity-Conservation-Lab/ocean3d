@@ -236,15 +236,12 @@ depths.
 
 Input: `SpatEnvelope` or `SpatVoxel`. A voxel’s volume sums the slab
 each occupied depth level stands for, so interior gaps cost volume
-instead of being filled in. Given one of each, the envelope is
-discretized onto the voxel’s depth levels.
+instead of being filled in.
 
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  — total 3D volume (km³) of a rasterized domain.
-- [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-  — per-cell depth intervals and volumes for two rasterized domains and
-  their intersection (returns a 9-layer stack). Built on
-  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md).
+  — 3D volume (km³) of a rasterized domain, as a total or per cell
+  (`per_cell = TRUE`). Measure an overlap with
+  `volume(intersect_3d(a, b))`.
 
 ### Summarise: environmental extraction from a `SpatVoxel`
 

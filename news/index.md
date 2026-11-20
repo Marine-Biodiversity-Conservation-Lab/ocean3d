@@ -4,9 +4,55 @@
 
 ### Breaking changes
 
+`calc_volume_overlap()` is removed
+([\#150](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/150)).
+It returned a nine-layer `SpatRaster` that the other 3D functions could
+only use as a flat 2D layer, not as the 3D space it described. Intersect
+with
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+then measure with
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+which has a new `per_cell` argument: `volume(x, per_cell = TRUE)`
+returns a one-layer `SpatRaster` named `volume` with the volume of each
+cell in km³, `NA` where `x` is absent. Each layer of the old stack maps
+to:
+
+| `calc_volume_overlap(a, b)` layer | Now |
+|----|----|
+| `depth_min_a`, `depth_max_a` | `a` itself (envelope), or `voxel_to_envelope(a)` (voxel) |
+| `depth_min_overlap`, `depth_max_overlap` | `ov <- intersect_3d(a, b)` |
+| `volume_a`, `volume_b` | `volume(a, per_cell = TRUE)`, `volume(b, per_cell = TRUE)` |
+| `volume_overlap` | `volume(ov, per_cell = TRUE)` |
+| `0` where both are present but share no depth | `both <- !is.na(volume(a, per_cell = TRUE)) & !is.na(volume(b, per_cell = TRUE))`, then `terra::ifel(both & is.na(vol_ov), 0, vol_ov)` with `vol_ov <- volume(ov, per_cell = TRUE)` |
+| totals | `volume(a)`, `volume(b)`, `volume(ov)` |
+
+Other changes to callers:
+
+- With an envelope and a voxel, `calc_volume_overlap()` reported the
+  volume of the envelope after placing it on the voxel’s depth levels.
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+  of the envelope uses its own depth limits. To compare it with the
+  overlap on the same levels, use
+  `volume(envelope_to_voxel(a, depths(b), bounds = bounds, depth_bounds = depth_bounds(b)), bounds = bounds)`.
+- Cells with nothing in them are now `NA` everywhere. The old
+  `volume_overlap` layer was the one place that used `0`, for cells
+  where both domains are present but share no depth; build that `0` from
+  the inputs as in the table.
+- [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+  of a domain with no cells now totals `0`, not `NA`.
+- `per_cell` is the second argument of
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+  so a positional `volume(v, "top")` is now an error. Name it:
+  `volume(v, bounds = "top")`.
+- Pass the same `bounds` to
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+  and
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md);
+  otherwise the overlap and the input volumes are measured on different
+  slabs and don’t add up.
+
 `bounds` now defaults to `"midpoint"` instead of `"top"` in
 [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md),
 [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
 [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
@@ -20,9 +66,7 @@ Results change for voxels that don’t carry their own depth edges (see
 `depth_bounds` under New features):
 
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  and
-  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-  give different volumes. For example, levels at 0, 100 and 300 m now
+  gives different volumes. For example, levels at 0, 100 and 300 m now
   stand for 0-50, 50-200 and 200-300 m rather than 0-100, 100-300 and
   none.
 - [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
@@ -174,7 +218,7 @@ how many cells have the limits swapped (or a seafloor above
   and read them with the new
   [`depth_bounds()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depth_bounds.md).
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
-  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md),
+  `calc_volume_overlap()`,
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
   [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
@@ -187,8 +231,7 @@ how many cells have the limits swapped (or a seafloor above
   [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md)
   gives each cell an envelope from the top of its shallowest selected
   slab to the bottom of its deepest, and the depth limits from
-  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-  follow the same rule
+  `calc_volume_overlap()` follow the same rule
   ([\#138](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/138)).
 
 ### Bug fixes
@@ -263,9 +306,7 @@ how many cells have the limits swapped (or a seafloor above
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
   about 2 times,
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  about 1.6 times and
-  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-  about 1.2 times
+  about 1.6 times and `calc_volume_overlap()` about 1.2 times
   ([\#154](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/154)).
 
 - [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)’s

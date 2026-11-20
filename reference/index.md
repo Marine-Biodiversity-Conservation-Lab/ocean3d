@@ -71,9 +71,7 @@ Find where 3D objects meet.
 Measure 3D objects and their overlap.
 
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  : Total 3D volume of a rasterized domain
-- [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-  : Per-cell 3D volume overlap between two rasterized domains
+  : 3D volume of a rasterized domain
 
 ## Extraction
 

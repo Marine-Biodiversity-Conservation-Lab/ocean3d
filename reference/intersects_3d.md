@@ -68,6 +68,8 @@ intersects_3d(x, y, ...)
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
   Not used when the voxel carries its own depth edges (see
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)).
+  To measure the result, pass the same `bounds` to
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md).
 
 ## Value
 

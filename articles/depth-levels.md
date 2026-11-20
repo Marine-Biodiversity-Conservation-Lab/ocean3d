@@ -113,12 +113,16 @@ terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200),
 
 The same `bounds` argument is accepted by
 [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html),
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
-[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md),
-[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 and
-[`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-wherever they place an envelope on a voxel’s depth levels. See
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+wherever they place an envelope on a voxel’s depth levels, and by
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+to measure a voxel. Use the same value in
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+and in
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+when measuring its result. See
 [`?envelope_to_voxel`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
 for the full rule, including how the shallowest and deepest levels are
 clamped.

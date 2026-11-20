@@ -378,30 +378,33 @@ and lets the loop carry on, so the later steps use the others.</p>
 <div class="section level3">
 <h3 id="step-3-calculate-3d-volume-overlap">Step 3: Calculate 3D Volume Overlap<a class="anchor" aria-label="anchor" href="#step-3-calculate-3d-volume-overlap"></a>
 </h3>
-<p>For each species-fishery pair, <code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code>
-computes the per-cell depth overlap and returns both the overlap raster
-and a summary with the overlap volume and proportion of each range’s
-total volume.</p>
+<p>For each species-fishery pair, <code><a href="../reference/intersect_3d.html">intersect_3d()</a></code> returns
+the water the two share: the shared depth interval in each cell.
+<code><a href="../reference/volume.html">volume()</a></code> measures that overlap, the species range and the
+fishery footprint, as totals or, with <code>per_cell = TRUE</code>, cell
+by cell.</p>
 <div class="section level4">
 <h4 id="a-single-species-fishery-example">3a: Single species-fishery example<a class="anchor" aria-label="anchor" href="#a-single-species-fishery-example"></a>
 </h4>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Example: overlap between first species and first fishery</span></span>
-<span><span class="va">overlap_rast</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_volume_overlap.html">calc_volume_overlap</a></span><span class="op">(</span></span>
-<span>  x <span class="op">=</span> <span class="va">species_rasters</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span>,</span>
-<span>  y <span class="op">=</span> <span class="va">fishery_rasters</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
-<span><span class="op">)</span></span>
+<span><span class="va">a</span> <span class="op">&lt;-</span> <span class="va">species_rasters</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
+<span><span class="va">b</span> <span class="op">&lt;-</span> <span class="va">fishery_rasters</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
+<span><span class="va">overlap_env</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/intersect_3d.html">intersect_3d</a></span><span class="op">(</span><span class="va">a</span>, <span class="va">b</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span></span>
 <span>  <span class="st">"Overlap between "</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">species_rasters</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span>,</span>
 <span>  <span class="st">" and "</span>, <span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">fishery_rasters</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Per-cell volume raster stack (volume_a, volume_b, volume_overlap in km³)</span></span>
-<span><span class="va">overlap_rast</span></span>
+<span><span class="co"># The shared depth interval in each cell (NA where they share no water)</span></span>
+<span><span class="va">overlap_env</span></span>
 <span></span>
-<span><span class="co"># Total volumes</span></span>
-<span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">overlap_rast</span>, <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
+<span><span class="co"># Overlap volume in each cell (km³)</span></span>
+<span><span class="va">overlap_map</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">overlap_env</span>, per_cell <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Total volumes (km³)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>species <span class="op">=</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">a</span><span class="op">)</span>, fishery <span class="op">=</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">b</span><span class="op">)</span>, overlap <span class="op">=</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">overlap_env</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level4">
 <h4 id="b-all-species-fishery-combinations">3b: All species-fishery combinations<a class="anchor" aria-label="anchor" href="#b-all-species-fishery-combinations"></a>
@@ -418,7 +421,7 @@ total volume.</p>
 <span><span class="fu"><a href="https://rdrr.io/r/base/message.html" class="external-link">message</a></span><span class="op">(</span><span class="st">"Computing "</span>, <span class="va">n_pairs</span>, <span class="st">" species x fishery overlaps..."</span><span class="op">)</span></span>
 <span><span class="va">pb</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/utils/txtProgressBar.html" class="external-link">txtProgressBar</a></span><span class="op">(</span>min <span class="op">=</span> <span class="fl">0</span>, max <span class="op">=</span> <span class="va">n_pairs</span>, style <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Store rasters and summary table</span></span>
+<span><span class="co"># Store the shared envelopes and summary table</span></span>
 <span><span class="va">overlap_rasters</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">vector</a></span><span class="op">(</span><span class="st">"list"</span>, <span class="va">n_pairs</span><span class="op">)</span></span>
 <span><span class="va">overlap_summaries</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">vector</a></span><span class="op">(</span><span class="st">"list"</span>, <span class="va">n_pairs</span><span class="op">)</span></span>
 <span></span>
@@ -426,19 +429,17 @@ total volume.</p>
 <span>  <span class="va">sp</span> <span class="op">&lt;-</span> <span class="va">pairs</span><span class="op">$</span><span class="va">species</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
 <span>  <span class="va">fi</span> <span class="op">&lt;-</span> <span class="va">pairs</span><span class="op">$</span><span class="va">fishery</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
 <span></span>
-<span>  <span class="va">ov</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/calc_volume_overlap.html">calc_volume_overlap</a></span><span class="op">(</span></span>
-<span>    x <span class="op">=</span> <span class="va">species_rasters</span><span class="op">[[</span><span class="va">sp</span><span class="op">]</span><span class="op">]</span>,</span>
-<span>    y <span class="op">=</span> <span class="va">fishery_rasters</span><span class="op">[[</span><span class="va">fi</span><span class="op">]</span><span class="op">]</span></span>
-<span>  <span class="op">)</span></span>
+<span>  <span class="va">a</span> <span class="op">&lt;-</span> <span class="va">species_rasters</span><span class="op">[[</span><span class="va">sp</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">b</span> <span class="op">&lt;-</span> <span class="va">fishery_rasters</span><span class="op">[[</span><span class="va">fi</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">ov</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/intersect_3d.html">intersect_3d</a></span><span class="op">(</span><span class="va">a</span>, <span class="va">b</span><span class="op">)</span></span>
 <span></span>
 <span>  <span class="va">overlap_rasters</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">ov</span></span>
-<span>  <span class="va">totals</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">ov</span>, <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span>  <span class="va">overlap_summaries</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span></span>
 <span>    species <span class="op">=</span> <span class="va">sp</span>,</span>
 <span>    fishery <span class="op">=</span> <span class="va">fi</span>,</span>
-<span>    volume_species_km3 <span class="op">=</span> <span class="va">totals</span><span class="op">[</span><span class="st">"volume_a"</span>, <span class="st">"sum"</span><span class="op">]</span>,</span>
-<span>    volume_fishery_km3 <span class="op">=</span> <span class="va">totals</span><span class="op">[</span><span class="st">"volume_b"</span>, <span class="st">"sum"</span><span class="op">]</span>,</span>
-<span>    volume_overlap_km3 <span class="op">=</span> <span class="va">totals</span><span class="op">[</span><span class="st">"volume_overlap"</span>, <span class="st">"sum"</span><span class="op">]</span></span>
+<span>    volume_species_km3 <span class="op">=</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">a</span><span class="op">)</span>,</span>
+<span>    volume_fishery_km3 <span class="op">=</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">b</span><span class="op">)</span>,</span>
+<span>    volume_overlap_km3 <span class="op">=</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">ov</span><span class="op">)</span></span>
 <span>  <span class="op">)</span></span>
 <span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/utils/txtProgressBar.html" class="external-link">setTxtProgressBar</a></span><span class="op">(</span><span class="va">pb</span>, <span class="va">i</span><span class="op">)</span></span>
@@ -473,13 +474,15 @@ it).</p>
 <span><span class="va">depth_refuge</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">n_pairs</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">sp</span> <span class="op">&lt;-</span> <span class="va">pairs</span><span class="op">$</span><span class="va">species</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
 <span>  <span class="va">fi</span> <span class="op">&lt;-</span> <span class="va">pairs</span><span class="op">$</span><span class="va">fishery</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
-<span>  <span class="va">ov</span> <span class="op">&lt;-</span> <span class="va">overlap_rasters</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">a</span> <span class="op">&lt;-</span> <span class="va">species_rasters</span><span class="op">[[</span><span class="va">sp</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">b</span> <span class="op">&lt;-</span> <span class="va">fishery_rasters</span><span class="op">[[</span><span class="va">fi</span><span class="op">]</span><span class="op">]</span></span>
 <span></span>
-<span>  <span class="va">cell_area_km2</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/cellSize.html" class="external-link">cellSize</a></span><span class="op">(</span><span class="va">ov</span><span class="op">[[</span><span class="st">"depth_min_a"</span><span class="op">]</span><span class="op">]</span>, unit <span class="op">=</span> <span class="st">"km"</span><span class="op">)</span></span>
-<span></span>
-<span>  <span class="co"># Horizontal footprints (presence, ignoring depth)</span></span>
-<span>  <span class="va">sp_present</span>   <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">ov</span><span class="op">[[</span><span class="st">"depth_min_a"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
-<span>  <span class="va">both_present</span> <span class="op">&lt;-</span> <span class="va">sp_present</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">ov</span><span class="op">[[</span><span class="st">"depth_min_b"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
+<span>  <span class="co"># Per-cell volumes are NA where a range is absent, so they also give the</span></span>
+<span>  <span class="co"># horizontal footprints (presence, ignoring depth).</span></span>
+<span>  <span class="va">vol_a</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">a</span>, per_cell <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="va">cell_area_km2</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/cellSize.html" class="external-link">cellSize</a></span><span class="op">(</span><span class="va">vol_a</span>, unit <span class="op">=</span> <span class="st">"km"</span><span class="op">)</span></span>
+<span>  <span class="va">sp_present</span>   <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">vol_a</span><span class="op">)</span></span>
+<span>  <span class="va">both_present</span> <span class="op">&lt;-</span> <span class="va">sp_present</span> <span class="op">&amp;</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">b</span>, per_cell <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span>  <span class="co"># 2D areas (km^2): species footprint and species x fishery intersection</span></span>
 <span>  <span class="va">species_area_km2</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span></span>
@@ -490,9 +493,8 @@ it).</p>
 <span>    <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">$</span><span class="va">sum</span></span>
 <span></span>
 <span>  <span class="co"># 3D volumes (km^3): species volume and species x fishery overlap volume</span></span>
-<span>  <span class="va">totals</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">ov</span>, <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span>  <span class="va">species_volume_km3</span> <span class="op">&lt;-</span> <span class="va">totals</span><span class="op">[</span><span class="st">"volume_a"</span>, <span class="st">"sum"</span><span class="op">]</span></span>
-<span>  <span class="va">overlap_volume_km3</span> <span class="op">&lt;-</span> <span class="va">totals</span><span class="op">[</span><span class="st">"volume_overlap"</span>, <span class="st">"sum"</span><span class="op">]</span></span>
+<span>  <span class="va">species_volume_km3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">a</span><span class="op">)</span></span>
+<span>  <span class="va">overlap_volume_km3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">overlap_rasters</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span><span class="op">)</span></span>
 <span></span>
 <span>  <span class="co"># Exposure of the species to the fishery, measured two ways</span></span>
 <span>  <span class="va">area_overlap_prop</span>   <span class="op">&lt;-</span> <span class="va">overlap_area_km2</span> <span class="op">/</span> <span class="va">species_area_km2</span></span>
@@ -578,15 +580,15 @@ it.</p>
 <span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">left_join</a></span><span class="op">(</span><span class="va">reference</span>, by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"species"</span>, <span class="st">"fishery"</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Compute our area and mean depth for the overlap to compare with reference</span></span>
-<span><span class="co"># (calc_volume_overlap returns volume rasters; extract area and depth</span></span>
+<span><span class="co"># (the overlap envelope gives the per-cell volume; extract area and volume</span></span>
 <span><span class="co"># separately)</span></span>
 <span><span class="va">overlap_diagnostics</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">pairs</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">sp</span> <span class="op">&lt;-</span> <span class="va">pairs</span><span class="op">$</span><span class="va">species</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
 <span>  <span class="va">fi</span> <span class="op">&lt;-</span> <span class="va">pairs</span><span class="op">$</span><span class="va">fishery</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
 <span>  <span class="va">ov</span> <span class="op">&lt;-</span> <span class="va">overlap_rasters</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span></span>
 <span></span>
-<span>  <span class="co"># Overlap cells: where volume_overlap &gt; 0</span></span>
-<span>  <span class="va">ov_vol</span> <span class="op">&lt;-</span> <span class="va">ov</span><span class="op">[[</span><span class="st">"volume_overlap"</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="co"># Overlap cells: where the overlap volume is &gt; 0</span></span>
+<span>  <span class="va">ov_vol</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">ov</span>, per_cell <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span>  <span class="va">ov_present</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">ov_vol</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">ov_vol</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
 <span></span>
 <span>  <span class="co"># Count overlapping cells and their area</span></span>
@@ -595,7 +597,7 @@ it.</p>
 <span>  <span class="va">our_area_m2</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">area_rast</span>, <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">$</span><span class="va">sum</span></span>
 <span></span>
 <span>  <span class="co"># Total overlap volume in m³ for direct comparison</span></span>
-<span>  <span class="va">our_volume_m3</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">ov_vol</span>, <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">$</span><span class="va">sum</span> <span class="op">*</span> <span class="fl">1e9</span></span>
+<span>  <span class="va">our_volume_m3</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">ov</span><span class="op">)</span> <span class="op">*</span> <span class="fl">1e9</span></span>
 <span></span>
 <span>  <span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/tibble.html" class="external-link">tibble</a></span><span class="op">(</span></span>
 <span>    species <span class="op">=</span> <span class="va">sp</span>,</span>
@@ -689,7 +691,7 @@ it.</p>
 <td>Volume formula</td>
 <td>area × depth_range (single depth per pair)</td>
 <td>Sum of per-cell (cell_area × clamped depth) via
-<code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code>
+<code>volume(intersect_3d())</code>
 </td>
 </tr>
 <tr class="even">
@@ -702,7 +704,8 @@ it.</p>
 <td>Species × fishery overlap maps</td>
 <td>Custom ggplot code</td>
 <td>
-<code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> + ggplot2/patchwork</td>
+<code>volume(intersect_3d(), per_cell = TRUE)</code> +
+ggplot2/patchwork</td>
 </tr>
 <tr class="even">
 <td><strong>Reproducibility</strong></td>
@@ -998,12 +1001,14 @@ fishery only, or both. Recreates the
 <span><span class="va">overlap_map_plots</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cr_pairs</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">sp</span> <span class="op">&lt;-</span> <span class="va">cr_pairs</span><span class="op">$</span><span class="va">species</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
 <span>  <span class="va">fi</span> <span class="op">&lt;-</span> <span class="va">cr_pairs</span><span class="op">$</span><span class="va">fishery</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
-<span>  <span class="va">ov</span> <span class="op">&lt;-</span> <span class="va">cr_overlap_rasters</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">vol_a</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">species_rasters</span><span class="op">[[</span><span class="va">sp</span><span class="op">]</span><span class="op">]</span>, per_cell <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="va">vol_b</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">fishery_rasters</span><span class="op">[[</span><span class="va">fi</span><span class="op">]</span><span class="op">]</span>, per_cell <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span>  <span class="va">vol_ov</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">cr_overlap_rasters</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span>, per_cell <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
 <span>  <span class="co"># Classify cells: 1 = species only, 2 = intersect, 3 = fishery only</span></span>
-<span>  <span class="va">has_a</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">ov</span><span class="op">[[</span><span class="st">"volume_a"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">ov</span><span class="op">[[</span><span class="st">"volume_a"</span><span class="op">]</span><span class="op">]</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
-<span>  <span class="va">has_b</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">ov</span><span class="op">[[</span><span class="st">"volume_b"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">ov</span><span class="op">[[</span><span class="st">"volume_b"</span><span class="op">]</span><span class="op">]</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
-<span>  <span class="va">has_ov</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">ov</span><span class="op">[[</span><span class="st">"volume_overlap"</span><span class="op">]</span><span class="op">]</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">ov</span><span class="op">[[</span><span class="st">"volume_overlap"</span><span class="op">]</span><span class="op">]</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
+<span>  <span class="va">has_a</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">vol_a</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">vol_a</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
+<span>  <span class="va">has_b</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">vol_b</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">vol_b</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
+<span>  <span class="va">has_ov</span> <span class="op">&lt;-</span> <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">vol_ov</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">vol_ov</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
 <span>  <span class="va">categ</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ifelse.html" class="external-link">ifel</a></span><span class="op">(</span><span class="va">has_ov</span>, <span class="fl">2</span>,</span>
 <span>    <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ifelse.html" class="external-link">ifel</a></span><span class="op">(</span><span class="va">has_a</span> <span class="op">&amp;</span> <span class="va">has_b</span>, <span class="fl">2</span>,</span>
 <span>      <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ifelse.html" class="external-link">ifel</a></span><span class="op">(</span><span class="va">has_a</span>, <span class="fl">1</span>,</span>
@@ -1046,14 +1051,14 @@ fishery only, or both. Recreates the
 <code class="sourceCode R"><span><span class="co"># Depth profile line plot for each species x fishery pair</span></span>
 <span><span class="co"># Shows bathymetry cross-section with species/fishery depth ranges</span></span>
 <span><span class="va">overlap_depth_plots</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">cr_pairs</span><span class="op">)</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">a</span> <span class="op">&lt;-</span> <span class="va">species_rasters</span><span class="op">[[</span><span class="va">cr_pairs</span><span class="op">$</span><span class="va">species</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span><span class="op">]</span></span>
+<span>  <span class="va">b</span> <span class="op">&lt;-</span> <span class="va">fishery_rasters</span><span class="op">[[</span><span class="va">cr_pairs</span><span class="op">$</span><span class="va">fishery</span><span class="op">[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span><span class="op">]</span></span>
 <span>  <span class="va">ov</span> <span class="op">&lt;-</span> <span class="va">cr_overlap_rasters</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span></span>
 <span></span>
-<span>  <span class="co"># Stack overlap depth layers with bathymetry, extract all values at once</span></span>
-<span>  <span class="va">stack</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">ov</span><span class="op">[[</span><span class="st">"depth_min_a"</span><span class="op">]</span><span class="op">]</span>, <span class="va">ov</span><span class="op">[[</span><span class="st">"depth_max_a"</span><span class="op">]</span><span class="op">]</span>,</span>
-<span>             <span class="va">ov</span><span class="op">[[</span><span class="st">"depth_min_b"</span><span class="op">]</span><span class="op">]</span>, <span class="va">ov</span><span class="op">[[</span><span class="st">"depth_max_b"</span><span class="op">]</span><span class="op">]</span>,</span>
-<span>             <span class="va">ov</span><span class="op">[[</span><span class="st">"depth_min_overlap"</span><span class="op">]</span><span class="op">]</span>, <span class="va">ov</span><span class="op">[[</span><span class="st">"depth_max_overlap"</span><span class="op">]</span><span class="op">]</span>,</span>
-<span>             <span class="va">seafloor</span><span class="op">)</span></span>
-<span>  <span class="va">df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">stack</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
+<span>  <span class="co"># Depth limits of the species, the fishery and their overlap, with</span></span>
+<span>  <span class="co"># bathymetry, one column each</span></span>
+<span>  <span class="va">df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">cbind</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">a</span><span class="op">)</span>, <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">b</span><span class="op">)</span>,</span>
+<span>                            <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">ov</span><span class="op">)</span>, <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="va">seafloor</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
 <span>    <span class="fu"><a href="https://rdrr.io/r/stats/setNames.html" class="external-link">setNames</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"sp_depth_min"</span>, <span class="st">"sp_depth_max"</span>, <span class="st">"fi_depth_min"</span>, <span class="st">"fi_depth_max"</span>,</span>
 <span>               <span class="st">"intersect_min"</span>, <span class="st">"intersect_max"</span>, <span class="st">"seafloor_depth"</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>
 <span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">sp_depth_min</span><span class="op">)</span>, <span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">fi_depth_min</span><span class="op">)</span><span class="op">)</span> <span class="op"><a href="https://magrittr.tidyverse.org/reference/pipe.html" class="external-link">%&gt;%</a></span></span>

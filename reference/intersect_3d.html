@@ -110,7 +110,8 @@ inputs are envelopes.</p></dd>
 <dd><p>Only when one input is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: <code>"midpoint"</code>
 (default) or <code>"top"</code>. See <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. Not used when the voxel
-carries its own depth edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>).</p></dd>
+carries its own depth edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>). To measure the
+result, pass the same <code>bounds</code> to <code><a href="volume.html">volume()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -166,8 +167,10 @@ rasters, vectors and extents keep terra's behaviour.</p>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="intersects_3d.html">intersects_3d()</a></code> for the yes/no form; <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code> to keep a voxel's
-values inside a domain; <code><a href="volume.html">volume()</a></code> for the volume of the result;
-<code><a href="calc_volume_overlap.html">calc_volume_overlap()</a></code>, which is built on this function.</p></div>
+values inside a domain; <code><a href="volume.html">volume()</a></code> for the volume of the result, in
+total or per cell. When one input is a voxel, the envelope is placed on
+its levels, so compare the overlap with <code>volume(envelope_to_voxel(...))</code>
+rather than with the envelope's own volume.</p></div>
     </div>
 
     <div class="section level2">

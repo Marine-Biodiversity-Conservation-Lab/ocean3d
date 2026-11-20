@@ -69,7 +69,7 @@ on its own.
 |----|----|----|----|
 | Build | What is the 3D shape or grid? | [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md), [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md), [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md), [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md), [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md), [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md), [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md), [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md), data loaders ([`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)) | track sampling |
 | Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D`; a coverage function that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
-| Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md) | `summarise_3d()` for statistics on intersect results |
+| Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md) (total or per cell) | `summarise_3d()` for statistics on intersect results |
 
 The planned functions are added alongside the existing ones: every
 function in “Exists now” stays, and the existing intersect functions
@@ -273,7 +273,7 @@ conventions define them.
 
 |  | netCDF model | `SpatVoxel` model |
 |----|----|----|
-| Functions | [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md) and its [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md) / `extract3d_*()` wrappers, [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md), [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md), [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md), [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()`, voxel profiles, [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md) |
+| Functions | [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md) and its [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md) / `extract3d_*()` wrappers, [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md), [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md), [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()`, voxel profiles, [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md) |
 | Input | netCDF paths, connections or file tables | `SpatVoxel` / `SpatEnvelope`, S4 classes extending [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html) |
 | Reads with | ncdf4, only the cells each observation needs | terra |
 | Depth | the netCDF depth coordinate: units converted to metres, `positive` direction, bounds | layer names (`{variable}_depth={value}`), one set of depths for the whole grid |
@@ -386,7 +386,6 @@ Jay Matsushiba on 2 November 2026 (#112).
 - **terra:** works only on 2D grids already in memory: cell areas,
   masks, crop, rasterising polygons and sums, so
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
-  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md),
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
   `mask()` and
   [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
@@ -595,6 +594,16 @@ Compared with the raster classes:
 
 Rules:
 
+- **Absent is `NA`:** in every raster that holds or measures an object
+  (an envelope, a voxel,
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+  `mask()`, `volume(per_cell = TRUE)`), a cell the object doesn’t reach
+  is `NA`, never `0`. `0` is a measurement (e.g. a zero-thickness
+  interval) and `FALSE` an answer to a per-cell question
+  ([`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)).
+  A map with `0` where two inputs are present but share nothing is built
+  from the inputs’ presence, not returned by an intersect or summarise
+  step.
 - **Depth by type:** points and lines have a depth at each vertex;
   polygons have a top and a bottom. A depth range (e.g. a buffer’s depth
   window) makes it a polygon.
@@ -729,9 +738,7 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
   replaces the separate per-buffer and per-track summaries in the
   removed `extract_to_buffered_track()` (#105).
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  and
-  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-  measure shapes rather than values, so they stay as they are; for
+  measures shapes rather than values, so it stays as it is; for
   polygons, the coverage weights sum to the volume.
 
 #### Order of work
@@ -980,9 +987,8 @@ marked *(planned)* aren’t implemented yet.
   on them is an error suggesting
   [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md).
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  and
-  [`calc_volume_overlap()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/calc_volume_overlap.md)
-  gain `SpatVector3D` methods, with overlap measured on
+  gains a `SpatVector3D` method with the same `per_cell` argument, and
+  overlap is measured on
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)’s
   result as for envelopes.
 

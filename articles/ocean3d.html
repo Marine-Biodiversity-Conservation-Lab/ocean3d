@@ -1211,10 +1211,10 @@ conventional two-dimensional analyses may overlook.</p>
 <p>Beyond identifying shared space, you may want to quantify its
 three-dimensional extent.</p>
 <p><code><a href="../reference/volume.html">volume()</a></code> calculates the volume represented by a
-<code>SpatEnvelope</code> or <code>SpatVoxel</code>.</p>
-<p>Similarly, <code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> calculates the
-spatially explicit volumes of two distributions and their
-intersection.</p>
+<code>SpatEnvelope</code> or <code>SpatVoxel</code>, as a total or, with
+<code>per_cell = TRUE</code>, cell by cell.</p>
+<p>To measure the volume two distributions share, use
+<code>volume(intersect_3d(a, b))</code>.</p>
 <p>These tools can support research questions involving habitat
 availability, species interactions and potential exposure to human
 activities.</p>
@@ -1240,9 +1240,9 @@ organised by fishing gear and depth to investigate their spatial overlap
 with a species’ potential distribution.</p>
 <p><strong><a href="https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/bangladesh-fisheries-3d-overlap.html">3D
 Volume Overlap Between Species and Fisheries</a></strong></p>
-<p>Discover how <code><a href="../reference/calc_volume_overlap.html">calc_volume_overlap()</a></code> can be applied to
-species distributions and fishing footprints to quantify their
-three-dimensional overlap.</p>
+<p>Discover how <code><a href="../reference/intersect_3d.html">intersect_3d()</a></code> and <code><a href="../reference/volume.html">volume()</a></code>
+can be applied to species distributions and fishing footprints to
+quantify their three-dimensional overlap.</p>
 </div>
 <div class="section level3">
 <h3 id="explore-the-full-package-documentation">Explore the full package documentation<a class="anchor" aria-label="anchor" href="#explore-the-full-package-documentation"></a>

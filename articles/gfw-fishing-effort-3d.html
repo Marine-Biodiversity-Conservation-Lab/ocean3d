@@ -77,7 +77,7 @@
 <p>This article turns Global Fishing Watch (GFW) fishing-effort data
 from a flat 2D map into a <strong>3D stack with one layer per
 depth</strong>. You can then overlap that stack with shark and ray
-ranges using [calc_volume_overlap()].</p>
+ranges using [intersect_3d()] and [volume()].</p>
 <p>Three tools do the work:</p>
 <ul>
 <li>
@@ -438,8 +438,8 @@ depth, ordered shallow to deep. Combining gears breaks that order, but
 <code><a href="https://rdrr.io/r/base/c.html" class="external-link">c()</a></code> keeps the class label anyway, so you get an object that
 claims to be a voxel and is not. The <code><a href="https://rspatial.github.io/terra/reference/writeRaster.html" class="external-link">writeRaster()</a></code> step
 avoids the problem, because it returns a plain SpatRaster. Keep the
-single-gear stacks if you need the voxel class for
-[calc_volume_overlap()] or [voxel_to_envelope()].</li>
+single-gear stacks if you need the voxel class for [intersect_3d()] or
+[voxel_to_envelope()].</li>
 </ul>
 <p>Gears with <code>mode = "unknown"</code> have no depth information,
 so skip them. Placing their effort at the surface would invent a result
