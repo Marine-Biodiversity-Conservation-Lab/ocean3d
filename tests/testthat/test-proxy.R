@@ -22,10 +22,11 @@ add_mapping <- function(f, name = NULL, wkt = NULL, grid_mapping = "crs") {
   nc <- ncdf4::nc_open(f, write = TRUE)
   nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def("crs", "", list(),
                                               prec = "integer"))
-  if (!is.null(name)) ncdf4::ncatt_put(nc, "crs", "grid_mapping_name", name)
-  if (!is.null(wkt)) ncdf4::ncatt_put(nc, "crs", "crs_wkt", wkt)
-  ncdf4::ncatt_put(nc, "temp", "grid_mapping", grid_mapping)
   ncdf4::nc_close(nc)
+  atts <- Filter(Negate(is.null), list(grid_mapping_name = name,
+                                       crs_wkt = wkt))
+  do.call(set_atts, c(list(f, "crs"), atts))
+  set_atts(f, "temp", grid_mapping = grid_mapping)
 }
 
 test_that("an ordinary lon, lat, depth and time grid is described", {
