@@ -10,8 +10,8 @@ NULL
 #' 3D volume of a rasterized domain
 #'
 #' Measures the occupied volume of a [SpatEnvelope-class], a
-#' [SpatVoxel-class] or [SpatVector3D-class] polygons, as a total or cell by
-#' cell (polygon by polygon for polygons). Envelopes and voxels describe a 3D
+#' [SpatVoxel-class] or [SpatVector3D-class] polygons, as a total, or cell by
+#' cell for envelopes and voxels. Envelopes and voxels describe a 3D
 #' domain over a 2D grid, but they store depth in dual roles, so each
 #' computes the vertical extent differently:
 #'
@@ -27,10 +27,13 @@ NULL
 #'     `depth_max - depth_min`. Polygon edges are geodesics, so a polygon
 #'     drawn along a grid's cell edges measures slightly differently from
 #'     its envelope on that grid, whose cells are bounded by parallels.
-#'     The time interval doesn't change the volume.
-#'     The total adds up the polygons, so where they overlap the shared space
-#'     is counted once for each. Points and lines have no volume, so they are
-#'     an error; [buffer_3d()] turns them into polygons.}
+#'     The time interval doesn't change the volume. The total adds up the
+#'     polygons, so where they overlap the shared space is counted once for
+#'     each; the overlap between two sets is `volume(intersect_3d(x, y))`.
+#'     `per_cell = TRUE` is an error, since polygons have no cells; put them
+#'     on a grid with [vector3d_to_envelope()] first. Points and lines have
+#'     no volume, so they are an error; [buffer_3d()] turns them into
+#'     polygons.}
 #' }
 #'
 #' A voxel volume is quantized to the levels the voxel was sampled at, and a
@@ -59,7 +62,7 @@ NULL
 #'   [as_voxel()] first. A netCDF file isn't accepted: load it as a
 #'   `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with [as_voxel()].
 #' @param per_cell `FALSE` (default) for the total volume, `TRUE` for the
-#'   volume of each cell, or of each polygon for [SpatVector3D-class].
+#'   volume of each cell. Not for [SpatVector3D-class] polygons.
 #' @param ... Arguments for the [SpatVoxel-class] method, which are an error
 #'   for an envelope or polygons.
 #' @param bounds SpatVoxel only. What each depth level stands for vertically:
@@ -74,9 +77,7 @@ NULL
 #' @returns With `per_cell = FALSE`, a number: the total volume in km³. With
 #'   `per_cell = TRUE`, a single-layer `SpatRaster` named `volume` on the grid
 #'   of `x`: the volume of each cell in km³, `NA` where `x` is absent (no
-#'   depth interval, or no occupied level). Its sum is the total. For
-#'   polygons with `per_cell = TRUE`, a numeric vector with the volume of
-#'   each polygon in km³, named by feature ID.
+#'   depth interval, or no occupied level). Its sum is the total.
 #'
 #' @seealso [intersect_3d()] for the space two domains share, which `volume()`
 #'   then measures; [intersects_3d()] for whether two domains share any depth

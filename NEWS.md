@@ -151,9 +151,8 @@ message says how many cells have the limits swapped (or a seafloor above
   the polygons covering it, so polygons from 0 to 50 m and from 200 to
   300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
   are polygon times, with a message (#114).
-* `volume()` measures `SpatVector3D` polygons: each polygon's area times
-  its depth range, in km³. `per_cell = TRUE` gives one volume per polygon,
-  named by feature ID (#115).
+* `volume()` measures `SpatVector3D` polygons: the sum of each polygon's
+  area times its depth range, in km³ (#115).
 * `intersect_3d()`, `intersects_3d()` and `mask()` accept `SpatVector3D`
   polygons with a `SpatEnvelope` or `SpatVoxel`, in either order. The
   polygons are put on the raster's grid with `vector3d_to_envelope()` and

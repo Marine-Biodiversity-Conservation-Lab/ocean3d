@@ -82,15 +82,17 @@ setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {
       "buffer_3d() turns {x@type} into polygons."
     ), class = "ocean3d_error_volume_type", call = NULL)
   }
-  f <- x@features
-  area_km2 <- if (nrow(f)) {
-    terra::expanse(terra::vect(f$geometry), unit = "km")
-  } else {
-    numeric()
+  if (per_cell) {
+    rlang::abort(paste0(
+      "Polygons have no cells, so `per_cell = TRUE` doesn't apply. Put them ",
+      "on a grid first: volume(vector3d_to_envelope(x, template), ",
+      "per_cell = TRUE)."
+    ), class = "ocean3d_error_volume_per_cell", call = NULL)
   }
-  per_feature <- area_km2 * (f$depth_max - f$depth_min) / 1000
-  if (!per_cell) return(sum(per_feature))
-  stats::setNames(per_feature, f$feature_id)
+  f <- x@features
+  if (nrow(f) == 0L) return(0)
+  area_km2 <- terra::expanse(terra::vect(f$geometry), unit = "km")
+  sum(area_km2 * (f$depth_max - f$depth_min) / 1000)
 })
 
 # Rejected here rather than by S4's default "unable to find an inherited

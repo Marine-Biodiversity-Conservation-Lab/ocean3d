@@ -225,15 +225,12 @@ test_that("volume() of polygons is area times depth range", {
   envelope <- vector3d_to_envelope(polygons, make_template())
   expect_equal(volume(polygons), volume(envelope), tolerance = 1e-3)
 
-  # Two polygons: the total is the sum of each, counting their overlap twice.
-  two <- sf::st_sf(id = c("a", "b"),
-                   top = c(0, 50), bottom = c(100, 60),
+  # Two polygons with the same outline, 100 m and 10 m thick: the total is
+  # the sum of each, counting their overlap twice.
+  two <- sf::st_sf(top = c(0, 50), bottom = c(100, 60),
                    geometry = rep(sf::st_geometry(make_polygon()), 2))
-  two <- as_vector3d(two, id = "id", depth_min = "top", depth_max = "bottom")
-  per_polygon <- volume(two, per_cell = TRUE)
-  expect_named(per_polygon, c("a", "b"))
-  expect_equal(per_polygon[["b"]], per_polygon[["a"]] / 10)
-  expect_equal(volume(two), sum(per_polygon))
+  two <- as_vector3d(two, depth_min = "top", depth_max = "bottom")
+  expect_equal(volume(two), 1.1 * volume(polygons))
 })
 
 test_that("volume() of polygons ignores time and allows no thickness", {
@@ -249,7 +246,11 @@ test_that("volume() of polygons ignores time and allows no thickness", {
   expect_identical(volume(flat), 0)
 })
 
-test_that("volume() of polygons rejects voxel arguments", {
+test_that("volume() of polygons rejects per_cell and voxel arguments", {
   polygons <- as_vector3d(make_polygon(), depth_min = 0, depth_max = 100)
+  expect_error(volume(polygons, per_cell = TRUE), "Polygons have no cells",
+               class = "ocean3d_error_volume_per_cell")
+  expect_error(volume(polygons, per_cell = TRUE), "vector3d_to_envelope(",
+               class = "ocean3d_error_volume_per_cell", fixed = TRUE)
   expect_error(volume(polygons, bounds = "top"), "unused argument")
 })

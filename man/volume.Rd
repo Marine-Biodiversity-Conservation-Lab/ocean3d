@@ -26,7 +26,7 @@ rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[
 \code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{per_cell}{\code{FALSE} (default) for the total volume, \code{TRUE} for the
-volume of each cell, or of each polygon for \link[=SpatVector3D-class]{SpatVector3D}.}
+volume of each cell. Not for \link[=SpatVector3D-class]{SpatVector3D} polygons.}
 
 \item{...}{Arguments for the \link[=SpatVoxel-class]{SpatVoxel} method, which are an error
 for an envelope or polygons.}
@@ -44,14 +44,12 @@ for a voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVo
 With \code{per_cell = FALSE}, a number: the total volume in km³. With
 \code{per_cell = TRUE}, a single-layer \code{SpatRaster} named \code{volume} on the grid
 of \code{x}: the volume of each cell in km³, \code{NA} where \code{x} is absent (no
-depth interval, or no occupied level). Its sum is the total. For
-polygons with \code{per_cell = TRUE}, a numeric vector with the volume of
-each polygon in km³, named by feature ID.
+depth interval, or no occupied level). Its sum is the total.
 }
 \description{
 Measures the occupied volume of a \link[=SpatEnvelope-class]{SpatEnvelope}, a
-\link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons, as a total or cell by
-cell (polygon by polygon for polygons). Envelopes and voxels describe a 3D
+\link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons, as a total, or cell by
+cell for envelopes and voxels. Envelopes and voxels describe a 3D
 domain over a 2D grid, but they store depth in dual roles, so each
 computes the vertical extent differently:
 }
@@ -68,10 +66,13 @@ grid: each polygon's area on the WGS84 ellipsoid times
 \code{depth_max - depth_min}. Polygon edges are geodesics, so a polygon
 drawn along a grid's cell edges measures slightly differently from
 its envelope on that grid, whose cells are bounded by parallels.
-The time interval doesn't change the volume.
-The total adds up the polygons, so where they overlap the shared space
-is counted once for each. Points and lines have no volume, so they are
-an error; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
+The time interval doesn't change the volume. The total adds up the
+polygons, so where they overlap the shared space is counted once for
+each; the overlap between two sets is \code{volume(intersect_3d(x, y))}.
+\code{per_cell = TRUE} is an error, since polygons have no cells; put them
+on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} first. Points and lines have
+no volume, so they are an error; \code{\link[=buffer_3d]{buffer_3d()}} turns them into
+polygons.}
 }
 
 A voxel volume is quantized to the levels the voxel was sampled at, and a

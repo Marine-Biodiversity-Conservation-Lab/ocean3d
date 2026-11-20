@@ -183,7 +183,7 @@ cost volume instead of being filled in. A polygon's volume is its area times
 its depth range, measured from the outline rather than a grid.
 
 - `volume()` — 3D volume (km³) of a domain, as a total or per cell
-  (`per_cell = TRUE`; per polygon for `SpatVector3D`). Measure an overlap with
+  (`per_cell = TRUE`, envelopes and voxels only). Measure an overlap with
   `volume(intersect_3d(a, b))`.
 
 ### Summarise: environmental extraction from a `SpatVoxel`
