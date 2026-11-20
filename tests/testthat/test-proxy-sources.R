@@ -37,8 +37,8 @@ test_that("a series joins its files' time axes in time order", {
   expect_equal(terra::time(v)[1], as.POSIXct("2020-01-05", tz = "UTC"))
 
   # Bounds are kept only when every file has them.
-  ab <- make_grid_file(time = c(0, 1), time_bounds = rbind(c(-0.5, 0.5),
-                                                          c(0.5, 1.5)))
+  ab <- make_grid_file(time = c(0, 1),
+                       time_bounds = rbind(c(-0.5, 0.5), c(0.5, 1.5)))
   on.exit(unlink(ab), add = TRUE)
   expect_identical(as_proxy(c(ab, b), var = "temp")@axes$time$edges, "none")
 })

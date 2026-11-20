@@ -1,5 +1,6 @@
 # The voxel builder (#113): as_voxel() on a SpatProxy reads one time step
-# into a SpatVoxel. Synthetic files from make_grid_file() (helper-netcdf-grid.R).
+# into a SpatVoxel. Synthetic files from make_grid_file()
+# (helper-netcdf-grid.R).
 
 # The value a voxel holds at each cell centre and depth, against the stored
 # array read in fixed lon, lat, depth order for time step `step`.
