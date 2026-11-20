@@ -1250,8 +1250,7 @@ represented by a `SpatEnvelope` or
 `per_cell = TRUE`, cell by cell.
 
 To measure the volume two
-distributions share, pass their
-intersection to it:
+distributions share, use
 `volume(intersect_3d(a, b))`.
 
 These tools can support research

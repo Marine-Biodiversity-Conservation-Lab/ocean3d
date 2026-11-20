@@ -96,9 +96,10 @@ terra::values(envelope_to_voxel(shallow, depths = c(0, 100, 200),
 
 The same `bounds` argument is accepted by `terra::mask()`, `intersect_3d()`
 and `intersects_3d()` wherever they place an envelope on a voxel's depth
-levels, and by `volume()` to measure a voxel. Pass the same value to
-`intersect_3d()` and to the `volume()` that measures its result. See `?envelope_to_voxel` for the full
-rule, including how the shallowest and deepest levels are clamped.
+levels, and by `volume()` to measure a voxel. Use the same value in
+`intersect_3d()` and in `volume()` when measuring its result. See
+`?envelope_to_voxel` for the full rule, including how the shallowest and
+deepest levels are clamped.
 
 ## A dataset's own edges: `depth_bounds`
 

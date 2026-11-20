@@ -309,10 +309,10 @@ fishery_rasters <- Filter(Negate(is.null), fishery_rasters)
 
 ## Step 3: Calculate 3D Volume Overlap
 
-For each species-fishery pair, `intersect_3d()` builds the space the two
-share: an envelope holding the shared depth interval in each cell. `volume()`
-then measures it, and measures the species range and fishery footprint the
-same way, either as a total or cell by cell with `per_cell = TRUE`.
+For each species-fishery pair, `intersect_3d()` returns the water the two
+share: the shared depth interval in each cell. `volume()` measures that
+overlap, the species range and the fishery footprint, as totals or, with
+`per_cell = TRUE`, cell by cell.
 
 ### 3a: Single species-fishery example
 
@@ -422,7 +422,7 @@ depth_refuge <- lapply(seq_len(n_pairs), function(i) {
     "sum", na.rm = TRUE)$sum
 
   # 3D volumes (km^3): species volume and species x fishery overlap volume
-  species_volume_km3 <- terra::global(vol_a, "sum", na.rm = TRUE)$sum
+  species_volume_km3 <- volume(a)
   overlap_volume_km3 <- volume(overlap_rasters[[i]])
 
   # Exposure of the species to the fishery, measured two ways
@@ -518,7 +518,7 @@ overlap_diagnostics <- lapply(seq_len(nrow(pairs)), function(i) {
   our_area_m2 <- terra::global(area_rast, "sum", na.rm = TRUE)$sum
 
   # Total overlap volume in m³ for direct comparison
-  our_volume_m3 <- terra::global(ov_vol, "sum", na.rm = TRUE)$sum * 1e9
+  our_volume_m3 <- volume(ov) * 1e9
 
   tibble::tibble(
     species = sp,
