@@ -142,6 +142,10 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' `SpatVoxel` even if invalid (for example `v[[c(1, 1)]]`, two layers at the
 #' same depth). Passing an invalid `SpatVoxel` to `as_voxel()` checks it as it
 #' would a plain raster: unsorted layers are sorted, and the rest is an error.
+#' Some terra operations reset depths to 0 (`crop()` or `mask()` with a
+#' polygon, replacing a layer with `[[<-`, `app()`), so they repeat;
+#' `as_voxel()` then reads the depths back from the `{varname}_depth={value}`
+#' names it gave the layers, if they're still there.
 #'
 #' Depths are positive metres increasing downward, matching the World Ocean
 #' Atlas convention. Negative depths are an error rather than being silently
@@ -260,6 +264,13 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     names(x) <- paste0(varname, "_depth=", d)
   } else if (was_voxel || .depth_set(x)) {
     d <- terra::depth(x)
+    # Some terra operations reset depths to 0 (crop() or mask() with a
+    # polygon, replacing a layer with `[[<-`, app()), leaving repeats. The
+    # names as_voxel() wrote still hold them.
+    named <- .parse_depth_layers_names(names(x), error = FALSE)
+    if (anyDuplicated(d) && !anyNA(named) && !anyDuplicated(named)) {
+      d <- named
+    }
   } else {
     d <- .parse_depth_layers_names(names(x), error = FALSE)
     if (anyNA(d)) {

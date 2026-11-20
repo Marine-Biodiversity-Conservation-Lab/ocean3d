@@ -44,6 +44,12 @@ terra operations that keep the \code{SpatVoxel} class (\code{[[}, \code{crop()},
 plain \code{SpatRaster} (\code{app()}, writing to a file) drops them. Combining a
 voxel that has edges with one that doesn't, with \code{c()}, leaves some layers
 without edges, so \code{bounds} applies to the result.
+
+terra keeps the depths through \code{[[}, arithmetic, \code{ifel()} and \code{crop()} or
+\code{mask()} with an extent or a raster, but resets them to 0 when it crops or
+masks with a polygon or replaces a layer with \verb{[[<-}. Re-wrap the result
+with \code{\link[=as_voxel]{as_voxel()}}, which reads the depths back from the layer names it
+wrote.
 }
 \section{Slots}{
 

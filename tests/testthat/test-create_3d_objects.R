@@ -1223,6 +1223,17 @@ test_that("terra operations keep a voxel's depths", {
   expect_identical(depths(v * 2), depths(v))
   expect_identical(depths(terra::ifel(v > 0, 1, NA)), depths(v))
 
+  # terra resets the depths when it crops to a polygon; re-wrapping reads
+  # them back from the layer names as_voxel() wrote.
+  poly <- terra::vect("POLYGON ((0 0, 2000 0, 2000 2000, 0 2000, 0 0))",
+                      crs = terra::crs(v))
+  expect_identical(depths(as_voxel(terra::crop(v, poly, mask = TRUE))),
+                   c(0, 100, 200))
+  # The same when a layer is replaced with `[[<-`.
+  replaced <- v
+  replaced[[2]] <- terra::setValues(terra::rast(v[[2]]), NA)
+  expect_identical(depths(as_voxel(replaced)), c(0, 100, 200))
+
   # terra's own c() resets depths to 0 and edits its inputs' depths in place;
   # the SpatVoxel method puts them back and leaves the inputs alone.
   shallow <- v[[1]]

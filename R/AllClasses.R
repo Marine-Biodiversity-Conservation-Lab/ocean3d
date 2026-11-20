@@ -44,6 +44,12 @@ NULL
 #' voxel that has edges with one that doesn't, with `c()`, leaves some layers
 #' without edges, so `bounds` applies to the result.
 #'
+#' terra keeps the depths through `[[`, arithmetic, `ifel()` and `crop()` or
+#' `mask()` with an extent or a raster, but resets them to 0 when it crops or
+#' masks with a polygon or replaces a layer with `[[<-`. Re-wrap the result
+#' with [as_voxel()], which reads the depths back from the layer names it
+#' wrote.
+#'
 #' @slot depth_edges A data frame with columns `depth`, `lower` and `upper`,
 #'   in metres positive down: the slab each depth stands for, from `lower`
 #'   (its top) to `upper` (its bottom), as in [SpatProxy-class]. It has no

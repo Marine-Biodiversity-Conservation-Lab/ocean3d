@@ -66,6 +66,10 @@ that changes the raster layer set can leave an object still labelled
 \code{SpatVoxel} even if invalid (for example \code{v[[c(1, 1)]]}, two layers at the
 same depth). Passing an invalid \code{SpatVoxel} to \code{as_voxel()} checks it as it
 would a plain raster: unsorted layers are sorted, and the rest is an error.
+Some terra operations reset depths to 0 (\code{crop()} or \code{mask()} with a
+polygon, replacing a layer with \verb{[[<-}, \code{app()}), so they repeat;
+\code{as_voxel()} then reads the depths back from the \verb{\{varname\}_depth=\{value\}}
+names it gave the layers, if they're still there.
 
 Depths are positive metres increasing downward, matching the World Ocean
 Atlas convention. Negative depths are an error rather than being silently
