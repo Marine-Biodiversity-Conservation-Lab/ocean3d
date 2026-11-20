@@ -1,46 +1,45 @@
-test_that("depths() reads the depth axis of a SpatVoxel", {
+test_that("depths() reads depths from voxels, rasters and layer names", {
   v <- as_voxel(make_multidepth_rast(depths = c(0, 100, 200, 300)))
-  expect_identical(depths(v), c(0, 100, 200, 300))
-})
-
-test_that("depths() works on a plain SpatRaster with conforming names", {
   r <- make_multidepth_rast(depths = c(0, 50, 100, 500))
   expect_false(methods::is(r, "SpatVoxel"))
-  expect_identical(depths(r), c(0, 50, 100, 500))
+
+  cases <- list(
+    list(label = "SpatVoxel", x = v, depths = c(0, 100, 200, 300)),
+    list(label = "plain SpatRaster with conforming names", x = r,
+         depths = c(0, 50, 100, 500)),
+    list(label = "layer names", x = c("t_an_depth=0", "t_an_depth=1500"),
+         depths = c(0, 1500)),
+    list(label = "terra::global() row names",
+         x = rownames(terra::global(v, "mean", na.rm = TRUE)),
+         depths = c(0, 100, 200, 300)),
+    list(label = "a name that doesn't follow the convention",
+         x = c("t_an_depth=0", "nope"), depths = c(0, NA)),
+    # Negative depths are rejected by as_voxel(), but the parser itself is
+    # the shared primitive and must report what the name actually says.
+    list(label = "decimal and negative values",
+         x = c("x_depth=2.5", "x_depth=-5"), depths = c(2.5, -5))
+  )
+  for (case in cases) {
+    expect_identical(depths(case$x), case$depths, label = case$label)
+  }
 })
 
-test_that("depths() accepts a character vector of layer names", {
-  expect_identical(depths(c("t_an_depth=0", "t_an_depth=1500")), c(0, 1500))
-})
-
-test_that("depths() recovers depths from terra::global() row names", {
-  v <- as_voxel(make_multidepth_rast(depths = c(0, 100, 200, 300)))
-  per_depth <- terra::global(v, "mean", na.rm = TRUE)
-  expect_identical(depths(rownames(per_depth)), c(0, 100, 200, 300))
-})
-
-test_that("depths() returns NA for names that do not follow the convention", {
-  expect_identical(depths(c("t_an_depth=0", "nope")), c(0, NA))
-})
-
-test_that("depths() errors when no name follows the convention", {
-  expect_error(depths("nope"), "'\\{variable\\}_depth=\\{value\\}'")
-
+test_that("depths() errors on input it can't read depths from", {
   r <- terra::rast(nrows = 2, ncols = 2)
   terra::values(r) <- 1:4
   names(r) <- "not_a_depth_layer"
-  expect_error(depths(r), "'\\{variable\\}_depth=\\{value\\}'")
-})
-
-test_that("depths() parses decimal and negative values in names", {
-  # Negative depths are rejected by as_voxel(), but the parser itself is the
-  # shared primitive and must report what the name actually says.
-  expect_identical(depths(c("x_depth=2.5", "x_depth=-5")), c(2.5, -5))
-})
-
-test_that("depths() rejects input that is neither a raster nor character", {
-  expect_error(depths(1:3), "SpatVoxel")
-  expect_error(depths(NULL), "SpatVoxel")
+  convention <- "'\\{variable\\}_depth=\\{value\\}'"
+  cases <- list(
+    list(label = "no name follows the convention", x = "nope",
+         pattern = convention),
+    list(label = "no layer name follows the convention", x = r,
+         pattern = convention),
+    list(label = "integer vector", x = 1:3, pattern = "SpatVoxel"),
+    list(label = "NULL", x = NULL, pattern = "SpatVoxel")
+  )
+  for (case in cases) {
+    expect_error(depths(case$x), case$pattern, label = case$label)
+  }
 })
 
 test_that("depth_bounds() reads a voxel's edges for its current layers", {
