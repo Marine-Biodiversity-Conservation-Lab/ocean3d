@@ -151,6 +151,9 @@ message says how many cells have the limits swapped (or a seafloor above
   the polygons covering it, so polygons from 0 to 50 m and from 200 to
   300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
   are polygon times, with a message (#114).
+* `volume()` measures `SpatVector3D` polygons: each polygon's area times
+  its depth range, in km³. `per_cell = TRUE` gives one volume per polygon,
+  named by feature ID (#115).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`, and read them with the new

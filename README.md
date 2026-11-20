@@ -174,12 +174,13 @@ object restricts the domain horizontally without restricting the depths.
 
 ### Summarise: 3D volume
 
-Input: `SpatEnvelope` or `SpatVoxel`. A voxel’s volume sums the slab each
-occupied depth level stands for, so interior gaps cost volume instead of
-being filled in.
+Input: `SpatEnvelope`, `SpatVoxel` or `SpatVector3D` polygons. A voxel’s
+volume sums the slab each occupied depth level stands for, so interior gaps
+cost volume instead of being filled in. A polygon's volume is its area times
+its depth range, measured from the outline rather than a grid.
 
-- `volume()` — 3D volume (km³) of a rasterized domain, as a total or per
-  cell (`per_cell = TRUE`). Measure an overlap with
+- `volume()` — 3D volume (km³) of a domain, as a total or per cell
+  (`per_cell = TRUE`; per polygon for `SpatVector3D`). Measure an overlap with
   `volume(intersect_3d(a, b))`.
 
 ### Summarise: environmental extraction from a `SpatVoxel`

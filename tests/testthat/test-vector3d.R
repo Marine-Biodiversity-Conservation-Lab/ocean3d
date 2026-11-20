@@ -334,12 +334,6 @@ test_that("depth_min and depth_max are only for polygons", {
                "are for polygons", class = "ocean3d_error_vector3d")
 })
 
-test_that("volume() on polygons says it isn't supported yet", {
-  p <- as_vector3d(areas(), depth_min = 0, depth_max = 50)
-  expect_error(volume(p), "doesn't support SpatVector3D polygons yet",
-               class = "ocean3d_error_volume_type")
-})
-
 # Buffers -------------------------------------------------------------------
 
 area_km2 <- function(polygons) {

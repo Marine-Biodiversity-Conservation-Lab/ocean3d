@@ -356,18 +356,3 @@ as.data.frame.SpatVector3D <- function(x, row.names = NULL, # nolint
                                        ...) {
   if (x@type == "polygons") x@features else x@vertices
 }
-
-#' @rdname volume
-#' @export
-setMethod("volume", "SpatVector3D", function(x, ...) {
-  message <- if (x@type == "polygons") {
-    "volume() doesn't support SpatVector3D polygons yet."
-  } else {
-    glue::glue(
-      "These are {x@type}, which have no volume. Volume is defined for ",
-      "shapes with a depth range: voxels, envelopes and polygons. ",
-      "buffer_3d() turns {x@type} into polygons."
-    )
-  }
-  rlang::abort(message, class = "ocean3d_error_volume_type", call = NULL)
-})
