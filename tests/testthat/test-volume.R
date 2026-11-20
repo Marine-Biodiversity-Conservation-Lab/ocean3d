@@ -250,5 +250,6 @@ test_that("volume() of polygons rejects per_cell and voxel arguments", {
   polygons <- as_vector3d(make_polygon(), depth_min = 0, depth_max = 100)
   expect_error(volume(polygons, per_cell = TRUE), "Polygons have no cells",
                class = "ocean3d_error_volume_per_cell")
-  expect_error(volume(polygons, bounds = "top"), "unused argument")
+  expect_error(volume(polygons, bounds = "top"), "unused argument",
+               class = "ocean3d_error_unused_argument")
 })

@@ -38,9 +38,11 @@
   nms <- names(extra)
   nms <- if (is.null(nms)) rep("", length(extra)) else nms
   nms[nms == ""] <- "<unnamed>"
-  stop("unused argument(s): ", toString(nms),
-       ". `bounds` applies only when one input is a SpatVoxel; envelopes ",
-       "and polygons carry their own depth intervals.", call. = FALSE)
+  rlang::abort(glue::glue(
+    "unused argument(s): {toString(nms)}. `bounds` applies only when one ",
+    "input is a SpatVoxel; envelopes and polygons carry their own depth ",
+    "intervals."
+  ), class = "ocean3d_error_unused_argument", call = NULL)
 }
 
 # Internal: a voxel's occupancy as a 0/1 stack, one layer per depth, ready to

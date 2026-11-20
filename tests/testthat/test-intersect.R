@@ -669,6 +669,23 @@ test_that("mask() by polygons keeps values where they reach", {
   expect_identical(!is.na(plain), inside())
 })
 
+test_that("an empty polygon set shares no space with a grid", {
+  far <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(rbind(
+    c(20, 20), c(21, 20), c(21, 21), c(20, 21), c(20, 20)
+  ))), crs = 4326))
+  far <- as_vector3d(far, depth_min = 0, depth_max = 100)
+  # intersect_3d() of two polygon sets that share nothing has no polygons.
+  none <- intersect_3d(polygons_0_100(), far)
+  expect_identical(length(none), 0L)
+
+  shared <- intersect_3d(none, envelope_50_200())
+  expect_s4_class(shared, "SpatEnvelope")
+  expect_true(all(is.na(terra::values(shared))))
+  expect_false(any(terra::values(intersects_3d(envelope_50_200(), none))))
+  masked <- mask(envelope_50_200(), none)
+  expect_true(all(is.na(terra::values(masked))))
+})
+
 test_that("comparing polygons with a grid drops their times with a message", {
   dated <- sf::st_sf(day = as.Date("2020-01-01"),
                      geometry = sf::st_geometry(make_polygon()))
@@ -682,7 +699,7 @@ test_that("points and lines aren't compared with a grid yet", {
   for (call in list(function() intersect_3d(points, envelope_50_200()),
                     function() intersects_3d(envelope_50_200(), points),
                     function() mask(envelope_50_200(), points))) {
-    expect_error(call(), "don't support SpatVector3D points yet",
+    expect_error(call(), "This needs polygons, but these are points",
                  class = "ocean3d_error_vector3d_type")
     expect_error(call(), "buffer_3d() turns points into polygons",
                  class = "ocean3d_error_vector3d_type", fixed = TRUE)
@@ -758,6 +775,30 @@ test_that("intersects_3d() of polygon sets lists the pairs that share space", {
                         b4 = character(0)))
 })
 
+test_that("intersect_3d() of polygon sets keeps the polygon part of a mix", {
+  # With planar geometry, a two-part polygon that overlaps a square in one
+  # part and only touches it in the other gives a polygon and a line.
+  old <- suppressMessages(sf::sf_use_s2(FALSE))
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  square <- function(x0, x1) {
+    rbind(c(x0, 0), c(x1, 0), c(x1, 1), c(x0, 1), c(x0, 0))
+  }
+  two_parts <- sf::st_multipolygon(list(list(square(0, 1)),
+                                        list(square(3, 4))))
+  x <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(two_parts, crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  y <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(square(0.5, 3))),
+                                       crs = 4326))
+  y <- as_vector3d(y, depth_min = 0, depth_max = 100)
+
+  shared <- suppressMessages(intersect_3d(x, y))
+  expect_identical(length(shared), 1L)
+  geometry <- as.data.frame(shared)$geometry
+  expect_identical(as.character(sf::st_geometry_type(geometry)), "POLYGON")
+  expect_identical(unname(sf::st_bbox(geometry)[c("xmin", "xmax")]),
+                   c(0.5, 1))
+})
+
 test_that("intersect_3d() of polygon sets compares time intervals", {
   on_days <- function(start, end) {
     p <- sf::st_sf(start = as.Date(start), end = as.Date(end),
@@ -788,6 +829,20 @@ test_that("intersect_3d() of polygon sets compares time intervals", {
                                        on_days("2021-01-01", "2021-01-02"))),
                    0)
 
+  # With hours, windows that meet at one instant overlap at that instant,
+  # so a polygon at a single time can meet one whose window ends then.
+  at_hours <- function(start, end) {
+    p <- sf::st_sf(start = as.POSIXct(start, tz = "UTC"),
+                   end = as.POSIXct(end, tz = "UTC"),
+                   geometry = sf::st_geometry(make_polygon()))
+    as_vector3d(p, time = c("start", "end"), depth_min = 0, depth_max = 100)
+  }
+  meeting <- intersect_3d(at_hours("2020-01-05 06:00", "2020-01-05 12:00"),
+                          at_hours("2020-01-05 12:00", "2020-01-05 18:00"))
+  expect_identical(length(meeting), 1L)
+  expect_identical(as.data.frame(meeting)$time_start,
+                   as.data.frame(meeting)$time_end)
+
   hourly <- sf::st_sf(time = as.POSIXct("2020-01-05 06:00", tz = "UTC"),
                       geometry = sf::st_geometry(make_polygon()))
   hourly <- as_vector3d(hourly, time = "time", depth_min = 0, depth_max = 10)
@@ -798,6 +853,15 @@ test_that("intersect_3d() of polygon sets compares time intervals", {
 test_that("intersect_3d() of polygon sets rejects points and lines", {
   points <- as_vector3d(data.frame(lon = 2.5, lat = 2.5, depth = 10))
   expect_error(intersect_3d(polygons_0_100(), points),
-               "don't support SpatVector3D points yet",
+               "This needs polygons, but these are points",
                class = "ocean3d_error_vector3d_type")
+  # A 2D object isn't a second set of polygons.
+  flat <- sf::st_geometry(make_polygon())
+  for (call in list(function() intersect_3d(polygons_0_100(), flat),
+                    function() intersects_3d(flat, polygons_0_100()))) {
+    err <- expect_error(call(), class = "ocean3d_error_query_input")
+    expect_match(conditionMessage(err),
+                 "SpatVector3D polygons can be compared with")
+    expect_match(conditionMessage(err), "not with sfc_POLYGON")
+  }
 })

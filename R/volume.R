@@ -68,9 +68,10 @@ setMethod(
 
 # SpatVector3D polygons are measured from their outlines, not a grid
 # (SPEC.md, "Summarise: volume calculations"): geodesic area times the depth
-# range. terra::expanse() gives the same area as terra::cellSize() for a
-# polygon that covers a cell exactly, so a polygon and its envelope agree
-# where the outline follows the grid. Points and lines have no volume.
+# range, with terra::expanse(). It agrees with terra::cellSize() for a polygon
+# drawn along a cell's edges to within about 0.02% at low latitudes: the
+# polygon's edges are geodesics, while cells are bounded by parallels.
+# Points and lines have no volume.
 #' @rdname volume
 #' @export
 setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {

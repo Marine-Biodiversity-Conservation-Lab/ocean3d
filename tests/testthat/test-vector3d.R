@@ -554,8 +554,8 @@ test_that("vector3d_to_envelope() rejects inputs it can't convert", {
   empty <- "ocean3d_error_envelope_empty"
   pts <- as_vector3d(data.frame(lon = 151, lat = -20.5, depth = 5))
   expect_error(vector3d_to_envelope(pts, envelope_grid()),
-               "These are points; buffer_3d() turns them into polygons",
-               class = err, fixed = TRUE)
+               "these are points. buffer_3d() turns points into polygons",
+               class = "ocean3d_error_vector3d_type", fixed = TRUE)
   expect_error(vector3d_to_envelope(areas(), envelope_grid()),
                "must be SpatVector3D polygons", class = err)
   p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)

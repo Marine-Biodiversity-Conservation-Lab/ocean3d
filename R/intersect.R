@@ -18,11 +18,26 @@
 # before it is returned (see R/AllClasses.R), and every 3D result is rebuilt
 # through as_envelope() or as_voxel() so the validity rules run.
 
-# Internal: the error for a query in which neither side is a 3D object.
-.stop_neither_3d <- function() {
-  stop("neither `x` nor `y` is a SpatEnvelope or a SpatVoxel. A 3D query ",
-       "needs at least one 3D object; build one with as_envelope(), ",
-       "vect_to_envelope() or as_voxel().", call. = FALSE)
+# Internal: the one producer of `ocean3d_error_query_input`, for a pair no
+# method takes: neither side is a 3D object, or SpatVector3D polygons meet
+# something other than an envelope, a voxel or other polygons.
+.stop_neither_3d <- function(x, y) {
+  vector <- methods::is(x, "SpatVector3D") || methods::is(y, "SpatVector3D")
+  message <- if (vector) {
+    other <- if (methods::is(x, "SpatVector3D")) y else x
+    glue::glue(
+      "SpatVector3D polygons can be compared with a SpatEnvelope, a ",
+      "SpatVoxel or other SpatVector3D polygons, not with ",
+      "{class(other)[1L]}. Build 3D polygons from 2D ones with as_vector3d()."
+    )
+  } else {
+    paste0(
+      "neither `x` nor `y` is a SpatEnvelope, a SpatVoxel or SpatVector3D ",
+      "polygons. A 3D query needs at least one 3D object; build one with ",
+      "as_envelope(), vect_to_envelope(), as_voxel() or as_vector3d()."
+    )
+  }
+  rlang::abort(message, class = "ocean3d_error_query_input", call = NULL)
 }
 
 # Internal: a voxel's occupancy as a presence domain: 1 where occupied, NA
@@ -148,7 +163,7 @@ setMethod("intersect_3d", c("ANY", "SpatVoxel"),
 #' @rdname intersect_3d
 #' @export
 setMethod("intersect_3d", c("ANY", "ANY"),
-          function(x, y, ...) .stop_neither_3d())
+          function(x, y, ...) .stop_neither_3d(x, y))
 
 # ---- intersects_3d ----------------------------------------------------------
 
@@ -267,7 +282,7 @@ setMethod("intersects_3d", c("ANY", "SpatVoxel"),
 #' @rdname intersects_3d
 #' @export
 setMethod("intersects_3d", c("ANY", "ANY"),
-          function(x, y, ...) .stop_neither_3d())
+          function(x, y, ...) .stop_neither_3d(x, y))
 
 # ---- mask -------------------------------------------------------------------
 
@@ -441,38 +456,27 @@ setMethod(
 
 # ---- SpatVector3D polygons --------------------------------------------------
 
-# Internal: the one producer of `ocean3d_error_vector3d_type`. The queries
-# take SpatVector3D polygons only, for now; points and lines come later
-# (#115).
-.check_polygons <- function(x) {
-  if (x@type != "polygons") {
-    rlang::abort(glue::glue(
-      "The 3D queries don't support SpatVector3D {x@type} yet. ",
-      "buffer_3d() turns {x@type} into polygons."
-    ), class = "ocean3d_error_vector3d_type", call = NULL)
-  }
-  invisible(x)
-}
-
 # Internal: SpatVector3D polygons on the grid of `template` as an envelope,
 # so the queries above compare them with an envelope or voxel cell by cell,
-# as SPEC.md ("Intersect: spatial query") plans. Polygons that miss the grid
-# or have no thickness give an empty envelope instead of
-# vector3d_to_envelope()'s error: sharing no space is an answer here, as it
-# is for two envelopes. Callers assign its result before passing it on: an
-# error raised while S4 evaluates an argument for dispatch loses its class.
+# as SPEC.md ("Intersect: spatial query") plans. No polygons, polygons that
+# miss the grid and polygons with no thickness give an empty envelope instead
+# of vector3d_to_envelope()'s errors: sharing no space is an answer here, as
+# it is for two envelopes, and intersect_3d() of two polygon sets can return
+# no polygons. Callers assign its result before passing it on: an error
+# raised while S4 evaluates an argument for dispatch loses its class.
 .polygons_on_grid <- function(x, template) {
+  # Checked first, so empty points or lines are still an error.
   .check_polygons(x)
-  tryCatch(
-    vector3d_to_envelope(x, template),
-    ocean3d_error_envelope_empty = function(e) {
-      # remove the 3D class
-      grid <- methods::as(template[[1]], "SpatRaster")
-      empty <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
-      names(empty) <- c("depth_min", "depth_max")
-      as_envelope(empty)
-    }
-  )
+  empty <- function(...) {
+    # remove the 3D class
+    grid <- methods::as(template[[1]], "SpatRaster")
+    out <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
+    names(out) <- c("depth_min", "depth_max")
+    as_envelope(out)
+  }
+  if (length(x) == 0L) return(empty())
+  tryCatch(vector3d_to_envelope(x, template),
+           ocean3d_error_envelope_empty = empty)
 }
 
 #' @rdname intersect_3d
@@ -570,7 +574,10 @@ setMethod(
     # which have no area; a collection keeps its polygon parts.
     geometry <- lapply(sf::st_geometry(pairs), function(g) {
       if (inherits(g, "GEOMETRYCOLLECTION")) {
-        g <- sf::st_union(sf::st_collection_extract(g, "POLYGON"))[[1]]
+        # On one geometry, st_collection_extract() and st_union() give a
+        # geometry, not a column, so the parts go in a column first.
+        parts <- sf::st_sfc(sf::st_collection_extract(g, "POLYGON"))
+        g <- sf::st_union(parts)[[1]]
       }
       g
     })
