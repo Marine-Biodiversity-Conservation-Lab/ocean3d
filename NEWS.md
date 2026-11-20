@@ -154,6 +154,11 @@ message says how many cells have the limits swapped (or a seafloor above
 * `volume()` measures `SpatVector3D` polygons: each polygon's area times
   its depth range, in km³. `per_cell = TRUE` gives one volume per polygon,
   named by feature ID (#115).
+* `intersect_3d()`, `intersects_3d()` and `mask()` accept `SpatVector3D`
+  polygons with a `SpatEnvelope` or `SpatVoxel`, in either order. The
+  polygons are put on the raster's grid with `vector3d_to_envelope()` and
+  compared as an envelope, so `mask(voxel, polygons)` keeps the voxel's
+  values in the cells and depth levels the polygons reach (#115).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`, and read them with the new

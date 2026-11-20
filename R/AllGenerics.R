@@ -136,8 +136,9 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' values where the other is present, use [mask()].
 #'
 #' At least one of `x` and `y` must be a 3D object: a [SpatEnvelope-class] or
-#' a [SpatVoxel-class]. The other can be a 3D object too, or a 2D object. A 2D
-#' object restricts the result horizontally and leaves its depths alone.
+#' a [SpatVoxel-class]. The other can be a 3D object too, [SpatVector3D-class]
+#' polygons, or a 2D object. A 2D object restricts the result horizontally and
+#' leaves its depths alone.
 #'
 #' \describe{
 #'   \item{Two envelopes}{Cell by cell, the result runs from the deeper
@@ -153,6 +154,14 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'   \item{A 3D object and polygons}{A `SpatVector`, `sf` or `sfc` object. The
 #'     polygons are rasterised onto the 3D object's grid. A cell is inside when
 #'     its centre is. Polygons in another CRS are projected first.}
+#'   \item{A 3D object and [SpatVector3D-class] polygons}{The polygons are
+#'     first put on the 3D object's grid with [vector3d_to_envelope()], then
+#'     compared as an envelope. Each cell a polygon touches gets its depth
+#'     range; where polygons overlap, a cell gets the shallowest top and the
+#'     deepest bottom, so a depth gap between two polygons over one cell is
+#'     filled. The polygons' time intervals are dropped, with a message.
+#'     Polygons that miss the grid give an empty result. Points and lines
+#'     aren't supported yet; [buffer_3d()] turns them into polygons.}
 #' }
 #'
 #' The order of `x` and `y` does not matter.
@@ -164,7 +173,8 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'
 #' @param x,y The two objects. At least one must be a [SpatEnvelope-class] or
 #'   a [SpatVoxel-class]. The other can be either of those, a single-layer
-#'   `SpatRaster` footprint, or polygons (`SpatVector`, `sf`, `sfc`). Rasters
+#'   `SpatRaster` footprint, 2D polygons (`SpatVector`, `sf`, `sfc`), or
+#'   [SpatVector3D-class] polygons with a 3D object. Rasters
 #'   must share one grid (CRS, extent, resolution). netCDF files aren't
 #'   accepted; load them with terra and wrap them with [as_voxel()] first.
 #' @param ... Arguments for the voxel methods. They are an error when both
@@ -176,7 +186,8 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'   result, pass the same `bounds` to [volume()].
 #'
 #' @returns A [SpatEnvelope-class] when both inputs are envelopes, or when one
-#'   is an envelope and the other is 2D. Otherwise a [SpatVoxel-class] of
+#'   is an envelope and the other is 2D or [SpatVector3D-class] polygons.
+#'   Otherwise a [SpatVoxel-class] of
 #'   presence. Either is on the grid of the 3D input.
 #'
 #' @seealso [intersects_3d()] for the yes/no form; [mask()] to keep a voxel's
@@ -208,6 +219,17 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' poly <- terra::vect("POLYGON ((0 0, 2000 0, 2000 1000, 0 1000, 0 0))",
 #'                     crs = terra::crs(fp))
 #' terra::values(intersect_3d(a, poly))
+#'
+#' # With SpatVector3D polygons, the depth ranges are compared too: a polygon
+#' # from 80 to 300 m over the first two cells shares 80-100 m with `a`.
+#' deep <- as_vector3d(
+#'   sf::st_sf(geometry = sf::st_as_sfc(
+#'     "POLYGON ((0 0, 2000 0, 2000 1000, 0 1000, 0 0))",
+#'     crs = terra::crs(fp)
+#'   )),
+#'   depth_min = 80, depth_max = 300
+#' )
+#' terra::values(intersect_3d(a, deep))
 #' @export
 setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 
@@ -230,6 +252,8 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' sums and plots like any other boolean layer. Depth intervals that only touch
 #' do not overlap. When `y` is a 2D footprint or polygons there is no depth
 #' axis to compare, so the test is only whether both are present.
+#' [SpatVector3D-class] polygons have depths, so they are compared as an
+#' envelope, after being put on the 3D object's grid as in [intersect_3d()].
 #'
 #' The order of `x` and `y` does not matter.
 #'

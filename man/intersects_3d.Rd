@@ -11,6 +11,10 @@
 \alias{intersects_3d,ANY,SpatEnvelope-method}
 \alias{intersects_3d,ANY,SpatVoxel-method}
 \alias{intersects_3d,ANY,ANY-method}
+\alias{intersects_3d,SpatVector3D,SpatEnvelope-method}
+\alias{intersects_3d,SpatVector3D,SpatVoxel-method}
+\alias{intersects_3d,SpatEnvelope,SpatVector3D-method}
+\alias{intersects_3d,SpatVoxel,SpatVector3D-method}
 \title{Do two objects share any 3D space?}
 \usage{
 intersects_3d(x, y, ...)
@@ -32,11 +36,20 @@ intersects_3d(x, y, ...)
 \S4method{intersects_3d}{ANY,SpatVoxel}(x, y, ...)
 
 \S4method{intersects_3d}{ANY,ANY}(x, y, ...)
+
+\S4method{intersects_3d}{SpatVector3D,SpatEnvelope}(x, y, ...)
+
+\S4method{intersects_3d}{SpatVector3D,SpatVoxel}(x, y, ...)
+
+\S4method{intersects_3d}{SpatEnvelope,SpatVector3D}(x, y, ...)
+
+\S4method{intersects_3d}{SpatVoxel,SpatVector3D}(x, y, ...)
 }
 \arguments{
 \item{x, y}{The two objects. At least one must be a \link[=SpatEnvelope-class]{SpatEnvelope} or
 a \link[=SpatVoxel-class]{SpatVoxel}. The other can be either of those, a single-layer
-\code{SpatRaster} footprint, or polygons (\code{SpatVector}, \code{sf}, \code{sfc}). Rasters
+\code{SpatRaster} footprint, 2D polygons (\code{SpatVector}, \code{sf}, \code{sfc}), or
+\link[=SpatVector3D-class]{SpatVector3D} polygons with a 3D object. Rasters
 must share one grid (CRS, extent, resolution). netCDF files aren't
 accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
@@ -72,6 +85,8 @@ This is how \code{terra} answers the 2D question for two rasters, so the result
 sums and plots like any other boolean layer. Depth intervals that only touch
 do not overlap. When \code{y} is a 2D footprint or polygons there is no depth
 axis to compare, so the test is only whether both are present.
+\link[=SpatVector3D-class]{SpatVector3D} polygons have depths, so they are compared as an
+envelope, after being put on the 3D object's grid as in \code{\link[=intersect_3d]{intersect_3d()}}.
 
 The order of \code{x} and \code{y} does not matter.
 }

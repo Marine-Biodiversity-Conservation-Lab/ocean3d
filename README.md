@@ -162,9 +162,12 @@ Input: `SpatRaster` layers, tables of points or lines, and polygons (`sf`,
 
 ### Intersect: 3D spatial query
 
-Input: `SpatVoxel` or `SpatEnvelope`, compared with another 3D object or a
-2D one: a `SpatRaster` footprint or polygons (`SpatVector`, `sf`). A 2D
-object restricts the domain horizontally without restricting the depths.
+Input: `SpatVoxel` or `SpatEnvelope`, compared with another 3D object,
+`SpatVector3D` polygons, or a 2D object: a `SpatRaster` footprint or
+polygons (`SpatVector`, `sf`). A 2D object restricts the domain
+horizontally without restricting the depths. `SpatVector3D` polygons are
+put on the raster's grid with `vector3d_to_envelope()` and compared as an
+envelope.
 
 - `intersect_3d(x, y)` — the shared 3D space between the two inputs. Returns an envelope with the shared depth interval or a presence voxel, depending on inputs.
 - `intersects_3d(x, y)` — whether inputs share any 3D space, cell by cell:

@@ -585,3 +585,106 @@ test_that("voxel pairs with different depth edges stop", {
     expect_match(conditionMessage(err), "different depth edges")
   }
 })
+
+# SpatVector3D polygons (#115) ----------------------------------------------
+
+test_that("intersect_3d() of polygons and an envelope compares depths", {
+  for (result in list(intersect_3d(polygons_0_100(), envelope_50_200()),
+                      intersect_3d(envelope_50_200(), polygons_0_100()))) {
+    expect_s4_class(result, "SpatEnvelope")
+    vals <- terra::values(result)
+    expect_identical(sum(inside()), 9L)
+    expect_true(all(vals[inside(), "depth_min"] == 50))
+    expect_true(all(vals[inside(), "depth_max"] == 100))
+    expect_true(all(is.na(vals[!inside(), ])))
+  }
+  # The overlap is 9 cells x 50 m, half the polygons' 100 m. The tolerance
+  # allows for the polygons' geodesic edges (see test-volume.R).
+  overlap <- volume(intersect_3d(polygons_0_100(), envelope_50_200()))
+  expect_equal(overlap, volume(polygons_0_100()) / 2, tolerance = 1e-3)
+})
+
+test_that("intersect_3d() of polygons and a voxel uses the voxel's levels", {
+  voxel <- envelope_to_voxel(envelope_50_200(), depths = c(0, 50, 100, 150))
+  polygons <- polygons_0_100()
+  on_grid <- vector3d_to_envelope(polygons, voxel)
+  expect_identical(
+    terra::values(intersect_3d(polygons, voxel, bounds = "top")),
+    terra::values(intersect_3d(on_grid, voxel, bounds = "top"))
+  )
+  expect_identical(terra::values(intersect_3d(voxel, polygons)),
+                   terra::values(intersect_3d(on_grid, voxel)))
+  expect_s4_class(intersect_3d(voxel, polygons), "SpatVoxel")
+})
+
+test_that("intersects_3d() of polygons tests depth overlap per cell", {
+  deep <- as_envelope(make_template(1), depth_min = 300, depth_max = 400)
+  cases <- list(
+    list(label = "overlapping depths", y = envelope_50_200(), inside = TRUE),
+    list(label = "disjoint depths", y = deep, inside = FALSE)
+  )
+  for (case in cases) {
+    for (answer in list(intersects_3d(polygons_0_100(), case$y),
+                        intersects_3d(case$y, polygons_0_100()))) {
+      vals <- terra::values(answer)[, 1]
+      expect_true(all(vals[inside()] == case$inside), label = case$label)
+      # Outside the polygons only the envelope is present.
+      expect_false(any(vals[!inside()]), label = case$label)
+    }
+  }
+})
+
+test_that("polygons that miss the grid share no space", {
+  far <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(rbind(
+    c(20, 20), c(21, 20), c(21, 21), c(20, 21), c(20, 20)
+  ))), crs = 4326))
+  far <- as_vector3d(far, depth_min = 0, depth_max = 100)
+  shared <- intersect_3d(far, envelope_50_200())
+  expect_s4_class(shared, "SpatEnvelope")
+  expect_true(all(is.na(terra::values(shared))))
+  expect_false(any(terra::values(intersects_3d(far, envelope_50_200()))))
+})
+
+test_that("mask() by polygons keeps values where they reach", {
+  # Levels 0, 100 and 200 m stand for 0-50, 50-150 and 150-200 m, so the
+  # polygons' 0-100 m reaches the first two.
+  layers <- lapply(1:3, function(i) make_template(i))
+  voxel <- as_voxel(terra::rast(layers), depths = c(0, 100, 200),
+                    varname = "temp")
+  masked <- mask(voxel, polygons_0_100())
+  expect_s4_class(masked, "SpatVoxel")
+  vals <- terra::values(masked)
+  expect_true(all(vals[inside(), 1:2] == rep(1:2, each = 9)))
+  expect_true(all(is.na(vals[inside(), 3])))
+  expect_true(all(is.na(vals[!inside(), ])))
+
+  # An envelope is kept whole where the depths overlap; a plain raster where
+  # the polygons are.
+  expect_identical(
+    terra::values(mask(envelope_50_200(), polygons_0_100())),
+    terra::values(mask(envelope_50_200(),
+                       vector3d_to_envelope(polygons_0_100(), make_template())))
+  )
+  plain <- terra::values(mask(make_template(7), polygons_0_100()))[, 1]
+  expect_identical(!is.na(plain), inside())
+})
+
+test_that("comparing polygons with a grid drops their times with a message", {
+  dated <- sf::st_sf(day = as.Date("2020-01-01"),
+                     geometry = sf::st_geometry(make_polygon()))
+  dated <- as_vector3d(dated, time = "day", depth_min = 0, depth_max = 100)
+  expect_message(intersect_3d(dated, envelope_50_200()),
+                 class = "ocean3d_message_time_dropped")
+})
+
+test_that("points and lines aren't compared with a grid yet", {
+  points <- as_vector3d(data.frame(lon = 2.5, lat = 2.5, depth = 10))
+  for (call in list(function() intersect_3d(points, envelope_50_200()),
+                    function() intersects_3d(envelope_50_200(), points),
+                    function() mask(envelope_50_200(), points))) {
+    expect_error(call(), "points with an envelope or voxel isn't supported",
+                 class = "ocean3d_error_vector3d_type")
+    expect_error(call(), "buffer_3d() turns points into polygons",
+                 class = "ocean3d_error_vector3d_type", fixed = TRUE)
+  }
+})

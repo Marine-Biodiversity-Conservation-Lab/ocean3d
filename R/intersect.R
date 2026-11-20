@@ -296,6 +296,12 @@ setMethod("intersects_3d", c("ANY", "ANY"),
 #'   \item{plain `SpatRaster` masked by an envelope or a voxel}{A cell is kept
 #'     where the mask domain is present at any depth. Without this method
 #'     terra would read the mask's first layer only.}
+#'   \item{anything masked by [SpatVector3D-class] polygons}{The polygons
+#'     are put on the grid of `x` with [vector3d_to_envelope()], then used as
+#'     an envelope mask as above. A voxel keeps its values in the cells and
+#'     levels the polygons reach. Where polygons overlap, a cell gets the
+#'     shallowest top and the deepest bottom, so a depth gap between them is
+#'     kept too. The time intervals are dropped, with a message.}
 #' }
 #'
 #' A voxel or envelope masked by a plain `SpatRaster` or by polygons is
@@ -307,7 +313,8 @@ setMethod("intersects_3d", c("ANY", "ANY"),
 #'   accepted: load it as a `SpatRaster` (e.g. with [woa_load_nc()]) and wrap
 #'   it with [as_voxel()].
 #' @param mask The 3D domain to keep `x` inside: a [SpatEnvelope-class] or a
-#'   [SpatVoxel-class] on the same grid as `x`.
+#'   [SpatVoxel-class] on the same grid as `x`, or [SpatVector3D-class]
+#'   polygons, which are put on that grid.
 #' @param bounds Only when one side is an envelope and the other a voxel. How
 #'   the envelope is placed on the voxel's depth levels: `"midpoint"`
 #'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
@@ -431,6 +438,98 @@ setMethod(
     terra::mask(x, .footprint(mask), ...)
   }
 )
+
+# ---- SpatVector3D polygons --------------------------------------------------
+
+# Internal: SpatVector3D polygons on the grid of `template` as an envelope,
+# so the queries above compare them with an envelope or voxel cell by cell,
+# as SPEC.md ("Intersect: spatial query") plans. Polygons that miss the grid
+# or have no thickness give an empty envelope instead of
+# vector3d_to_envelope()'s error: sharing no space is an answer here, as it
+# is for two envelopes. Callers assign its result before passing it on: an
+# error raised while S4 evaluates an argument for dispatch loses its class.
+.polygons_on_grid <- function(x, template) {
+  if (x@type != "polygons") {
+    rlang::abort(glue::glue(
+      "Comparing SpatVector3D {x@type} with an envelope or voxel isn't ",
+      "supported yet. buffer_3d() turns {x@type} into polygons."
+    ), class = "ocean3d_error_vector3d_type", call = NULL)
+  }
+  tryCatch(
+    vector3d_to_envelope(x, template),
+    ocean3d_error_envelope_empty = function(e) {
+      # remove the 3D class
+      grid <- methods::as(template[[1]], "SpatRaster")
+      empty <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
+      names(empty) <- c("depth_min", "depth_max")
+      as_envelope(empty)
+    }
+  )
+}
+
+#' @rdname intersect_3d
+#' @export
+setMethod("intersect_3d", c("SpatVector3D", "SpatEnvelope"),
+          function(x, y, ...) {
+            polygons <- .polygons_on_grid(x, y)
+            intersect_3d(polygons, y, ...)
+          })
+
+#' @rdname intersect_3d
+#' @export
+setMethod("intersect_3d", c("SpatVector3D", "SpatVoxel"),
+          function(x, y, ...) {
+            polygons <- .polygons_on_grid(x, y)
+            intersect_3d(polygons, y, ...)
+          })
+
+#' @rdname intersect_3d
+#' @export
+setMethod("intersect_3d", c("SpatEnvelope", "SpatVector3D"),
+          function(x, y, ...) intersect_3d(y, x, ...))
+
+#' @rdname intersect_3d
+#' @export
+setMethod("intersect_3d", c("SpatVoxel", "SpatVector3D"),
+          function(x, y, ...) intersect_3d(y, x, ...))
+
+#' @rdname intersects_3d
+#' @export
+setMethod("intersects_3d", c("SpatVector3D", "SpatEnvelope"),
+          function(x, y, ...) {
+            polygons <- .polygons_on_grid(x, y)
+            intersects_3d(polygons, y, ...)
+          })
+
+#' @rdname intersects_3d
+#' @export
+setMethod("intersects_3d", c("SpatVector3D", "SpatVoxel"),
+          function(x, y, ...) {
+            polygons <- .polygons_on_grid(x, y)
+            intersects_3d(polygons, y, ...)
+          })
+
+#' @rdname intersects_3d
+#' @export
+setMethod("intersects_3d", c("SpatEnvelope", "SpatVector3D"),
+          function(x, y, ...) intersects_3d(y, x, ...))
+
+#' @rdname intersects_3d
+#' @export
+setMethod("intersects_3d", c("SpatVoxel", "SpatVector3D"),
+          function(x, y, ...) intersects_3d(y, x, ...))
+
+# One signature serves voxels, envelopes and plain rasters: the polygons go
+# on the grid of `x`, and mask() then dispatches to the envelope methods
+# above for that class of `x`.
+#' @rdname mask-3d
+#' @export
+setMethod("mask", c("SpatRaster", "SpatVector3D"),
+          function(x, mask, ...) {
+            polygons <- .polygons_on_grid(mask, x)
+            mask(x, polygons, ...)
+          })
+
 # ---- terra::intersect() guard -----------------------------------------------
 
 #' @rdname intersect_3d

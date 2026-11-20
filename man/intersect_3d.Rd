@@ -11,6 +11,10 @@
 \alias{intersect_3d,ANY,SpatEnvelope-method}
 \alias{intersect_3d,ANY,SpatVoxel-method}
 \alias{intersect_3d,ANY,ANY-method}
+\alias{intersect_3d,SpatVector3D,SpatEnvelope-method}
+\alias{intersect_3d,SpatVector3D,SpatVoxel-method}
+\alias{intersect_3d,SpatEnvelope,SpatVector3D-method}
+\alias{intersect_3d,SpatVoxel,SpatVector3D-method}
 \alias{intersect-guard}
 \alias{intersect,SpatEnvelope,SpatEnvelope-method}
 \alias{intersect,SpatEnvelope,SpatVoxel-method}
@@ -41,11 +45,20 @@ intersect_3d(x, y, ...)
 \S4method{intersect_3d}{ANY,SpatVoxel}(x, y, ...)
 
 \S4method{intersect_3d}{ANY,ANY}(x, y, ...)
+
+\S4method{intersect_3d}{SpatVector3D,SpatEnvelope}(x, y, ...)
+
+\S4method{intersect_3d}{SpatVector3D,SpatVoxel}(x, y, ...)
+
+\S4method{intersect_3d}{SpatEnvelope,SpatVector3D}(x, y, ...)
+
+\S4method{intersect_3d}{SpatVoxel,SpatVector3D}(x, y, ...)
 }
 \arguments{
 \item{x, y}{The two objects. At least one must be a \link[=SpatEnvelope-class]{SpatEnvelope} or
 a \link[=SpatVoxel-class]{SpatVoxel}. The other can be either of those, a single-layer
-\code{SpatRaster} footprint, or polygons (\code{SpatVector}, \code{sf}, \code{sfc}). Rasters
+\code{SpatRaster} footprint, 2D polygons (\code{SpatVector}, \code{sf}, \code{sfc}), or
+\link[=SpatVector3D-class]{SpatVector3D} polygons with a 3D object. Rasters
 must share one grid (CRS, extent, resolution). netCDF files aren't
 accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
@@ -60,7 +73,8 @@ result, pass the same \code{bounds} to \code{\link[=volume]{volume()}}.}
 }
 \value{
 A \link[=SpatEnvelope-class]{SpatEnvelope} when both inputs are envelopes, or when one
-is an envelope and the other is 2D. Otherwise a \link[=SpatVoxel-class]{SpatVoxel} of
+is an envelope and the other is 2D or \link[=SpatVector3D-class]{SpatVector3D} polygons.
+Otherwise a \link[=SpatVoxel-class]{SpatVoxel} of
 presence. Either is on the grid of the 3D input.
 }
 \description{
@@ -71,8 +85,9 @@ values where the other is present, use \code{\link[terra:mask]{mask()}}.
 }
 \details{
 At least one of \code{x} and \code{y} must be a 3D object: a \link[=SpatEnvelope-class]{SpatEnvelope} or
-a \link[=SpatVoxel-class]{SpatVoxel}. The other can be a 3D object too, or a 2D object. A 2D
-object restricts the result horizontally and leaves its depths alone.
+a \link[=SpatVoxel-class]{SpatVoxel}. The other can be a 3D object too, \link[=SpatVector3D-class]{SpatVector3D}
+polygons, or a 2D object. A 2D object restricts the result horizontally and
+leaves its depths alone.
 
 \describe{
 \item{Two envelopes}{Cell by cell, the result runs from the deeper
@@ -88,6 +103,14 @@ layer and be on the same grid.}
 \item{A 3D object and polygons}{A \code{SpatVector}, \code{sf} or \code{sfc} object. The
 polygons are rasterised onto the 3D object's grid. A cell is inside when
 its centre is. Polygons in another CRS are projected first.}
+\item{A 3D object and \link[=SpatVector3D-class]{SpatVector3D} polygons}{The polygons are
+first put on the 3D object's grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then
+compared as an envelope. Each cell a polygon touches gets its depth
+range; where polygons overlap, a cell gets the shallowest top and the
+deepest bottom, so a depth gap between two polygons over one cell is
+filled. The polygons' time intervals are dropped, with a message.
+Polygons that miss the grid give an empty result. Points and lines
+aren't supported yet; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
 }
 
 The order of \code{x} and \code{y} does not matter.
@@ -128,6 +151,17 @@ names(intersect_3d(a, bv))
 poly <- terra::vect("POLYGON ((0 0, 2000 0, 2000 1000, 0 1000, 0 0))",
                     crs = terra::crs(fp))
 terra::values(intersect_3d(a, poly))
+
+# With SpatVector3D polygons, the depth ranges are compared too: a polygon
+# from 80 to 300 m over the first two cells shares 80-100 m with `a`.
+deep <- as_vector3d(
+  sf::st_sf(geometry = sf::st_as_sfc(
+    "POLYGON ((0 0, 2000 0, 2000 1000, 0 1000, 0 0))",
+    crs = terra::crs(fp)
+  )),
+  depth_min = 80, depth_max = 300
+)
+terra::values(intersect_3d(a, deep))
 }
 \seealso{
 \code{\link[=intersects_3d]{intersects_3d()}} for the yes/no form; \code{\link[terra:mask]{mask()}} to keep a voxel's
