@@ -45,19 +45,23 @@ test_that("a series joins its files' time axes in time order", {
 
 test_that("a series needs one variable on one grid, each step once", {
   a <- make_grid_file(time = c(0, 1))
-  overlap <- make_grid_file(time = c(1, 2))
+  repeated <- make_grid_file(time = c(1, 2))
+  overlap <- make_grid_file(time = c(0.5, 2))
   grid <- make_grid_file(time = c(5, 6), lon = c(0.5, 1.5))
   depth <- make_grid_file(time = c(5, 6), depth = c(5, 25))
+  kelvin <- make_grid_file(time = c(5, 6), var_units = "K")
   untimed <- make_grid_file(time = NULL)
   clim <- make_grid_file(time = 6,
                          time_units = "months since 0000-01-01 00:00:00")
-  on.exit(unlink(c(a, overlap, grid, depth, untimed, clim)), add = TRUE)
+  on.exit(unlink(c(a, repeated, overlap, grid, depth, kelvin, untimed, clim)),
+          add = TRUE)
 
   cases <- list(
-    list(files = c(a, a), pattern = "more than once"),
-    list(files = c(a, overlap), pattern = "repeats or overlaps"),
+    list(files = c(a, a), pattern = "appears more than once in the series"),
+    list(files = c(a, overlap), pattern = "overlaps the time steps"),
     list(files = c(a, grid), pattern = "different grid"),
     list(files = c(a, depth), pattern = "different grid"),
+    list(files = c(a, kelvin), pattern = "gives `temp` in K, but .* in degC"),
     list(files = c(a, untimed), pattern = "no dated time axis"),
     list(files = c(a, clim), pattern = "no dated time axis")
   )
@@ -67,6 +71,13 @@ test_that("a series needs one variable on one grid, each step once", {
     ))
     expect_match(conditionMessage(err), case$pattern)
   }
+
+  # A step in two files is a repeated step, as within one file.
+  err <- expect_error(as_proxy(c(a, repeated), var = "temp"),
+                      class = "ocean3d_error_repeated_time")
+  expect_match(conditionMessage(err),
+               "2020-01-02 is also in an earlier file of the series in ")
+  expect_match(conditionMessage(err), "must come from one file")
 })
 
 test_that("a voxel in memory is a source like a file", {
@@ -78,6 +89,12 @@ test_that("a voxel in memory is a source like a file", {
   p <- as_proxy(v)
   expect_s4_class(p, "SpatProxy")
   expect_identical(p@source$type, "voxel")
+  # The variable's name comes from the layer labels as_voxel() gave, or is
+  # "value" when the layers were renamed.
+  expect_identical(p@variable$name, "temp")
+  renamed <- v
+  names(renamed) <- c("top", "bottom")
+  expect_identical(as_proxy(renamed)@variable$name, "value")
   expect_match(capture.output(print(p))[2], "SpatVoxel in memory")
   # The same cells, depths, depth edges and date.
   expect_equal(sort(p@axes$lon$centres), file_proxy@axes$lon$centres)

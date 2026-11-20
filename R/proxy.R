@@ -98,30 +98,35 @@ setValidity("SpatProxy", function(object) {
   TRUE
 })
 
-#' Describe a gridded netCDF variable without reading its values
-#' (experimental)
+#' Describe gridded data without reading its values (experimental)
 #'
-#' `as_proxy()` opens one netCDF file, reads the metadata of one variable and
-#' its coordinates, and returns a [SpatProxy-class]. The CF metadata is
-#' applied here, once, so later steps can rely on each axis being in a fixed
-#' form. No values of the variable are read.
+#' `as_proxy()` describes one variable of gridded data and returns a
+#' [SpatProxy-class]. The data can be one netCDF file, a series of netCDF
+#' files, or a [SpatVoxel-class] already in memory. For a netCDF file it
+#' reads the metadata of the variable and its coordinates and applies the CF
+#' metadata once, so later steps can rely on each axis being in a fixed form.
+#' No values of the variable are read.
 #'
-#' Two other sources give the same kind of proxy:
+#' Besides one file, two sources give the same kind of proxy:
 #'
 #' * **A series of files** (several paths): the same variable on the same
 #'   grid and depths in every file, each with its own dated time axis, such as
 #'   one file per day. The files are put in time order and their time axes
-#'   joined into one, in the first file's units. Each time step must come
-#'   from one file: repeated or overlapping steps, a file without a time
-#'   axis, and files on different grids (spatial tiles) stop with an error.
-#'   The time axis keeps its bounds only when every file has them.
+#'   joined into one, in the first file's units. A series stops with an error
+#'   when files repeat or overlap each other's time steps, when a file has no
+#'   dated time axis, or when the files differ in grid (spatial tiles) or in
+#'   the variable's units. The time axis keeps its bounds only when every
+#'   file has them.
 #' * **A [SpatVoxel-class] already in memory**: one time step (the voxel's
-#'   [terra::time()] when set), with the voxel's cells, depths and depth edges
-#'   (or the slabs its default `bounds` gives). The time must be a date or a
-#'   date-time; a date is read as midnight UTC. A voxel whose time is a year,
-#'   a month or a plain number stops with an error: give it a date-time, or
-#'   remove its time with `terra::time(v) <- NULL`. [as_voxel()] returns the
-#'   voxel itself.
+#'   [terra::time()] when set), with the voxel's cells, depths and depth
+#'   edges; a voxel without edges gets slabs halfway between its depths, as
+#'   `bounds = "midpoint"` gives. The time must be a date or a date-time; a
+#'   date is read as midnight UTC. A voxel whose time is a year, a month or a
+#'   plain number stops with an error: give it a date-time, or remove its
+#'   time with `terra::time(v) <- NULL`. [as_voxel()] returns the voxel
+#'   itself.
+#'
+#' For netCDF files, each axis is put in a fixed form:
 #'
 #' * **Longitude and latitude:** cell edges come from the coordinate's CF
 #'   `bounds` variable, or halfway between neighbouring centres.
@@ -366,7 +371,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   full <- normalizePath(paths, mustWork = FALSE)
   if (anyDuplicated(full)) {
     stop_series(glue::glue(
-      "The series names {basename(full[duplicated(full)][1])} more than once"
+      "{basename(full[duplicated(full)][1])} appears more than once in the ",
+      "series"
     ))
   }
   parts <- lapply(paths, as_proxy, var = var, lon_dim = lon_dim,
@@ -377,13 +383,23 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     if (is.null(p@axes$time) || isTRUE(p@axes$time$climatology)) {
       stop_series(glue::glue(
         "{file(p)} has no dated time axis. Every file in a series needs one, ",
-        "so each step comes from one file"
+        "so its steps can be placed in time order"
       ))
     }
     if (!identical(p@variable$name, parts[[1L]]@variable$name)) {
       stop_series(glue::glue(
         "{file(p)} holds `{p@variable$name}`, not ",
         "`{parts[[1L]]@variable$name}`. A series is one variable"
+      ))
+    }
+    if (!identical(p@variable$units, parts[[1L]]@variable$units)) {
+      unit <- function(x) {
+        if (is.null(x@variable$units)) "no units" else x@variable$units
+      }
+      stop_series(glue::glue(
+        "{file(p)} gives `{p@variable$name}` in {unit(p)}, but ",
+        "{file(parts[[1L]])} gives it in {unit(parts[[1L]])}. A series needs ",
+        "one unit; convert the files first"
       ))
     }
     if (!.same_grid(p, parts[[1L]])) {
@@ -402,12 +418,23 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   # One time axis, in the first file's units.
   axis <- parts[[1L]]@axes$time$cftime
   for (p in parts[-1L]) {
-    # CFtime warns about overlapping steps; the error below says which file.
+    # CFtime warns about overlapping steps; the errors below say which file.
     joined <- suppressWarnings(axis + .cftime_in(p@axes$time$cftime, axis))
-    if (!isTRUE(all(diff(joined$offsets) > 0))) {
+    steps <- diff(joined$offsets)
+    if (any(steps == 0)) {
+      # A repeated step, as within one file.
+      when <- joined$as_timestamp()[which(steps == 0)[1L] + 1L]
+      .abort_repeated_time(
+        glue::glue("Time step {when} is also in an earlier file of the series"),
+        file(p),
+        paste("Each time step must come from one file; leave out the file",
+              "or the steps it repeats.")
+      )
+    }
+    if (any(steps < 0)) {
       stop_series(glue::glue(
-        "{file(p)} repeats or overlaps the time steps of an earlier file. ",
-        "Each step must come from one file"
+        "{file(p)} overlaps the time steps of an earlier file. Each file's ",
+        "steps must come after the previous file's"
       ))
     }
     axis <- joined
@@ -510,7 +537,15 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   dims <- c("lon", "lat", "depth", if (dated) "time")
   lengths <- c(lon = nc, lat = nr, depth = terra::nlyr(v),
                if (dated) c(time = 1L))
-  name <- sub("_depth=.*$", "", names(v)[1L])
+  # The variable's name, from the labels as_voxel() gives the layers
+  # (`{variable}_depth={value}`) when every layer has one with the same
+  # variable; "value", as_voxel()'s default, otherwise.
+  prefix <- unique(sub("_depth=.*$", "", names(v)))
+  name <- if (all(grepl("_depth=", names(v))) && length(prefix) == 1L) {
+    prefix
+  } else {
+    "value"
+  }
   units <- terra::units(v)[1L]
   crs <- terra::crs(v)
   methods::new(

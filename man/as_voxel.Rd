@@ -37,9 +37,10 @@ layers; a voxel without edges uses the \code{bounds} argument of the functions
 it is passed to.}
 
 \item{time}{For a \link[=SpatProxy-class]{SpatProxy} only: the time step to read, as a step
-number or a date or date-time matched exactly at its own resolution (so
-\code{"2020-01-02"} selects that day). \code{NULL} (the default) reads the only
-step of a proxy that has one; a proxy with more needs \code{time}.}
+number, or a date or date-time that matches one step exactly. A date such
+as \code{"2020-01-02"} matches the step on that day; with several steps a day,
+give a date-time. \code{NULL} (the default) reads the only step of a proxy
+that has one; a proxy with more needs \code{time}.}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} whose layers are ordered shallow to deep.

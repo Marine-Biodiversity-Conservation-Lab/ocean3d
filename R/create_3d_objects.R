@@ -175,9 +175,10 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   `depths`, or from a proxy's depths, where it defaults to the proxy's
 #'   variable name. Ignored otherwise.
 #' @param time For a [SpatProxy-class] only: the time step to read, as a step
-#'   number or a date or date-time matched exactly at its own resolution (so
-#'   `"2020-01-02"` selects that day). `NULL` (the default) reads the only
-#'   step of a proxy that has one; a proxy with more needs `time`.
+#'   number, or a date or date-time that matches one step exactly. A date such
+#'   as `"2020-01-02"` matches the step on that day; with several steps a day,
+#'   give a date-time. `NULL` (the default) reads the only step of a proxy
+#'   that has one; a proxy with more needs `time`.
 #' @param depth_bounds Optional two-column matrix or data frame: the top and
 #'   bottom of the slab of water each layer stands for, in metres positive
 #'   down, one row per layer of `x` in its current order (for example a netCDF
@@ -338,7 +339,19 @@ setMethod("c", "SpatVoxel", function(x, ...) {
     terra::deepcopy(methods::as(a, "SpatRaster"))
   })
   out <- do.call(c, args)
-  if (anyNA(d) || length(d) != terra::nlyr(out)) return(out)
+  # A layer without a depth, two layers at one depth or a negative depth
+  # isn't a voxel, so the layers stay a plain raster.
+  if (anyNA(d) || length(d) != terra::nlyr(out) || anyDuplicated(d) ||
+        any(d < 0)) {
+    return(out)
+  }
+  # Layers given deepest first are sorted shallow to deep, as as_voxel()
+  # does. The edges are keyed by depth, so they follow their layers.
+  if (is.unsorted(d)) {
+    o <- order(d)
+    out <- out[[o]]
+    d <- d[o]
+  }
   terra::depth(out) <- d
   # Only each voxel's rows for the layers it still has, so a row left over
   # from a dropped layer can't stand in for another voxel's edges.
@@ -349,10 +362,11 @@ setMethod("c", "SpatVoxel", function(x, ...) {
   }))
   edges <- edges[!duplicated(edges$depth), , drop = FALSE]
   rownames(edges) <- NULL
-  # new() runs the validity checks; layers that aren't a valid voxel stay a
-  # plain raster.
-  tryCatch(methods::new("SpatVoxel", out, depth_edges = edges),
-           error = function(e) out)
+  v <- methods::new("SpatVoxel", out)
+  v@depth_edges <- edges
+  # Slabs from different voxels can overlap; then the layers aren't a valid
+  # voxel either.
+  if (isTRUE(methods::validObject(v, test = TRUE))) v else out
 })
 
 #' @rdname SpatVoxel-class

@@ -1340,6 +1340,14 @@ test_that("depth edges survive terra operations that keep the class", {
   expect_true(methods::validObject(joined))
   expect_equal(edges_of(joined), edge_bounds)
   expect_equal(volume(joined), volume(v))
+  # Given deepest first, the layers are sorted and keep their edges.
+  reversed <- c(rest, top)
+  expect_s4_class(reversed, "SpatVoxel")
+  expect_identical(depths(reversed), edge_depths)
+  expect_equal(edges_of(reversed), edge_bounds)
+  # Slabs that overlap between voxels aren't a voxel: a plain raster.
+  clash <- as_voxel(make_voxel(1, 0.8), depth_bounds = cbind(0.6, 1.2))
+  expect_false(methods::is(c(top, clash), "SpatVoxel"))
   # With a voxel that has none, some layers have no edges, so `bounds`
   # applies to all of them.
   mixed <- c(top, make_voxel(1, edge_depths[2:3]))
