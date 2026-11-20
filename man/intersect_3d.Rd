@@ -132,7 +132,7 @@ terra::values(intersect_3d(a, poly))
 \seealso{
 \code{\link[=intersects_3d]{intersects_3d()}} for the yes/no form; \code{\link[terra:mask]{mask()}} to keep a voxel's
 values inside a domain; \code{\link[=volume]{volume()}} for the volume of the result, in
-total or per cell. Because an envelope is placed on the voxel's levels,
-compare the overlap with \code{volume(envelope_to_voxel(...))} rather than
-with the envelope's own volume.
+total or per cell. When one input is a voxel, the envelope is placed on
+its levels, so compare the overlap with \code{volume(envelope_to_voxel(...))}
+rather than with the envelope's own volume.
 }

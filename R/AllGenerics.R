@@ -31,14 +31,17 @@ NULL
 #' error shrinks as the levels tighten around the range. Where an envelope's
 #' limits fall exactly on levels under `bounds = "top"`, the two agree.
 #'
-#' To measure the space two domains share, intersect them first and measure
-#' the result: `volume(intersect_3d(a, b))`. When one is an envelope and the
-#' other a voxel, [intersect_3d()] places the envelope on the voxel's depth
-#' levels, so the overlap is measured on levels while `volume()` of the
-#' envelope itself is exact. To compare like with like, measure the envelope
-#' on the same levels: `volume(envelope_to_voxel(a, depths(b), bounds))`. Pass
-#' the same `bounds` to [intersect_3d()] and `volume()`; mixing them gives
-#' volumes that don't add up.
+#' To measure the space two domains share, measure their intersection:
+#' `volume(intersect_3d(a, b))`.
+#'
+#' With one envelope and one voxel, [intersect_3d()] places the envelope on
+#' the voxel's depth levels, so the overlap is measured on those levels while
+#' `volume()` of the envelope uses its own depth limits. To compare the two on
+#' the same levels, measure the envelope on them too:
+#' `volume(envelope_to_voxel(a, depths(b), bounds = bounds,`
+#' `depth_bounds = depth_bounds(b)), bounds = bounds)`. Pass the same `bounds`
+#' to [intersect_3d()] and `volume()`; otherwise the overlap and the input
+#' volumes are measured on different slabs and don't add up.
 #'
 #' @param x A [SpatEnvelope-class] or [SpatVoxel-class]. A bare SpatRaster is
 #'   rejected; build one with [as_envelope()], [vect_to_envelope()] or
@@ -63,9 +66,9 @@ NULL
 #'   depth interval, or no occupied level). Its sum is the total.
 #'
 #' @seealso [intersect_3d()] for the space two domains share, which `volume()`
-#'   then measures; [intersects_3d()] to tell a cell where both are present
-#'   but share no depth from one where either is absent; [SpatVolume-class]
-#'   for why the two representations dispatch separately.
+#'   then measures; [intersects_3d()] for whether two domains share any depth
+#'   in each cell; [SpatVolume-class] for why the two representations
+#'   dispatch separately.
 #'
 #' @examples
 #' fp <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2000,
@@ -98,7 +101,14 @@ NULL
 #' volume(ov)
 #' terra::values(volume(ov, per_cell = TRUE))
 #' @export
-setGeneric("volume", function(x, ...) standardGeneric("volume"))
+setGeneric("volume", function(x, per_cell = FALSE, ...) {
+  # Checked once here, before a method computes anything.
+  if (!rlang::is_bool(per_cell)) {
+    rlang::abort("`per_cell` must be TRUE or FALSE.",
+                 class = "ocean3d_error_per_cell", call = NULL)
+  }
+  standardGeneric("volume")
+}, signature = "x")
 
 #' The 3D space two objects share
 #'
@@ -153,9 +163,9 @@ setGeneric("volume", function(x, ...) standardGeneric("volume"))
 #'
 #' @seealso [intersects_3d()] for the yes/no form; [mask()] to keep a voxel's
 #'   values inside a domain; [volume()] for the volume of the result, in
-#'   total or per cell. Because an envelope is placed on the voxel's levels,
-#'   compare the overlap with `volume(envelope_to_voxel(...))` rather than
-#'   with the envelope's own volume.
+#'   total or per cell. When one input is a voxel, the envelope is placed on
+#'   its levels, so compare the overlap with `volume(envelope_to_voxel(...))`
+#'   rather than with the envelope's own volume.
 #'
 #' @examples
 #' fp <- terra::rast(nrows = 1, ncols = 3, xmin = 0, xmax = 3000,

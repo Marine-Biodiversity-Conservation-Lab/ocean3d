@@ -2,9 +2,9 @@
 
 ## Breaking changes
 
-`calc_volume_overlap()` is removed (#150). It intersected two domains and
-measured them in one call, returning a nine-layer `SpatRaster` that was
-neither an envelope nor a voxel, so no other 3D function could take it.
+`calc_volume_overlap()` is removed (#150). It returned a nine-layer
+`SpatRaster` that the other 3D functions could only use as a flat 2D layer,
+not as the 3D space it described.
 Intersect with `intersect_3d()`, then measure with `volume()`, which has a
 new `per_cell` argument: `volume(x, per_cell = TRUE)` returns a one-layer
 `SpatRaster` named `volume` with the volume of each cell in km³, `NA` where
@@ -16,22 +16,29 @@ new `per_cell` argument: `volume(x, per_cell = TRUE)` returns a one-layer
 | `depth_min_overlap`, `depth_max_overlap` | `ov <- intersect_3d(a, b)` |
 | `volume_a`, `volume_b` | `volume(a, per_cell = TRUE)`, `volume(b, per_cell = TRUE)` |
 | `volume_overlap` | `volume(ov, per_cell = TRUE)` |
-| `0` where both are present but share no depth | `terra::ifel(!intersects_3d(a, b), 0, volume(ov, per_cell = TRUE))` |
+| `0` where both are present but share no depth | `both <- !is.na(volume(a, per_cell = TRUE)) & !is.na(volume(b, per_cell = TRUE))`, then `terra::ifel(both & is.na(vol_ov), 0, vol_ov)` with `vol_ov <- volume(ov, per_cell = TRUE)` |
 | totals | `volume(a)`, `volume(b)`, `volume(ov)` |
 
-Two results differ from the old stack:
+Other changes to callers:
 
 * With an envelope and a voxel, `calc_volume_overlap()` reported the volume of
   the envelope after placing it on the voxel's depth levels. `volume()` of the
-  envelope is exact. To compare it with the overlap on the same levels, use
-  `volume(envelope_to_voxel(a, depths(b), bounds))`.
-* A voxel cell with no occupied level is `NA` in `volume(per_cell = TRUE)`,
-  as outside an envelope.
-
-Pass the same `bounds` to `intersect_3d()` and `volume()`.
+  envelope uses its own depth limits. To compare it with the overlap on the
+  same levels, use
+  `volume(envelope_to_voxel(a, depths(b), bounds = bounds, depth_bounds = depth_bounds(b)), bounds = bounds)`.
+* Cells with nothing in them are now `NA` everywhere. The old
+  `volume_overlap` layer was the one place that used `0`, for cells where
+  both domains are present but share no depth; build that `0` from the
+  inputs as in the table.
+* `volume()` of a domain with no cells now totals `0`, not `NA`.
+* `per_cell` is the second argument of `volume()`, so a positional
+  `volume(v, "top")` is now an error. Name it: `volume(v, bounds = "top")`.
+* Pass the same `bounds` to `intersect_3d()` and `volume()`; otherwise the
+  overlap and the input volumes are measured on different slabs and don't add
+  up.
 
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
-`calc_volume_overlap()`, `envelope_to_voxel()`, `intersect_3d()`,
+`envelope_to_voxel()`, `intersect_3d()`,
 `intersects_3d()` and `mask()` (#138). The slab of water each depth level
 stands for now runs halfway to the neighbouring levels. This matches World
 Ocean Atlas levels and is closer than `"top"` to Copernicus Marine layers.
@@ -39,7 +46,7 @@ Under the old default each level was the top of its slab and the deepest
 level had no volume. Results change for voxels that don't carry their own
 depth edges (see `depth_bounds` under New features):
 
-* `volume()` and `calc_volume_overlap()` give different volumes. For example,
+* `volume()` gives different volumes. For example,
   levels at 0, 100 and 300 m now stand for 0-50, 50-200 and 200-300 m rather
   than 0-100, 100-300 and none.
 * `envelope_to_voxel()` can place an envelope on different levels, and so

@@ -8,15 +8,15 @@
 \alias{volume,SpatRaster-method}
 \title{3D volume of a rasterized domain}
 \usage{
-volume(x, ...)
+volume(x, per_cell = FALSE, ...)
 
-\S4method{volume}{SpatVector3D}(x, ...)
+\S4method{volume}{SpatVector3D}(x, per_cell = FALSE, ...)
 
 \S4method{volume}{SpatEnvelope}(x, per_cell = FALSE, ...)
 
 \S4method{volume}{SpatVoxel}(x, per_cell = FALSE, bounds = c("midpoint", "top"))
 
-\S4method{volume}{SpatRaster}(x, ...)
+\S4method{volume}{SpatRaster}(x, per_cell = FALSE, ...)
 }
 \arguments{
 \item{x}{A \link[=SpatEnvelope-class]{SpatEnvelope} or \link[=SpatVoxel-class]{SpatVoxel}. A bare SpatRaster is
@@ -24,11 +24,11 @@ rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[
 \code{\link[=as_voxel]{as_voxel()}} first. A netCDF file isn't accepted: load it as a
 \code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with \code{\link[=as_voxel]{as_voxel()}}.}
 
-\item{...}{Arguments for the \link[=SpatVoxel-class]{SpatVoxel} method, which are an error
-for an envelope.}
-
 \item{per_cell}{\code{FALSE} (default) for the total volume, \code{TRUE} for the
 volume of each cell.}
+
+\item{...}{Arguments for the \link[=SpatVoxel-class]{SpatVoxel} method, which are an error
+for an envelope.}
 
 \item{bounds}{SpatVoxel only. What each depth level stands for vertically:
 \code{"midpoint"} (default) puts the slab edges halfway to each neighbouring
@@ -69,14 +69,17 @@ more water than the envelope it came from. Coarse levels overstate; the
 error shrinks as the levels tighten around the range. Where an envelope's
 limits fall exactly on levels under \code{bounds = "top"}, the two agree.
 
-To measure the space two domains share, intersect them first and measure
-the result: \code{volume(intersect_3d(a, b))}. When one is an envelope and the
-other a voxel, \code{\link[=intersect_3d]{intersect_3d()}} places the envelope on the voxel's depth
-levels, so the overlap is measured on levels while \code{volume()} of the
-envelope itself is exact. To compare like with like, measure the envelope
-on the same levels: \code{volume(envelope_to_voxel(a, depths(b), bounds))}. Pass
-the same \code{bounds} to \code{\link[=intersect_3d]{intersect_3d()}} and \code{volume()}; mixing them gives
-volumes that don't add up.
+To measure the space two domains share, measure their intersection:
+\code{volume(intersect_3d(a, b))}.
+
+With one envelope and one voxel, \code{\link[=intersect_3d]{intersect_3d()}} places the envelope on
+the voxel's depth levels, so the overlap is measured on those levels while
+\code{volume()} of the envelope uses its own depth limits. To compare the two on
+the same levels, measure the envelope on them too:
+\verb{volume(envelope_to_voxel(a, depths(b), bounds = bounds,}
+\verb{depth_bounds = depth_bounds(b)), bounds = bounds)}. Pass the same \code{bounds}
+to \code{\link[=intersect_3d]{intersect_3d()}} and \code{volume()}; otherwise the overlap and the input
+volumes are measured on different slabs and don't add up.
 }
 \examples{
 fp <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2000,
@@ -111,7 +114,7 @@ terra::values(volume(ov, per_cell = TRUE))
 }
 \seealso{
 \code{\link[=intersect_3d]{intersect_3d()}} for the space two domains share, which \code{volume()}
-then measures; \code{\link[=intersects_3d]{intersects_3d()}} to tell a cell where both are present
-but share no depth from one where either is absent; \link[=SpatVolume-class]{SpatVolume}
-for why the two representations dispatch separately.
+then measures; \code{\link[=intersects_3d]{intersects_3d()}} for whether two domains share any depth
+in each cell; \link[=SpatVolume-class]{SpatVolume} for why the two representations
+dispatch separately.
 }

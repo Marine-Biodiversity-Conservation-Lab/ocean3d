@@ -15,12 +15,9 @@
 # like any other domain.
 
 # Internal: what both methods return from their per-cell volume raster (km³,
-# NA outside the domain): the raster itself, or its total.
+# NA outside the domain): the raster itself, or its total. The generic has
+# already checked `per_cell`.
 .volume_result <- function(vol_rast, per_cell) {
-  if (!rlang::is_bool(per_cell)) {
-    rlang::abort("`per_cell` must be TRUE or FALSE.",
-                 class = "ocean3d_error_per_cell", call = NULL)
-  }
   if (!per_cell) {
     # terra sums an all-NA raster to NA; an empty domain holds no water.
     total <- terra::global(vol_rast, "sum", na.rm = TRUE)[[1]]
@@ -73,4 +70,5 @@ setMethod(
 # method", which says nothing about how to build the right object.
 #' @rdname volume
 #' @export
-setMethod("volume", "SpatRaster", function(x, ...) .stop_not_volume())
+setMethod("volume", "SpatRaster",
+          function(x, per_cell = FALSE, ...) .stop_not_volume())
