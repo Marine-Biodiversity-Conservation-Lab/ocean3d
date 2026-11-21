@@ -39,20 +39,26 @@
   invisible(NULL)
 }
 
-# Stops on a climatological time axis: one with a CF `climatology`
+# Whether a time axis is a climatology: one with a CF `climatology`
 # attribute, or months or years counted from year 0 (WOA's `months since
 # 0000-01-01`, which CFtime can't decode). Days or hours since year 0 (as in
-# MATLAB datenums) are ordinary dates. Buffer extraction and the core object
-# stop here; point and track extraction accept climatologies and report them
-# instead.
-# `file` names the file in the message.
-.check_climatology <- function(nc, time_dim, file = NULL) {
+# MATLAB datenums) are ordinary dates.
+.is_climatology <- function(nc, time_dim) {
   units <- .read_attribute(nc, time_dim, "units")
   units_ok <- is.character(units) && length(units) == 1L && !is.na(units)
   year_zero <- units_ok &&
     grepl("^\\s*(months?|years?)\\s+since\\s+0+-", units, ignore.case = TRUE)
-  flagged <- !is.null(.read_attribute(nc, time_dim, "climatology"))
-  if (!flagged && !year_zero) return(invisible(NULL))
+  year_zero || !is.null(.read_attribute(nc, time_dim, "climatology"))
+}
+
+# Stops on a climatological time axis (see .is_climatology()). Buffer
+# extraction stops here; the core object stops only for a climatology with
+# more than one step; point and track extraction accept climatologies and
+# report them instead. `file` names the file in the message.
+.check_climatology <- function(nc, time_dim, file = NULL) {
+  if (!.is_climatology(nc, time_dim)) return(invisible(NULL))
+  units <- .read_attribute(nc, time_dim, "units")
+  units_ok <- is.character(units) && length(units) == 1L && !is.na(units)
   where <- if (is.null(file)) "" else glue::glue(" in {file}")
   shown <- if (units_ok) glue::glue(" (units '{units}')") else ""
   rlang::abort(glue::glue(

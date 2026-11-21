@@ -41,8 +41,9 @@ level is its shallow edge. Under both, the outer edges are clamped to
 \code{range(depths)} rather than extrapolated. Not used when \code{depth_bounds}
 is given.}
 
-\item{varname}{Name to use for depth layer, taking on form of
-\verb{\{varname\}_depth=\{depths[i]\}}}
+\item{varname}{Variable name for the layer names, which take the form
+\verb{\{varname\}_depth=\{depths[i]\}}. The depths themselves are stored in
+\code{\link[terra:depth]{terra::depth()}}.}
 
 \item{depth_bounds}{Optional two-column matrix or data frame: the top and
 bottom of the slab of water each depth stands for, in metres, one row per

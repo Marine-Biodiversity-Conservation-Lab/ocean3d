@@ -37,6 +37,9 @@ test_that("extract_to_area() selects the correct depth range", {
   # depths 50, 100, 500 are the nearest standard layers bracketing 40-600
   expect_identical(terra::nlyr(out), 3)
   expect_true(all(grepl("depth=(50|100|500)$", names(out))))
+  # The crop to the polygon keeps the depths.
+  expect_identical(depths(out), c(50, 100, 500))
+  expect_identical(terra::depth(out), c(50, 100, 500))
 })
 
 test_that("extract_to_area() returns a SpatVoxel", {

@@ -127,3 +127,10 @@ set_atts <- function(f, var, ...) {
   atts <- list(...)
   for (name in names(atts)) ncdf4::ncatt_put(nc, var, name, atts[[name]])
 }
+
+# A SpatProxy of a make_grid_file() file, and the file, which must outlive the
+# proxy: each test removes it at the end.
+proxy_and_file <- function(...) {
+  f <- make_grid_file(...)
+  list(proxy = as_proxy(f, var = "temp"), file = f)
+}
