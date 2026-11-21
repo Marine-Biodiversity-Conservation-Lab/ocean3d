@@ -360,11 +360,10 @@ Two practical points:
   `terra::writeRaster()` before combining them.
 - **A combined stack is no longer a voxel.** Each single-gear stack is a
   [SpatVoxel-class]: one variable, one layer per depth, ordered shallow to
-  deep. Combining gears breaks that order, but `c()` keeps the class label
-  anyway, so you get an object that claims to be a voxel and is not. The
-  `writeRaster()` step avoids the problem, because it returns a plain
-  SpatRaster. Keep the single-gear stacks if you need the voxel class for
-  [intersect_3d()] or [voxel_to_envelope()].
+  deep. Gears built on the same standard depths share every depth, so
+  `c()` returns a plain SpatRaster for the combined stack. Keep the
+  single-gear stacks if you need the voxel class for [intersect_3d()] or
+  [voxel_to_envelope()].
 
 Gears with `mode = "unknown"` have no depth information, so skip them. Placing
 their effort at the surface would invent a result rather than estimate one.
@@ -383,7 +382,6 @@ every fished cell, and that many cubes exceeds what plotly can serialise.
 library(plotly)
 library(tidyr)
 library(dplyr)
-library(stringr)
 
 # `trawlers_3d` comes from the benthic chunk above. Only the benthic stack
 # is rendered; the helpers below take any SpatVoxel, reading each layer's

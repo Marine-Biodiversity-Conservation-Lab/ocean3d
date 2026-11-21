@@ -87,10 +87,10 @@ we need a way to represent both datasets in three dimensions.
 
 - **`SpatVoxel`** represents three-dimensional information
   using a stack of raster layers, each corresponding to a
-  specific depth. Its layers follow the naming convention
-  `{variable}_depth={value}`, allowing environmental conditions
-  or other spatial information to be represented at different
-  depths.
+  specific depth. Each layer stores its depth (in
+  `terra::depth()`) and is labelled `{variable}_depth={value}`,
+  allowing environmental conditions or other spatial
+  information to be represented at different depths.
 
 The key difference is **how depth is represented**. In a
 `SpatEnvelope`, depth is stored as the cell value, defining
@@ -102,7 +102,7 @@ depth level.
 | Object | What it is |
 |---|---|
 | `SpatEnvelope` | The species' 3D range. Two layers, `depth_min` and `depth_max`; **depth is the cell value**, so the vertical interval varies per cell. |
-| `SpatVoxel` | The environmental raster. One layer per standard depth, named `{variable}_depth={value}`; **depth is the layer index**. |
+| `SpatVoxel` | The environmental raster. One layer per standard depth, each storing its depth and labelled `{variable}_depth={value}`; **depth is the layer index**. |
 
 Figure 2 illustrates how the same species' three-dimensional distribution
 can be represented using either a `SpatEnvelope` or a `SpatVoxel`. 
@@ -409,11 +409,11 @@ names(t_annual)
 
 Notice that each layer name contains two pieces of
 information: the environmental variable (`t_an`, annual
-temperature) and its corresponding depth. For example, `t_an_depth=100` represents the temperature raster at a depth of 100 metres.
+temperature) and its corresponding depth. For example, `t_an_depth=100` labels the temperature raster at a depth of 100 metres.
 
-Rather than extracting depth information manually from
-the layer names, we can use the `depths()` function
-to retrieve the numerical depth axis.
+The names are labels for reading; the depths themselves are
+stored with each layer, and the `depths()` function
+retrieves them.
 
 ```{r depths}
 depths(t_annual)
