@@ -382,18 +382,18 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   parts <- lapply(paths, as_proxy, var = var, lon_dim = lon_dim,
                   lat_dim = lat_dim, depth_dim = depth_dim,
                   time_dim = time_dim)
-  file <- function(p) basename(p@source$path)
+  file_name <- function(p) basename(p@source$path)
   first <- parts[[1L]]
   for (p in parts) {
     if (is.null(p@axes$time) || isTRUE(p@axes$time$climatology)) {
       stop_series(glue::glue(
-        "{file(p)} has no dated time axis. Every file in a series needs one, ",
-        "so its steps can be placed in time order"
+        "{file_name(p)} has no dated time axis. Every file in a series ",
+        "needs one, so its steps can be placed in time order"
       ))
     }
     if (!identical(p@variable$name, first@variable$name)) {
       stop_series(glue::glue(
-        "{file(p)} holds `{p@variable$name}`, not ",
+        "{file_name(p)} holds `{p@variable$name}`, not ",
         "`{first@variable$name}`. A series is one variable"
       ))
     }
@@ -402,8 +402,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         if (is.null(q@variable$units)) "no units" else q@variable$units
       }, character(1))
       stop_series(glue::glue(
-        "{file(p)} gives `{p@variable$name}` in {units[1]}, but ",
-        "{file(first)} gives it in {units[2]}. A series needs one unit; ",
+        "{file_name(p)} gives `{p@variable$name}` in {units[1]}, but ",
+        "{file_name(first)} gives it in {units[2]}. A series needs one unit; ",
         "convert the files first"
       ))
     }
@@ -423,9 +423,9 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       isTRUE(all.equal(cells[[1L]], cells[[2L]]))
     if (!same_grid) {
       stop_series(glue::glue(
-        "{file(p)} has a different grid from {file(first)}. A series needs ",
-        "the same grid and depths in every file; spatial tiles aren't ",
-        "supported"
+        "{file_name(p)} has a different grid from {file_name(first)}. A ",
+        "series needs the same grid and depths in every file; spatial tiles ",
+        "aren't supported"
       ))
     }
   }
@@ -438,22 +438,24 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   axis <- parts[[1L]]@axes$time$cftime
   for (p in parts[-1L]) {
     # CFtime warns about overlapping steps; the errors below say which file.
-    joined <- suppressWarnings(axis + .cftime_in(p@axes$time$cftime, axis))
+    joined <- suppressWarnings(
+      axis + .cftime_to_units_of(p@axes$time$cftime, axis)
+    )
     steps <- diff(joined$offsets)
     if (any(steps == 0)) {
       # A repeated step, as within one file.
       when <- joined$as_timestamp()[which(steps == 0)[1L] + 1L]
       .abort_repeated_time(
         glue::glue("Time step {when} is also in an earlier file of the series"),
-        file(p),
+        file_name(p),
         paste("Each time step must come from one file; leave out the file",
               "or the steps it repeats.")
       )
     }
     if (any(steps < 0)) {
       stop_series(glue::glue(
-        "{file(p)} overlaps the time steps of an earlier file. Each file's ",
-        "steps must come after the previous file's"
+        "{file_name(p)} overlaps the time steps of an earlier file. Each ",
+        "file's steps must come after the previous file's"
       ))
     }
     axis <- joined
@@ -478,7 +480,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 
 # A CFtime axis in the units of `target`, with its bounds, so the two can be
 # joined with `+`. Unchanged when the units already match.
-.cftime_in <- function(cftime, target) {
+.cftime_to_units_of <- function(cftime, target) {
   if (identical(cftime$cal$definition, target$cal$definition) &&
         identical(cftime$cal$name, target$cal$name)) {
     return(cftime)
@@ -722,8 +724,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   values <- .read_proxy_window(x, window)
 
   # terra's cells run west to east, then north to south.
-  lon <- .regular_axis(axes$lon, "longitude")
-  lat <- .regular_axis(axes$lat, "latitude")
+  lon <- .regular_extent(axes$lon, "longitude")
+  lat <- .regular_extent(axes$lat, "latitude")
   lon_order <- order(axes$lon$centres)
   lat_order <- order(axes$lat$centres, decreasing = TRUE)
   n_depth <- length(axes$depth$centres)
@@ -799,13 +801,13 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   step
 }
 
-# One horizontal axis as the extent of a regular grid: `min` and `max` from
-# the cell edges. Coordinates stored as float32 are rarely exactly regular:
-# rounding builds up along the axis (about 0.02% of a cell on Copernicus
-# Marine's 1/12 degree grid), so each centre may sit up to 0.1% of a cell from
-# where a regular grid puts it. A truly irregular axis can't be a terra raster
-# and stops.
-.regular_axis <- function(axis, label) {
+# The extent of a regular horizontal axis: `min` and `max` from its cell
+# edges, once the cells are checked to be regular. Coordinates stored as
+# float32 are rarely exactly regular: rounding builds up along the axis (about
+# 0.02% of a cell on Copernicus Marine's 1/12 degree grid), so each centre may
+# sit up to 0.1% of a cell from where a regular grid puts it. A truly
+# irregular axis can't be a terra raster and stops.
+.regular_extent <- function(axis, label) {
   centres <- sort(axis$centres)
   lower <- min(axis$lower)
   upper <- max(axis$upper)

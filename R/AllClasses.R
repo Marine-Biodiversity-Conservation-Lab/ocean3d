@@ -314,7 +314,7 @@ setClassUnion("SpatVolume", c("SpatVoxel", "SpatEnvelope", "SpatVector3D"))
 
 setValidity("SpatVoxel", function(object) {
   # Depth lives in terra::depth(); layer names are only labels.
-  if (!.depth_set(object)) {
+  if (!.has_depths(object)) {
     return(paste("depths must be set in terra::depth(); set them with",
                  "as_voxel(x, depths = ...) or terra::depth()"))
   }

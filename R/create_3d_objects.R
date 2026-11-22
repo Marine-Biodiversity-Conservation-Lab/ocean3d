@@ -333,7 +333,7 @@ setMethod("c", "SpatVoxel", function(x, ...) {
   is_raster <- vapply(args, methods::is, logical(1), "SpatRaster")
   # Each raster's depths, in order, read before combining.
   d <- unlist(lapply(args[is_raster], function(a) {
-    tryCatch(depths(a), error = function(e) rep(NA_real_, terra::nlyr(a)))
+    if (.has_depths(a)) terra::depth(a) else rep(NA_real_, terra::nlyr(a))
   }))
   # terra edits its inputs' depths in place when it combines them, so it gets
   # plain copies, and the result is tagged as a voxel again afterwards.
@@ -393,7 +393,9 @@ setMethod("subset", "SpatVoxel", function(x, subset, negate = FALSE,
   # depth flag, so the next operation (arithmetic, crop(), mask(), ...) would
   # reset them to 0. The subset is a new raster, so setting its depths again
   # doesn't touch `x`.
-  if (.depth_set(x) && !.depth_set(out)) terra::depth(out) <- terra::depth(out)
+  if (.has_depths(x) && !.has_depths(out)) {
+    terra::depth(out) <- terra::depth(out)
+  }
   out
 })
 

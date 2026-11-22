@@ -43,7 +43,7 @@ depths <- function(x) {
     ), class = "ocean3d_error_depths_input", call = NULL)
   }
   # as_voxel() reads the depths through here too, so both stop the same way.
-  if (!.depth_set(x)) {
+  if (!.has_depths(x)) {
     rlang::abort(paste(
       "The raster has no depths in terra::depth(). Pass `depths` to",
       "as_voxel(), or set them with terra::depth(). Layer names aren't read",
@@ -63,8 +63,9 @@ depths <- function(x) {
 # memory keeps the values but clears the flag; the SpatVoxel method for
 # subset() sets it again. terra has no exported accessor for the flag. If a
 # terra release renames it, every raster reads as having no depths, so
-# as_voxel() and depths() stop rather than return wrong depths.
-.depth_set <- function(x) {
+# as_voxel() and depths() stop, and c() of voxels gives a plain SpatRaster,
+# rather than return wrong depths.
+.has_depths <- function(x) {
   isTRUE(tryCatch(x@pntr$hasDepth, error = function(e) FALSE))
 }
 
