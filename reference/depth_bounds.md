@@ -7,7 +7,11 @@ the `depth_bounds` argument of
 [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
 or
 [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
-for example from a netCDF file's depth bounds.
+for example from a netCDF file's depth bounds. A voxel read from a
+[SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+carries the proxy's edges, which are halfway between levels when the
+file has no depth bounds (see
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)).
 
 ## Usage
 

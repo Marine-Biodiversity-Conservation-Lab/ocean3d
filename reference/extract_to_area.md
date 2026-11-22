@@ -27,9 +27,9 @@ extract_to_area(area, rast_3d, min_depth = NULL, max_depth = NULL)
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   or
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
-  A netCDF file isn't accepted: load it as a `SpatRaster` (e.g. with
-  [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md))
-  and wrap it with
+  A netCDF file isn't accepted: describe it with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+  and read one time step with
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 
 - min_depth:

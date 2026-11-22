@@ -73,8 +73,8 @@ Reprojected to the voxel's CRS when the two differ.</p></dd>
 
 <dt id="arg-rast-d">rast_3d<a class="anchor" aria-label="anchor" href="#arg-rast-d"></a></dt>
 <dd><p><a href="SpatVoxel-class.html">SpatVoxel</a>. Multi-depth raster, e.g. from <code><a href="as_voxel.html">as_voxel()</a></code>
-or <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. A netCDF file isn't accepted: load it as a
-<code>SpatRaster</code> (e.g. with <code><a href="woa_load_nc.html">woa_load_nc()</a></code>) and wrap it with <code><a href="as_voxel.html">as_voxel()</a></code>.</p></dd>
+or <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. A netCDF file isn't accepted: describe it with
+<code><a href="as_proxy.html">as_proxy()</a></code> and read one time step with <code><a href="as_voxel.html">as_voxel()</a></code>.</p></dd>
 
 
 <dt id="arg-min-depth">min_depth<a class="anchor" aria-label="anchor" href="#arg-min-depth"></a></dt>

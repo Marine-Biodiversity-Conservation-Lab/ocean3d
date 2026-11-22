@@ -51,6 +51,62 @@ Other changes to callers:
   otherwise the overlap and the input volumes are measured on different
   slabs and don’t add up.
 
+A `SpatVoxel` now stores each layer’s depth in terra’s own per-layer
+field,
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
+instead of in its layer names
+([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)).
+Before, the depth was read from names like `temp_depth=100`, so renaming
+a layer broke the voxel. Now the package never reads depths from layer
+names:
+
+- Renaming a layer doesn’t change its depth.
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  still names layers `{varname}_depth={value}` when it sets the depths,
+  as labels.
+- [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  takes the depths from `depths`, or else from the raster’s
+  [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
+  which terra also sets when it reads a netCDF file. A raster with
+  neither is an error, even if its layers are named
+  `{variable}_depth={value}`. Before, such names were read as depths.
+- [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
+  reads
+  [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
+  and is an error for a raster without depths. It no longer takes a
+  character vector of layer names. To label a per-layer summary such as
+  `terra::global(v, ...)`, use `depths(v)`: the summary has one row per
+  layer, in layer order.
+- Selecting layers (`v[[2:3]]`, `v$name`,
+  [`subset()`](https://rspatial.github.io/terra/reference/subset.html))
+  and replacing one with `[[<-` keep each layer’s depth through later
+  operations. Without the `SpatVoxel` methods for these, terra would
+  reset the depths to 0, for example in `v[[2:3]] * 2` or a crop of
+  `v[[3]]`.
+- [`c()`](https://rdrr.io/r/base/c.html) of voxels keeps each layer’s
+  depth. When the layers don’t make a valid voxel, for example two
+  layers at the same depth, it returns a plain `SpatRaster`; before, it
+  returned an invalid `SpatVoxel`.
+- A few terra operations, such as
+  [`app()`](https://rspatial.github.io/terra/reference/app.html), drop
+  the depths and return a plain `SpatRaster`; the package’s functions
+  then stop with an error. Set the depths again with
+  `as_voxel(x, depths = ...)`.
+
+Code that set a voxel’s depth through its layer names, or read depths
+back from names, should pass `depths` to
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+or set
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
+and read them with
+[`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md).
+[`terra::writeCDF()`](https://rspatial.github.io/terra/reference/writeCDF.html)
+and `saveRDS(terra::wrap(v))` keep the depths. GeoTIFF doesn’t, so a
+voxel read back from GeoTIFF needs `depths`. All three return a plain
+`SpatRaster`, so re-wrap with
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+after reading.
+
 `bounds` now defaults to `"midpoint"` instead of `"top"` in
 [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
 [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
@@ -165,20 +221,53 @@ how many cells have the limits swapped (or a seafloor above
 - New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
   `depth_report`. Longitudes match across the 0-360 and -180-180
   conventions and across the antimeridian.
+
 - Missing outputs are explained once, under the report for their cause
   (spatial, depth or time), with repeated reasons grouped by file. The
   time report now also explains outputs that are missing because no
   observation date was supplied for a file with a time dimension.
+
 - New experimental class `SpatProxy`, built with
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
-  describes one variable of a netCDF file without reading its values
+  describes one variable of gridded data without reading its values
   ([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)):
   its axes, chunk sizes and coordinate reference system (CRS). Depth is
-  in metres positive down and time is a CFtime object.
+  in metres positive down with each level’s edges, and time is a CFtime
+  object. The data can be:
+
+  - one netCDF file;
+  - a series of netCDF files, such as one per day, put in time order and
+    joined into one time axis. The files must hold the same variable on
+    the same grid and depths, and their time steps must not repeat or
+    overlap;
+  - a `SpatVoxel` already in memory, as one time step. Its time must be
+    a date or a date-time.
+
+  A climatology with one time step, such as a World Ocean Atlas file, is
+  read without a date.
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
-  stops with an error if the time axis isn’t strictly increasing or is a
-  climatology. No other function accepts a `SpatProxy` yet, and it may
-  change without notice.
+  stops with an error if a time axis isn’t strictly increasing or is a
+  climatology with more than one step.
+
+- `as_voxel(proxy, time = ...)` reads one time step of a `SpatProxy`
+  into a `SpatVoxel`
+  ([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)),
+  chosen by step number or date. The voxel’s extent comes from the cell
+  edges, its CRS is always set, its depths and depth edges come from the
+  proxy, and its date is in
+  [`terra::time()`](https://rspatial.github.io/terra/reference/time.html).
+  For a file without depth bounds, the depth edges are halfway between
+  levels, so the voxel’s `bounds` argument doesn’t apply. Grids that are
+  regular apart from rounding in the stored coordinates are treated as
+  regular; other irregular grids stop with an error.
+
+  `SpatProxy`,
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+  and reading a `SpatProxy` with
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  are experimental and may change without notice while the core object
+  is built.
+
 - New class `SpatVector3D` for 3D points, lines and polygons, built with
   [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
   from a table, sf object or
@@ -191,6 +280,7 @@ how many cells have the limits swapped (or a seafloor above
   [`geomtype()`](https://rspatial.github.io/terra/reference/geomtype.html)
   reports the type
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
+
 - New
   [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
   turns each `SpatVector3D` point or line into a polygon with a depth
@@ -199,6 +289,7 @@ how many cells have the limits swapped (or a seafloor above
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
   on points or lines now suggests it
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
+
 - New
   [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
   puts `SpatVector3D` polygons onto a grid as a `SpatEnvelope`, as
@@ -209,6 +300,7 @@ how many cells have the limits swapped (or a seafloor above
   where top equals bottom are dropped, and so are polygon times, with a
   message
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
+
 - A `SpatVoxel` can carry the top and bottom of the slab of water each
   layer stands for, such as a netCDF file’s depth bounds: pass
   `depth_bounds` to

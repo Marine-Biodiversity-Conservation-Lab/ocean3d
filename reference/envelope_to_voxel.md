@@ -69,8 +69,9 @@ envelope_to_voxel(
 
 - varname:
 
-  Name to use for depth layer, taking on form of
-  `{varname}_depth={depths[i]}`
+  Variable name for the layer names, which take the form
+  `{varname}_depth={depths[i]}`. The depths themselves are stored in
+  [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html).
 
 - depth_bounds:
 

@@ -36,8 +36,8 @@ The workflow has three steps:
     \[gfw_effort_to_raster()\], one layer per gear.
 3.  **Extend into 3D**. Give each gear a depth window, then turn that
     window into depth layers with \[as_envelope()\] and
-    \[envelope_to_voxel()\]. The result is a stack named
-    `effort_<geartype>_depth=<value>`.
+    \[envelope_to_voxel()\]. The result is a `SpatVoxel` whose layers
+    are labelled `effort_<geartype>_depth=<value>`.
 
 ### Before you start
 
@@ -362,13 +362,11 @@ Two practical points:
   before combining them.
 - **A combined stack is no longer a voxel.** Each single-gear stack is a
   \[SpatVoxel-class\]: one variable, one layer per depth, ordered
-  shallow to deep. Combining gears breaks that order, but
-  [`c()`](https://rdrr.io/r/base/c.html) keeps the class label anyway,
-  so you get an object that claims to be a voxel and is not. The
-  [`writeRaster()`](https://rspatial.github.io/terra/reference/writeRaster.html)
-  step avoids the problem, because it returns a plain SpatRaster. Keep
-  the single-gear stacks if you need the voxel class for
-  \[intersect_3d()\] or \[voxel_to_envelope()\].
+  shallow to deep. Gears built on the same standard depths share every
+  depth, so [`c()`](https://rdrr.io/r/base/c.html) returns a plain
+  SpatRaster for the combined stack. Keep the single-gear stacks if you
+  need the voxel class for \[intersect_3d()\] or
+  \[voxel_to_envelope()\].
 
 Gears with `mode = "unknown"` have no depth information, so skip them.
 Placing their effort at the surface would invent a result rather than
@@ -391,11 +389,10 @@ serialise.
 library(plotly)
 library(tidyr)
 library(dplyr)
-library(stringr)
 
 # `trawlers_3d` comes from the benthic chunk above. Only the benthic stack
-# is rendered; the helpers below are written to take any stack following the
-# `{variable}_depth=<value>` convention.
+# is rendered; the helpers below take any SpatVoxel, reading each layer's
+# depth with depths().
 
 # Vertical extent of each depth band: half-way to neighbouring standard
 # depths (so adjacent cubes meet without gaps or overlap).
@@ -442,10 +439,13 @@ make_cube_mesh <- function(voxels, dx, dy) {
 # Turn a multi-layer effort stack into mesh3d cubes by collapsing across
 # gears at each (x, y, depth) and joining per-depth z-band extents.
 stack_to_cubes <- function(stack, dx, dy, bands) {
+  # Each layer's depth, looked up by layer name: depths() reads them from the
+  # voxel.
+  layer_depth <- stats::setNames(depths(stack), names(stack))
   voxels <- terra::as.data.frame(stack, xy = TRUE, na.rm = FALSE) |>
     pivot_longer(cols = -c(x, y), names_to = "layer", values_to = "effort") |>
     filter(effort > 0) |>
-    mutate(depth = as.numeric(str_extract(layer, "(?<=depth=)-?[0-9.]+"))) |>
+    mutate(depth = unname(layer_depth[layer])) |>
     group_by(x, y, depth) |>
     summarise(effort = sum(effort), .groups = "drop") |>
     left_join(bands, by = "depth")
@@ -567,9 +567,8 @@ sea surface sits at the top and the seafloor at the bottom.
 
 ### Overlapping with a species range
 
-`trawlers_3d` and `purse_seines_3d` follow the
-`{variable}_depth=<value>` naming convention, so they work with the rest
-of the package exactly as WOA rasters do:
+`trawlers_3d` and `purse_seines_3d` are `SpatVoxel` objects, so they
+work with the rest of the package exactly as WOA voxels do:
 
 ``` r
 
@@ -605,7 +604,7 @@ range_rast <- vect_to_envelope(
 
 # Mask the 3D effort stack to cells + depths inside the species' per-cell
 # depth window. mask() is depth-aware for an envelope: it places the range on
-# the effort stack's own `effort_<gear>_depth=<value>` levels and keeps each
+# the effort stack's own depth levels and keeps each
 # layer's effort only where the species is present at that depth.
 # `purse_seines_3d` is already one gear, so it goes in whole; a multi-gear
 # stack would be subset by layer name first.
@@ -621,7 +620,7 @@ total_exposed
 
 # Per-depth exposure profile (effort-hours summed across cells, per layer).
 per_depth <- terra::global(exposed_effort, "sum", na.rm = TRUE)
-per_depth$depth <- depths(rownames(per_depth))
+per_depth$depth <- depths(exposed_effort)
 per_depth[!is.na(per_depth$sum) & per_depth$sum > 0,
           c("depth", "sum")]
 ```

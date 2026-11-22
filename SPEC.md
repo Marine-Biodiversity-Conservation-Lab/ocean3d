@@ -46,6 +46,9 @@ intersect with one another.
   ncdf4 and CFtime, terra for slices in memory, and stars only for
   remote Zarr (agreed in \#112; trial in
   [`dev/data-model-trial.md`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/dev/data-model-trial.md)).
+- **In progress (#113):** the core object, `SpatProxy`. It records the
+  grid, depths and time steps of a netCDF file, a series of files or a
+  voxel in memory, and reads one time step as a `SpatVoxel`.
 - **Done (#114):** one vector class, `SpatVector3D`, holding points,
   lines and polygons with depth.
 - **Done (#111):** CFtime decodes time on the standard calendars.
@@ -219,13 +222,14 @@ A 3D raster is a stack of 2D rasters, one per standard depth, as in
 Copernicus Marine and World Ocean Atlas (WOA) data. netCDF files store
 these stacks. In 3D graphics this is called a **voxel model**.
 
-Multi-depth rasters used by `ocean3d` currently encode depth in layer
-names using the format `{variable}_depth={value}` (e.g. `t_an_depth=0`,
-`t_an_depth=100` for WOA annual mean temperature, `t_an`, at 0 and 100
-m). The unified model stores depth in
-[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
-instead and reads these names only on input (see
-[Direction](#direction-a-hybrid)).
+A `SpatVoxel` stores each layer’s depth in
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
+terra’s own per-layer field (#113).
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+also names layers `{variable}_depth={value}` as labels for people to
+read (e.g. `t_an_depth=0`, `t_an_depth=100` for WOA annual mean
+temperature, `t_an`, at 0 and 100 m). The package never reads depths
+from layer names (see [Direction](#direction-a-hybrid)).
 
 The depth range each layer covers depends on the source file. WOA, for
 instance, gives explicit depth bounds: the 0 m layer covers 0–2.5 m, the
@@ -234,9 +238,10 @@ instance, gives explicit depth bounds: the 0 m layer covers 0–2.5 m, the
 These rasters hold values across x, y and depth: e.g. temperature in °C,
 or a species’ probability of occurrence, at each coordinate and depth.
 
-Data loaders currently convert other formats to this naming, and
 [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
-reads the depths from layer names, e.g. so
+reads the depths from
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
+e.g. so
 [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
 can select layers in a depth range.
 
@@ -276,8 +281,8 @@ conventions define them.
 | Functions | [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md) and its [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md) / `extract3d_*()` wrappers, [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md), [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md), [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()`, voxel profiles, [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md) |
 | Input | netCDF paths, connections or file tables | `SpatVoxel` / `SpatEnvelope`, S4 classes extending [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html) |
 | Reads with | ncdf4, only the cells each observation needs | terra |
-| Depth | the netCDF depth coordinate: units converted to metres, `positive` direction, bounds | layer names (`{variable}_depth={value}`), one set of depths for the whole grid |
-| Time | CF time decoding (calendars, sub-daily steps, nearest or exact matching, series split across files) | none |
+| Depth | the netCDF depth coordinate: units converted to metres, `positive` direction, bounds | [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html), one set of depths for the whole grid, and each layer’s top and bottom (depth edges) when the voxel has them |
+| Time | CF time decoding (calendars, sub-daily steps, nearest or exact matching, series split across files) | at most one date per voxel, in [`terra::time()`](https://rspatial.github.io/terra/reference/time.html); the voxel tools don’t use it |
 | Cell edges | CF bounds, or inferred from cell centres | terra’s regular grid extent and resolution |
 
 The netCDF model keeps 4D data (lon, lat, depth, time) and its CF
@@ -295,9 +300,11 @@ voxel tools have no time dimension.
 ### Planned: one model (#99)
 
 This section is the plan from \#99, decided with the stars and ncdfCF
-trial (#112). Only the first part of the core object (`SpatProxy`,
-experimental) is implemented so far (see [Order of
-work](#order-of-work), step 5).
+trial (#112). The core object (`SpatProxy`, experimental) is
+implemented: it reads a netCDF file, a series of files or a voxel in
+memory, and builds a `SpatVoxel` for one time step. The coverage step
+and time-aware analysis aren’t built yet (see [Order of
+work](#order-of-work), steps 5 and 7).
 
 #### Requirements
 
@@ -305,7 +312,8 @@ work](#order-of-work), step 5).
     object (the single object that will describe gridded data; see
     [Direction](#direction-a-hybrid)). Volume, overlap and profiles work
     through time (for example seasonal habitat volume, or overlap by
-    month), not only on a static voxel.
+    month), not only on a static voxel. Volume through time is planned
+    in \#159.
 2.  **Lazy reads for data larger than memory.** Opening a dataset
     doesn’t read its values, every operation reads only the slices it
     needs, and heavy processing runs per time step, or per tile within a
@@ -332,12 +340,22 @@ Jay Matsushiba on 2 November 2026 (#112).
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
   It holds no values.
   - **Name:** in terra, “proxy” means described but not loaded, as in
-    `SpatVectorProxy`. A `SpatVoxel` will be one time step of a
-    `SpatProxy` loaded into memory. Named by Jay Matsushiba on 3
-    November 2026.
+    `SpatVectorProxy`. A `SpatVoxel` is one time step of a `SpatProxy`
+    loaded into memory. Named by Jay Matsushiba on 3 November 2026.
   - **Sources:** one netCDF file, a series of files, a remote Zarr
     store, or a `SpatVoxel` already in memory, so voxels go through the
-    same coverage step as files.
+    same coverage step as files. Files, series and voxels are
+    implemented (#152); Zarr is planned (#151).
+    - **A series** is several files holding the same variable on the
+      same grid and depths, each with time steps that have calendar
+      dates, such as one file per day. The package sorts the files by
+      time and joins their time axes into one, in the first file’s
+      units. It stops with an error if time steps repeat or overlap, a
+      file has no time axis, or files are on different grids (spatial
+      tiles). Time bounds are kept only when every file has them.
+    - **A voxel in memory** becomes a core object with one time step,
+      keeping the voxel’s date (if it has one), cells, depths and depth
+      edges.
   - **Contents:** the variable with its chunk layout (the blocks the
     file is stored and compressed in), and each axis in a fixed form:
     longitude and latitude with cell edges, depth in metres positive
@@ -376,13 +394,13 @@ Jay Matsushiba on 2 November 2026 (#112).
   is given (see Block reads). terra’s own netCDF reading (GDAL’s driver)
   decodes some CF cases wrongly without warning, so it isn’t used for
   these files.
-- **Remote Zarr:** an optional source read with `stars::read_mdim()`
-  (Suggests); ncdf4 couldn’t open the Copernicus Zarr store with the
-  netCDF-C library used in the trial (Zarr needs a build with NCZarr and
-  S3 support). The package corrects what `read_mdim()` returns:
-  coordinates shifted by half a cell, time as `Date` (or not decoded
-  without a `calendar` attribute), and Copernicus’ `elevation` axis
-  (`positive = "up"`) turned into depth.
+- **Remote Zarr** (#151, not started): an optional source read with
+  `stars::read_mdim()` (Suggests); ncdf4 couldn’t open the Copernicus
+  Zarr store with the netCDF-C library used in the trial (Zarr needs a
+  build with NCZarr and S3 support). The package corrects what
+  `read_mdim()` returns: coordinates shifted by half a cell, time as
+  `Date` (or not decoded without a `calendar` attribute), and
+  Copernicus’ `elevation` axis (`positive = "up"`) turned into depth.
 - **terra:** works only on 2D grids already in memory: cell areas,
   masks, crop, rasterising polygons and sums, so
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
@@ -424,6 +442,13 @@ Jay Matsushiba on 2 November 2026 (#112).
     without them. Until then, such files can be converted to a standard
     calendar with an outside tool (for example CDO). Decided by Jay
     Matsushiba on 2 November 2026.
+  - **Climatologies:** a climatology is a long-term average, such as a
+    WOA annual mean, whose time axis gives a period rather than a date
+    (`months since 0000-01-01`, which CFtime can’t decode). One with a
+    single time step is read without a date, so its voxel has no
+    [`terra::time()`](https://rspatial.github.io/terra/reference/time.html)
+    (#152). Climatologies with more than one step stop with an error for
+    now.
   - **Time runs forwards only:** the core object accepts a time axis
     only if it is strictly increasing within each file. A time axis that
     runs backwards (newest first, or ordered by age before present) or
@@ -447,52 +472,114 @@ Jay Matsushiba on 2 November 2026 (#112).
   1/12° product over 50 levels is about 3.5 GB as doubles). Read the
   slice through the core object, process it with terra, and combine the
   results across tiles and time; volume and overlap add up across them.
+  For now the voxel builder (below) reads a whole time step at once;
+  reading groups of depth layers is planned with volume through time
+  (#159).
 - **`SpatVoxel` / `SpatEnvelope`:** stay terra classes and become views
   of one time step of the core object, so the existing terra-based tools
   keep working on a slice.
-  - **Builder:** reads the slice with ncdf4 through the core object’s
-    read window, builds the `SpatRaster` (extent from the cell edges,
-    CRS always set, grids whose float32 coordinates are almost regular
-    treated as regular, truly irregular grids rejected on this path) and
-    calls
-    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
-    [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
-    is the one existing loader that moves from `terra::rast(file)` to
-    the builder; the constructors and converters
-    ([`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
-    [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md),
+  - **Builder** (#152): `as_voxel(proxy, time = ...)` reads one time
+    step, chosen by step number or date, and builds the `SpatRaster`:
+    - extent from the cell edges, with the CRS always set;
+    - grids that are regular apart from rounding in the stored
+      coordinates (centres within 0.1% of a cell of a regular grid)
+      treated as regular, and other irregular grids rejected;
+    - depths in
+      [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+      with the core object’s depth edges (none for a single level
+      without bounds), and the step’s date in
+      [`terra::time()`](https://rspatial.github.io/terra/reference/time.html).
+      For a file without depth bounds, such as Copernicus Marine, the
+      stored edges are the core object’s guess: halfway between levels,
+      from the surface to half a gap below the deepest level. So the
+      voxel’s `bounds` argument doesn’t apply, the bottom layer counts
+      in full, and a depth range or a group of layers measures the same
+      as its share of the whole column, which reading a time step in
+      groups of depth layers (#159) relies on. The same file read with
+      [`terra::rast()`](https://rspatial.github.io/terra/reference/rast.html)
+      and
+      [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+      has no edges and gets `bounds = "midpoint"` instead, which stops
+      at the deepest level. Decided by Jay Matsushiba on 20 November
+      2026 (#152).
+
+    Tested on one day (30 July 2026) of Copernicus Marine’s global daily
+    temperature product (`cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m`,
+    a 0 to 500 m subset): the voxel’s depths run 0 to 490.8 m, and its
+    values match those terra reads from the same file, within R’s
+    floating-point tolerance. terra reads this file correctly: it has a
+    regular grid, the standard calendar and no depth bounds. It extends
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+    rather than adding a function; the other constructors and converters
+    ([`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md),
     [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
     [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md),
     [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md))
     don’t change.
+    [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
+    is the one existing loader that moves from `terra::rast(file)` to
+    the builder (#157).
   - **Depth and time:** stored in terra’s own per-layer fields,
     [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
     (metres, positive down) and
     [`terra::time()`](https://rspatial.github.io/terra/reference/time.html)
-    (the time step the voxel shows), which terra keeps through layer
-    subsetting, `crop()`, `ifel()`, arithmetic and
-    [`c()`](https://rdrr.io/r/base/c.html). No new S4 slots: terra would
-    copy them unchanged and leave them out of date after `v[[i]]`.
+    (the time step the voxel shows). The class checks only that the
+    depths are distinct, non-negative and ordered shallow to deep.
+    - **What terra keeps:** terra holds the depths with a flag that says
+      they are set. On a whole voxel, `crop()` and `mask()` (with an
+      extent, a raster or a polygon), arithmetic and `ifel()` keep them.
+      Selecting layers of a raster in memory (`[[`, `$`,
+      [`subset()`](https://rdrr.io/r/base/subset.html)) keeps the values
+      but clears the flag, so the next operation resets every depth to
+      0; `[[<-`, [`c()`](https://rdrr.io/r/base/c.html) and `app()`
+      reset them too (terra 1.9.50). The `SpatVoxel` methods for
+      [`subset()`](https://rdrr.io/r/base/subset.html), `[[<-` and
+      [`c()`](https://rdrr.io/r/base/c.html) keep the depths, so a voxel
+      keeps them through these operations. `app()` returns a plain
+      `SpatRaster`, which needs `depths` again (#152).
+    - **Layer names:** labels only.
+      [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+      names layers `{variable}_depth={value}` when it sets the depths,
+      and renaming them doesn’t change the depths.
+    - **Depths must be set:** a raster without
+      [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+      set is an error in
+      [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
+      [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
+      and the class checks, which say to pass `depths` or set
+      [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html).
+      Whether depths are set is terra’s flag, the only way to tell a 0 m
+      layer from a layer without a depth; terra has no exported accessor
+      for it, so the package reads the internal field, and a terra
+      release that renames it makes every raster read as having no
+      depths, which the tests catch.
+    - **Depth edges:** the `depth_edges` slot (#138) holds each layer’s
+      top and bottom depth, matched to the layer by depth, so it stays
+      correct after selecting layers (`v[[i]]`). This replaces the 2
+      November plan of “no new S4 slots”. Decided by Jay Matsushiba on
+      19 November 2026.
+  - **No depths from layer names:**
     [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
-    is the only stored depth: package code no longer writes or parses
-    `{variable}_depth={value}` layer names, layer names are free, and
-    validity checks only that the depths are set, distinct, non-negative
-    and shallow to deep.
-  - **Old layer names:** on input only,
-    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-    still accepts a raster whose depths aren’t set but whose names
-    follow the old pattern (existing code, or a voxel written to
-    GeoTIFF), and fills
-    [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
-    from the names once. Decided by Jay Matsushiba on 2 November 2026.
+    is the only record of a voxel’s depths, and layer names are never
+    read as depths, not even on input. A raster whose layers are named
+    `{variable}_depth={value}` but whose depths aren’t set (existing
+    code, or a voxel written to GeoTIFF) needs `depths`.
+    [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
+    no longer takes a character vector of names; a per-layer summary is
+    labelled with
+    [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
+    of the voxel. Decided by Jay Matsushiba on 20 November 2026 (#152),
+    replacing the 2 November 2026 decision to read such names once on
+    input.
   - **Saving:** with `saveRDS(terra::wrap(v))` or
     [`terra::writeCDF()`](https://rspatial.github.io/terra/reference/writeCDF.html),
-    which keep depth and time. The docs say GeoTIFF loses depth. All
-    three save routes tested lose the class, so a reloaded voxel goes
-    back through
+    which keep depth and time. GeoTIFF loses depth, so a voxel read back
+    from it needs `depths`. All three save routes tested lose the class,
+    so a reloaded voxel goes back through
     [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
-  - **API change:** dropping the layer-name convention needs a NEWS
-    entry.
+  - **API change:** moving depths to
+    [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+    is a breaking change, in NEWS (#152).
 - **Block reads:** ncdf4 reads one box of index space per call
   (`ncvar_get()` with `start` and `count`), and compressed netCDF-4
   decompresses whole chunks. Today the extraction functions make one
@@ -529,7 +616,7 @@ Jay Matsushiba on 2 November 2026 (#112).
   point rule in the coverage step keeps this (#115).
 - **Zarr layouts:** Copernicus Marine serves each product chunked by
   time step (for maps) and by location (for time series). How the core
-  object records both and which one each step reads (#113).
+  object records both and which one each step reads (#151).
 - **Combined extraction functions:** keep each as a wrapper over the
   three steps, or retire it in favour of a workflow vignette (#116; see
   [Combined functions](#package-design-build-intersect-summarise)).
@@ -744,7 +831,7 @@ summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
 #### Order of work
 
 Each step has its own issue, and each PR branches off `main`. Status as
-of 19 November 2026.
+of 20 November 2026.
 
 1.  **Document the current split:** which functions take netCDF and
     which take `SpatVoxel` (README function overview and each function’s
@@ -784,15 +871,21 @@ of 19 November 2026.
     its chunk sizes, the axes in fixed form, time running forwards only
     (see Direction, Time decoding) and the CRS. The second PR (#143)
     adds the internal reader for one read window, which returns the
-    values with the axes in the order lon, lat, depth, time. Still to
-    do: the other sources (series of files, Zarr, in-memory voxels),
-    with their axes built at open. Then the voxel builder (depth in
-    [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
-    with old layer names read on input, CRS always set, float32
-    tolerance,
+    values with the axes in the order lon, lat, depth, time. The third
+    (#152) moves voxel depths to
+    [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
+    adds the voxel builder
+    ([`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+    on a `SpatProxy`), reads climatologies with one time step, and
+    accepts a series of files or a `SpatVoxel` in memory as sources. The
+    fourth (#157, draft) moves
     [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
-    moved to it), and time-aware volume, overlap and profiles, tiled
-    when a time step is too large.
+    onto the builder and closes \#113. Split out of \#113: volume
+    through time, including reads in groups of depth layers when one
+    time step is too large for memory (#159); remote Zarr (#151);
+    extraction on the core object (#116). After the core object: the
+    utility that writes a time-sorted copy of a file (see Direction,
+    Time decoding).
 6.  **Add `SpatVector3D`** with `geomtype()`,
     [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
     and sf input: points and lines with per-vertex depth and time, and
@@ -831,10 +924,11 @@ New tests check that the same synthetic data gives the same values from
 a netCDF file, the core object and the matching `SpatVoxel`. API changes
 (what
 [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
-and the voxel constructors return, depth no longer read from layer
-names, time in volume and overlap, any retired extraction function) need
-NEWS entries and should settle before the rOpenSci and CRAN submissions
-(#12).
+and the voxel constructors return, depths stored in
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html)
+instead of layer names, time in volume and overlap, any retired
+extraction function) need NEWS entries and should settle before the
+rOpenSci and CRAN submissions (#12).
 
 ## `ocean3d` functionality
 
@@ -975,8 +1069,11 @@ marked *(planned)* aren’t implemented yet.
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)’s
   result, measured the same way.
 - **Calculate the volume occupied by 3D representation**. Each layer’s
-  height is the distance to the next layer: with `t_an_depth=0` and
-  `t_an_depth=100`, the 0 m layer is 100 m tall.
+  height is the depth range it covers: from the voxel’s depth edges when
+  it has them, otherwise halfway to the neighbouring levels but not past
+  the top and bottom levels (`bounds = "midpoint"`, the default since
+  \#148). With levels at 0, 100 and 200 m, the 100 m layer is 100 m tall
+  (50 to 150 m) and the 0 and 200 m layers 50 m each.
 - **Calculate the volume of `SpatVector3D` polygons** *(planned)*.
   Measured from the geometry, not a grid: polygon area × (`bottom` -
   `top`) for constant surfaces, exact formulas for named shapes (sphere,

@@ -44,7 +44,7 @@ bathy <- load_gebco_bathymetry(nc_path)
 bathy
 #> class       : SpatRaster
 #> size        : 36, 72, 1  (nrow, ncol, nlyr)
-#> dimensions  : longitude, latitude (72, 36}
+#> dimensions  : longitude, latitude (72, 36)
 #> resolution  : 5, 5  (x, y)
 #> extent      : -180, 180, -90, 90  (xmin, xmax, ymin, ymax)
 #> coord. ref. : lon/lat WGS 84 (EPSG:4326)

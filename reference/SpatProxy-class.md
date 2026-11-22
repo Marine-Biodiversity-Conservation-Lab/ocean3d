@@ -22,16 +22,24 @@ show(object)
 ## Details
 
 A `SpatProxy` is the planned core data object of ocean3d (SPEC.md, "Data
-model"). Later versions will read one time step of it into memory as a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
+model").
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+reads one time step of it into memory as a
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
+with the proxy's depths, depth edges, CRS and date.
 
 ## Slots
 
 - `source`:
 
-  A list: `type` (`"netcdf"`) and `path`, the full path of the file. A
-  path rather than an open connection, so the object can be saved with
-  [`base::saveRDS()`](https://rdrr.io/r/base/readRDS.html).
+  A list with `type` and where the data are: for `"netcdf"`, `path`, the
+  full path of the file (a path rather than an open connection, so the
+  object can be saved with
+  [`base::saveRDS()`](https://rdrr.io/r/base/readRDS.html)); for
+  `"series"`, `path`, the files in time order, and `steps`, the number
+  of time steps in each; for `"voxel"`, `voxel`, the
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+  in memory.
 
 - `variable`:
 
@@ -49,7 +57,9 @@ model"). Later versions will read one time step of it into memory as a
   cell without bounds). `depth` is in metres positive down and also has
   `storage` (`"shallow_first"` or `"deep_first"`). `time` holds `dim`,
   `cftime` (a CFtime object, with the file's bounds attached when it has
-  them) and `edges` (`"bounds"` or `"none"`).
+  them) and `edges` (`"bounds"` or `"none"`). A one-step climatology,
+  such as a World Ocean Atlas period, has `climatology = TRUE`, its
+  `units` and no `cftime`.
 
 - `crs`:
 
@@ -60,8 +70,7 @@ model"). Later versions will read one time step of it into memory as a
 `SpatProxy` and
 [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
 are experimental. Their slots and behaviour may change without notice
-while the core object is built, and no other function accepts a
-`SpatProxy` yet.
+while the core object is built.
 
 ## See also
 

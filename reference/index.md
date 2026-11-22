@@ -7,6 +7,9 @@ holds a depth range per cell; a `SpatVector3D` holds points or lines
 with a depth and time at each vertex, or polygons with a depth range.
 
 - [`c(`*`<SpatVoxel>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+  [`subset(`*`<SpatVoxel>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+  [`` `[[<-`( ``*`<SpatVoxel>`*`,`*`<numeric>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+  [`` `[[<-`( ``*`<SpatVoxel>`*`,`*`<character>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
   : 3D voxel model: one layer per standard depth level
 - [`SpatEnvelope-class`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   : 2.5D min-max envelope: exactly depth_min, depth_max
@@ -127,5 +130,4 @@ accepted by other functions.
 - [`show(`*`<SpatProxy>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
   : A gridded dataset described but not loaded (experimental)
 - [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
-  : Describe a gridded netCDF variable without reading its values
-  (experimental)
+  : Describe gridded data without reading its values (experimental)

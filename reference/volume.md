@@ -39,10 +39,9 @@ volume(x, per_cell = FALSE, ...)
   [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
   or
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-  first. A netCDF file isn't accepted: load it as a `SpatRaster` (e.g.
-  with
-  [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md))
-  and wrap it with
+  first. A netCDF file isn't accepted: describe it with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+  and read one time step with
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 
 - per_cell:

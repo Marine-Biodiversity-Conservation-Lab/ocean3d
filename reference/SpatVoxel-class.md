@@ -3,26 +3,62 @@
 A `SpatVoxel` is a
 [terra::SpatRaster](https://rspatial.github.io/terra/reference/SpatRaster-class.html)
 in which **depth is the layer index** and the cell values are the
-variable (temperature, oxygen, presence, ...). Layer names follow the
-`{variable}_depth={value}` convention and must be distinct and ordered
-shallow to deep. The depth axis is grid-wide: every cell is sampled at
-the same set of standard depths.
+variable (temperature, oxygen, presence, ...). Each layer's depth is
+stored in terra's own per-layer field,
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
+in metres positive down; depths must be set, distinct and ordered
+shallow to deep. Read them with
+[`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md).
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+names the layers `{variable}_depth={value}` when it sets the depths, as
+labels for people to read. The package never reads depths from layer
+names, so renaming the layers doesn't change their depths. The depth
+axis is grid-wide: every cell is sampled at the same set of standard
+depths.
 
 ## Usage
 
 ``` r
 # S4 method for class 'SpatVoxel'
 c(x, ...)
+
+# S4 method for class 'SpatVoxel'
+subset(x, subset, negate = FALSE, NSE = FALSE, ...)
+
+# S4 method for class 'SpatVoxel,numeric'
+x[[i, j]] <- value
+
+# S4 method for class 'SpatVoxel,character'
+x[[i, j]] <- value
 ```
 
 ## Arguments
 
-- x, ...:
+- x:
 
-  For [`c()`](https://rdrr.io/r/base/c.html): a `SpatVoxel` and further
-  rasters to combine, as with terra's
-  [`c()`](https://rdrr.io/r/base/c.html). The result keeps the depth
-  edges of every `SpatVoxel` among them.
+  A `SpatVoxel`.
+
+- ...:
+
+  For [`c()`](https://rdrr.io/r/base/c.html): further rasters to combine
+  with `x`, as with terra's [`c()`](https://rdrr.io/r/base/c.html). The
+  result is a `SpatVoxel` with each layer's depth and the depth edges of
+  every `SpatVoxel` among them, or a plain `SpatRaster` when the layers
+  don't make a valid voxel (for example two layers at the same depth).
+  For [`subset()`](https://rdrr.io/r/base/subset.html): passed to
+  terra's [`subset()`](https://rdrr.io/r/base/subset.html).
+
+- subset, negate, NSE:
+
+  For [`subset()`](https://rdrr.io/r/base/subset.html), which `[[` and
+  `$` also call: the layers to keep, as with terra's
+  [`subset()`](https://rdrr.io/r/base/subset.html). The result is a
+  `SpatVoxel` that keeps each layer's depth through later operations.
+
+- i, j, value:
+
+  For `[[<-`: the layer to replace, by number or name, and its new
+  values, as with terra. A replaced layer keeps its depth.
 
 ## Details
 
@@ -55,6 +91,21 @@ to a file) drops them. Combining a voxel that has edges with one that
 doesn't, with [`c()`](https://rdrr.io/r/base/c.html), leaves some layers
 without edges, so `bounds` applies to the result.
 
+The depths stay through selecting layers (`[[`, `$`,
+[`subset()`](https://rdrr.io/r/base/subset.html)), replacing a layer
+with `[[<-`, [`c()`](https://rdrr.io/r/base/c.html), arithmetic,
+`ifel()`, `crop()` and `mask()`. The `SpatVoxel` methods for
+[`subset()`](https://rdrr.io/r/base/subset.html), `[[<-` and
+[`c()`](https://rdrr.io/r/base/c.html) keep them where terra alone would
+reset them to 0. A few terra operations drop them, such as `app()`,
+which also returns a plain `SpatRaster`. The package's functions then
+stop with an error; set the depths again with
+`as_voxel(x, depths = ...)` or
+[`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html).
+A plain `SpatRaster` (for example after `methods::as(v, "SpatRaster")`)
+gets terra's own behaviour: after a layer subset, its next operation
+resets the depths.
+
 ## Slots
 
 - `depth_edges`:
@@ -76,14 +127,14 @@ without edges, so `bounds` applies to the result.
 
 ``` r
 # Two cells sampled at three standard depths. Build one with as_voxel(),
-# which names the layers for you and sorts them shallow to deep.
+# which sets the depths and sorts the layers shallow to deep.
 r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
                  ymax = 1, nlyrs = 3)
 terra::values(r) <- cbind(c(12, 11), c(9, NA), c(6, 5))
 v <- as_voxel(r, depths = c(0, 100, 200), varname = "temp")
 
-names(v)          # depth lives in the layer name
-#> [1] "temp_depth=0"   "temp_depth=100" "temp_depth=200"
+depths(v)         # depth is stored per layer, in terra::depth()
+#> [1]   0 100 200
 terra::values(v)  # ...and the variable in the cell values
 #>      temp_depth=0 temp_depth=100 temp_depth=200
 #> [1,]           12              9              6
@@ -99,14 +150,21 @@ methods::is(v, "SpatRaster")
 #> [1] TRUE
 terra::nlyr(terra::crop(v, terra::ext(0, 1, 0, 1)))
 #> [1] 3
-identical(names(as_voxel(v)), names(v))
+identical(depths(as_voxel(v)), depths(v))
 #> [1] TRUE
 
-# Validity is enforced on construction: every layer name must carry its
-# depth, and the layers must run shallow to deep.
-bad <- r
-names(bad) <- c("a", "b", "c")
-try(methods::new("SpatVoxel", bad))
+# Layer names are labels: renaming keeps the depths.
+names(v) <- c("surface", "mid", "deep")
+depths(v)
+#> [1]   0 100 200
+
+# Selecting layers keeps their depths through later operations.
+depths(terra::crop(v[[2:3]], terra::ext(0, 1, 0, 1)) * 2)
+#> [1] 100 200
+
+# The class checks run on construction: the depths must be set, distinct
+# and run shallow to deep.
+try(methods::new("SpatVoxel", r))
 #> Error in validObject(.Object) : 
-#>   invalid class “SpatVoxel” object: every layer name must follow {variable}_depth={value}
+#>   invalid class “SpatVoxel” object: depths must be set in terra::depth(); set them with as_voxel(x, depths = ...) or terra::depth()
 ```

@@ -74,17 +74,19 @@ describes vector data on disk. Build one with <code><a href="as_proxy.html">as_p
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>A <code>SpatProxy</code> is the planned core data object of ocean3d (SPEC.md, "Data
-model"). Later versions will read one time step of it into memory as a
-<a href="SpatVoxel-class.html">SpatVoxel</a>.</p>
+model"). <code><a href="as_voxel.html">as_voxel()</a></code> reads one time step of it into memory as a
+<a href="SpatVoxel-class.html">SpatVoxel</a>, with the proxy's depths, depth edges, CRS and date.</p>
     </div>
     <div class="section level2">
     <h2 id="slots">Slots<a class="anchor" aria-label="anchor" href="#slots"></a></h2>
 
 
 <dl><dt><code>source</code></dt>
-<dd><p>A list: <code>type</code> (<code>"netcdf"</code>) and <code>path</code>, the full path of the
-file. A path rather than an open connection, so the object can be saved
-with <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">base::saveRDS()</a></code>.</p></dd>
+<dd><p>A list with <code>type</code> and where the data are: for <code>"netcdf"</code>,
+<code>path</code>, the full path of the file (a path rather than an open connection,
+so the object can be saved with <code><a href="https://rdrr.io/r/base/readRDS.html" class="external-link">base::saveRDS()</a></code>); for <code>"series"</code>,
+<code>path</code>, the files in time order, and <code>steps</code>, the number of time steps
+in each; for <code>"voxel"</code>, <code>voxel</code>, the <a href="SpatVoxel-class.html">SpatVoxel</a> in memory.</p></dd>
 
 
 <dt><code>variable</code></dt>
@@ -102,7 +104,9 @@ the edges come from (<code>"bounds"</code>, <code>"inferred"</code>, or <code>"n
 cell without bounds). <code>depth</code> is in metres positive down and also has
 <code>storage</code> (<code>"shallow_first"</code> or <code>"deep_first"</code>). <code>time</code> holds <code>dim</code>,
 <code>cftime</code> (a CFtime object, with the file's bounds attached when it has
-them) and <code>edges</code> (<code>"bounds"</code> or <code>"none"</code>).</p></dd>
+them) and <code>edges</code> (<code>"bounds"</code> or <code>"none"</code>). A one-step climatology, such
+as a World Ocean Atlas period, has <code>climatology = TRUE</code>, its <code>units</code> and
+no <code>cftime</code>.</p></dd>
 
 
 <dt><code>crs</code></dt>
@@ -115,8 +119,7 @@ them) and <code>edges</code> (<code>"bounds"</code> or <code>"none"</code>).</p>
 
 
 <p><code>SpatProxy</code> and <code><a href="as_proxy.html">as_proxy()</a></code> are experimental. Their slots and behaviour
-may change without notice while the core object is built, and no other
-function accepts a <code>SpatProxy</code> yet.</p>
+may change without notice while the core object is built.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

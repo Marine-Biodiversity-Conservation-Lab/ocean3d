@@ -205,7 +205,7 @@
 <li>
 <code><a href="reference/create_study_raster.html">create_study_raster()</a></code> — build an empty study-area <code>SpatRaster</code> covering the combined extent of one or more spatial inputs.</li>
 <li>
-<code><a href="reference/as_voxel.html">as_voxel()</a></code> — wrap a multi-depth <code>SpatRaster</code> (or a list of single-depth ones) as a validated <code>SpatVoxel</code>, ordered shallow to deep with <code>{variable}_depth={value}</code> layer names. This is how gridded data, including netCDF files loaded with terra, enter the voxel model.</li>
+<code><a href="reference/as_voxel.html">as_voxel()</a></code> — wrap a multi-depth <code>SpatRaster</code> (or a list of single-depth ones) as a validated <code>SpatVoxel</code>, ordered shallow to deep, with each layer’s depth in <code><a href="https://rspatial.github.io/terra/reference/depth.html" class="external-link">terra::depth()</a></code>. This is how gridded data, including netCDF files described with <code><a href="reference/as_proxy.html">as_proxy()</a></code> or loaded with terra, enter the voxel model.</li>
 <li>
 <code><a href="reference/as_envelope.html">as_envelope()</a></code> — define a 3D envelope with two rasters, with <code>depth_min</code> and <code>depth_max</code> corresponding to the minimum and maximum depths present in given cell.</li>
 <li>
@@ -312,7 +312,7 @@
 <li>
 <code><a href="reference/woa_download.html">woa_download()</a></code> — download WOA 2023 NetCDF files (temperature, salinity, dissolved oxygen, oxygen saturation, AOU, nitrate, phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with caching.</li>
 <li>
-<code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> — load a WOA NetCDF and select a statistical field (e.g., objectively analyzed climatology), returning a <code>SpatRaster</code> with the package’s standard <code>{variable}_depth={value}</code> layer names.</li>
+<code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> — load a WOA NetCDF and select a statistical field (e.g., objectively analyzed climatology), returning a <code>SpatRaster</code> with one layer per depth, for <code><a href="reference/as_voxel.html">as_voxel()</a></code>.</li>
 <li>
 <code><a href="reference/woa_cache_dir.html">woa_cache_dir()</a></code> / <code><a href="reference/woa_cache_clear.html">woa_cache_clear()</a></code> — manage the persistent WOA download cache.</li>
 </ul>

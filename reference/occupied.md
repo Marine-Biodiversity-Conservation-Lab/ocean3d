@@ -19,9 +19,9 @@ occupied(x, fun = function(v) !is.na(v))
 
   A
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
-  A netCDF file isn't accepted: load it as a `SpatRaster` (e.g. with
-  [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md))
-  and wrap it with
+  A netCDF file isn't accepted: describe it with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+  and read one time step with
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 
 - fun:

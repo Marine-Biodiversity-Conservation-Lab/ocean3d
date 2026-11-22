@@ -184,9 +184,12 @@ Input: `SpatRaster` layers, tables of points or lines, and polygons
   of one or more spatial inputs.
 - [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   — wrap a multi-depth `SpatRaster` (or a list of single-depth ones) as
-  a validated `SpatVoxel`, ordered shallow to deep with
-  `{variable}_depth={value}` layer names. This is how gridded data,
-  including netCDF files loaded with terra, enter the voxel model.
+  a validated `SpatVoxel`, ordered shallow to deep, with each layer’s
+  depth in
+  [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html).
+  This is how gridded data, including netCDF files described with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+  or loaded with terra, enter the voxel model.
 - [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)
   — define a 3D envelope with two rasters, with `depth_min` and
   `depth_max` corresponding to the minimum and maximum depths present in
@@ -338,8 +341,9 @@ usethis::edit_r_environ()
   at 0.25°, 1°, or 5° resolution, with caching.
 - [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
   — load a WOA NetCDF and select a statistical field (e.g., objectively
-  analyzed climatology), returning a `SpatRaster` with the package’s
-  standard `{variable}_depth={value}` layer names.
+  analyzed climatology), returning a `SpatRaster` with one layer per
+  depth, for
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 - [`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_dir.md)
   /
   [`woa_cache_clear()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_clear.md)

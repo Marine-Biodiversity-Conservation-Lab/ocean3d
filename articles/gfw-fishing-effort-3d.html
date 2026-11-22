@@ -110,7 +110,8 @@ risk.</p>
 <li>
 <strong>Extend into 3D</strong>. Give each gear a depth window, then
 turn that window into depth layers with [as_envelope()] and
-[envelope_to_voxel()]. The result is a stack named
+[envelope_to_voxel()]. The result is a <code>SpatVoxel</code> whose
+layers are labelled
 <code>effort_&lt;geartype&gt;_depth=&lt;value&gt;</code>.</li>
 </ol>
 </div>
@@ -434,12 +435,10 @@ them.</li>
 <li>
 <strong>A combined stack is no longer a voxel.</strong> Each
 single-gear stack is a [SpatVoxel-class]: one variable, one layer per
-depth, ordered shallow to deep. Combining gears breaks that order, but
-<code><a href="https://rdrr.io/r/base/c.html" class="external-link">c()</a></code> keeps the class label anyway, so you get an object that
-claims to be a voxel and is not. The <code><a href="https://rspatial.github.io/terra/reference/writeRaster.html" class="external-link">writeRaster()</a></code> step
-avoids the problem, because it returns a plain SpatRaster. Keep the
-single-gear stacks if you need the voxel class for [intersect_3d()] or
-[voxel_to_envelope()].</li>
+depth, ordered shallow to deep. Gears built on the same standard depths
+share every depth, so <code><a href="https://rdrr.io/r/base/c.html" class="external-link">c()</a></code> returns a plain SpatRaster for
+the combined stack. Keep the single-gear stacks if you need the voxel
+class for [intersect_3d()] or [voxel_to_envelope()].</li>
 </ul>
 <p>Gears with <code>mode = "unknown"</code> have no depth information,
 so skip them. Placing their effort at the surface would invent a result
@@ -461,11 +460,10 @@ what plotly can serialise.</p>
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://plotly-r.com" class="external-link">plotly</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://tidyr.tidyverse.org" class="external-link">tidyr</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://stringr.tidyverse.org" class="external-link">stringr</a></span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># `trawlers_3d` comes from the benthic chunk above. Only the benthic stack</span></span>
-<span><span class="co"># is rendered; the helpers below are written to take any stack following the</span></span>
-<span><span class="co"># `{variable}_depth=&lt;value&gt;` convention.</span></span>
+<span><span class="co"># is rendered; the helpers below take any SpatVoxel, reading each layer's</span></span>
+<span><span class="co"># depth with depths().</span></span>
 <span></span>
 <span><span class="co"># Vertical extent of each depth band: half-way to neighbouring standard</span></span>
 <span><span class="co"># depths (so adjacent cubes meet without gaps or overlap).</span></span>
@@ -512,10 +510,13 @@ what plotly can serialise.</p>
 <span><span class="co"># Turn a multi-layer effort stack into mesh3d cubes by collapsing across</span></span>
 <span><span class="co"># gears at each (x, y, depth) and joining per-depth z-band extents.</span></span>
 <span><span class="va">stack_to_cubes</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">stack</span>, <span class="va">dx</span>, <span class="va">dy</span>, <span class="va">bands</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="co"># Each layer's depth, looked up by layer name: depths() reads them from the</span></span>
+<span>  <span class="co"># voxel.</span></span>
+<span>  <span class="va">layer_depth</span> <span class="op">&lt;-</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/setNames.html" class="external-link">setNames</a></span><span class="op">(</span><span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">stack</span><span class="op">)</span>, <span class="fu"><a href="https://rspatial.github.io/terra/reference/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">stack</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="va">voxels</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">stack</span>, xy <span class="op">=</span> <span class="cn">TRUE</span>, na.rm <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="https://tidyr.tidyverse.org/reference/pivot_longer.html" class="external-link">pivot_longer</a></span><span class="op">(</span>cols <span class="op">=</span> <span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span><span class="op">)</span>, names_to <span class="op">=</span> <span class="st">"layer"</span>, values_to <span class="op">=</span> <span class="st">"effort"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">effort</span> <span class="op">&gt;</span> <span class="fl">0</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>depth <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/numeric.html" class="external-link">as.numeric</a></span><span class="op">(</span><span class="fu"><a href="https://stringr.tidyverse.org/reference/str_extract.html" class="external-link">str_extract</a></span><span class="op">(</span><span class="va">layer</span>, <span class="st">"(?&lt;=depth=)-?[0-9.]+"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>depth <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/unname.html" class="external-link">unname</a></span><span class="op">(</span><span class="va">layer_depth</span><span class="op">[</span><span class="va">layer</span><span class="op">]</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">depth</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarise</a></span><span class="op">(</span>effort <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">effort</span><span class="op">)</span>, .groups <span class="op">=</span> <span class="st">"drop"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">left_join</a></span><span class="op">(</span><span class="va">bands</span>, by <span class="op">=</span> <span class="st">"depth"</span><span class="op">)</span></span>
@@ -637,9 +638,9 @@ bottom.</p>
 <div class="section level3">
 <h3 id="overlapping-with-a-species-range">Overlapping with a species range<a class="anchor" aria-label="anchor" href="#overlapping-with-a-species-range"></a>
 </h3>
-<p><code>trawlers_3d</code> and <code>purse_seines_3d</code> follow the
-<code>{variable}_depth=&lt;value&gt;</code> naming convention, so they
-work with the rest of the package exactly as WOA rasters do:</p>
+<p><code>trawlers_3d</code> and <code>purse_seines_3d</code> are
+<code>SpatVoxel</code> objects, so they work with the rest of the
+package exactly as WOA voxels do:</p>
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Example: silky shark (epipelagic, and heavily taken as bycatch in</span></span>
 <span><span class="co"># tuna purse seines around FADs).</span></span>
@@ -673,7 +674,7 @@ work with the rest of the package exactly as WOA rasters do:</p>
 <span></span>
 <span><span class="co"># Mask the 3D effort stack to cells + depths inside the species' per-cell</span></span>
 <span><span class="co"># depth window. mask() is depth-aware for an envelope: it places the range on</span></span>
-<span><span class="co"># the effort stack's own `effort_&lt;gear&gt;_depth=&lt;value&gt;` levels and keeps each</span></span>
+<span><span class="co"># the effort stack's own depth levels and keeps each</span></span>
 <span><span class="co"># layer's effort only where the species is present at that depth.</span></span>
 <span><span class="co"># `purse_seines_3d` is already one gear, so it goes in whole; a multi-gear</span></span>
 <span><span class="co"># stack would be subset by layer name first.</span></span>
@@ -689,7 +690,7 @@ work with the rest of the package exactly as WOA rasters do:</p>
 <span></span>
 <span><span class="co"># Per-depth exposure profile (effort-hours summed across cells, per layer).</span></span>
 <span><span class="va">per_depth</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/global.html" class="external-link">global</a></span><span class="op">(</span><span class="va">exposed_effort</span>, <span class="st">"sum"</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
-<span><span class="va">per_depth</span><span class="op">$</span><span class="va">depth</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">per_depth</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">per_depth</span><span class="op">$</span><span class="va">depth</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/depths.html">depths</a></span><span class="op">(</span><span class="va">exposed_effort</span><span class="op">)</span></span>
 <span><span class="va">per_depth</span><span class="op">[</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">per_depth</span><span class="op">$</span><span class="va">sum</span><span class="op">)</span> <span class="op">&amp;</span> <span class="va">per_depth</span><span class="op">$</span><span class="va">sum</span> <span class="op">&gt;</span> <span class="fl">0</span>,</span>
 <span>          <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"depth"</span>, <span class="st">"sum"</span><span class="op">)</span><span class="op">]</span></span></code></pre></div>
 </div>

@@ -72,10 +72,12 @@ a way to represent both datasets in three dimensions.
   geographical locations.
 
 - **`SpatVoxel`** represents three-dimensional information using a stack
-  of raster layers, each corresponding to a specific depth. Its layers
-  follow the naming convention `{variable}_depth={value}`, allowing
-  environmental conditions or other spatial information to be
-  represented at different depths.
+  of raster layers, each corresponding to a specific depth. Each layer
+  stores its depth (in
+  [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html))
+  and is labelled `{variable}_depth={value}`, allowing environmental
+  conditions or other spatial information to be represented at different
+  depths.
 
 The key difference is **how depth is represented**. In a `SpatEnvelope`,
 depth is stored as the cell value, defining a vertical interval. In a
@@ -85,7 +87,7 @@ at a particular depth level.
 | Object | What it is |
 |----|----|
 | `SpatEnvelope` | The species’ 3D range. Two layers, `depth_min` and `depth_max`; **depth is the cell value**, so the vertical interval varies per cell. |
-| `SpatVoxel` | The environmental raster. One layer per standard depth, named `{variable}_depth={value}`; **depth is the layer index**. |
+| `SpatVoxel` | The environmental raster. One layer per standard depth, each storing its depth and labelled `{variable}_depth={value}`; **depth is the layer index**. |
 
 Figure 2 illustrates how the same species’ three-dimensional
 distribution can be represented using either a `SpatEnvelope` or a
@@ -419,13 +421,13 @@ names(t_annual)
 
 Notice that each layer name contains two pieces of information: the
 environmental variable (`t_an`, annual temperature) and its
-corresponding depth. For example, `t_an_depth=100` represents the
+corresponding depth. For example, `t_an_depth=100` labels the
 temperature raster at a depth of 100 metres.
 
-Rather than extracting depth information manually from the layer names,
-we can use the
+The names are labels for reading; the depths themselves are stored with
+each layer, and the
 [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
-function to retrieve the numerical depth axis.
+function retrieves them.
 
 ``` r
 
@@ -846,9 +848,9 @@ the number of geographical cells contributing to these calculations.
 # Calculate the mean, minimum and maximum temperature within the species' potential distribution at each depth.
 per_depth <- terra::global(in_range, c("mean", "min", "max"), na.rm = TRUE)
 
-# Extract the numerical depth associated with each layer.
-per_depth$depth <- depths(rownames(per_depth))
-#`depths()` accepts a character vector, making a per-layer
+# Label each row with its layer's depth: terra::global() gives one row per
+# layer, in layer order.
+per_depth$depth <- depths(in_range)
 
 # Count how many cells contain temperature data at each depth (excluding cells outside the species' potential distribution).
 per_depth$n_cells <- terra::global(!is.na(in_range), "sum", na.rm = TRUE)[, 1]
