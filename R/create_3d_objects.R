@@ -259,9 +259,10 @@ as_voxel <- function(x, depths = NULL, varname = "value",
          paste(class(x), collapse = "/"), ".", call. = FALSE)
   }
 
-  # The depths come from `depths`, else from terra::depth(); layer names are
-  # labels and never read. terra::depth() is set only on a copy of `x`,
-  # because terra sets it in place and `x` may still be the caller's raster.
+  # The depths come from `depths`, else from terra::depth() through depths(),
+  # which stops when terra holds none; layer names are labels and never read.
+  # terra::depth() is set only on a copy of `x`, because terra sets it in
+  # place and `x` may still be the caller's raster.
   if (!is.null(depths)) {
     problem <- if (length(depths) != terra::nlyr(x)) {
       glue::glue("must have one value per layer: got {length(depths)} for ",
@@ -279,10 +280,8 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     # Readable names; `names<-` copies the raster first.
     names(x) <- paste0(varname, "_depth=", d)
     terra::depth(x) <- d
-  } else if (.depth_set(x)) {
-    d <- terra::depth(x)
   } else {
-    .abort_no_depths()
+    d <- depths(x)
   }
   if (any(d < 0)) {
     stop("depths are positive metres increasing downward; got ",

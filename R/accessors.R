@@ -42,7 +42,15 @@ depths <- function(x) {
       "{paste(class(x), collapse = '/')}."
     ), class = "ocean3d_error_depths_input", call = NULL)
   }
-  if (!.depth_set(x)) .abort_no_depths()
+  # as_voxel() reads the depths through here too, so both stop the same way.
+  if (!.depth_set(x)) {
+    rlang::abort(paste(
+      "The raster has no depths in terra::depth(). Pass `depths` to",
+      "as_voxel(), or set them with terra::depth(). Layer names aren't read",
+      "as depths. terra drops the depths in some operations, such as app();",
+      "see ?`SpatVoxel-class`."
+    ), class = "ocean3d_error_no_depths", call = NULL)
+  }
   terra::depth(x)
 }
 
@@ -58,17 +66,6 @@ depths <- function(x) {
 # as_voxel() and depths() stop rather than return wrong depths.
 .depth_set <- function(x) {
   isTRUE(tryCatch(x@pntr$hasDepth, error = function(e) FALSE))
-}
-
-# Internal: error, class `ocean3d_error_no_depths`, for a raster whose depths
-# aren't set in terra::depth(). Raised by depths() and as_voxel().
-.abort_no_depths <- function() {
-  rlang::abort(paste(
-    "The raster has no depths in terra::depth(). Pass `depths` to",
-    "as_voxel(), or set them with terra::depth(). Layer names aren't read as",
-    "depths. terra drops the depths in some operations, such as app(); see",
-    "?`SpatVoxel-class`."
-  ), class = "ocean3d_error_no_depths", call = NULL)
 }
 
 #' Depth edges of a voxel's layers
