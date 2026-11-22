@@ -50,11 +50,12 @@ test_that("a series needs one variable on one grid, each step once", {
   grid <- make_grid_file(time = c(5, 6), lon = c(0.5, 1.5))
   depth <- make_grid_file(time = c(5, 6), depth = c(5, 25))
   kelvin <- make_grid_file(time = c(5, 6), var_units = "K")
+  unitless <- make_grid_file(time = c(5, 6), var_units = "")
   untimed <- make_grid_file(time = NULL)
   clim <- make_grid_file(time = 6,
                          time_units = "months since 0000-01-01 00:00:00")
-  on.exit(unlink(c(a, repeated, overlap, grid, depth, kelvin, untimed, clim)),
-          add = TRUE)
+  on.exit(unlink(c(a, repeated, overlap, grid, depth, kelvin, unitless,
+                   untimed, clim)), add = TRUE)
 
   cases <- list(
     list(files = c(a, a), pattern = "appears more than once in the series"),
@@ -62,6 +63,8 @@ test_that("a series needs one variable on one grid, each step once", {
     list(files = c(a, grid), pattern = "different grid"),
     list(files = c(a, depth), pattern = "different grid"),
     list(files = c(a, kelvin), pattern = "gives `temp` in K, but .* in degC"),
+    list(files = c(a, unitless),
+         pattern = "gives `temp` without units, but .* gives it in degC"),
     list(files = c(a, untimed), pattern = "no dated time axis"),
     list(files = c(a, clim), pattern = "no dated time axis")
   )

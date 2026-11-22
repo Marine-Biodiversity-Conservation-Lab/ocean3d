@@ -399,11 +399,12 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     }
     if (!identical(p@variable$units, first@variable$units)) {
       units <- vapply(list(p, first), function(q) {
-        if (is.null(q@variable$units)) "no units" else q@variable$units
+        u <- q@variable$units
+        if (is.null(u)) "without units" else paste("in", u)
       }, character(1))
       stop_series(glue::glue(
-        "{file_name(p)} gives `{p@variable$name}` in {units[1]}, but ",
-        "{file_name(first)} gives it in {units[2]}. A series needs one unit; ",
+        "{file_name(p)} gives `{p@variable$name}` {units[1]}, but ",
+        "{file_name(first)} gives it {units[2]}. A series needs one unit; ",
         "convert the files first"
       ))
     }

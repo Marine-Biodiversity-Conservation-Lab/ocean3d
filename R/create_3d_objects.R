@@ -411,7 +411,7 @@ setReplaceMethod("[[", c("SpatVoxel", "numeric"), function(x, i, j, value) {
   # this doesn't re-run the class checks. A layer added by name has no depth
   # to keep, so that result is left as terra returns it.
   out <- methods::callNextMethod()
-  d <- if (.depth_set(x)) terra::depth(x)
+  d <- if (.has_depths(x)) terra::depth(x)
   if (length(d) != terra::nlyr(out)) return(out)
   terra::depth(out) <- d
   x@pntr <- out@pntr
