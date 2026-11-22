@@ -181,7 +181,7 @@ setValidity("SpatProxy", function(object) {
 #' @export
 as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
                      depth_dim = NULL, time_dim = NULL) {
-  if (methods::is(x, "SpatVoxel")) return(.voxel_proxy(x))
+  if (methods::is(x, "SpatVoxel")) return(.voxel_to_proxy(x))
   paths <- is.character(x) && length(x) >= 1L && !anyNA(x)
   if (!.is_ncdf4(x) && !paths) {
     rlang::abort(paste(
@@ -190,7 +190,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     ), class = "ocean3d_error_proxy_input", call = NULL)
   }
   if (paths && length(x) > 1L) {
-    return(.series_proxy(x, var, lon_dim, lat_dim, depth_dim, time_dim))
+    return(.series_to_proxy(x, var, lon_dim, lat_dim, depth_dim, time_dim))
   }
   type <- if (.is_ncdf4(x)) "connection" else "path"
   opened <- .open_source(list(source = x, type = type))
@@ -363,7 +363,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # grid in every file, each with its own time axis, ordered by time and
 # joined into one axis in the first file's units (#94, #96). Each file is
 # described and checked by as_proxy() first.
-.series_proxy <- function(paths, var, lon_dim, lat_dim, depth_dim, time_dim) {
+.series_to_proxy <- function(paths, var, lon_dim, lat_dim, depth_dim,
+                             time_dim) {
   stop_series <- function(problem) {
     rlang::abort(glue::glue("{problem}."),
                  class = "ocean3d_error_proxy_series", call = NULL)
@@ -379,6 +380,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
                   lat_dim = lat_dim, depth_dim = depth_dim,
                   time_dim = time_dim)
   file <- function(p) basename(p@source$path)
+  first <- parts[[1L]]
   for (p in parts) {
     if (is.null(p@axes$time) || isTRUE(p@axes$time$climatology)) {
       stop_series(glue::glue(
@@ -386,26 +388,40 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         "so its steps can be placed in time order"
       ))
     }
-    if (!identical(p@variable$name, parts[[1L]]@variable$name)) {
+    if (!identical(p@variable$name, first@variable$name)) {
       stop_series(glue::glue(
         "{file(p)} holds `{p@variable$name}`, not ",
-        "`{parts[[1L]]@variable$name}`. A series is one variable"
+        "`{first@variable$name}`. A series is one variable"
       ))
     }
-    if (!identical(p@variable$units, parts[[1L]]@variable$units)) {
-      unit <- function(x) {
-        if (is.null(x@variable$units)) "no units" else x@variable$units
-      }
+    if (!identical(p@variable$units, first@variable$units)) {
+      units <- vapply(list(p, first), function(q) {
+        if (is.null(q@variable$units)) "no units" else q@variable$units
+      }, character(1))
       stop_series(glue::glue(
-        "{file(p)} gives `{p@variable$name}` in {unit(p)}, but ",
-        "{file(parts[[1L]])} gives it in {unit(parts[[1L]])}. A series needs ",
-        "one unit; convert the files first"
+        "{file(p)} gives `{p@variable$name}` in {units[1]}, but ",
+        "{file(first)} gives it in {units[2]}. A series needs one unit; ",
+        "convert the files first"
       ))
     }
-    if (!.same_grid(p, parts[[1L]])) {
+    # The same grid: the same dimensions in the same order and CRS, and the
+    # same longitude, latitude and depth cells. Time may differ.
+    spatial <- setdiff(p@variable$dims, p@variable$axis_dims$time)
+    cells <- lapply(list(p, first), function(q) {
+      lapply(q@axes[c("lon", "lat", "depth")], function(axis) {
+        axis[c("centres", "lower", "upper")]
+      })
+    })
+    same_grid <- identical(p@variable$dims, first@variable$dims) &&
+      identical(p@variable$axis_dims, first@variable$axis_dims) &&
+      identical(p@crs, first@crs) &&
+      identical(p@variable$dim_lengths[spatial],
+                first@variable$dim_lengths[spatial]) &&
+      isTRUE(all.equal(cells[[1L]], cells[[2L]]))
+    if (!same_grid) {
       stop_series(glue::glue(
-        "{file(p)} has a different grid from {file(parts[[1L]])}. A series ",
-        "needs the same grid and depths in every file; spatial tiles aren't ",
+        "{file(p)} has a different grid from {file(first)}. A series needs ",
+        "the same grid and depths in every file; spatial tiles aren't ",
         "supported"
       ))
     }
@@ -457,28 +473,6 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   out
 }
 
-# Whether two SpatProxy objects describe the same grid: the same dimensions in
-# the same order and the same longitude, latitude and depth cells. Time may
-# differ.
-.same_grid <- function(a, b) {
-  va <- a@variable
-  vb <- b@variable
-  if (!identical(va$dims, vb$dims) || !identical(va$axis_dims, vb$axis_dims) ||
-        !identical(a@crs, b@crs)) {
-    return(FALSE)
-  }
-  spatial <- setdiff(va$dims, va$axis_dims$time)
-  if (!identical(va$dim_lengths[spatial], vb$dim_lengths[spatial])) {
-    return(FALSE)
-  }
-  cells <- function(p) {
-    lapply(p@axes[c("lon", "lat", "depth")], function(axis) {
-      axis[c("centres", "lower", "upper")]
-    })
-  }
-  isTRUE(all.equal(cells(a), cells(b)))
-}
-
 # A CFtime axis in the units of `target`, with its bounds, so the two can be
 # joined with `+`. Unchanged when the units already match.
 .cftime_in <- function(cftime, target) {
@@ -503,7 +497,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # through the same steps. One time step: the voxel's date when it has one.
 # Cell edges come from the raster; depth edges from the voxel's stored edges,
 # or the slabs its default `bounds` ("midpoint") gives.
-.voxel_proxy <- function(v) {
+.voxel_to_proxy <- function(v) {
   v <- as_voxel(v)
   nc <- terra::ncol(v)
   nr <- terra::nrow(v)
