@@ -218,18 +218,49 @@ test_that("climatological time axes are recognised by attribute or year 0", {
   ))
   on.exit(unlink(c(dated, woa, flagged)), add = TRUE)
 
-  expect_null(check(dated))
+  expect_false(check(dated))
   # Days since year 0 (MATLAB datenums) are dates, not a climatology.
   datenum <- make_grid_file(depth = NULL, time = c(737791, 737792),
                             time_units = "days since 0000-01-01 00:00:00",
                             calendar = "proleptic_gregorian")
   on.exit(unlink(datenum), add = TRUE)
-  expect_null(check(datenum))
+  expect_false(check(datenum))
   err <- expect_error(check(woa), class = "ocean3d_error_time_climatology")
   expect_match(conditionMessage(err), basename(woa), fixed = TRUE)
   expect_match(conditionMessage(err), "months since 0000-01-01", fixed = TRUE)
+  expect_match(conditionMessage(err), "aren't supported here yet",
+               fixed = TRUE)
   expect_error(check(flagged),
                class = "ocean3d_error_time_climatology")
+})
+
+test_that("a one-step climatology passes when one step is allowed", {
+  check <- function(f) {
+    nc <- ncdf4::nc_open(f)
+    on.exit(ncdf4::nc_close(nc))
+    .check_climatology(nc, "time", basename(f), one_step_ok = TRUE)
+  }
+  units <- "months since 0000-01-01 00:00:00"
+  one <- make_grid_file(depth = NULL, time = 6, time_units = units)
+  several <- make_grid_file(depth = NULL, time = c(0.5, 1.5),
+                            time_units = units)
+  dated <- make_grid_file(depth = NULL, time = 0)
+  on.exit(unlink(c(one, several, dated)), add = TRUE)
+
+  expect_true(check(one))
+  expect_false(check(dated))
+  # A one-step climatology still stops where one step isn't allowed.
+  nc <- ncdf4::nc_open(one)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  expect_error(.check_climatology(nc, "time"),
+               class = "ocean3d_error_time_climatology")
+
+  err <- expect_error(check(several),
+                      class = "ocean3d_error_time_climatology")
+  expect_match(conditionMessage(err), basename(several), fixed = TRUE)
+  expect_match(conditionMessage(err),
+               "one time step is supported, but one with several steps",
+               fixed = TRUE)
 })
 
 test_that("a single monthly step with bounds is read", {

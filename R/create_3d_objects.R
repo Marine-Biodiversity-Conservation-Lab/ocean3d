@@ -402,29 +402,26 @@ setMethod("subset", "SpatVoxel", function(x, subset, negate = FALSE,
 #'   its new values, as with terra. A replaced layer keeps its depth.
 #' @export
 setReplaceMethod("[[", c("SpatVoxel", "numeric"), function(x, i, j, value) {
-  .replace_layer(x, methods::callNextMethod())
-})
-
-#' @rdname SpatVoxel-class
-#' @export
-setReplaceMethod("[[", c("SpatVoxel", "character"), function(x, i, j, value) {
-  .replace_layer(x, methods::callNextMethod())
-})
-
-# Internal: the result `out` of terra's `[[<-` on voxel `x`, with x's depths
-# and class back. terra gives a replaced layer the depth of the new values,
-# which is 0 when they have none, so each replaced layer keeps its own depth
-# instead. Replacing by name returns a plain SpatRaster, so the result goes
-# back into `x`, whose only other slot is depth_edges; like terra's own
-# operations, this doesn't re-run the class checks. A layer added by name has
-# no depth to keep, so that result is left as terra returns it.
-.replace_layer <- function(x, out) {
+  # terra gives a replaced layer the depth of the new values, which is 0 when
+  # they have none, so each replaced layer keeps its own depth instead.
+  # Replacing by name returns a plain SpatRaster, so the result goes back into
+  # `x`, whose only other slot is depth_edges; like terra's own operations,
+  # this doesn't re-run the class checks. A layer added by name has no depth
+  # to keep, so that result is left as terra returns it.
+  out <- methods::callNextMethod()
   d <- if (.depth_set(x)) terra::depth(x)
   if (length(d) != terra::nlyr(out)) return(out)
   terra::depth(out) <- d
   x@pntr <- out@pntr
   x
-}
+})
+
+#' @rdname SpatVoxel-class
+#' @export
+# The same method for a layer named by character. Not registered for "ANY":
+# terra's own methods would win dispatch over it and reset the depths to 0.
+setReplaceMethod("[[", c("SpatVoxel", "character"),
+                 methods::getMethod("[[<-", c("SpatVoxel", "numeric")))
 
 # Internal: a depth_edges table (depth, lower, upper) from `depth_bounds`: a
 # two-column matrix or data frame of top and bottom with one row per depth, in

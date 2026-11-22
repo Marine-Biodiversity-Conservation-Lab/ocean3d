@@ -286,13 +286,12 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 .proxy_time_axis <- function(nc, dim, path) {
   file <- basename(path)
   # A one-step climatology, such as a World Ocean Atlas period, has no date
-  # CFtime can decode: it is recorded as a climatology, with its units.
-  one_step <- identical(as.integer(nc$dim[[dim]]$len), 1L)
-  if (.is_climatology(nc, dim) && one_step) {
+  # CFtime can decode: it is recorded as a climatology, with its units. A
+  # climatology with more steps stops here.
+  if (.check_climatology(nc, dim, file, one_step_ok = TRUE)) {
     return(list(dim = dim, cftime = NULL, edges = "none", climatology = TRUE,
                 units = .read_attribute(nc, dim, "units")))
   }
-  .check_climatology(nc, dim, file)
   offsets <- as.vector(.get_dim_values(nc, dim))
   units <- .read_attribute(nc, dim, "units")
   usable <- is.numeric(offsets) && all(is.finite(offsets)) &&
