@@ -21,8 +21,8 @@ volume(x, per_cell = FALSE, ...)
 \arguments{
 \item{x}{A \link[=SpatEnvelope-class]{SpatEnvelope} or \link[=SpatVoxel-class]{SpatVoxel}. A bare SpatRaster is
 rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[=vect_to_envelope]{vect_to_envelope()}} or
-\code{\link[=as_voxel]{as_voxel()}} first. A netCDF file isn't accepted: load it as a
-\code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with \code{\link[=as_voxel]{as_voxel()}}.}
+\code{\link[=as_voxel]{as_voxel()}} first. A netCDF file isn't accepted: describe it with
+\code{\link[=as_proxy]{as_proxy()}} and read one time step with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{per_cell}{\code{FALSE} (default) for the total volume, \code{TRUE} for the
 volume of each cell.}

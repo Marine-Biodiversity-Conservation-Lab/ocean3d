@@ -7,25 +7,23 @@
 depths(x)
 }
 \arguments{
-\item{x}{A \link[=SpatVoxel-class]{SpatVoxel}, a \link[terra:SpatRaster]{terra::SpatRaster}, or a character vector of
-layer names.}
+\item{x}{A \link[=SpatVoxel-class]{SpatVoxel}, or a \link[terra:SpatRaster]{terra::SpatRaster} with its depths set.}
 }
 \value{
-Numeric vector, one depth per layer of \code{x} (or per element, when \code{x}
-is character). \code{NA} for any name that does not follow the convention; an
-error when no name does.
+Numeric vector, one depth per layer of \code{x}. An error when the
+depths aren't set, for example after a terra operation that drops them
+(see \link[=SpatVoxel-class]{SpatVoxel}).
 }
 \description{
-Read the depth axis of a \link[=SpatVoxel-class]{SpatVoxel}. Depth is the layer index in a
-voxel, and the depth itself is carried in the layer name following the
-\verb{\{variable\}_depth=\{value\}} convention used throughout the package; this
-parses it back out.
+Read the depth of each layer of a \link[=SpatVoxel-class]{SpatVoxel}. Depth is the layer
+index in a voxel, and each layer's depth is stored in terra's own per-layer
+field, \code{\link[terra:depth]{terra::depth()}}. Layer names are labels for people to read: the
+depths are never read from them, so renaming the layers doesn't change
+them.
 }
 \details{
-\code{x} is normally a \code{SpatVoxel}, but any \link[terra:SpatRaster]{terra::SpatRaster} whose layer names
-follow the convention works, as does a bare character vector of layer names —
-useful for the row names of a \code{\link[terra:global]{terra::global()}} result, which carry the layer
-names but not the raster.
+\code{x} can also be a plain \link[terra:SpatRaster]{terra::SpatRaster} whose depths are set in
+\code{\link[terra:depth]{terra::depth()}}, such as a raster terra read from a netCDF file.
 
 Depths are positive metres increasing downward.
 }
@@ -37,15 +35,12 @@ v <- as_voxel(r, depths = c(0, 100, 200), varname = "temp")
 names(v)
 depths(v)
 
-# A character vector works too, so the depths of a per-layer summary can be
-# recovered from its row names.
+# A per-layer summary has one row per layer, in layer order, so the voxel's
+# depths label it.
 per_depth <- terra::global(v, "mean", na.rm = TRUE)
-depths(rownames(per_depth))
-
-# Names that do not follow the convention come back NA, as long as at least
-# one name does.
-depths(c("temp_depth=0", "not_a_depth_layer"))
+per_depth$depth <- depths(v)
+per_depth
 }
 \seealso{
-\code{\link[=as_voxel]{as_voxel()}}, which builds those layer names.
+\code{\link[=as_voxel]{as_voxel()}}, which sets the depths.
 }

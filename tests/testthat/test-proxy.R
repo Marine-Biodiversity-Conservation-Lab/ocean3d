@@ -219,11 +219,22 @@ test_that("unsupported calendars and climatologies stop", {
   calendar <- proxy_error(calendar = "noleap")
   expect_s3_class(calendar$error, "ocean3d_error_calendar")
 
-  # WOA-style monthly climatology, which CFtime can't read. The calendar and
-  # climatology checks are tested directly in test-netcdf-time.R.
+  # A climatology of more than one step, which CFtime can't read. The
+  # calendar and climatology checks are tested directly in
+  # test-netcdf-time.R.
   woa <- proxy_error(time = c(0.5, 1.5),
                      time_units = "months since 0000-01-01 00:00:00")
   expect_s3_class(woa$error, "ocean3d_error_time_climatology")
+})
+
+test_that("a one-step climatology is recorded without a date", {
+  # A World Ocean Atlas period: one step of `months since 0000-01-01`.
+  x <- proxy_of(time = 6, time_units = "months since 0000-01-01 00:00:00")
+  expect_true(x@axes$time$climatology)
+  expect_null(x@axes$time$cftime)
+  expect_identical(x@axes$time$units, "months since 0000-01-01 00:00:00")
+  expect_true(methods::validObject(x))
+  expect_match(capture.output(print(x))[8], "time .*: climatology, 1 step")
 })
 
 test_that("the CRS comes from a geographic grid mapping", {
@@ -269,7 +280,7 @@ test_that("an open connection is read and left open", {
   expect_identical(nc$var$temp$name, "temp")
   expect_no_error(ncdf4::ncvar_get(nc, "temp"))
 
-  expect_error(as_proxy(c(f, f)), class = "ocean3d_error_proxy_input")
+  expect_error(as_proxy(1), class = "ocean3d_error_proxy_input")
 })
 
 test_that("unlimited, empty and unsaved time axes", {
@@ -355,15 +366,15 @@ test_that("the print shows each axis", {
     "dimensions : 3 x 2 (lon x lat)"
   ))
   expect_identical(bare[7:8], c("depth      : none", "time       : none"))
+
+  # A file without units: NULL units, and just the name on the variable line.
+  no_units <- proxy_of(depth = NULL, time = NULL, var_units = "")
+  expect_null(no_units@variable$units)
+  expect_identical(capture.output(print(no_units))[3], "variable   : temp")
 })
 
-# The index-window reader. The file must outlive the proxy, so each test
-# removes it at the end.
-proxy_and_file <- function(...) {
-  f <- make_grid_file(...)
-  list(proxy = as_proxy(f, var = "temp"), file = f)
-}
-
+# The index-window reader. proxy_and_file() is in helper-netcdf-grid.R; the
+# file must outlive the proxy, so each test removes it at the end.
 stored_values <- function(f) {
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc))
