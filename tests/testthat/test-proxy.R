@@ -366,6 +366,11 @@ test_that("the print shows each axis", {
     "dimensions : 3 x 2 (lon x lat)"
   ))
   expect_identical(bare[7:8], c("depth      : none", "time       : none"))
+
+  # A file without units: NULL units, and just the name on the variable line.
+  no_units <- proxy_of(depth = NULL, time = NULL, var_units = "")
+  expect_null(no_units@variable$units)
+  expect_identical(capture.output(print(no_units))[3], "variable   : temp")
 })
 
 # The index-window reader. proxy_and_file() is in helper-netcdf-grid.R; the

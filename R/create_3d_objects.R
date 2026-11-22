@@ -173,7 +173,8 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   for a [SpatProxy-class], which gives its own.
 #' @param varname Character. Variable name used in the layer names built from
 #'   `depths`, or from a proxy's depths, where it defaults to the proxy's
-#'   variable name. Ignored otherwise.
+#'   variable name; it is also stored in [terra::varnames()], which renaming
+#'   the layers keeps. Ignored otherwise.
 #' @param time For a [SpatProxy-class] only: the time step to read, as a step
 #'   number, or a date or date-time that matches one step exactly. A date such
 #'   as `"2020-01-02"` matches the step on that day; with several steps a day,
@@ -279,6 +280,8 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     d <- as.numeric(depths)
     # Readable names; `names<-` copies the raster first.
     names(x) <- paste0(varname, "_depth=", d)
+    # The variable's name, in terra's own field, which renaming keeps.
+    terra::varnames(x) <- varname
     terra::depth(x) <- d
   } else {
     d <- depths(x)

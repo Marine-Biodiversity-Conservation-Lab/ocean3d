@@ -89,12 +89,19 @@ test_that("a voxel in memory is a source like a file", {
   p <- as_proxy(v)
   expect_s4_class(p, "SpatProxy")
   expect_identical(p@source$type, "voxel")
-  # The variable's name comes from the layer labels as_voxel() gave, or is
-  # "value" when the layers were renamed.
+  # The variable's name comes from terra::varnames(), which as_voxel() sets
+  # and renaming the layers keeps; "value" when the voxel has none.
   expect_identical(p@variable$name, "temp")
   renamed <- v
   names(renamed) <- c("top", "bottom")
-  expect_identical(as_proxy(renamed)@variable$name, "value")
+  expect_identical(as_proxy(renamed)@variable$name, "temp")
+  unnamed <- terra::rast(nrows = 2, ncols = 2, nlyrs = 2, vals = 1)
+  terra::depth(unnamed) <- c(0, 10)
+  expect_identical(as_proxy(as_voxel(unnamed))@variable$name, "value")
+  # Without units, the variable line shows just the name.
+  expect_null(as_proxy(as_voxel(unnamed))@variable$units)
+  expect_true(any(grepl("^variable +: value$",
+                        capture.output(print(as_proxy(as_voxel(unnamed)))))))
   expect_match(capture.output(print(p))[2], "SpatVoxel in memory")
   # The same cells, depths, depth edges and date.
   expect_equal(sort(p@axes$lon$centres), file_proxy@axes$lon$centres)

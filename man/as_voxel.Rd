@@ -23,7 +23,8 @@ for a \link[=SpatProxy-class]{SpatProxy}, which gives its own.}
 
 \item{varname}{Character. Variable name used in the layer names built from
 \code{depths}, or from a proxy's depths, where it defaults to the proxy's
-variable name. Ignored otherwise.}
+variable name; it is also stored in \code{\link[terra:varnames]{terra::varnames()}}, which renaming
+the layers keeps. Ignored otherwise.}
 
 \item{depth_bounds}{Optional two-column matrix or data frame: the top and
 bottom of the slab of water each layer stands for, in metres positive

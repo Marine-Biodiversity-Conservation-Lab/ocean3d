@@ -242,11 +242,15 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     }
     path <- normalizePath(path)
   }
+  # Units are NULL when the file gives none, as for a voxel source; ncdf4's
+  # own `units` is "" then.
+  units <- .read_attribute(nc, var, "units")
+  if (!is.null(units) && !nzchar(trimws(units))) units <- NULL
   methods::new(
     "SpatProxy",
     source = list(type = "netcdf", path = path),
     variable = list(
-      name = var, units = info$units, long_name = info$longname,
+      name = var, units = units, long_name = info$longname,
       dims = dims$var_dims,
       dim_lengths = stats::setNames(as.integer(info$varsize), dims$var_dims),
       axis_dims = dims[c("lon", "lat", "depth", "time")],
@@ -531,15 +535,12 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   dims <- c("lon", "lat", "depth", if (dated) "time")
   lengths <- c(lon = nc, lat = nr, depth = terra::nlyr(v),
                if (dated) c(time = 1L))
-  # The variable's name, from the labels as_voxel() gives the layers
-  # (`{variable}_depth={value}`) when every layer has one with the same
-  # variable; "value", as_voxel()'s default, otherwise.
-  prefix <- unique(sub("_depth=.*$", "", names(v)))
-  name <- if (all(grepl("_depth=", names(v))) && length(prefix) == 1L) {
-    prefix
-  } else {
-    "value"
-  }
+  # The variable's name from terra's own field, which as_voxel() sets and
+  # terra keeps through renaming, subsetting and arithmetic; layer names are
+  # labels and aren't read. "value", as_voxel()'s default, when the voxel
+  # has no single variable name.
+  name <- unique(terra::varnames(v))
+  if (length(name) != 1L || is.na(name) || !nzchar(name)) name <- "value"
   units <- terra::units(v)[1L]
   crs <- terra::crs(v)
   methods::new(
@@ -857,8 +858,11 @@ setMethod("show", "SpatProxy", function(object) {
       ),
       basename(object@source$path)
     ),
-    variable = glue::glue(
-      "{variable$name} ({variable$units}){chunks}"
+    # Units are NULL when the data give none.
+    variable = paste0(
+      variable$name,
+      if (!is.null(variable$units)) glue::glue(" ({variable$units})"),
+      chunks
     ),
     dimensions = glue::glue(
       "{sizes(variable$dim_lengths)} ({paste(names(dims), collapse = ' x ')})"
