@@ -27,14 +27,24 @@
   methods::as(vol_rast, "SpatRaster")  # remove the 3D class
 }
 
-# Internal: the one producer of `ocean3d_error_volume_per_level` for shapes
-# without depth levels, from the envelope and polygon methods.
-.no_levels <- function(per_level, what) {
-  if (per_level) {
-    rlang::abort(glue::glue(
+# Internal: the one producer of `ocean3d_error_volume_per_level`. The generic
+# checks that `per_level` is a flag and comes with `per_cell`; the envelope
+# and polygon methods name their shapes in `what`, which have no levels.
+.check_per_level <- function(per_level, per_cell, what = NULL) {
+  problem <- if (!rlang::is_bool(per_level)) {
+    "`per_level` must be TRUE or FALSE."
+  } else if (per_level && !per_cell) {
+    paste("`per_level = TRUE` gives the volume of each cell at each depth",
+          "level, so it needs `per_cell = TRUE`.")
+  } else if (per_level && !is.null(what)) {
+    glue::glue(
       "{what} have no depth levels, so `per_level = TRUE` doesn't apply. ",
       "Put them on a voxel's levels with envelope_to_voxel() first."
-    ), class = "ocean3d_error_volume_per_level", call = NULL)
+    )
+  }
+  if (!is.null(problem)) {
+    rlang::abort(problem, class = "ocean3d_error_volume_per_level",
+                 call = NULL)
   }
   invisible(TRUE)
 }
@@ -44,7 +54,7 @@
 setMethod("volume", "SpatEnvelope", function(x, per_cell = FALSE,
                                              per_level = FALSE, ...) {
   .no_extra_args(...)
-  .no_levels(per_level, "Envelopes")
+  .check_per_level(per_level, per_cell, "Envelopes")
   .check_3d(x, "x")
 
   depth_extent <- .envelope_layer(x, "depth_max") -
@@ -99,7 +109,7 @@ setMethod(
 setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE,
                                              per_level = FALSE, ...) {
   .no_extra_args(...)
-  .no_levels(per_level, "Polygons")
+  .check_per_level(per_level, per_cell, "Polygons")
   if (x@type != "polygons") {
     rlang::abort(glue::glue(
       "These are {x@type}, which have no volume. Volume is defined for ",

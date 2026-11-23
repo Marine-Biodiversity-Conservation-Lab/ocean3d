@@ -137,16 +137,7 @@ setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
     rlang::abort("`per_cell` must be TRUE or FALSE.",
                  class = "ocean3d_error_per_cell", call = NULL)
   }
-  if (!rlang::is_bool(per_level)) {
-    rlang::abort("`per_level` must be TRUE or FALSE.",
-                 class = "ocean3d_error_volume_per_level", call = NULL)
-  }
-  if (per_level && !per_cell) {
-    rlang::abort(paste(
-      "`per_level = TRUE` gives the volume of each cell at each depth level,",
-      "so it needs `per_cell = TRUE`."
-    ), class = "ocean3d_error_volume_per_level", call = NULL)
-  }
+  .check_per_level(per_level, per_cell)
   standardGeneric("volume")
 }, signature = "x")
 
