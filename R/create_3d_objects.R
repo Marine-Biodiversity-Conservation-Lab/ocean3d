@@ -291,10 +291,8 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     problem <- if (length(depths) != terra::nlyr(x)) {
       glue::glue("must have one value per layer: got {length(depths)} for ",
                  "{terra::nlyr(x)} layers")
-    } else if (!is.numeric(depths)) {
-      "must be numeric metres"
-    } else if (anyNA(depths)) {
-      "must give every layer a depth; some are NA"
+    } else {
+      .depth_problem(depths)
     }
     if (!is.null(problem)) {
       rlang::abort(glue::glue("`depths` {problem}."),
@@ -308,16 +306,11 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     terra::depth(x) <- d
   } else {
     d <- depths(x)
-  }
-  if (any(d < 0)) {
-    stop("depths are positive metres increasing downward; got ",
-         toString(d[d < 0]),
-         ". Negate the depths in `depths` or terra::depth().",
-         call. = FALSE)
-  }
-  if (anyDuplicated(d)) {
-    stop("duplicate depth(s): ", toString(unique(d[duplicated(d)])),
-         ". Each layer must be a distinct depth.", call. = FALSE)
+    problem <- .depth_problem(d)
+    if (!is.null(problem)) {
+      rlang::abort(glue::glue("The depths in terra::depth() {problem}."),
+                   class = "ocean3d_error_voxel_input", call = NULL)
+    }
   }
 
   if (!is.null(depth_bounds)) {
@@ -366,8 +359,7 @@ setMethod("c", "SpatVoxel", function(x, ...) {
   out <- do.call(c, args)
   # A layer without a depth, two layers at one depth or a negative depth
   # isn't a voxel, so the layers stay a plain raster.
-  if (anyNA(d) || length(d) != terra::nlyr(out) || anyDuplicated(d) ||
-        any(d < 0)) {
+  if (length(d) != terra::nlyr(out) || !is.null(.depth_problem(d))) {
     return(out)
   }
   # Layers given deepest first are sorted shallow to deep, as as_voxel()
@@ -648,10 +640,11 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
     stop("Input error for envelope_to_voxel(): `varname` needs to be a string.",
          call. = FALSE)
   }
-  if (any(depths < 0)) {
-    stop("Input error for envelope_to_voxel(): depths are positive metres ",
-         "increasing downward; got ", toString(depths[depths < 0]),
-         ".", call. = FALSE)
+  # Repeated depths are dropped below rather than rejected.
+  problem <- .depth_problem(unique(depths))
+  if (!is.null(problem)) {
+    rlang::abort(glue::glue("`depths` {problem}."),
+                 class = "ocean3d_error_voxel_input", call = NULL)
   }
   # Checked up front rather than on first use, so a bad profile is an error
   # even on an envelope where no cell turns out to be occupied. What the
