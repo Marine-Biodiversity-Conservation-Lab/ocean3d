@@ -987,40 +987,8 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
   }
 
   for (i in seq_along(x)) {
-    el <- x[[i]]
-    label <- if (length(x) == 1L) {
-      glue::glue("`{arg}`")
-    } else {
-      glue::glue("`{arg}` element {i}")
-    }
-
-    if (inherits(el, "SpatRaster")) {
-      if (!terra::same.crs(el, template)) {
-        .abort_envelope_input(glue::glue(
-          "{label} has a different CRS than `template`. ",
-          "Project it onto the template grid first."
-        ))
-      }
-      aligned <- terra::compareGeom(el, template, crs = FALSE,
-                                    stopOnError = FALSE, messages = FALSE)
-      if (!isTRUE(aligned)) {
-        .abort_envelope_input(glue::glue(
-          "{label} does not align with `template`; its extent or ",
-          "resolution differs. Resample it onto the template grid first."
-        ))
-      }
-    } else if (!is.numeric(el)) {
-      .abort_envelope_input(glue::glue(
-        "{label} must be numeric or a SpatRaster, not {class(el)[1]}."
-      ))
-    } else if (anyNA(el)) {
-      # A scalar NA carries no information but, under `na.rm = FALSE`, would
-      # blank every cell of the output. Reject it here where we can say which
-      # argument was at fault instead of reporting an empty envelope later.
-      .abort_envelope_input(glue::glue(
-        "{label} is NA. Drop it, or supply a real depth constraint."
-      ))
-    }
+    label <- if (length(x) == 1L) "`{arg}`" else "`{arg}` element {i}"
+    .grid_value(x[[i]], template, glue::glue(label), grid = "`template`")
   }
 
   x

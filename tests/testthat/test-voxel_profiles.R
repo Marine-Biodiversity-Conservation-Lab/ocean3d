@@ -142,19 +142,19 @@ test_that("envelope_to_voxel() rejects a profile that doesn't return weights", {
   envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
   other <- terra::rast(nrows = 3, ncols = 3, xmin = 0, xmax = 3,
                        ymin = 0, ymax = 3, vals = 1)
-  not_weight <- paste("`profile` must return a single non-missing number",
-                      "or a SpatRaster")
+  not_weight <- paste("The weight `profile` returned must be a single",
+                      "non-missing number or a SpatRaster")
   failed <- "`profile` failed when called with (ind, depths, n_depths)"
 
   # Each `message` is a fixed string the error must contain.
   cases <- list(
     list(label = "two layers for four depths",
          profile = function(ind, depths, n_depths) ind[[1:2]],
-         message = paste0("`profile` must return a SpatRaster with 1 layer ",
-                          "or one per depth (4); got 2")),
+         message = paste0("The weight `profile` returned must be a ",
+                          "SpatRaster with 1 or 4 layers; got 2 layers")),
     list(label = "raster on another grid",
          profile = function(ind, depths, n_depths) other,
-         message = "`profile` must return a SpatRaster on the same grid"),
+         message = "The weight `profile` returned does not align with `x`"),
     list(label = "text", profile = function(ind, depths, n_depths) "half",
          message = not_weight),
     list(label = "three numbers",

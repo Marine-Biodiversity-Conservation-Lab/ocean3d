@@ -107,6 +107,26 @@ test_that("as_envelope() is idempotent on its own output", {
   expect_identical(terra::values(as_envelope(e)), terra::values(e))
 })
 
+test_that("as_envelope() says how a per-cell limit is off the grid", {
+  fp <- make_footprint()
+  other_crs <- terra::rast(fp, vals = 100)
+  terra::crs(other_crs) <- "EPSG:3857"
+  cases <- list(
+    list(limit = c(terra::rast(fp, vals = 100), terra::rast(fp, vals = 200)),
+         pattern = "`depth_max` must be a single-layer SpatRaster; got 2"),
+    list(limit = other_crs,
+         pattern = "`depth_max` has a different CRS than `x`"),
+    list(limit = terra::rast(nrows = 3, ncols = 3, xmin = 0, xmax = 2,
+                             ymin = 0, ymax = 2, vals = 100),
+         pattern = "`depth_max` does not align with `x`")
+  )
+  for (case in cases) {
+    err <- expect_error(as_envelope(fp, 0, case$limit),
+                        class = "ocean3d_error_grid_value")
+    expect_match(conditionMessage(err), case$pattern, fixed = TRUE)
+  }
+})
+
 test_that("as_envelope() rejects unusable input and says what is wrong", {
   fp <- make_footprint()
   e <- as_envelope(fp, 0, 200)
@@ -775,6 +795,7 @@ test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
 
 test_that("vect_to_envelope() rejects unusable input", {
   input <- "ocean3d_error_envelope_input"
+  grid <- "ocean3d_error_grid_value"
   # a raster that doesn't overlap make_polygon()
   elsewhere <- terra::rast(nrows = 5, ncols = 5, xmin = 5, xmax = 10,
                            ymin = 5, ymax = 10, crs = "EPSG:4326")
@@ -803,21 +824,21 @@ test_that("vect_to_envelope() rejects unusable input", {
          pattern = "The polygons don't overlap any cell of `template`"),
     list(args = list(poly, mercator, 0, 10), class = input,
          pattern = "`polygon` and `template` have different CRS."),
-    list(args = list(poly, tmpl, 0, list(10, bad_res)), class = input,
+    list(args = list(poly, tmpl, 0, list(10, bad_res)), class = grid,
          pattern = "does not align with `template`"),
-    list(args = list(poly, tmpl, 0, list(10, bad_ext)), class = input,
+    list(args = list(poly, tmpl, 0, list(10, bad_ext)), class = grid,
          pattern = "does not align with `template`"),
-    list(args = list(poly, tmpl, 0, list(10, bad_crs)), class = input,
+    list(args = list(poly, tmpl, 0, list(10, bad_crs)), class = grid,
          pattern = "different CRS than `template`"),
     list(args = list(poly, tmpl, list(), 10), class = input,
          pattern = "`depth_min` is empty"),
     list(args = list(poly, tmpl, 0, list()), class = input,
          pattern = "`depth_max` is empty"),
-    list(args = list(poly, tmpl, 0, list(10, "deep")), class = input,
-         pattern = "must be numeric or a SpatRaster"),
+    list(args = list(poly, tmpl, 0, list(10, "deep")), class = grid,
+         pattern = "element 2 must be a single non-missing number"),
     # `na.rm = TRUE` would drop an NA silently, widening rather than narrowing.
-    list(args = list(poly, tmpl, 0, list(10, NA_real_)), class = input,
-         pattern = "is NA")
+    list(args = list(poly, tmpl, 0, list(10, NA_real_)), class = grid,
+         pattern = "element 2 must be a single non-missing number")
   )
   for (case in cases) {
     expect_error(do.call(vect_to_envelope, case$args), case$pattern,
