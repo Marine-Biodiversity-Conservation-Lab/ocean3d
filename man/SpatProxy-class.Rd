@@ -15,8 +15,9 @@
 \item{x}{A \code{SpatProxy}.}
 
 \item{y}{For \code{crop()}: the area to keep, as a \link[terra:SpatExtent]{terra::SpatExtent} or
-anything with an extent (\link[terra:SpatRaster]{terra::SpatRaster}, \link[terra:SpatVector]{terra::SpatVector}, or an
-sf object). The result keeps the cells whose longitude and latitude
+anything with an extent (\link[terra:SpatRaster]{terra::SpatRaster}, \link[terra:SpatVector]{terra::SpatVector}, an
+sf object, or a \link[=SpatVector3D-class]{SpatVector3D} such as a buffer from
+\code{\link[=buffer_3d]{buffer_3d()}}). The result keeps the cells whose longitude and latitude
 ranges overlap the area's extent, still without reading values, so
 \code{\link[=as_voxel]{as_voxel()}} then reads only those cells from the file. A polygon is cut
 to its extent; to keep only the cells inside it, mask the voxel with it
@@ -25,7 +26,8 @@ longitude-latitude grid an extent in the other longitude convention (0 to
 360 or -180 to 180) finds its cells too. An area that crosses the edge of
 the grid's longitudes (the
 antimeridian on a -180 to 180 grid) can't be read as one window and
-stops; crop each side separately.}
+stops; crop each side separately. A \code{SpatVector3D} that crosses the
+180th meridian has an extent from -180 to 180, so it needs the same.}
 
 \item{...}{Not used.}
 

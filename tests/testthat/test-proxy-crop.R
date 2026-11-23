@@ -168,6 +168,24 @@ test_that("series and voxel sources crop too", {
   expect_equal(projected@axes$lat$centres, cropped@axes$lat$centres)
 })
 
+test_that("crop() takes a SpatVector3D, so a buffer reads only its cells", {
+  f <- make_grid_file(lon = grid_lon, lat = grid_lat)
+  on.exit(unlink(f), add = TRUE)
+  p <- as_proxy(f, var = "temp")
+  detection <- as_vector3d(data.frame(lon = 4.5, lat = 12.5, depth = 10))
+  # A circle of about 0.5 degrees radius reaches the neighbouring cells only.
+  buffer <- buffer_3d(detection, radius_km = 60, depth_window = 5)
+  cropped <- terra::crop(p, buffer)
+  expect_equal(cropped@axes$lon$centres, c(3.5, 4.5, 5.5))
+  expect_equal(cropped@axes$lat$centres, c(11.5, 12.5, 13.5))
+  # The same cells as cropping with the buffer's extent.
+  expect_equal(terra::values(as_voxel(cropped, time = 1)),
+               terra::values(terra::crop(as_voxel(p, time = 1),
+                                         terra::ext(buffer), snap = "out")))
+  # A point is an area of no width: the cell it falls in.
+  expect_equal(terra::crop(p, detection)@axes$lon$centres, 4.5)
+})
+
 test_that("a WOA-style file reads through as_proxy(), crop(), as_voxel()", {
   # WOA's depth bounds and one-step climatology (`months since` year 0).
   f <- make_grid_file(lon = grid_lon, lat = grid_lat, depth = c(0, 5, 10),

@@ -363,6 +363,98 @@ setMethod("show", "SpatVector3D", function(object) {
 })
 
 #' @rdname SpatVector3D-class
+#' @param i For `[`: the features to keep, by position (negative numbers
+#'   drop), by a logical vector, or by feature ID (character). The result
+#'   keeps the features in the order of `i`, with their IDs and other
+#'   columns. For points and lines, every vertex of each chosen feature is
+#'   kept.
+#' @param j,drop Not used; `j` must be left out.
+#' @return `[`: a `SpatVector3D` of the same type with the chosen features,
+#'   which can be none.
+#' @export
+setMethod("[", "SpatVector3D", function(x, i, j, ..., drop = TRUE) {
+  if (!missing(j)) {
+    .abort_vector3d(
+      "A SpatVector3D is subset by feature only: use `x[i]`, not `x[i, j]`."
+    )
+  }
+  ids <- if (x@type == "polygons") x@features$feature_id else
+    unique(x@vertices$feature_id)
+  n <- length(ids)
+  if (missing(i)) i <- seq_len(n)
+  if (is.factor(i)) i <- as.character(i)
+  # Positions, logicals and IDs all become positions, in the order asked.
+  chosen <- if (is.character(i)) {
+    unknown <- setdiff(i, ids)
+    if (length(unknown)) {
+      .abort_vector3d(glue::glue(
+        "No feature has ID {toString(unknown)}. The IDs are {toString(ids)}."
+      ))
+    }
+    match(i, ids)
+  } else if (is.logical(i)) {
+    if (length(i) != n) {
+      .abort_vector3d(glue::glue(
+        "A logical `i` must have one value per feature: got {length(i)} for ",
+        "{n} features."
+      ))
+    }
+    which(i)
+  } else if (is.numeric(i)) {
+    if (anyNA(i) || any(i != round(i)) || any(abs(i) > n) ||
+          (any(i < 0) && any(i > 0))) {
+      .abort_vector3d(glue::glue(
+        "`i` must be whole numbers from 1 to {n} (the features), all ",
+        "positive or all negative."
+      ))
+    }
+    seq_len(n)[i]
+  } else {
+    .abort_vector3d(glue::glue(
+      "`i` must be feature positions, a logical vector or feature IDs; got ",
+      "{class(i)[1L]}."
+    ))
+  }
+  if (x@type == "polygons") {
+    return(.new_vector3d(x@type, x@time_resolution,
+                         features = x@features[chosen, , drop = FALSE]))
+  }
+  v <- x@vertices
+  keep <- match(v$feature_id, ids[chosen])
+  v <- v[!is.na(keep), , drop = FALSE]
+  v <- v[order(keep[!is.na(keep)], v$vertex), , drop = FALSE]
+  .new_vector3d(x@type, x@time_resolution, vertices = v)
+})
+
+#' @rdname SpatVector3D-class
+#' @return `ext()`: the features' horizontal extent as a [terra::SpatExtent]
+#'   in longitude and latitude. A shape that crosses the 180th meridian
+#'   spans -180 to 180, so a [terra::crop()] with it would take a band right
+#'   round the globe: crop each side separately.
+#' @export
+setMethod("ext", "SpatVector3D", function(x, ...) {
+  if (length(x) == 0L) {
+    .abort_vector3d("`x` has no features, so it has no extent.")
+  }
+  if (x@type == "polygons") {
+    return(terra::ext(terra::vect(x@features$geometry)))
+  }
+  terra::ext(c(range(x@vertices$lon), range(x@vertices$lat)))
+})
+
+#' @rdname SpatVector3D-class
+#' @param proj,describe,parse For `crs()`: as in [terra::crs()]. The
+#'   coordinates of a `SpatVector3D` are always longitude and latitude on
+#'   WGS84 (EPSG:4326). With `ext()`, terra functions that take an area,
+#'   such as `crop()` of a [SpatProxy-class], take a `SpatVector3D` too.
+#' @export
+setMethod("crs", "SpatVector3D",
+          function(x, proj = FALSE, describe = FALSE, parse = FALSE) {
+            terra::crs("EPSG:4326", proj = proj, describe = describe,
+                       parse = parse)
+          })
+
+#' @rdname SpatVector3D-class
 #' @param row.names,optional Not used.
 #' @return `as.data.frame()`: the vertex table for points and lines, or the
 #'   polygon table, with its sf geometry column, for polygons.

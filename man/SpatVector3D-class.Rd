@@ -6,6 +6,9 @@
 \alias{geomtype,SpatVector3D-method}
 \alias{length,SpatVector3D-method}
 \alias{show,SpatVector3D-method}
+\alias{[,SpatVector3D,ANY,ANY-method}
+\alias{ext,SpatVector3D-method}
+\alias{crs,SpatVector3D-method}
 \alias{as.data.frame.SpatVector3D}
 \title{3D points, lines and polygons with depth and time}
 \usage{
@@ -14,6 +17,12 @@
 \S4method{length}{SpatVector3D}(x)
 
 \S4method{show}{SpatVector3D}(object)
+
+\S4method{[}{SpatVector3D,ANY,ANY}(x, i, j, ..., drop = TRUE)
+
+\S4method{ext}{SpatVector3D}(x, ...)
+
+\S4method{crs}{SpatVector3D}(x, proj = FALSE, describe = FALSE, parse = FALSE)
 
 \method{as.data.frame}{SpatVector3D}(x, row.names = NULL, optional = FALSE, ...)
 }
@@ -24,9 +33,30 @@
 
 \item{object}{A \code{SpatVector3D}.}
 
+\item{i}{For \code{[}: the features to keep, by position (negative numbers
+drop), by a logical vector, or by feature ID (character). The result
+keeps the features in the order of \code{i}, with their IDs and other
+columns. For points and lines, every vertex of each chosen feature is
+kept.}
+
+\item{j, drop}{Not used; \code{j} must be left out.}
+
+\item{proj, describe, parse}{For \code{crs()}: as in \code{\link[terra:crs]{terra::crs()}}. The
+coordinates of a \code{SpatVector3D} are always longitude and latitude on
+WGS84 (EPSG:4326). With \code{ext()}, terra functions that take an area,
+such as \code{crop()} of a \link[=SpatProxy-class]{SpatProxy}, take a \code{SpatVector3D} too.}
+
 \item{row.names, optional}{Not used.}
 }
 \value{
+\code{[}: a \code{SpatVector3D} of the same type with the chosen features,
+which can be none.
+
+\code{ext()}: the features' horizontal extent as a \link[terra:SpatExtent]{terra::SpatExtent}
+in longitude and latitude. A shape that crosses the 180th meridian
+spans -180 to 180, so a \code{\link[terra:crop]{terra::crop()}} with it would take a band right
+round the globe: crop each side separately.
+
 \code{as.data.frame()}: the vertex table for points and lines, or the
 polygon table, with its sf geometry column, for polygons.
 }
@@ -77,6 +107,15 @@ obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35))
 pts <- as_vector3d(obs)
 geomtype(pts)
 pts
+
+# One feature at a time, by position or ID, as in a loop over shapes.
+pts[2]
+as.data.frame(pts["1"])
+
+# The horizontal extent and CRS let terra functions take the shape as an
+# area, for example crop() of a SpatProxy.
+terra::ext(pts)
+terra::crs(pts, describe = TRUE)$name
 }
 \seealso{
 \code{\link[=as_vector3d]{as_vector3d()}}, \code{\link[=buffer_3d]{buffer_3d()}}, \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}},

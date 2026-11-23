@@ -837,8 +837,9 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 #' @rdname SpatProxy-class
 #' @param x A `SpatProxy`.
 #' @param y For `crop()`: the area to keep, as a [terra::SpatExtent] or
-#'   anything with an extent ([terra::SpatRaster], [terra::SpatVector], or an
-#'   sf object). The result keeps the cells whose longitude and latitude
+#'   anything with an extent ([terra::SpatRaster], [terra::SpatVector], an
+#'   sf object, or a [SpatVector3D-class] such as a buffer from
+#'   [buffer_3d()]). The result keeps the cells whose longitude and latitude
 #'   ranges overlap the area's extent, still without reading values, so
 #'   [as_voxel()] then reads only those cells from the file. A polygon is cut
 #'   to its extent; to keep only the cells inside it, mask the voxel with it
@@ -847,7 +848,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 #'   360 or -180 to 180) finds its cells too. An area that crosses the edge of
 #'   the grid's longitudes (the
 #'   antimeridian on a -180 to 180 grid) can't be read as one window and
-#'   stops; crop each side separately.
+#'   stops; crop each side separately. A `SpatVector3D` that crosses the
+#'   180th meridian has an extent from -180 to 180, so it needs the same.
 #' @param ... Not used.
 #' @export
 setMethod("crop", "SpatProxy", function(x, y, ...) {
