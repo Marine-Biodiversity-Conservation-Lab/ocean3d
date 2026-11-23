@@ -236,6 +236,10 @@ message says how many cells have the limits swapped (or a seafloor above
 
 ## Bug fixes
 
+* `as_proxy()`, `extract_to_point()`, `extract_to_buffer()` and
+  `extract_to_track()` now open remote sources given as a URL, such as
+  OPeNDAP or NCZarr addresses. They used to stop with "netCDF file does
+  not exist" for any path that was not a local file (#160).
 * netCDF time axes are decoded with the CFtime package. Time units that
   used to stop extraction are now read: a trailing `UTC` or `Z`
   (`days since 2020-01-01 UTC`), origins written `2020-1-1`,
