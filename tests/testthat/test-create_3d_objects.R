@@ -410,7 +410,7 @@ test_that("envelope_to_voxel() rejects invalid input", {
     list(label = "values on another grid",
          args = list(x = good_envel, depths = c(0, 100),
                      values = terra::rast(nrows = 3, ncols = 3)),
-         pattern = "same grid"),
+         pattern = "`values` does not align with `x`"),
     list(label = "multi-layer values",
          args = list(x = good_envel, depths = c(0, 100),
                      values = c(terra::rast(fp), terra::rast(fp))),

@@ -83,8 +83,10 @@ as_envelope <- function(x, depth_min, depth_max) {
 
     # Only the non-NA pattern of the footprint matters, never its values.
     present <- terra::ifel(is.na(x), NA, 1)
-    dmin <- terra::mask(.as_depth_layer(depth_min, "depth_min", x), present)
-    dmax <- terra::mask(.as_depth_layer(depth_max, "depth_max", x), present)
+    dmin <- .grid_value(depth_min, x, "`depth_min`", fill = TRUE)
+    dmax <- .grid_value(depth_max, x, "`depth_max`", fill = TRUE)
+    dmin <- terra::mask(dmin, present)
+    dmax <- terra::mask(dmax, present)
   }
 
   out <- c(dmin, dmax)
@@ -94,28 +96,49 @@ as_envelope <- function(x, depth_min, depth_max) {
   methods::new("SpatEnvelope", out)
 }
 
-# Internal: resolve a depth limit given either as a single number or as a
-# single-layer SpatRaster into a named layer on the grid of `template`.
-.as_depth_layer <- function(value, name, template) {
-  if (inherits(value, "SpatRaster")) {
-    if (terra::nlyr(value) != 1) {
-      stop("`", name, "` must be a single-layer SpatRaster; got ",
-           terra::nlyr(value), " layers.", call. = FALSE)
+# Internal: a value given either as a single number or as a raster on the grid
+# of `template`, checked once for every constructor that takes one: depth
+# limits in as_envelope() and vect_to_envelope(), `values` in
+# envelope_to_voxel() and a profile's weights. `arg` names the value in the
+# message, `grid` the object whose grid it must match, and `layers` the layer
+# counts a raster may have. Returns the number, or with `fill = TRUE` a layer
+# on `template`'s grid holding it; a raster is returned as it is. A CRS
+# mismatch is told apart from an extent or resolution mismatch, since the fix
+# differs (project, or resample).
+.grid_value <- function(value, template, arg, layers = 1, grid = "`x`",
+                        fill = FALSE) {
+  layers <- unique(layers)
+  problem <- if (methods::is(value, "SpatRaster")) {
+    n <- terra::nlyr(value)
+    if (!n %in% layers) {
+      counts <- glue::glue_collapse(layers, sep = ", ", last = " or ")
+      want <- if (identical(layers, 1)) "a single-layer SpatRaster" else
+        glue::glue("a SpatRaster with {counts} layers")
+      glue::glue("must be {want}; got {n} layers")
+    } else if (!terra::same.crs(value, template)) {
+      glue::glue("has a different CRS than {grid}. Project it onto that grid ",
+                 "first")
+    } else if (!isTRUE(terra::compareGeom(value, template, crs = FALSE,
+                                          stopOnError = FALSE,
+                                          messages = FALSE))) {
+      glue::glue("does not align with {grid}; its extent or resolution ",
+                 "differs. Resample it onto that grid first")
     }
-    if (!terra::compareGeom(value, template, stopOnError = FALSE)) {
-      stop("`", name, "` must be on the same grid (CRS, extent, resolution) ",
-           "as `x`.", call. = FALSE)
-    }
-    out <- value
-  } else {
-    if (!is.numeric(value) || length(value) != 1 || is.na(value)) {
-      stop("`", name, "` must be a single non-missing number or a ",
-           "single-layer SpatRaster.", call. = FALSE)
-    }
-    out <- terra::setValues(terra::rast(template), value)
+  } else if (!is.numeric(value) || length(value) != 1 || is.na(value)) {
+    glue::glue("must be a single non-missing number or a SpatRaster on the ",
+               "grid of {grid}; got {paste(class(value), collapse = '/')} ",
+               "of length {length(value)}")
   }
-  names(out) <- name
-  out
+  if (!is.null(problem)) {
+    rlang::abort(glue::glue("{arg} {problem}."),
+                 class = "ocean3d_error_grid_value", call = NULL)
+  }
+  if (fill && is.numeric(value)) {
+    # remove the 3D class
+    grid_of <- terra::rast(methods::as(template, "SpatRaster"), nlyrs = 1)
+    value <- terra::setValues(grid_of, value)
+  }
+  value
 }
 
 #' Create a voxel object
@@ -703,7 +726,7 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 
   # Step 2: values. The magnitude each cell carries, and how `profile` spreads
   # it down the levels that cell occupies.
-  v <- .cell_values(values, x)
+  v <- if (is.null(values)) 1 else .grid_value(values, x, "`values`")
 
   # NULL means the flat shape, which is a profile like any other. Called
   # positionally, so a caller's own profile is free to name its arguments
@@ -754,30 +777,6 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
     },
     stop("Unhandled `bounds`: \"", bounds, "\".", call. = FALSE)
   ) # nolint: unreachable_code_linter. switch() default, not dead code.
-}
-
-# Internal: resolve `values` into the magnitude each cell carries — a single
-# number applying to the whole grid, or a single-layer raster on its grid.
-.cell_values <- function(values, template) {
-  if (is.null(values)) return(1)
-
-  if (inherits(values, "SpatRaster")) {
-    if (terra::nlyr(values) != 1) {
-      stop("`values` must be a single-layer SpatRaster; got ",
-           terra::nlyr(values), " layers.", call. = FALSE)
-    }
-    if (!terra::compareGeom(values, template, stopOnError = FALSE)) {
-      stop("`values` must be on the same grid (CRS, extent, resolution) as ",
-           "`x`.", call. = FALSE)
-    }
-    return(values)
-  }
-
-  if (!is.numeric(values) || length(values) != 1 || is.na(values)) {
-    stop("`values` must be a single non-missing number or a single-layer ",
-         "SpatRaster.", call. = FALSE)
-  }
-  values
 }
 
 #' Collapse Voxel 3D -> Envelope 2.5D
