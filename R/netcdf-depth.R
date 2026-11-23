@@ -110,10 +110,16 @@
   if (positive == "up") depth_m <- -depth_m
   problem <- .depth_problem(depth_m)
   if (!is.null(problem)) {
-    stop(glue::glue(
-      "The depth coordinate's depths below the reference surface {problem}. ",
-      "Check its sign and vertical reference."
-    ), call. = FALSE)
+    # Only a negative depth points at the sign or the vertical reference.
+    hint <- if (any(depth_m < 0)) {
+      " Check its sign and vertical reference."
+    } else {
+      ""
+    }
+    rlang::abort(glue::glue(
+      "The depth coordinate's depths below the reference surface ",
+      "{problem}.{hint}"
+    ), class = "ocean3d_error_depth_values", call = NULL)
   }
   list(
     depth_m = depth_m,

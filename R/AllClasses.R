@@ -319,13 +319,9 @@ setValidity("SpatVoxel", function(object) {
                  "as_voxel(x, depths = ...) or terra::depth()"))
   }
   d <- terra::depth(object)
-  if (anyNA(d)) return("every layer needs a depth in terra::depth()")
+  problem <- .depth_problem(d)
+  if (!is.null(problem)) return(paste("depths", problem))
   if (is.unsorted(d)) return("depth layers must be ordered shallow to deep")
-  if (anyDuplicated(d)) {
-    return(paste("depth layers must be distinct; set them with as_voxel()",
-                 "or terra::depth()"))
-  }
-  if (any(d < 0)) return("depths are positive metres increasing downward")
   edges <- object@depth_edges
   if (!identical(names(edges), c("depth", "lower", "upper")) ||
         !all(vapply(edges, is.numeric, logical(1)))) {

@@ -125,9 +125,11 @@ as_envelope <- function(x, depth_min, depth_max) {
                  "differs. Resample it onto that grid first")
     }
   } else if (!is.numeric(value) || length(value) != 1 || is.na(value)) {
+    got <- if (length(value) == 1 && is.na(value)) "NA" else
+      glue::glue("{paste(class(value), collapse = '/')} of length ",
+                 "{length(value)}")
     glue::glue("must be a single non-missing number or a SpatRaster on the ",
-               "grid of {grid}; got {paste(class(value), collapse = '/')} ",
-               "of length {length(value)}")
+               "grid of {grid}; got {got}")
   }
   if (!is.null(problem)) {
     rlang::abort(glue::glue("{arg} {problem}."),
@@ -253,7 +255,7 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     "`time` selects a time step of a SpatProxy; `x` isn't one."
   }
   if (!is.null(misplaced)) {
-    rlang::abort(misplaced, class = "ocean3d_error_voxel_input", call = NULL)
+    .abort_voxel_input(misplaced)
   }
   if (proxy) {
     if (missing(varname)) varname <- x@variable$name
@@ -295,8 +297,7 @@ as_voxel <- function(x, depths = NULL, varname = "value",
       .depth_problem(depths)
     }
     if (!is.null(problem)) {
-      rlang::abort(glue::glue("`depths` {problem}."),
-                   class = "ocean3d_error_voxel_input", call = NULL)
+      .abort_voxel_input(glue::glue("`depths` {problem}."))
     }
     d <- as.numeric(depths)
     # Readable names; `names<-` copies the raster first.
@@ -308,8 +309,7 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     d <- depths(x)
     problem <- .depth_problem(d)
     if (!is.null(problem)) {
-      rlang::abort(glue::glue("The depths in terra::depth() {problem}."),
-                   class = "ocean3d_error_voxel_input", call = NULL)
+      .abort_voxel_input(glue::glue("The depths in terra::depth() {problem}."))
     }
   }
 
@@ -334,6 +334,12 @@ as_voxel <- function(x, depths = NULL, varname = "value",
   if (is.null(edges)) return(methods::new("SpatVoxel", x))
   rownames(edges) <- NULL
   methods::new("SpatVoxel", x, depth_edges = edges)
+}
+
+# The one producer of `ocean3d_error_voxel_input`: input as_voxel() or
+# envelope_to_voxel() can't build a voxel from.
+.abort_voxel_input <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_voxel_input", call = NULL)
 }
 
 #' @rdname SpatVoxel-class
@@ -643,8 +649,7 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   # Repeated depths are dropped below rather than rejected.
   problem <- .depth_problem(unique(depths))
   if (!is.null(problem)) {
-    rlang::abort(glue::glue("`depths` {problem}."),
-                 class = "ocean3d_error_voxel_input", call = NULL)
+    .abort_voxel_input(glue::glue("`depths` {problem}."))
   }
   # Checked up front rather than on first use, so a bad profile is an error
   # even on an envelope where no cell turns out to be occupied. What the
@@ -840,8 +845,7 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
 
   # `SpatVoxel` validity guarantees depths are non-NA and sorted shallow to
   # deep, so each row's first and last TRUE column are exactly the envelope
-  # bounds. `max.col()` finds them at C level, which avoids building one
-  # full-size intermediate raster per depth.
+  # bounds. `max.col()` finds them at C level, from the one matrix of hits.
   first_hit <- max.col(hit, ties.method = "first")
   last_hit <- max.col(hit, ties.method = "last")
 

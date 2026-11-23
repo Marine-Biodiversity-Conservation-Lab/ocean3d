@@ -23,7 +23,7 @@ test_that("new() refuses an object that breaks the class rules", {
     list(label = "voxel without depths", class = "SpatVoxel",
          object = unset, pattern = "must be set in terra::depth"),
     list(label = "voxel with a repeated depth", class = "SpatVoxel",
-         object = repeated, pattern = "must be distinct"),
+         object = repeated, pattern = "must each be a distinct depth"),
     list(label = "voxel with unsorted layers", class = "SpatVoxel",
          object = unsorted, pattern = "shallow to deep"),
     list(label = "envelope without the two depth layers",
@@ -387,6 +387,8 @@ test_that("envelope_to_voxel() rejects invalid input", {
   bad_envel <- make_multidepth_rast()
   good_envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 200)
   fp <- make_footprint()
+  inverted <- good_envel[[c("depth_max", "depth_min")]]
+  names(inverted) <- c("depth_min", "depth_max")
 
   good_depths <- c(0, 50, 100, 150, 200, 300, 600)
   profile_msg <- paste0("`profile` needs to be NULL or a function of ",
@@ -395,7 +397,13 @@ test_that("envelope_to_voxel() rejects invalid input", {
   cases <- list(
     list(label = "`x` not an envelope",
          args = list(x = bad_envel, depths = good_depths),
-         pattern = "`x` must be a SpatEnvelope; got"),
+         pattern = "`x` must be a SpatEnvelope; got",
+         class = "ocean3d_error_not_3d"),
+    # an envelope whose interval runs backwards after a layer swap
+    list(label = "`x` tagged but not valid",
+         args = list(x = inverted, depths = good_depths),
+         pattern = "`x` is tagged SpatEnvelope but is not a valid one",
+         class = "ocean3d_error_invalid_3d"),
     list(label = "non-numeric depths",
          args = list(x = good_envel, depths = c("hello", 100, "depths")),
          pattern = "`depths` needs to be array coercible to numeric type"),
@@ -405,7 +413,8 @@ test_that("envelope_to_voxel() rejects invalid input", {
     # positive-down convention
     list(label = "negative depths",
          args = list(x = good_envel, depths = c(-100, 0, 100)),
-         pattern = "positive metres increasing downward"),
+         pattern = "positive metres increasing downward",
+         class = "ocean3d_error_voxel_input"),
     # A shape is passed as the function itself, so a name that used to select
     # one is now just the wrong type.
     list(label = "profile as a name",
@@ -430,18 +439,33 @@ test_that("envelope_to_voxel() rejects invalid input", {
     list(label = "values on another grid",
          args = list(x = good_envel, depths = c(0, 100),
                      values = terra::rast(nrows = 3, ncols = 3)),
-         pattern = "`values` does not align with `x`"),
+         pattern = "`values` does not align with `x`",
+         class = "ocean3d_error_grid_value"),
     list(label = "multi-layer values",
          args = list(x = good_envel, depths = c(0, 100),
                      values = c(terra::rast(fp), terra::rast(fp))),
-         pattern = "must be a single-layer SpatRaster"),
+         pattern = "must be a single-layer SpatRaster",
+         class = "ocean3d_error_grid_value"),
     list(label = "vector values",
          args = list(x = good_envel, depths = c(0, 100), values = c(1, 2)),
-         pattern = "single non-missing number")
+         pattern = "single non-missing number",
+         class = "ocean3d_error_grid_value"),
+    list(label = "NA values",
+         args = list(x = good_envel, depths = c(0, 100), values = NA_real_),
+         pattern = paste("single non-missing number or a SpatRaster on",
+                         "the grid of `x`; got NA."),
+         class = "ocean3d_error_grid_value")
   )
   for (case in cases) {
-    expect_error(do.call(envelope_to_voxel, case$args), case$pattern,
-                 fixed = TRUE, label = case$label)
+    if (is.null(case$class)) {
+      expect_error(do.call(envelope_to_voxel, case$args), case$pattern,
+                   fixed = TRUE, label = case$label)
+    } else {
+      err <- expect_error(do.call(envelope_to_voxel, case$args),
+                          class = case$class, label = case$label)
+      expect_match(conditionMessage(err), case$pattern, fixed = TRUE,
+                   label = case$label)
+    }
   }
 
   # the supplied shapes and the default all have to survive the profile check
@@ -813,6 +837,7 @@ test_that("vect_to_envelope() rejects unusable input", {
                          ymin = 0, ymax = 5, vals = 50, crs = "EPSG:3857")
   poly <- make_polygon()
   tmpl <- make_template()
+  deep <- terra::rast(tmpl, vals = 50)
 
   cases <- list(
     list(args = list("test", tmpl, 0, 10), class = input,
@@ -838,7 +863,12 @@ test_that("vect_to_envelope() rejects unusable input", {
          pattern = "element 2 must be a single non-missing number"),
     # `na.rm = TRUE` would drop an NA silently, widening rather than narrowing.
     list(args = list(poly, tmpl, 0, list(10, NA_real_)), class = grid,
-         pattern = "element 2 must be a single non-missing number")
+         pattern = "element 2 must be a single non-missing number.*got NA"),
+    # each constraint is one number or one layer
+    list(args = list(poly, tmpl, list(c(10, 20)), 100), class = grid,
+         pattern = "`depth_min` must be a single non-missing number"),
+    list(args = list(poly, tmpl, 0, list(10, c(deep, deep))), class = grid,
+         pattern = "element 2 must be a single-layer SpatRaster; got 2")
   )
   for (case in cases) {
     expect_error(do.call(vect_to_envelope, case$args), case$pattern,
