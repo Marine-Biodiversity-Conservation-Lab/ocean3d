@@ -116,29 +116,36 @@
                     depth_bounds = depth_bounds(v))
 }
 
-# Internal: the class boundary is the contract. A raster that merely happens to
-# carry the right layer names is not one of the package's 3D representations --
-# duck-typing was how these functions used to accept a voxel silently and hand
-# back nonsense for it.
-.stop_not_volume <- function() {
-  stop("input must be a SpatEnvelope or a SpatVoxel, not a bare SpatRaster. ",
-       "Build one with as_envelope() or vect_to_envelope() for a 2.5D ",
-       "min-max envelope, or with as_voxel() for a multi-depth voxel model.",
-       call. = FALSE)
-}
-
-
-# Internal: a 3D input must satisfy its class's validity rules before it is
-# read. terra keeps the SpatVoxel / SpatEnvelope tag through operations that
-# change the layer set, so an object can arrive tagged but not valid; the
-# query verbs check here and say how to rebuild it, instead of failing deeper
-# in on a missing layer name.
-.check_3d <- function(x, arg) {
+# Internal: a 3D input must be one of the classes `class` allows, and satisfy
+# that class's validity rules, before it is read. The class boundary is the
+# contract: a raster that merely carries the right layer names isn't one of
+# the package's 3D representations. terra also keeps the SpatVoxel /
+# SpatEnvelope tag through operations that change the layer set, so an object
+# can arrive tagged but not valid; the checks here say how to build or
+# rebuild it, instead of failing deeper in on a missing layer name.
+.check_3d <- function(x, arg, class = c("SpatVoxel", "SpatEnvelope")) {
+  builders <- c(
+    SpatVoxel = "as_voxel() for a multi-depth voxel",
+    SpatEnvelope = "as_envelope() or vect_to_envelope() for a min-max envelope"
+  )
+  is_class <- vapply(class, function(cl) methods::is(x, cl), logical(1))
+  if (!any(is_class)) {
+    wanted <- glue::glue_collapse(class, sep = ", ", last = " or ")
+    got <- paste(class(x), collapse = "/")
+    hint <- glue::glue_collapse(builders[class], sep = ", or with ")
+    rlang::abort(glue::glue(
+      "`{arg}` must be a {wanted}; got {got}. Build one with {hint}."
+    ), class = "ocean3d_error_not_3d", call = NULL)
+  }
   ok <- methods::validObject(x, test = TRUE)
   if (!isTRUE(ok)) {
-    stop("`", arg, "` is tagged ", class(x)[[1]], " but is not a valid one: ",
-         ok, ". A terra operation probably changed its layers; rebuild it ",
-         "with as_voxel() or as_envelope().", call. = FALSE)
+    tagged <- class[is_class][[1]]
+    rebuild <- c(SpatVoxel = "as_voxel()", SpatEnvelope = "as_envelope()")
+    rlang::abort(glue::glue(
+      "`{arg}` is tagged {tagged} but is not a valid one: {ok}. A terra ",
+      "operation probably changed its layers; rebuild it with ",
+      "{rebuild[[tagged]]}."
+    ), class = "ocean3d_error_invalid_3d", call = NULL)
   }
   invisible(TRUE)
 }

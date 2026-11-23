@@ -182,13 +182,14 @@ test_that("volume() rejects input it cannot measure", {
     expect_match(conditionMessage(err), "`per_cell` must be TRUE or FALSE")
   }
 
+  not_3d <- "must be a SpatVoxel or SpatEnvelope; got SpatRaster"
   cases <- list(
     # voxel-only arguments for envelopes
     list(call = function() volume(a, bounds = "midpoint"),
          pattern = "unused argument"),
-    list(call = function() volume(bare), pattern = "not a bare SpatRaster"),
+    list(call = function() volume(bare), pattern = not_3d),
     list(call = function() volume(bare, per_cell = TRUE),
-         pattern = "not a bare SpatRaster")
+         pattern = not_3d)
   )
   for (case in cases) {
     expect_error(case$call(), case$pattern,

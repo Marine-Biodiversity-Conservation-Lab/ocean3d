@@ -633,10 +633,7 @@ setReplaceMethod("[[", c("SpatVoxel", "character"),
 envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
                               bounds = c("midpoint", "top"),
                               varname = "presence", depth_bounds = NULL) {
-  if (!is(x, "SpatEnvelope")) {
-    stop("Input error for envelope_to_voxel(): `x` needs to be of ",
-         "`SpatEnvelope` class.", call. = FALSE)
-  }
+  .check_3d(x, "x", "SpatEnvelope")
   # Coercion, not class: an integer vector, or a character vector of numbers,
   # is as good as a double here — "hello" is not a depth.
   depths <- suppressWarnings(as.numeric(depths))
@@ -838,10 +835,7 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 #' terra::values(voxel_to_envelope(edged))
 #' @export
 voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
-  if (!is(v, "SpatVoxel")) {
-    stop("`v` must be a SpatVoxel object.")
-  }
-  .check_3d(v, "v")
+  .check_3d(v, "v", "SpatVoxel")
   depths <- depths(v)
   n_cells <- terra::ncell(v)
 
@@ -939,11 +933,7 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
 #' terra::values(intersect_3d(warm, occupied(effort, function(x) x > 0)))
 #' @export
 occupied <- function(x, fun = function(v) !is.na(v)) {
-  if (!methods::is(x, "SpatVoxel")) {
-    stop("`x` must be a SpatVoxel; got ", paste(class(x), collapse = "/"),
-         ". Build one with as_voxel() or envelope_to_voxel().", call. = FALSE)
-  }
-  .check_3d(x, "x")
+  .check_3d(x, "x", "SpatVoxel")
   .presence_voxel(.voxel_occupancy(x, fun), depths(x),
                   depth_bounds(x))
 }

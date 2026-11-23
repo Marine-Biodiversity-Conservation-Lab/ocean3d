@@ -395,7 +395,7 @@ test_that("envelope_to_voxel() rejects invalid input", {
   cases <- list(
     list(label = "`x` not an envelope",
          args = list(x = bad_envel, depths = good_depths),
-         pattern = "`x` needs to be of `SpatEnvelope` class"),
+         pattern = "`x` must be a SpatEnvelope; got"),
     list(label = "non-numeric depths",
          args = list(x = good_envel, depths = c("hello", 100, "depths")),
          pattern = "`depths` needs to be array coercible to numeric type"),
