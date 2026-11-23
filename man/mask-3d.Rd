@@ -33,7 +33,7 @@ accepted: describe it with \code{\link[=as_proxy]{as_proxy()}} and read one time
 
 \item{mask}{The 3D domain to keep \code{x} inside: a \link[=SpatEnvelope-class]{SpatEnvelope} or a
 \link[=SpatVoxel-class]{SpatVoxel} on the same grid as \code{x}, or \link[=SpatVector3D-class]{SpatVector3D}
-polygons, which are put on that grid.}
+polygons or points, which are put on that grid.}
 
 \item{bounds}{Only when one side is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: \code{"midpoint"}
@@ -78,6 +78,13 @@ an envelope mask as above. A voxel keeps its values in the cells and
 levels the polygons reach. Where polygons overlap, a cell gets the
 shallowest top and the deepest bottom, so a depth gap between them is
 kept too. The time intervals are dropped, with a message.}
+\item{anything masked by \link[=SpatVector3D-class]{SpatVector3D} points}{A point covers
+one cell and one depth level, as in \code{\link[=intersect_3d]{intersect_3d()}}. A voxel keeps
+its value in each point's cell at the level nearest the point's depth
+(chosen by depth, not by where the voxel has values). An envelope
+keeps its interval whole in the cells where a point lies within it. A
+plain \code{SpatRaster} keeps the cells that hold a point. Lines aren't
+supported; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
 }
 
 A voxel or envelope masked by a plain \code{SpatRaster} or by polygons is

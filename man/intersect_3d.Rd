@@ -53,14 +53,15 @@ intersect_3d(x, y, ...)
 }
 \arguments{
 \item{x, y}{The two objects: two of \link[=SpatEnvelope-class]{SpatEnvelope},
-\link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatVector3D-class]{SpatVector3D} polygons, in any pairing, or
-an envelope or voxel with a 2D object (a single-layer \code{SpatRaster}
-footprint or 2D polygons: \code{SpatVector}, \code{sf}, \code{sfc}). Rasters
-must share one grid (CRS, extent, resolution). netCDF files aren't
-accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
+\link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatVector3D-class]{SpatVector3D} polygons or points, in any
+pairing except two sets of points, or an envelope or voxel with a 2D
+object (a single-layer \code{SpatRaster} footprint or 2D polygons:
+\code{SpatVector}, \code{sf}, \code{sfc}). Rasters must share one grid (CRS, extent,
+resolution). netCDF files aren't accepted; load them with terra and
+wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
 \item{...}{Arguments for the voxel methods. They are an error when both
-inputs are envelopes.}
+inputs are envelopes, or points and an envelope.}
 
 \item{bounds}{Only when one input is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: \code{"midpoint"}
@@ -69,9 +70,10 @@ carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure
 result, pass the same \code{bounds} to \code{\link[=volume]{volume()}}.}
 }
 \value{
-\link[=SpatVector3D-class]{SpatVector3D} polygons when both inputs are polygons. A
+\link[=SpatVector3D-class]{SpatVector3D} polygons when both inputs are polygons, and
+\link[=SpatVector3D-class]{SpatVector3D} points when one is points and the other polygons. A
 \link[=SpatEnvelope-class]{SpatEnvelope} when both inputs are envelopes, or when one
-is an envelope and the other is 2D or \link[=SpatVector3D-class]{SpatVector3D} polygons.
+is an envelope and the other is 2D or a \link[=SpatVector3D-class]{SpatVector3D}.
 Otherwise a \link[=SpatVoxel-class]{SpatVoxel} of
 presence. Either is on the grid of the 3D input.
 }
@@ -83,9 +85,9 @@ values where the other is present, use \code{\link[terra:mask]{mask()}}.
 }
 \details{
 At least one of \code{x} and \code{y} must be a 3D object: a \link[=SpatEnvelope-class]{SpatEnvelope}, a
-\link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons. The other can be a 3D
-object too, or, with an envelope or voxel, a 2D object. A 2D object
-restricts the result horizontally and leaves its depths alone.
+\link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons or points. The other
+can be a 3D object too, or, with an envelope or voxel, a 2D object. A 2D
+object restricts the result horizontally and leaves its depths alone.
 
 \describe{
 \item{Two envelopes}{Cell by cell, the result runs from the deeper
@@ -109,8 +111,30 @@ polygon touches gets its depth range; where polygons overlap, a cell
 gets the shallowest top and the deepest bottom, so a depth gap between
 two polygons over one cell is filled. The polygons' time intervals are
 dropped, with a message. Polygons that miss the grid, or a set with no
-polygons, give an empty result. Points and lines aren't supported yet;
-\code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
+polygons, give an empty result.}
+\item{A voxel and \link[=SpatVector3D-class]{SpatVector3D} points}{A point covers one cell
+and one depth level: the cell that holds it and the level whose depth
+is nearest the point's depth (a tie goes to the shallower level, as in
+\code{\link[=extract_to_point]{extract_to_point()}}). The level is chosen by depth alone, so a point
+whose nearest level has no value in the voxel shares nothing there.
+The result is a presence voxel on the voxel's levels. Points off the
+grid share nothing. Points' times aren't compared, since a voxel shows
+one time step.}
+\item{An envelope and \link[=SpatVector3D-class]{SpatVector3D} points}{The result is an
+envelope holding, in each cell with a point whose depth lies within
+the cell's interval (both ends included), the shallowest and deepest
+such depth. A lone point gives a zero-thickness interval, so the
+result's \code{\link[=volume]{volume()}} is 0: points have no volume.}
+\item{\link[=SpatVector3D-class]{SpatVector3D} points and polygons}{A point is inside a
+polygon when its position is within the outline, its depth within
+\code{depth_min} to \code{depth_max} and its time within the polygon's time
+interval, all with both ends included (with dates, the interval covers
+all of its end day). A point or polygon without a time matches any
+time; one side with dates and the other with hours is an error. Each
+matching pair gives one point, numbered, with columns \code{feature_id_x}
+and \code{feature_id_y} naming the pair and the inputs' other columns
+dropped. Two sets of points share no space, so they are an error.
+Lines aren't supported; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
 \item{Two sets of \link[=SpatVector3D-class]{SpatVector3D} polygons}{Each pair of polygons,
 one from \code{x} and one from \code{y}, whose outlines, depth ranges and times
 overlap gives one polygon: the shared outline (as
@@ -177,6 +201,12 @@ deep <- as_vector3d(
   depth_min = 80, depth_max = 300
 )
 terra::values(intersect_3d(a, deep))
+
+# A SpatVector3D point covers the cell that holds it and, on a voxel, the
+# level nearest its depth: here the 50 m level of `bv` in the first cell
+# (the point is projected onto the grid's CRS).
+detection <- as_vector3d(data.frame(lon = 0.0045, lat = 0.0045, depth = 60))
+terra::values(intersect_3d(detection, bv))
 
 # Two sets of SpatVector3D polygons give the polygons they share.
 square <- function(x0) {

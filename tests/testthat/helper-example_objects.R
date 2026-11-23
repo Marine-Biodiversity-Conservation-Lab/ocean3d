@@ -42,6 +42,16 @@ envelope_50_200 <- function() {
 inside <- function() {
   !is.na(terra::values(terra::mask(make_template(1), make_polygon()))[, 1])
 }
+# Helpers for SpatVector3D point queries (#115): points_at() puts points on
+# the make_template() grid, and voxel_1_2_3() is a voxel on that grid with
+# levels 0, 100 and 200 m holding 1, 2 and 3.
+points_at <- function(lon, lat, depth, ...) {
+  as_vector3d(data.frame(lon = lon, lat = lat, depth = depth, ...))
+}
+voxel_1_2_3 <- function() {
+  as_voxel(terra::rast(lapply(1:3, function(i) make_template(i))),
+           depths = c(0, 100, 200), varname = "temp")
+}
 
 # Helpers for intersect and volume tests. The LAEA projection makes every cell
 # 1 km x 1 km, so volumes are hand-computable. With `vals`, make_grid() is a
