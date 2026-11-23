@@ -64,6 +64,17 @@ test_that("crop() takes rasters, vectors and sf, in any CRS", {
                               crs = "EPSG:3413")
   rows <- terra::crop(as_proxy(arctic, var = "temp"), polar)@axes$lat$centres
   expect_equal(max(rows), 80.5)
+
+  # A box around the North Pole: its edges reach only 80.8 N, but the area
+  # includes every longitude up to the pole.
+  north <- make_grid_file(lon = seq(-179.5, 179.5, by = 5),
+                          lat = seq(70.5, 89.5, by = 1), depth = 5, time = 0)
+  on.exit(unlink(north), add = TRUE)
+  around <- terra::as.polygons(terra::ext(-1e6, 1e6, -1e6, 1e6),
+                               crs = "EPSG:3413")
+  cropped <- terra::crop(as_proxy(north, var = "temp"), around)@axes
+  expect_equal(max(cropped$lat$centres), 89.5)
+  expect_length(cropped$lon$centres, 72)
 })
 
 test_that("crop() of a voxel in map units doesn't wrap longitudes", {

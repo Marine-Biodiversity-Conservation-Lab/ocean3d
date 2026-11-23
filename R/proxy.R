@@ -868,9 +868,29 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
           100,
         flat = TRUE
       )
-      y <- terra::project(box, x@crs)
+      y <- terra::ext(terra::project(box, x@crs))
+      # A box around a pole: no point on its edges reaches the pole, so the
+      # projected extent stops short of it. If a pole lies inside the box,
+      # the area reaches that pole at every longitude. A projection that
+      # can't place a pole (Mercator, say) can't contain one either.
+      if (terra::is.lonlat(x@crs) && !terra::is.lonlat(crs)) {
+        for (lat in c(90, -90)) {
+          pole <- tryCatch(
+            terra::crds(terra::project(terra::vect(cbind(0, lat),
+                                                   crs = x@crs), crs)),
+            error = function(err) NULL
+          )
+          inside <- !is.null(pole) && all(is.finite(pole)) &&
+            pole[1L] >= e[["xmin"]] && pole[1L] <= e[["xmax"]] &&
+            pole[2L] >= e[["ymin"]] && pole[2L] <= e[["ymax"]]
+          if (inside) {
+            box_lat <- as.vector(y)[c("ymin", "ymax")]
+            y <- terra::ext(-180, 180, min(box_lat, lat), max(box_lat, lat))
+          }
+        }
+      }
     }
-    y <- terra::ext(y)
+    if (!inherits(y, "SpatExtent")) y <- terra::ext(y)
   }
   e <- as.vector(y)
   # Longitudes wrap only on a longitude-latitude grid, not in map units.
