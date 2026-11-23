@@ -74,8 +74,9 @@ cell is dropped rather than falling back to the remaining constraints.</p>
 
 
 <dl><dt id="arg-polygon">polygon<a class="anchor" aria-label="anchor" href="#arg-polygon"></a></dt>
-<dd><p>sf or SpatVector, for example species ranges or fishery
-footprints.</p></dd>
+<dd><p>sf, sfc or SpatVector, for example species ranges or
+fishery footprints. Polygons in another CRS are projected onto the CRS
+of <code>template</code> first. Every cell a polygon touches is inside.</p></dd>
 
 
 <dt id="arg-template">template<a class="anchor" aria-label="anchor" href="#arg-template"></a></dt>
@@ -85,17 +86,20 @@ SpatEnvelope output.</p></dd>
 
 <dt id="arg-depth-min">depth_min<a class="anchor" aria-label="anchor" href="#arg-depth-min"></a></dt>
 <dd><p>List. Can contain both numeric and SpatRasters that match
-CRS, resolution, extent of <code>template</code> and contain numeric values. For each
-cell, the maximum across the <code>depth_min</code> list parameters is used as output
-SpatEnvelope depth_min layer cell value.</p></dd>
+CRS, resolution, extent of <code>template</code> and contain numeric values. A list
+element can be several numbers or a multi-layer SpatRaster; each value
+or layer counts as one constraint. For each cell, the maximum across all
+the constraints is used as output SpatEnvelope depth_min layer cell
+value.</p></dd>
 
 
 <dt id="arg-depth-max">depth_max<a class="anchor" aria-label="anchor" href="#arg-depth-max"></a></dt>
 <dd><p>List. Can contain both numeric and SpatRasters that match
-CRS, resolution, extent of <code>template</code> and contain numeric values. For each
-cell, the minimum across the <code>depth_max</code> list parameters is used as output
-SpatEnvelope depth_max layer cell value. Cells where it isn't deeper
-than <code>depth_min</code> are <code>NA</code>.</p></dd>
+CRS, resolution, extent of <code>template</code> and contain numeric values. A list
+element can be several numbers or a multi-layer SpatRaster; each value
+or layer counts as one constraint. For each cell, the minimum across all
+the constraints is used as output SpatEnvelope depth_max layer cell
+value. Cells where it isn't deeper than <code>depth_min</code> are <code>NA</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -113,8 +117,7 @@ already a raster.</p></div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A 4x4 study grid, and a range polygon covering its middle. `polygon` and</span></span></span>
-<span class="r-in"><span><span class="co"># `template` must already share a CRS: this function does not reproject.</span></span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="co"># A 4x4 study grid, and a range polygon covering its middle.</span></span></span>
 <span class="r-in"><span><span class="va">template</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span>nrows <span class="op">=</span> <span class="fl">4</span>, ncols <span class="op">=</span> <span class="fl">4</span>, xmin <span class="op">=</span> <span class="fl">0</span>, xmax <span class="op">=</span> <span class="fl">4</span>,</span></span>
 <span class="r-in"><span>                        ymin <span class="op">=</span> <span class="fl">0</span>, ymax <span class="op">=</span> <span class="fl">4</span>, crs <span class="op">=</span> <span class="st">"EPSG:4326"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">poly</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/vect.html" class="external-link">vect</a></span><span class="op">(</span><span class="st">"POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))"</span>, crs <span class="op">=</span> <span class="st">"EPSG:4326"</span><span class="op">)</span></span></span>

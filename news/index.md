@@ -247,6 +247,37 @@ how many cells have the limits swapped (or a seafloor above
 `depth_min`), equal, or missing
 ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
 
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
+and
+[`depth_bounds()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depth_bounds.md)
+now stop with an error when given a `SpatEnvelope` or `SpatVoxel` whose
+layers no longer match its class, for example after a terra operation
+changed them
+([\#97](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/97)).
+They used to use such an object without checking it.
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
+could then return a wrong voxel, such as an empty one for an envelope
+whose two layers had been swapped.
+[`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md),
+[`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md),
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+already rejected such objects. Rebuild the object with
+[`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md)
+or
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+first.
+
+[`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)
+now stops with an error when `depths` repeats a depth, as
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+does
+([\#97](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/97)).
+It used to drop the repeats silently. Pass each depth once, for example
+with `unique(depths)`.
+
 ### New features
 
 - New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
@@ -472,6 +503,14 @@ how many cells have the limits swapped (or a seafloor above
   ([\#93](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/93)).
 
 ### Minor improvements
+
+- [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
+  now projects polygons in another CRS onto the CRS of `template`, as
+  the 3D query functions do with polygons
+  ([\#97](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/97)).
+  It used to stop with an error asking for the polygons to be projected
+  first. Depth rasters in `depth_min` and `depth_max` must still be on
+  the template’s grid, CRS included.
 
 - Functions that take a `SpatEnvelope` check it faster when it is held
   in memory. Envelopes read from a file, or with more than a million

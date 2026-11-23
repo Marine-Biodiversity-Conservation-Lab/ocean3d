@@ -253,9 +253,10 @@ from extending below the actual bathymetry, and drops cells where the
 bed sits above the shallowest depth the animal occupies.
 
 [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
-works one polygon at a time and does not reproject, so we transform the
-ranges onto the grid’s CRS once and loop with
-[`lapply()`](https://rdrr.io/r/base/lapply.html).
+works one polygon at a time, so we loop with
+[`lapply()`](https://rdrr.io/r/base/lapply.html). It would project each
+polygon onto the grid’s CRS itself; we transform the ranges once up
+front instead, so that isn’t repeated for every polygon.
 
 If the seafloor is shallower than a species’ or fishery’s `depth_min`
 across its whole range, no water is left for it, and

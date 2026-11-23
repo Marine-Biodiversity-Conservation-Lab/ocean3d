@@ -35,8 +35,8 @@ envelope_to_voxel(
 - depths:
 
   Array of values that can be coerced into numeric type, represents
-  metres depth below sea level. Sorted shallow to deep, and
-  deduplicated, before use.
+  metres depth below sea level, each depth once. Sorted shallow to deep
+  before use.
 
 - values:
 
@@ -80,7 +80,7 @@ envelope_to_voxel(
   `depths` (or a `depth`, `lower`, `upper` table, as in
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)).
   When given, these slabs are used instead of `bounds`, the returned
-  voxel carries them, and `depths` must not repeat a depth.
+  voxel carries them.
 
 ## Value
 

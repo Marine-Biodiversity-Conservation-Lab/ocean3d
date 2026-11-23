@@ -18,7 +18,9 @@ vect_to_envelope(polygon, template, depth_min, depth_max)
 
 - polygon:
 
-  sf or SpatVector, for example species ranges or fishery footprints.
+  sf, sfc or SpatVector, for example species ranges or fishery
+  footprints. Polygons in another CRS are projected onto the CRS of
+  `template` first. Every cell a polygon touches is inside.
 
 - template:
 
@@ -28,17 +30,20 @@ vect_to_envelope(polygon, template, depth_min, depth_max)
 - depth_min:
 
   List. Can contain both numeric and SpatRasters that match CRS,
-  resolution, extent of `template` and contain numeric values. For each
-  cell, the maximum across the `depth_min` list parameters is used as
-  output SpatEnvelope depth_min layer cell value.
+  resolution, extent of `template` and contain numeric values. A list
+  element can be several numbers or a multi-layer SpatRaster; each value
+  or layer counts as one constraint. For each cell, the maximum across
+  all the constraints is used as output SpatEnvelope depth_min layer
+  cell value.
 
 - depth_max:
 
   List. Can contain both numeric and SpatRasters that match CRS,
-  resolution, extent of `template` and contain numeric values. For each
-  cell, the minimum across the `depth_max` list parameters is used as
-  output SpatEnvelope depth_max layer cell value. Cells where it isn't
-  deeper than `depth_min` are `NA`.
+  resolution, extent of `template` and contain numeric values. A list
+  element can be several numbers or a multi-layer SpatRaster; each value
+  or layer counts as one constraint. For each cell, the minimum across
+  all the constraints is used as output SpatEnvelope depth_max layer
+  cell value. Cells where it isn't deeper than `depth_min` are `NA`.
 
 ## Value
 
@@ -55,8 +60,7 @@ which attaches depth limits to a footprint that is already a raster.
 ## Examples
 
 ``` r
-# A 4x4 study grid, and a range polygon covering its middle. `polygon` and
-# `template` must already share a CRS: this function does not reproject.
+# A 4x4 study grid, and a range polygon covering its middle.
 template <- terra::rast(nrows = 4, ncols = 4, xmin = 0, xmax = 4,
                         ymin = 0, ymax = 4, crs = "EPSG:4326")
 poly <- terra::vect("POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))", crs = "EPSG:4326")

@@ -84,8 +84,8 @@ envelope, are <code>NA</code> in every layer.</p>
 
 <dt id="arg-depths">depths<a class="anchor" aria-label="anchor" href="#arg-depths"></a></dt>
 <dd><p>Array of values that can be coerced into numeric type,
-represents metres depth below sea level. Sorted shallow to deep, and
-deduplicated, before use.</p></dd>
+represents metres depth below sea level, each depth once. Sorted shallow
+to deep before use.</p></dd>
 
 
 <dt id="arg-values">values<a class="anchor" aria-label="anchor" href="#arg-values"></a></dt>
@@ -125,7 +125,7 @@ is given.</p></dd>
 bottom of the slab of water each depth stands for, in metres, one row per
 element of <code>depths</code> (or a <code>depth</code>, <code>lower</code>, <code>upper</code> table, as in
 <code><a href="as_voxel.html">as_voxel()</a></code>). When given, these slabs are used instead of <code>bounds</code>, the
-returned voxel carries them, and <code>depths</code> must not repeat a depth.</p></dd>
+returned voxel carries them.</p></dd>
 
 </dl></div>
     <div class="section level2">
