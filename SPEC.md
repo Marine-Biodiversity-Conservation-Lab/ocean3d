@@ -198,7 +198,7 @@ None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on 
 
 #### Open questions
 
-- **Nearest depth with missing layers:** `extract_to_point()` skips missing layers when choosing the nearest depth. Whether the point rule in the coverage step keeps this (#115).
+- **Nearest depth with missing layers:** `extract_to_point()` skips missing layers when choosing the nearest depth. The point methods of `intersect_3d()` and `mask()` don't: a point's level is the one nearest its depth, whatever the voxel holds there, so the shape query says where the point is and a missing value stays missing (#115). Whether `extract_to_point()` keeps its rule when it is rebuilt on the steps is for #116.
 - **Zarr layouts:** Copernicus Marine serves each product chunked by time step (for maps) and by location (for time series). How the core object records both and which one each step reads (#151).
 - **Combined extraction functions:** keep each as a wrapper over the three steps, or retire it in favour of a workflow vignette (#116; see [Combined functions](#package-design-build-intersect-summarise)).
 - **ncdfCF:** revisit at its 1.0 release or if native model grids come into scope.
@@ -323,12 +323,12 @@ Three functions handle pairs of 3D objects (`SpatEnvelope`, `SpatVoxel`, and `Sp
 - **`intersects_3d(x, y)`**: whether they share any 3D space, cell by cell for rasters, with terra's three answers: `TRUE`, `FALSE` (both present but disjoint, or only one present), `NA` (neither present).
 - **`mask(x, mask)`**: `terra::mask()` made depth-aware. Keeps `x`'s values where the mask reaches that cell at that depth. A voxel masked by an envelope puts the envelope on the voxel's own levels, so the caller cannot misalign them.
 
-`SpatVector3D` methods (polygons with an envelope, a voxel or other polygons exist; points and lines are *(planned)*):
+`SpatVector3D` methods (polygons and points with an envelope, a voxel or polygons exist; lines go through `buffer_3d()` or track sampling, #105):
 - **Vector with vector**: `intersect_3d()` intersects the geometries, the depths and the time intervals. Time intervals include both ends, a feature without a time overlaps any time, and features whose times don't overlap don't intersect.
   - Two polygon sets give one polygon per overlapping pair (footprints and depth intervals intersected), numbered, with `feature_id_x` and `feature_id_y` naming the pair.
-  - `intersects_3d()` of two polygon sets returns, for each feature of `x`, the IDs of the features of `y` it shares space with, as `sf::st_intersects()` does.
-  - *(planned)* A point or line with a polygon gives the points or parts of lines inside it.
-- **Vector with envelope or voxel**: polygons are evaluated on the raster's grid (as in `vector3d_to_envelope()`) and compared cell by cell as two envelopes are. Where polygons overlap over a cell, the depth gap between them is filled. `mask(voxel, x)` keeps the voxel values in the cells and levels `x` reaches. *(planned)* `vector3d_to_voxel()` will put polygons on a voxel's levels one level at a time and keep the gap; points and lines will be compared in the cells and levels they pass through.
+  - Points with polygons give one point per (point, polygon) pair where the point lies within the outline, the depth range and the time interval, numbered the same way. Two sets of points share no space, so they are an error.
+  - `intersects_3d()` of two sets returns, for each feature of `x`, the IDs of the features of `y` it shares space with, as `sf::st_intersects()` does.
+- **Vector with envelope or voxel**: polygons are evaluated on the raster's grid (as in `vector3d_to_envelope()`) and compared cell by cell as two envelopes are. Where polygons overlap over a cell, the depth gap between them is filled. A point covers one cell and one depth level: on a voxel, the cell that holds it and the level nearest its depth (ties go shallower; the level is chosen by depth, not by where the voxel has values); on an envelope, the cell where its depth lies within the interval. `mask(voxel, x)` keeps the voxel values in the cells and levels `x` reaches. *(planned)* `vector3d_to_voxel()` will put polygons on a voxel's levels one level at a time and keep the gap.
 - **Vector with a data source**: the coverage function, not these three, returns data values, with each cell's partial coverage as a weight (see [Summarise: extraction](#summarise-extraction)).
 
 These functions are the intersect step of the [package design](#package-design-build-intersect-summarise).

@@ -188,6 +188,15 @@ Pass each depth once, for example with `unique(depths)`.
 
 ## New features
 
+* `intersect_3d()`, `intersects_3d()` and `mask()` take `SpatVector3D`
+  points (#115). A point covers one cell and one depth level: with a voxel,
+  the cell that holds it and the level nearest its depth (ties go to the
+  shallower level), as a presence voxel; with an envelope, the cell where its
+  depth lies within the interval, as a zero-thickness envelope; with
+  polygons, one point per point inside a polygon's outline, depth range and
+  time interval, with `feature_id_x` and `feature_id_y` naming the pair.
+  `mask(voxel, points)` keeps the value at each point's cell and level.
+  Lines are still an error that points to `buffer_3d()`.
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
   `depth_report`. Longitudes match across the 0-360 and -180-180
   conventions and across the antimeridian.
