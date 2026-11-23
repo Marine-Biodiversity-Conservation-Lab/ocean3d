@@ -178,7 +178,7 @@ datasets or requiring API credentials.
 For real-world applications, `ocean3d` provides several functions
 to facilitate data acquisition and preparation. These include
 `load_gebco_bathymetry()` for bathymetric data from GEBCO,
-`woa_download()` and `woa_load_nc()` for environmental data
+`woa_download()` (read with `as_proxy()`) for environmental data
 from the World Ocean Atlas, and `fetch_species_assessments()`
 for retrieving species information, including depth limits,
 from the IUCN Red List API.
@@ -426,7 +426,7 @@ depth levels.
 **Working with real data:** Instead of generating
 artificial temperature rasters, we could obtain
 environmental data from the World Ocean Atlas using
-`woa_download()` and `woa_load_nc()`. 
+`woa_download()`, then read it with `as_proxy()` and `as_voxel()`.
 
 
 ### 2.4. Visualising our 3D environmental data
@@ -1132,10 +1132,11 @@ several of these functions earlier in the
   that can be used to constrain species'
   potential vertical distributions.
 
-- `woa_download()` and `woa_load_nc()` provide
-  access to World Ocean Atlas 2023
-  climatologies. They allow you to download
-  and prepare environmental variables,
+- `woa_download()` provides access to World
+  Ocean Atlas 2023 climatologies, which
+  `as_proxy()`, `terra::crop()` and
+  `as_voxel()` then read for your study area.
+  You can download environmental variables,
   including temperature, salinity,
   dissolved oxygen and nutrients,
   at different geographical resolutions
