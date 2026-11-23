@@ -188,6 +188,12 @@ Pass each depth once, for example with `unique(depths)`.
 
 ## New features
 
+* `volume()` measures a `SpatProxy` through time (#159): one row per time
+  step, with the step's date and its volume in km³, or with
+  `per_cell = TRUE` one layer per step. `fun` says which values count as
+  occupied, as in `occupied()`. A step larger than the read budget (option
+  `ocean3d.max_read_mb`, 1024 MB by default) is read in groups of depth
+  layers, so memory follows one step or one group, not the dataset.
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
   `depth_report`. Longitudes match across the 0-360 and -180-180
   conventions and across the antimeridian.

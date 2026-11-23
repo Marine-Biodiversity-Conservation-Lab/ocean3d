@@ -709,12 +709,16 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # step of a SpatProxy read into memory as a SpatVoxel, for as_voxel(). The
 # raster's extent comes from the cell edges and its CRS from the proxy; depth
 # goes in terra::depth() with the proxy's depth edges, and the date of the
-# step in terra::time().
-.proxy_to_voxel <- function(x, time, varname) {
-  # A voxel already in memory is its own only time step.
+# step in terra::time(). `depth`, a first and last index in storage order,
+# reads only those levels, so volume() can measure a large step in groups of
+# layers; NULL reads them all.
+.proxy_to_voxel <- function(x, time, varname, depth = NULL) {
+  # A voxel already in memory is its own only time step; its layers are in
+  # storage order.
   if (identical(x@source$type, "voxel")) {
     .proxy_time_step(x, time)
-    return(x@source$voxel)
+    v <- x@source$voxel
+    return(if (is.null(depth)) v else v[[seq(depth[1L], depth[2L])]])
   }
   axes <- x@axes
   if (is.null(axes$depth)) {
@@ -725,6 +729,13 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   }
   step <- .proxy_time_step(x, time)
   window <- if (is.null(step)) list() else list(time = c(step, step))
+  if (!is.null(depth)) {
+    window$depth <- depth
+    axes$depth[c("centres", "lower", "upper")] <- lapply(
+      axes$depth[c("centres", "lower", "upper")], `[`,
+      seq(depth[1L], depth[2L])
+    )
+  }
   values <- .read_proxy_window(x, window)
 
   # terra's cells run west to east, then north to south.
