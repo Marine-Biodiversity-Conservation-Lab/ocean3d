@@ -75,6 +75,22 @@ test_that("crop() takes rasters, vectors and sf, in any CRS", {
   cropped <- terra::crop(as_proxy(north, var = "temp"), around)@axes
   expect_equal(max(cropped$lat$centres), 89.5)
   expect_length(cropped$lon$centres, 72)
+
+  # A polar box across the antimeridian, without the pole: about 174 to 186
+  # degrees east. On a 0 to 360 grid it is one window; on a -180 to 180 grid
+  # it crosses the edge and stops, rather than taking every longitude.
+  across <- terra::as.polygons(terra::ext(-1.1e6, -0.9e6, 0.9e6, 1.1e6),
+                               crs = "EPSG:3413")
+  east <- make_grid_file(lon = seq(0.5, 359.5, by = 1),
+                         lat = seq(70.5, 84.5, by = 1), depth = 5, time = 0)
+  west <- make_grid_file(lon = seq(-179.5, 179.5, by = 1),
+                         lat = seq(70.5, 84.5, by = 1), depth = 5, time = 0)
+  on.exit(unlink(c(east, west)), add = TRUE)
+  lon <- terra::crop(as_proxy(east, var = "temp"), across)@axes$lon$centres
+  expect_equal(range(lon), c(174.5, 185.5))
+  err <- expect_error(terra::crop(as_proxy(west, var = "temp"), across),
+                      class = "ocean3d_error_proxy_crop")
+  expect_match(conditionMessage(err), "crosses the edge of the grid's")
 })
 
 test_that("crop() of a voxel in map units doesn't wrap longitudes", {
