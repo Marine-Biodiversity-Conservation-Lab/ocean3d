@@ -870,14 +870,16 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
       )
       projected <- terra::project(box, x@crs)
       y <- terra::ext(projected)
-      # A box across the antimeridian: its projected longitudes jump from 180
-      # to -180, so their range spans nearly the globe. Written from 0 to 360
-      # they are continuous, so take that range when it is the narrower one;
-      # crop() then finds the cells, or says the area crosses the grid's edge.
+      # A box across the antimeridian: going round its edge, the projected
+      # longitude jumps between 180 and -180 (consecutive points more than
+      # 180 degrees apart), so their range spans nearly the globe. Written
+      # from 0 to 360 they are continuous, so take that range; crop() then
+      # finds the cells, or says the area crosses the grid's edge. A box
+      # that covers every longitude has no such jump and keeps its range.
       if (terra::is.lonlat(x@crs)) {
         lon <- terra::crds(projected)[, 1L]
-        east <- ifelse(lon < 0, lon + 360, lon)
-        if (diff(range(east)) < diff(range(lon))) {
+        if (any(abs(diff(c(lon, lon[1L]))) > 180)) {
+          east <- ifelse(lon < 0, lon + 360, lon)
           y <- terra::ext(min(east), max(east), terra::ymin(y),
                           terra::ymax(y))
         }

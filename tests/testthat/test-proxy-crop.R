@@ -91,6 +91,17 @@ test_that("crop() takes rasters, vectors and sf, in any CRS", {
   err <- expect_error(terra::crop(as_proxy(west, var = "temp"), across),
                       class = "ocean3d_error_proxy_crop")
   expect_match(conditionMessage(err), "crosses the edge of the grid's")
+
+  # A box covering every longitude (Web Mercator's full width) doesn't cross
+  # the antimeridian: it keeps every longitude of a -180 to 180 grid.
+  equator <- make_grid_file(lon = seq(-177.5, 177.5, by = 5),
+                            lat = seq(-4.5, 4.5, by = 1), depth = 5, time = 0)
+  on.exit(unlink(equator), add = TRUE)
+  wide <- terra::as.polygons(
+    terra::ext(-20037508, 20037508, -1e6, 1e6), crs = "EPSG:3857"
+  )
+  expect_length(terra::crop(as_proxy(equator, var = "temp"),
+                            wide)@axes$lon$centres, 72)
 })
 
 test_that("crop() of a voxel in map units doesn't wrap longitudes", {
