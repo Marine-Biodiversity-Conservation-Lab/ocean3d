@@ -838,9 +838,6 @@ test_that("vect_to_envelope() rejects unusable input", {
   # a raster that doesn't overlap make_polygon()
   elsewhere <- terra::rast(nrows = 5, ncols = 5, xmin = 5, xmax = 10,
                            ymin = 5, ymax = 10, crs = "EPSG:4326")
-  # a template in another CRS
-  mercator <- terra::rast(nrows = 5, ncols = 5, xmin = 0, xmax = 5,
-                          ymin = 0, ymax = 5, crs = "EPSG:3857")
   # depth rasters whose resolution, extent or CRS differ from the template's;
   # with a different CRS but the same extent numbers, terra would otherwise
   # return a wrong answer rather than fail
@@ -861,8 +858,6 @@ test_that("vect_to_envelope() rejects unusable input", {
     list(args = list(poly, elsewhere, 0, 10),
          class = "ocean3d_error_envelope_empty",
          pattern = "The polygons don't overlap any cell of `template`"),
-    list(args = list(poly, mercator, 0, 10), class = input,
-         pattern = "`polygon` and `template` have different CRS."),
     list(args = list(poly, tmpl, 0, list(10, bad_res)), class = mismatch,
          pattern = "does not align with `template`"),
     list(args = list(poly, tmpl, 0, list(10, bad_ext)), class = mismatch,
@@ -885,6 +880,28 @@ test_that("vect_to_envelope() rejects unusable input", {
   }
 
   # TODO: implement check for the depth_min and depth_max inputs
+})
+
+test_that("vect_to_envelope() projects polygons onto the template's CRS", {
+  tmpl <- make_template()
+  # edges inside cells, so projecting doesn't move one onto a cell edge
+  poly <- terra::vect("POLYGON ((1.3 1.3, 3.6 1.3, 3.6 3.6, 1.3 3.6, 1.3 1.3))",
+                      crs = "EPSG:4326")
+  mercator <- terra::project(poly, "EPSG:3857")
+  expected <- vect_to_envelope(poly, tmpl, 0, 100)
+
+  for (p in list(mercator, sf::st_as_sf(mercator))) {
+    e <- vect_to_envelope(p, tmpl, 0, 100)
+    expect_identical(terra::values(e), terra::values(expected))
+  }
+  expect_identical(sum(!is.na(terra::values(expected)[, 1])), 9L)
+
+  # depth rasters aren't projected: another CRS is still an error
+  bad_crs <- terra::rast(tmpl, vals = 50)
+  terra::crs(bad_crs) <- "EPSG:3857"
+  expect_error(vect_to_envelope(mercator, tmpl, 0, list(100, bad_crs)),
+               "`depth_max` element 2 has a different CRS than `template`",
+               class = "ocean3d_error_grid_mismatch")
 })
 
 test_that("vect_to_envelope() counts each value and layer as a constraint", {

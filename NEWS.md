@@ -335,6 +335,12 @@ Pass each depth once, for example with `unique(depths)`.
 
 ## Minor improvements
 
+* `vect_to_envelope()` now projects polygons in another CRS onto the CRS of
+  `template`, as the 3D query functions do with polygons (#97). It used to
+  stop with an error asking for the polygons to be projected first. Depth
+  rasters in `depth_min` and `depth_max` must still be on the template's
+  grid, CRS included.
+
 * Functions that take a `SpatEnvelope` check it faster when it is held in
   memory. Envelopes read from a file, or with more than a million cells, are
   checked as before. On 9-cell test grids, `as_envelope()` is about 5 times

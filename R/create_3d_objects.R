@@ -82,7 +82,10 @@ as_envelope <- function(x, depth_min, depth_max) {
     }
 
     # Only the non-NA pattern of the footprint matters, never its values.
-    present <- terra::ifel(is.na(x), NA, 1)
+    # Assigned before ifel() takes it: an error raised while S4 evaluates an
+    # argument for dispatch is reworded.
+    fp <- .footprint(x, x, "x")
+    present <- terra::ifel(fp, 1, NA)
     dmin <- .grid_value(depth_min, x, "`depth_min`", fill = TRUE)
     dmax <- .grid_value(depth_max, x, "`depth_max`", fill = TRUE)
     dmin <- terra::mask(dmin, present)
@@ -1017,8 +1020,9 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 #' Where a constraint raster is NA at a cell its limit there is unknown, so the
 #' cell is dropped rather than falling back to the remaining constraints.
 #' 
-#' @param polygon sf or SpatVector, for example species ranges or fishery
-#'   footprints.
+#' @param polygon sf, sfc or SpatVector, for example species ranges or
+#'   fishery footprints. Polygons in another CRS are projected onto the CRS
+#'   of `template` first. Every cell a polygon touches is inside.
 #' @param template SpatRaster that defines the horizontal grid of the
 #'   SpatEnvelope output.
 #' @param depth_min List. Can contain both numeric and SpatRasters that match
@@ -1043,8 +1047,7 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 #'   already a raster.
 #'
 #' @examples
-#' # A 4x4 study grid, and a range polygon covering its middle. `polygon` and
-#' # `template` must already share a CRS: this function does not reproject.
+#' # A 4x4 study grid, and a range polygon covering its middle.
 #' template <- terra::rast(nrows = 4, ncols = 4, xmin = 0, xmax = 4,
 #'                         ymin = 0, ymax = 4, crs = "EPSG:4326")
 #' poly <- terra::vect("POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))", crs = "EPSG:4326")
@@ -1075,21 +1078,12 @@ vect_to_envelope <- function(polygon, template, depth_min, depth_max) {
   if (!inherits(polygon, c("sf", "sfc", "SpatVector"))) {
     .abort_envelope_input("`polygon` must be a SpatVector, sf or sfc object.")
   }
-  if (inherits(polygon, "sf") || inherits(polygon, "sfc")) {
-    polygon <- terra::vect(polygon)
-  }
   if (!is(template, "SpatRaster")) {
     .abort_envelope_input("`template` must be a SpatRaster.")
   }
   # Only the grid is used. Drop any class tag so a voxel can serve as the
   # template without its layers reaching the depth-aware mask() methods.
   template <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
-  if (!terra::same.crs(crs(polygon), crs(template))) {
-    .abort_envelope_input(paste0(
-      "`polygon` and `template` have different CRS. Project `polygon` onto ",
-      "the CRS of `template` first."
-    ))
-  }
 
   # Depths stay 8-byte doubles if terra writes to disk; its default 4-byte
   # floats would turn 10.1 m into 10.1000004 m.
@@ -1102,12 +1096,12 @@ vect_to_envelope <- function(polygon, template, depth_min, depth_max) {
   depth_min <- .normalize_depth_inputs(depth_min, template, "depth_min")
   depth_max <- .normalize_depth_inputs(depth_max, template, "depth_max")
 
-  # take first layer in case multi-layer raster
-  all_one <- template[[1]]
-  # make all cell values 1, since mask leaves NAs alone 
-  terra::values(all_one) <- 1
-  # intersect between polygon and template
-  masked <- terra::mask(all_one, polygon) 
+  # The cells the polygons touch, 1 there and NA elsewhere. .footprint()
+  # projects the polygons onto the template's CRS when they differ. Assigned
+  # before ifel() takes it: an error raised while S4 evaluates an argument
+  # for dispatch is reworded.
+  fp <- .footprint(polygon, template, "polygon")
+  masked <- terra::ifel(fp, 1, NA)
   if (terra::global(masked, "notNA")[1, 1] == 0) {
     .abort_envelope_empty(paste0(
       "The polygons don't overlap any cell of `template`, so the envelope ",

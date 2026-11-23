@@ -7,8 +7,9 @@
 vect_to_envelope(polygon, template, depth_min, depth_max)
 }
 \arguments{
-\item{polygon}{sf or SpatVector, for example species ranges or fishery
-footprints.}
+\item{polygon}{sf, sfc or SpatVector, for example species ranges or
+fishery footprints. Polygons in another CRS are projected onto the CRS
+of \code{template} first. Every cell a polygon touches is inside.}
 
 \item{template}{SpatRaster that defines the horizontal grid of the
 SpatEnvelope output.}
@@ -42,8 +43,7 @@ Where a constraint raster is NA at a cell its limit there is unknown, so the
 cell is dropped rather than falling back to the remaining constraints.
 }
 \examples{
-# A 4x4 study grid, and a range polygon covering its middle. `polygon` and
-# `template` must already share a CRS: this function does not reproject.
+# A 4x4 study grid, and a range polygon covering its middle.
 template <- terra::rast(nrows = 4, ncols = 4, xmin = 0, xmax = 4,
                         ymin = 0, ymax = 4, crs = "EPSG:4326")
 poly <- terra::vect("POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))", crs = "EPSG:4326")
