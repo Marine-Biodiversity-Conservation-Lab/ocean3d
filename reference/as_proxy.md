@@ -26,8 +26,8 @@ as_proxy(
 
 - x:
 
-  A netCDF file path, several paths for a series of files, a connection
-  opened with
+  A netCDF file path or URL (e.g. OPeNDAP or NCZarr), several paths for
+  a series of files, a connection opened with
   [`ncdf4::nc_open()`](https://rdrr.io/pkg/ncdf4/man/nc_open.html) (left
   open), or a
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
