@@ -698,10 +698,6 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   values
 }
 
-# TRUE for a URL such as an OPeNDAP or NCZarr address, which ncdf4 opens
-# without a local file.
-.is_url <- function(path) grepl("^[A-Za-z][A-Za-z0-9+.-]*://", path)
-
 # The voxel builder (SPEC.md, "SpatVoxel / SpatEnvelope", Builder): one time
 # step of a SpatProxy read into memory as a SpatVoxel, for as_voxel(). The
 # raster's extent comes from the cell edges and its CRS from the proxy; depth

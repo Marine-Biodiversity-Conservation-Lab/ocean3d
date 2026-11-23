@@ -527,7 +527,7 @@ test_that("a file that no longer matches the proxy stops", {
   changed(g, "Can't find")
 })
 
-test_that("a proxy of a URL source is read", {
+test_that("a proxy of a URL source is read, opened or given as a path", {
   store <- file.path(tempfile(), "grid.zarr")
   dir.create(dirname(store))
   on.exit(unlink(dirname(store), recursive = TRUE), add = TRUE)
@@ -551,4 +551,9 @@ test_that("a proxy of a URL source is read", {
   expect_identical(x@source$path, url)
   expect_identical(.read_proxy_window(x, list(lat = c(2, 2))),
                    array(c(4, 5, 6), c(3, 1, 1, 1)))
+
+  # The URL given as a path opens the same store.
+  y <- as_proxy(url)
+  expect_identical(y@source$path, url)
+  expect_identical(.read_proxy_window(y), .read_proxy_window(x))
 })
