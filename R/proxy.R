@@ -623,9 +623,16 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     keep <- lapply(spans, function(s) seq(s[1L], s[2L]))
     return(values[keep$lon, keep$lat, keep$depth, keep$time, drop = FALSE])
   }
+  # A proxy cut down with crop() reads its window at an offset in the file,
+  # and checks the file against the file's own dimension lengths.
+  file_spans <- spans
+  for (axis in names(source$offset)) {
+    file_spans[[axis]] <- spans[[axis]] + source$offset[[axis]]
+  }
+  file_lengths <- if (is.null(source$file_lengths)) variable$dim_lengths else
+    source$file_lengths
   if (!identical(source$type, "series")) {
-    return(.read_file_window(source$path, variable, spans,
-                             variable$dim_lengths))
+    return(.read_file_window(source$path, variable, file_spans, file_lengths))
   }
   # A series: each file's share of the time window, joined along time, the
   # slowest-varying axis of the fixed order.
@@ -634,10 +641,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   first <- last - source$steps + 1L
   parts <- list()
   for (i in which(first <= spans$time[2L] & last >= spans$time[1L])) {
-    local <- spans
+    local <- file_spans
     local$time <- c(max(spans$time[1L], first[i]),
                     min(spans$time[2L], last[i])) - first[i] + 1L
-    lengths <- variable$dim_lengths
+    lengths <- file_lengths
     lengths[[time_dim]] <- source$steps[i]
     parts[[length(parts) + 1L]] <- .read_file_window(source$path[i], variable,
                                                      local, lengths)
@@ -829,6 +836,91 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     ), class = "ocean3d_error_irregular_grid", call = NULL)
   }
   list(min = lower, max = upper)
+}
+
+#' @rdname SpatProxy-class
+#' @param x A `SpatProxy`.
+#' @param y For `crop()`: the area to keep, as a [terra::SpatExtent] or
+#'   anything with an extent ([terra::SpatRaster], [terra::SpatVector], or an
+#'   sf object). The result keeps the cells whose longitude and latitude
+#'   ranges overlap the area's extent, still without reading values, so
+#'   [as_voxel()] then reads only those cells from the file. A polygon is cut
+#'   to its extent; to keep only the cells inside it, mask the voxel with it
+#'   afterwards. An area in another CRS is projected first, and an extent in
+#'   the other longitude convention (0 to 360 or -180 to 180) finds its cells
+#'   too. An area that crosses the edge of the grid's longitudes (the
+#'   antimeridian on a -180 to 180 grid) can't be read as one window and
+#'   stops; crop each side separately.
+#' @param ... Not used.
+#' @export
+setMethod("crop", "SpatProxy", function(x, y, ...) {
+  if (inherits(y, c("sf", "sfc"))) y <- terra::vect(y)
+  # A voxel in memory is cropped as the raster it is.
+  if (identical(x@source$type, "voxel")) {
+    return(.voxel_to_proxy(terra::crop(x@source$voxel, y, snap = "out")))
+  }
+  if (!inherits(y, "SpatExtent")) {
+    crs <- terra::crs(y)
+    if (nzchar(crs) && nzchar(x@crs) && !terra::same.crs(crs, x@crs)) {
+      y <- terra::project(terra::as.polygons(terra::ext(y), crs = crs),
+                          x@crs)
+    }
+    y <- terra::ext(y)
+  }
+  e <- as.vector(y)
+  spans <- list(
+    lon = .crop_span(x@axes$lon, e[["xmin"]], e[["xmax"]], "longitude",
+                     wrap = TRUE),
+    lat = .crop_span(x@axes$lat, e[["ymin"]], e[["ymax"]], "latitude")
+  )
+  # The cropped axes and lengths describe the smaller grid; the offset and
+  # the file's own lengths let the reader find it in the file.
+  out <- x
+  offset <- if (is.null(x@source$offset)) c(lon = 0L, lat = 0L) else
+    x@source$offset
+  if (is.null(out@source$file_lengths)) {
+    out@source$file_lengths <- x@variable$dim_lengths
+  }
+  for (axis in names(spans)) {
+    keep <- seq(spans[[axis]][1L], spans[[axis]][2L])
+    out@axes[[axis]][c("centres", "lower", "upper")] <-
+      lapply(x@axes[[axis]][c("centres", "lower", "upper")], `[`, keep)
+    out@variable$dim_lengths[[x@variable$axis_dims[[axis]]]] <- length(keep)
+    offset[[axis]] <- offset[[axis]] + spans[[axis]][1L] - 1L
+  }
+  out@source$offset <- offset
+  methods::validObject(out)
+  out
+})
+
+# Internal: the first and last index, in storage order, of the cells of a
+# longitude or latitude `axis` whose range overlaps `low` to `high`. With
+# `wrap`, the range is also tried 360 degrees either way, so an area in the
+# other longitude convention finds its cells. An area whose edge only touches
+# a cell, within rounding (as after projecting it), doesn't take that cell.
+# The cells must be next to each other in the file, or one read window can't
+# hold them. Raised from here only, for both axes of crop().
+.crop_span <- function(axis, low, high, label, wrap = FALSE) {
+  lo <- pmin(axis$lower, axis$upper)
+  hi <- pmax(axis$lower, axis$upper)
+  tol <- .interval_tolerance(lo, hi)
+  shifts <- if (wrap) c(0, 360, -360) else 0
+  hit <- sort(unique(unlist(lapply(shifts, function(s) {
+    which(hi - tol > low + s & lo + tol < high + s)
+  }))))
+  problem <- if (!length(hit)) {
+    glue::glue("doesn't overlap the grid's {label}s")
+  } else if (any(diff(hit) != 1L)) {
+    glue::glue(
+      "crosses the edge of the grid's {label}s, so it can't be read as one ",
+      "window; crop each side separately"
+    )
+  }
+  if (!is.null(problem)) {
+    rlang::abort(glue::glue("The area {problem}."),
+                 class = "ocean3d_error_proxy_crop", call = NULL)
+  }
+  range(hit)
 }
 
 #' @rdname SpatProxy-class

@@ -119,20 +119,19 @@ sp_range <- sf::st_read(
 # canonical study grid.
 t_annual_path <- woa_download("temperature", period = "annual",
                               resolution = "0.25")
-t_annual <- woa_load_nc(t_annual_path, field = "an")
+# Describe the objectively analyzed mean, `t_an`, without reading it.
+t_annual <- as_proxy(t_annual_path, var = "t_an")
 
-# Crop to the species range (plus a ~1 degree margin) before any heavy work.
-# WOA ships globally, but the bathymetry projection, envelope construction, and
-# per-depth masking all cost in proportion to grid size. A circumglobal range
-# whose bbox spans the antimeridian makes this a no-op.
+# Crop to the species range (plus a ~1 degree margin) before reading. WOA
+# ships globally, and only the cropped cells are read from the file; the
+# bathymetry projection, envelope construction and per-depth masking also
+# cost in proportion to grid size. A circumglobal range reads the whole grid.
 range_ext <- terra::intersect(
   terra::ext(terra::vect(sp_range)) + 1,
   terra::ext(-180, 180, -90, 90)
 )
 
-# woa_load_nc() returns a SpatVoxel. terra's crop() keeps the class but
-# doesn't re-run its checks, so as_voxel() checks the depths again; given a
-# valid voxel it returns it unchanged, so this is cheap.
+# Read the cropped area as a SpatVoxel, with WOA's own depth bounds.
 t_annual <- as_voxel(terra::crop(t_annual, range_ext))
 
 # Derive the study grid from the cropped raster so the envelope and the voxel

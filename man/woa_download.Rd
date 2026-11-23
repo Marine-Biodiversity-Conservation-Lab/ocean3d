@@ -53,6 +53,37 @@ file is reported before downloading. A full set of WOA files can be many
 gigabytes — supply \code{output_dir} to direct the cache elsewhere (HPC scratch,
 external drive, etc.).
 }
+\section{Reading the files}{
+
+Describe a downloaded file with \code{\link[=as_proxy]{as_proxy()}}, naming the field's variable,
+then read it with \code{\link[=as_voxel]{as_voxel()}}. Crop the proxy to your area first with
+\code{terra::crop()}, so that only those cells are read from the file. Each
+file holds one variable per statistical field, named \verb{\{code\}_\{field\}}, such
+as \code{t_an} for the objectively analyzed temperature. Leave out \code{var} and
+\code{\link[=as_proxy]{as_proxy()}} lists the file's variables.
+
+The variable codes are \code{t} (temperature), \code{s} (salinity), \code{o} (dissolved
+oxygen), \code{O} (oxygen saturation), \code{A} (AOU), \code{n} (nitrate), \code{p}
+(phosphate), \code{i} (silicate) and \code{I} (density). The field codes are \code{an}
+(objectively analyzed climatology), \code{mn} (statistical mean), \code{dd} (number
+of observations), \code{sd} (standard deviation), \code{se} (standard error), \code{oa}
+(statistical mean minus the objectively analyzed mean), \code{ma} (the period's
+objectively analyzed mean minus the annual one), \code{gp} (number of grid
+squares with a statistical mean within the radius of influence), \code{sdo}
+(objectively analyzed standard deviation) and \code{sea} (standard error of the
+analysis). See the WOA 2023 Product Documentation:
+\url{https://repository.library.noaa.gov/view/noaa/70581}.
+
+The voxel carries WOA's own depth bounds (\code{\link[=depth_bounds]{depth_bounds()}}), its CRS
+(EPSG:4326) and no date, since a WOA file is a climatology for one period.
+For the same reason, the 12 monthly (or 4 seasonal) files can't be joined
+as one series with \code{\link[=as_proxy]{as_proxy()}}: open each file on its own.
+Because the voxel has depth bounds, the \code{bounds} argument of \code{\link[=volume]{volume()}},
+\code{\link[terra:mask]{mask()}} and the other 3D functions doesn't apply to it. WOA's bounds are
+halfway between its standard levels, which is what their default,
+\code{bounds = "midpoint"}, gives.
+}
+
 \examples{
 \dontrun{
 # Annual temperature climatology at 1-degree resolution, cached in a
@@ -60,7 +91,12 @@ external drive, etc.).
 tmp <- file.path(tempdir(), "woa")
 f <- woa_download("temperature", period = "annual", resolution = "1",
                   output_dir = tmp)
-woa_load_nc(f)
+
+# Describe the objectively analyzed mean without reading it, crop it to a
+# study area, and read only that area as a SpatVoxel
+temp <- as_proxy(f, var = "t_an")
+v <- as_voxel(terra::crop(temp, terra::ext(-20, -10, 30, 40)))
+depth_bounds(v)
 
 # All 12 monthly files, downloaded in parallel, into the default cache
 monthly <- woa_download("temperature", period = "monthly",

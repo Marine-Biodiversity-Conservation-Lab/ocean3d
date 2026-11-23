@@ -121,16 +121,16 @@ takes one of them:
 | netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_buffer()`, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
 | `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions, `mask()` and `extract_to_area()` | terra; no time dimension |
 
-The extraction functions don't take a voxel yet: a voxel from `woa_load_nc()`
-or `as_voxel()` can't be passed to `extract_to_point()`, and a netCDF file
-can't be passed to `extract_to_area()` or `volume()`. To use a netCDF file
-with the voxel functions, describe it with `as_proxy()` and read one time
-step with `as_voxel()`; `woa_load_nc()` does this for World Ocean Atlas
-files. Merging the two into one model with time is planned in
+A function takes only its own model: a voxel can't be passed to
+`extract_to_point()`, and a netCDF file can't be passed to `extract_to_area()`
+or `volume()`. Merging the two into one model with time is planned in
 [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
-Its first, experimental part is `as_proxy()`, which describes a netCDF file,
-a series of files or a voxel in memory as a `SpatProxy` without reading its
-values.
+Its first, experimental part is `as_proxy()`, which describes a netCDF file
+(such as a World Ocean Atlas file from `woa_download()`), a series of files
+or a voxel in memory as a `SpatProxy` without reading its values. To use a
+netCDF file with the voxel functions, describe it with `as_proxy()`, crop it
+to your area with `terra::crop()`, and read one time step with
+`as_voxel()`; only the cropped cells are read.
 
 ### Build: 3D objects
 
@@ -266,10 +266,9 @@ usethis::edit_r_environ()
 - `woa_download()` — download WOA 2023 NetCDF files (temperature,
   salinity, dissolved oxygen, oxygen saturation, AOU, nitrate,
   phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with
-  caching.
-- `woa_load_nc()` — load a WOA NetCDF and select a statistical field
-  (e.g., objectively analyzed climatology), returning a `SpatVoxel` with
-  WOA's own depth bounds.
+  caching. Read a field with `as_proxy(file, var = "t_an")`, crop it, and
+  read it with `as_voxel()`; its help page lists the variable and field
+  codes.
 - `woa_cache_dir()` / `woa_cache_clear()` — manage the persistent WOA
   download cache.
 

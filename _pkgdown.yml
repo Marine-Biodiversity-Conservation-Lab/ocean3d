@@ -60,7 +60,6 @@ reference:
   contents:
   - load_gebco_bathymetry
   - woa_download
-  - woa_load_nc
   - woa_cache_dir
   - woa_cache_clear
   - gfw_effort_to_raster
