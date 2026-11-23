@@ -28,9 +28,6 @@ This article shows how to:
 - compare fields, read monthly climatologies and other variables, and measure
   a volume of water.
 
-The code isn't run when this site is built, because WOA files are large
-downloads. The output shown comes from running it on the files named.
-
 ```{r setup}
 library(ocean3d)
 ```
@@ -39,8 +36,8 @@ library(ocean3d)
 
 `woa_download()` downloads WOA 2023 files from NCEI and returns their paths.
 Files are kept in a cache (`woa_cache_dir()`, or `output_dir`), so a second
-call doesn't download them again. The first time it writes to the cache in an
-interactive session, it asks for permission.
+call doesn't download them again. The first time a file is written to the
+cache in an interactive session, you're asked for permission.
 
 ```{r download}
 f <- woa_download("temperature", period = "annual", resolution = "0.25")
@@ -48,7 +45,7 @@ basename(f)
 #> [1] "woa23_decav_t00_04.nc"
 ```
 
-Three arguments choose the file:
+You choose the file with three arguments:
 
 - **`variable`**: `"temperature"`, `"salinity"`, `"dissolved_oxygen"`,
   `"oxygen_saturation"`, `"AOU"`, `"nitrate"`, `"phosphate"`, `"silicate"` or
@@ -61,9 +58,10 @@ Three arguments choose the file:
   file is large (about 1 GB for salinity), so `woa_download()` reports each
   file's size before downloading it.
 
-The file name puts these together as `woa23_{decade}_{code}{period}_{resolution}.nc`:
-here `decav` (the average of all decades, the default for temperature), `t`
-(temperature), `00` (annual) and `04` (0.25°).
+Together, these make up the file name,
+`woa23_{decade}_{code}{period}_{resolution}.nc`: here `decav` (the average of
+all decades, the default for temperature), `t` (temperature), `00` (annual)
+and `04` (0.25°).
 
 ## What a file holds
 
@@ -287,8 +285,8 @@ terra::global(august[[1]], "mean", na.rm = TRUE)
 
 ## Other variables
 
-Every variable works the same way; only the codes change. Dissolved oxygen
-uses the code `o`, and its default decade is `all`:
+Every variable is read the same way; only the codes change. The code for
+dissolved oxygen is `o`, and its default decade is `all`:
 
 ```{r oxygen}
 o <- woa_download("dissolved_oxygen", period = "annual", resolution = "1")
