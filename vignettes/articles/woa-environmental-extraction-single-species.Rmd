@@ -130,9 +130,9 @@ range_ext <- terra::intersect(
   terra::ext(-180, 180, -90, 90)
 )
 
-# as_voxel() re-wraps after the crop: terra operations propagate the class but
-# do not re-run its validity rules, so wrapping is how the depth axis is
-# re-checked. It is idempotent, so this is cheap.
+# woa_load_nc() returns a SpatVoxel. terra's crop() keeps the class but
+# doesn't re-run its checks, so as_voxel() checks the depths again; given a
+# valid voxel it returns it unchanged, so this is cheap.
 t_annual <- as_voxel(terra::crop(t_annual, range_ext))
 
 # Derive the study grid from the cropped raster so the envelope and the voxel

@@ -121,15 +121,16 @@ takes one of them:
 | netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_buffer()`, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
 | `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions, `mask()` and `extract_to_area()` | terra; no time dimension |
 
-The two don't convert into each other yet. A voxel from `woa_load_nc()` and
-`as_voxel()` can't be passed to `extract_to_point()`, and a netCDF file can't
-be passed to `extract_to_area()` or `volume()`. To use a netCDF file with the
-voxel functions, load it as a `SpatRaster` (e.g. with `woa_load_nc()`) and
-wrap it with `as_voxel()`. Merging the two into one model with time is
-planned in [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
-The first, experimental part of that model is `as_proxy()`. It describes
-one variable of a netCDF file as a `SpatProxy` without reading its values.
-No other function accepts a `SpatProxy` yet.
+The extraction functions don't take a voxel yet: a voxel from `woa_load_nc()`
+or `as_voxel()` can't be passed to `extract_to_point()`, and a netCDF file
+can't be passed to `extract_to_area()` or `volume()`. To use a netCDF file
+with the voxel functions, describe it with `as_proxy()` and read one time
+step with `as_voxel()`; `woa_load_nc()` does this for World Ocean Atlas
+files. Merging the two into one model with time is planned in
+[#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
+Its first, experimental part is `as_proxy()`, which describes a netCDF file,
+a series of files or a voxel in memory as a `SpatProxy` without reading its
+values.
 
 ### Build: 3D objects
 
@@ -267,8 +268,8 @@ usethis::edit_r_environ()
   phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with
   caching.
 - `woa_load_nc()` — load a WOA NetCDF and select a statistical field
-  (e.g., objectively analyzed climatology), returning a `SpatRaster`
-  with one layer per depth, for `as_voxel()`.
+  (e.g., objectively analyzed climatology), returning a `SpatVoxel` with
+  WOA's own depth bounds.
 - `woa_cache_dir()` / `woa_cache_clear()` — manage the persistent WOA
   download cache.
 
