@@ -46,8 +46,8 @@
 }
 
 # Internal: a voxel's occupancy as a 0/1 stack, one layer per depth, ready to
-# multiply by slab thicknesses. Only occupied() passes a non-default `fun`;
-# the query verbs read presence as it stands.
+# multiply by slab thicknesses. occupied() and voxel_to_envelope() pass the
+# caller's `fun`; the query verbs read presence as it stands.
 .voxel_occupancy <- function(x, fun = function(v) !is.na(v)) {
   if (!is.function(fun)) {
     stop("`fun` must take a vector of cell values and return a logical ",
