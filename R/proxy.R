@@ -511,27 +511,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   d <- depths(v)
   stored <- depth_bounds(v)
   slabs <- .depth_slabs(d, "midpoint", stored)
-  dated <- isTRUE(terra::timeInfo(v)$time)
-  # terra::time() is a date-time (step "seconds") or a date ("days"); a
-  # year, a year and month, a month of the year or a plain number has no
-  # date to place on the time axis, so it stops rather than being guessed
-  # or dropped.
-  step <- if (dated) terra::timeInfo(v)$step
-  if (dated && !step %in% c("seconds", "days")) {
-    what <- c(years = "a year", yearmonths = "a year and month",
-              months = "a month of the year")[step]
-    if (is.na(what)) what <- "a plain number"
-    rlang::abort(glue::glue(
-      "The voxel's time is {what} ({format(terra::time(v)[1L])}), not a ",
-      "date or date-time, so it can't be placed on a time axis. Give it a ",
-      "date-time with terra::time(), or remove it with ",
-      "`terra::time(v) <- NULL`."
-    ), class = "ocean3d_error_voxel_time", call = NULL)
-  }
-  # A date is midnight UTC.
-  seconds <- if (dated) {
-    as.numeric(as.POSIXct(terra::time(v)[1L], tz = "UTC"))
-  }
+  # The voxel's date-time, or NA without one; a year or a month stops there.
+  time <- .voxel_time(v)
+  dated <- !is.na(time)
+  seconds <- if (dated) as.numeric(time)
   dims <- c("lon", "lat", "depth", if (dated) "time")
   lengths <- c(lon = nc, lat = nr, depth = terra::nlyr(v),
                if (dated) c(time = 1L))

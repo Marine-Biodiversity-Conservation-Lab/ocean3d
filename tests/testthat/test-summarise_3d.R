@@ -103,15 +103,41 @@ test_that("a voxel with no values gives NA with n = 0", {
   expect_identical(summarise_3d(one, "sd")$sd, NA_real_)
 })
 
+test_that("values with no volume are weighted equally", {
+  # A single level without edges stands for a zero-thickness slab, so every
+  # volume weight is 0; the values still get their equal-weighted summary.
+  one_level <- make_voxel(cbind(c(1, 2, 3, 4, rep(NA, 5))), 50)
+  out <- summarise_3d(one_level, c("mean", "sd", "median"))
+  expect_equal(out[c("mean", "sd", "median", "n")],
+               data.frame(mean = 2.5, sd = stats::sd(1:4), median = 2.5,
+                          n = 4L))
+  # Under "top" the deepest level has no height either.
+  by_depth <- summarise_3d(two_levels(), c("mean", "sd"), by = "depth",
+                           bounds = "top")
+  expect_equal(by_depth$mean, c(mean(2:8), mean(11:18)))
+  expect_equal(by_depth$sd, c(stats::sd(2:8), stats::sd(11:18)))
+  # The weighted statistic itself falls back to equal weights.
+  expect_identical(.weighted_statistic(c(1, 3), c(0, 0), "mean"), 2)
+})
+
+test_that("a voxel whose time is a year or month stops, as in as_proxy()", {
+  v <- two_levels()
+  terra::time(v, tstep = "years") <- rep(2020L, 2)
+  expect_error(summarise_3d(v), "is a year",
+               class = "ocean3d_error_voxel_time")
+  expect_error(as_proxy(v), class = "ocean3d_error_voxel_time")
+})
+
 test_that("summarise_3d() rejects input it can't summarise", {
   v <- two_levels()
+  # One object is checked as every 3D input is.
+  expect_error(summarise_3d(make_range_rast(rep(0, 9), rep(100, 9))),
+               "got SpatEnvelope", class = "ocean3d_error_not_3d")
+  expect_error(summarise_3d(methods::as(v, "SpatRaster")), "got SpatRaster",
+               class = "ocean3d_error_not_3d")
   cases <- list(
-    list(x = make_range_rast(rep(0, 9), rep(100, 9)), args = list(),
-         pattern = "got SpatEnvelope"),
-    list(x = methods::as(v, "SpatRaster"), args = list(),
-         pattern = "got SpatRaster"),
-    list(x = list(v, 1), args = list(), pattern = "list with other objects"),
-    list(x = list(), args = list(), pattern = "must be a SpatVoxel"),
+    list(x = list(v, 1), args = list(), pattern = "nothing else"),
+    list(x = list(), args = list(), pattern = "one or more SpatVoxels"),
     list(x = v, args = list(by = "cell"), pattern = "`by` must be NULL")
   )
   for (case in cases) {
@@ -119,6 +145,9 @@ test_that("summarise_3d() rejects input it can't summarise", {
                  case$pattern, class = "ocean3d_error_summarise_input")
   }
   expect_error(summarise_3d(v, statistic = "mode"), "should be one of")
-  # A tagged voxel that is no longer valid is rejected as elsewhere.
+  # A tagged voxel that is no longer valid is rejected as elsewhere, in a
+  # list too.
   expect_error(summarise_3d(v[[c(1, 1)]]), class = "ocean3d_error_invalid_3d")
+  expect_error(summarise_3d(list(v, v[[c(1, 1)]])),
+               class = "ocean3d_error_invalid_3d")
 })

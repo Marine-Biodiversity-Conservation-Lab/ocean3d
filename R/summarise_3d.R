@@ -1,7 +1,8 @@
 # The summarise step for voxels (#116): statistics of a SpatVoxel's values
 # across its cells and depth levels, weighted by the volume of each cell and
 # level, as the per-shape workflow needs after mask(v, shape). It reads no
-# files and handles no geometry: the weights come from volume().
+# files and handles no geometry: the weights come from volume(). The weighted
+# statistics are shared with buffer extraction.
 
 #' Summarise a voxel's values across cells and depth levels
 #'
@@ -9,25 +10,26 @@
 #' [SpatVoxel-class], across all its cells and depth levels at once. It is
 #' the summarise step of an analysis: the values inside a shape are kept with
 #' [mask()], and `summarise_3d()` turns them into a mean, a standard
-#' deviation, a range or a median. [terra::global()] summarises each layer,
-#' which here is each depth level, separately.
+#' deviation, a range or a median. Compare [terra::global()], which
+#' summarises each layer, here each depth level, on its own.
 #'
 #' With `weighting = "volume"` (the default), each value is weighted by the
 #' volume of its cell *and* depth level, from
 #' `volume(x, per_cell = TRUE, per_level = TRUE)`: cells shrink towards the
-#' poles, and depth levels range from a few metres to 100 m or more thick. A
-#' mean over a water column with thin warm levels near the surface and thick
-#' cold ones below is colder weighted by volume than with equal weights.
+#' poles, and depth levels range from a few metres thick to 100 m or more.
+#' In a water column with thin warm levels near the surface and thick cold
+#' ones below, the volume-weighted mean is colder than the equal-weighted one.
 #' `weighting = "equal"` counts each value once, so `sd` and `median` are
 #' then [stats::sd()] and [stats::median()].
 #'
-#' The weighted standard deviation is the one [extract_to_buffer()] reports:
-#' with normalised weights \eqn{w_i}, the square root of
-#' \eqn{\sum w_i (v_i - \bar v)^2 / \sum w_i (1 - w_i)}, which is the sample
-#' standard deviation under equal weights. The weighted median is the value
-#' at which the cumulative weight, over the values in order, reaches half the
-#' total; when it reaches half exactly, the two values either side are
-#' averaged, as [stats::median()] does. `min` and `max` ignore the weights.
+#' With normalised weights \eqn{w_i}, the weighted standard deviation is the
+#' square root of \eqn{\sum w_i (v_i - \bar v)^2 / \sum w_i (1 - w_i)}, the
+#' sample standard deviation under equal weights and the same formula as in
+#' [extract_to_buffer()]. The weighted median is the value at which the
+#' cumulative weight, over the values sorted from smallest to largest,
+#' reaches half the total; when it reaches half exactly, the two values
+#' either side are averaged, as [stats::median()] does. `min` and `max`
+#' ignore the weights.
 #'
 #' @param x A [SpatVoxel-class], typically `mask(v, shape)` for the values
 #'   inside a shape, or a list of voxels, one per time step, as [as_voxel()]
@@ -37,23 +39,27 @@
 #' @param statistic One or more of `"mean"`, `"sd"`, `"min"`, `"max"` and
 #'   `"median"`. Each becomes a column of the result, in this order.
 #' @param weighting `"volume"` (default) weights each value by the volume of
-#'   its cell and depth level; `"equal"` counts each value once.
+#'   its cell and depth level; `"equal"` counts each value once. A row whose
+#'   values all have zero volume, such as a voxel with a single level and no
+#'   depth edges, or the deepest level under `bounds = "top"`, uses equal
+#'   weights.
 #' @param by `NULL` (default) gives one row per voxel, so one per time step
 #'   for a list; `"depth"` one row per depth level of each voxel, with a
-#'   `depth` column. Time steps are never pooled, so a list keeps the change
-#'   from step to step. `"time"` means the same as `NULL`.
-#' @param bounds As in [volume()]: how the slab edges are placed for a voxel
-#'   without depth edges, for `weighting = "volume"`. Voxels read with
-#'   [as_voxel()] from a [SpatProxy-class] carry their edges, so it rarely
-#'   applies.
+#'   `depth` column. Values from different time steps aren't combined, so a
+#'   list shows the change from step to step. `"time"` means the same as
+#'   `NULL`, and says in a call on a list that the rows are per time step.
+#' @param bounds As in [volume()]: where the slab edges fall for a voxel that
+#'   carries no depth edges; used with `weighting = "volume"` only. Voxels
+#'   read with [as_voxel()] from a [SpatProxy-class] carry their edges, so
+#'   `bounds` isn't used for them.
 #'
 #' @returns A data frame with one row per voxel, or per voxel and depth level
 #'   with `by = "depth"`, in the order of `x` and then of depth. Columns:
 #'   `time` (the voxel's [terra::time()], UTC, or `NA` when it has none),
 #'   `depth` (with `by = "depth"` only, in metres), one column per
-#'   `statistic`, and `n`, the number of values the row is built on. A row
-#'   with no values has `NA` statistics and `n = 0`, so summaries built on
-#'   too few values can be dropped.
+#'   `statistic`, and `n`, the number of values the row is built on, so rows
+#'   built on too few values can be dropped. A row with no values has `NA`
+#'   statistics and `n = 0`.
 #'
 #' @seealso [mask()] to keep the values inside a shape; [volume()] for the
 #'   weights; [as_voxel()] to read one time step of a [SpatProxy-class].
@@ -86,22 +92,25 @@ summarise_3d <- function(x, statistic = "mean",
   weighting <- match.arg(weighting)
   bounds <- match.arg(bounds)
   if (!is.null(by) && !identical(by, "depth") && !identical(by, "time")) {
-    .abort_summarise_input(
-      "`by` must be NULL (one row per voxel), \"depth\" or \"time\"."
+    rlang::abort(
+      "`by` must be NULL (one row per voxel), \"depth\" or \"time\".",
+      class = "ocean3d_error_summarise_input", call = NULL
     )
   }
-  voxels <- if (is.list(x)) x else list(x)
-  is_voxel <- vapply(voxels, methods::is, logical(1), "SpatVoxel")
-  if (!length(voxels) || !all(is_voxel)) {
-    got <- if (is.list(x)) {
-      "a list with other objects in it"
-    } else {
-      paste(class(x), collapse = "/")
+  # One voxel is checked as every 3D input is; a list must hold only voxels.
+  if (is.list(x)) {
+    is_voxel <- vapply(x, methods::is, logical(1), "SpatVoxel")
+    if (!length(x) || !all(is_voxel)) {
+      rlang::abort(paste(
+        "A list `x` must hold one or more SpatVoxels, one per time step,",
+        "and nothing else. Build each with as_voxel(), and keep the values",
+        "inside a shape with mask()."
+      ), class = "ocean3d_error_summarise_input", call = NULL)
     }
-    .abort_summarise_input(glue::glue(
-      "`x` must be a SpatVoxel or a list of SpatVoxels; got {got}. Build one ",
-      "with as_voxel(), and keep the values inside a shape with mask()."
-    ))
+    voxels <- x
+  } else {
+    .check_3d(x, "x", "SpatVoxel")
+    voxels <- list(x)
   }
 
   rows <- lapply(voxels, function(v) {
@@ -115,12 +124,7 @@ summarise_3d <- function(x, statistic = "mean",
     } else {
       array(1, dim(values))
     }
-    # A date is midnight UTC; a voxel without a time gives NA.
-    time <- if (isTRUE(terra::timeInfo(v)$time)) {
-      as.POSIXct(terra::time(v)[1L], tz = "UTC")
-    } else {
-      .POSIXct(NA_real_, tz = "UTC")
-    }
+    time <- .voxel_time(v)
     groups <- if (identical(by, "depth")) {
       lapply(seq_len(ncol(values)), function(i) {
         c(list(depth = depths(v)[i]),
@@ -141,50 +145,56 @@ summarise_3d <- function(x, statistic = "mean",
 
 # Internal: the statistics of the non-NA `values` with their `weights`, as a
 # named list ending in `n`, the number of values. Called per voxel and per
-# depth level by summarise_3d(). The weighted sd is the one
-# .buffer_statistic() (R/extract_to_buffer.R) reports, so the two agree.
+# depth level by summarise_3d().
 .weighted_statistics <- function(values, weights, statistic) {
   keep <- !is.na(values)
   values <- as.numeric(values[keep])
   weights <- as.numeric(weights[keep])
   n <- length(values)
-  out <- stats::setNames(rep(NA_real_, length(statistic)), statistic)
-  if (n) {
-    w <- weights / sum(weights)
-    average <- sum(w * values)
-    for (s in statistic) {
-      out[[s]] <- switch(
-        s,
-        mean = average,
-        min = min(values),
-        max = max(values),
-        sd = {
-          correction <- sum(w * (1 - w))
-          if (n < 2L || correction <= 0) NA_real_ else
-            sqrt(sum(w * (values - average)^2) / correction)
-        },
-        median = {
-          o <- order(values)
-          sorted <- values[o]
-          cumulative <- cumsum(w[o])
-          # The first value at which the cumulative weight reaches half;
-          # exactly half (within rounding) averages it with the next, as
-          # stats::median() does for an even count.
-          at <- which(cumulative >= 0.5 - 1e-10)[1L]
-          if (abs(cumulative[at] - 0.5) < 1e-10 && at < n) {
-            (sorted[at] + sorted[at + 1L]) / 2
-          } else {
-            sorted[at]
-          }
-        }
-      )
-    }
+  out <- if (n) {
+    vapply(statistic, .weighted_statistic, numeric(1), values = values,
+           weights = weights)
+  } else {
+    stats::setNames(rep(NA_real_, length(statistic)), statistic)
   }
   c(as.list(out), list(n = n))
 }
 
-# The one producer of `ocean3d_error_summarise_input`: input summarise_3d()
-# can't summarise.
-.abort_summarise_input <- function(message) {
-  rlang::abort(message, class = "ocean3d_error_summarise_input", call = NULL)
+# Internal: one weighted statistic of `values` (one or more, none NA) with
+# their `weights`: "mean", "sd", "se", "min", "max" or "median". The sd is
+# the square root of sum(w (v - mean)^2) / sum(w (1 - w)) with normalised
+# weights, the sample sd under equal weights, and the se divides it by the
+# square root of the effective number of values, 1 / sum(w^2). The median is
+# the value at which the cumulative weight reaches half, averaged with the
+# next when it lands exactly on half, as stats::median() does. Weights that
+# sum to 0, such as volumes of a zero-thickness slab, count each value once.
+# Shared by buffer extraction (.buffer_summarise_samples()) and
+# summarise_3d().
+.weighted_statistic <- function(values, weights, statistic) {
+  if (statistic == "min") return(min(values))
+  if (statistic == "max") return(max(values))
+
+  if (sum(weights) <= 0) weights <- rep(1, length(values))
+  weights <- weights / sum(weights)
+  if (statistic == "median") {
+    o <- order(values)
+    sorted <- values[o]
+    cumulative <- cumsum(weights[o])
+    at <- which(cumulative >= 0.5 - 1e-10)[1L]
+    if (abs(cumulative[at] - 0.5) < 1e-10 && at < length(values)) {
+      return((sorted[at] + sorted[at + 1L]) / 2)
+    }
+    return(sorted[at])
+  }
+  average <- sum(values * weights)
+  if (statistic == "mean") return(average)
+  if (length(values) < 2L) return(NA_real_)
+
+  correction <- sum(weights * (1 - weights))
+  if (correction <= 0) return(NA_real_)
+  deviation <- sqrt(sum(weights * (values - average)^2) / correction)
+  if (statistic == "sd") return(deviation)
+
+  effective_n <- 1 / sum(weights^2)
+  deviation / sqrt(effective_n)
 }

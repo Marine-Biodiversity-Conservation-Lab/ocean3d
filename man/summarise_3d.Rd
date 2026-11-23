@@ -23,52 +23,57 @@ read one time step with \code{\link[=as_voxel]{as_voxel()}}.}
 \code{"median"}. Each becomes a column of the result, in this order.}
 
 \item{weighting}{\code{"volume"} (default) weights each value by the volume of
-its cell and depth level; \code{"equal"} counts each value once.}
+its cell and depth level; \code{"equal"} counts each value once. A row whose
+values all have zero volume, such as a voxel with a single level and no
+depth edges, or the deepest level under \code{bounds = "top"}, uses equal
+weights.}
 
 \item{by}{\code{NULL} (default) gives one row per voxel, so one per time step
 for a list; \code{"depth"} one row per depth level of each voxel, with a
-\code{depth} column. Time steps are never pooled, so a list keeps the change
-from step to step. \code{"time"} means the same as \code{NULL}.}
+\code{depth} column. Values from different time steps aren't combined, so a
+list shows the change from step to step. \code{"time"} means the same as
+\code{NULL}, and says in a call on a list that the rows are per time step.}
 
-\item{bounds}{As in \code{\link[=volume]{volume()}}: how the slab edges are placed for a voxel
-without depth edges, for \code{weighting = "volume"}. Voxels read with
-\code{\link[=as_voxel]{as_voxel()}} from a \link[=SpatProxy-class]{SpatProxy} carry their edges, so it rarely
-applies.}
+\item{bounds}{As in \code{\link[=volume]{volume()}}: where the slab edges fall for a voxel that
+carries no depth edges; used with \code{weighting = "volume"} only. Voxels
+read with \code{\link[=as_voxel]{as_voxel()}} from a \link[=SpatProxy-class]{SpatProxy} carry their edges, so
+\code{bounds} isn't used for them.}
 }
 \value{
 A data frame with one row per voxel, or per voxel and depth level
 with \code{by = "depth"}, in the order of \code{x} and then of depth. Columns:
 \code{time} (the voxel's \code{\link[terra:time]{terra::time()}}, UTC, or \code{NA} when it has none),
 \code{depth} (with \code{by = "depth"} only, in metres), one column per
-\code{statistic}, and \code{n}, the number of values the row is built on. A row
-with no values has \code{NA} statistics and \code{n = 0}, so summaries built on
-too few values can be dropped.
+\code{statistic}, and \code{n}, the number of values the row is built on, so rows
+built on too few values can be dropped. A row with no values has \code{NA}
+statistics and \code{n = 0}.
 }
 \description{
 \code{summarise_3d()} computes statistics of every non-\code{NA} value of a
 \link[=SpatVoxel-class]{SpatVoxel}, across all its cells and depth levels at once. It is
 the summarise step of an analysis: the values inside a shape are kept with
 \code{\link[terra:mask]{mask()}}, and \code{summarise_3d()} turns them into a mean, a standard
-deviation, a range or a median. \code{\link[terra:global]{terra::global()}} summarises each layer,
-which here is each depth level, separately.
+deviation, a range or a median. Compare \code{\link[terra:global]{terra::global()}}, which
+summarises each layer, here each depth level, on its own.
 }
 \details{
 With \code{weighting = "volume"} (the default), each value is weighted by the
 volume of its cell \emph{and} depth level, from
 \code{volume(x, per_cell = TRUE, per_level = TRUE)}: cells shrink towards the
-poles, and depth levels range from a few metres to 100 m or more thick. A
-mean over a water column with thin warm levels near the surface and thick
-cold ones below is colder weighted by volume than with equal weights.
+poles, and depth levels range from a few metres thick to 100 m or more.
+In a water column with thin warm levels near the surface and thick cold
+ones below, the volume-weighted mean is colder than the equal-weighted one.
 \code{weighting = "equal"} counts each value once, so \code{sd} and \code{median} are
 then \code{\link[stats:sd]{stats::sd()}} and \code{\link[stats:median]{stats::median()}}.
 
-The weighted standard deviation is the one \code{\link[=extract_to_buffer]{extract_to_buffer()}} reports:
-with normalised weights \eqn{w_i}, the square root of
-\eqn{\sum w_i (v_i - \bar v)^2 / \sum w_i (1 - w_i)}, which is the sample
-standard deviation under equal weights. The weighted median is the value
-at which the cumulative weight, over the values in order, reaches half the
-total; when it reaches half exactly, the two values either side are
-averaged, as \code{\link[stats:median]{stats::median()}} does. \code{min} and \code{max} ignore the weights.
+With normalised weights \eqn{w_i}, the weighted standard deviation is the
+square root of \eqn{\sum w_i (v_i - \bar v)^2 / \sum w_i (1 - w_i)}, the
+sample standard deviation under equal weights and the same formula as in
+\code{\link[=extract_to_buffer]{extract_to_buffer()}}. The weighted median is the value at which the
+cumulative weight, over the values sorted from smallest to largest,
+reaches half the total; when it reaches half exactly, the two values
+either side are averaged, as \code{\link[stats:median]{stats::median()}} does. \code{min} and \code{max}
+ignore the weights.
 }
 \examples{
 # One water column sampled at seven depths: thin warm levels near the
