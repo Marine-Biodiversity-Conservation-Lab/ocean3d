@@ -312,6 +312,20 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   invisible(x)
 }
 
+# The one producer of `ocean3d_message_time_dropped`: polygon times don't
+# fit a grid, as an envelope or a voxel holds no time interval. Raised by
+# vector3d_to_envelope() and vector3d_to_voxel().
+.inform_time_dropped <- function(x) {
+  if (any(!is.na(x@features$time_start))) {
+    rlang::inform(
+      paste0("The polygons' times are dropped: the result keeps only their ",
+             "area and depth range."),
+      class = "ocean3d_message_time_dropped"
+    )
+  }
+  invisible(x)
+}
+
 # The one producer of `ocean3d_error_vector3d`: input that can't become a
 # SpatVector3D. Every check in as_vector3d() and buffer_3d() and the class's
 # validity rules report through it.

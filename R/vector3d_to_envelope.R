@@ -72,13 +72,7 @@ vector3d_to_envelope <- function(x, template) {
       "`depth_window` above 0 in buffer_3d()."
     ))
   }
-  if (any(!is.na(f$time_start))) {
-    rlang::inform(
-      paste0("The polygons' times are dropped: an envelope keeps only their ",
-             "area and depth range."),
-      class = "ocean3d_message_time_dropped"
-    )
-  }
+  .inform_time_dropped(x)
 
   # Only the grid is used. Dropping the class tag keeps a voxel template's
   # layers away from the depth-aware methods in R/intersect.R.

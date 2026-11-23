@@ -1005,8 +1005,9 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
   rlang::abort(message, class = "ocean3d_error_envelope_input", call = NULL)
 }
 
-# The one producer of `ocean3d_error_envelope_empty`: an envelope with no
-# cells left, because the shapes miss the grid or have no thickness.
+# The one producer of `ocean3d_error_envelope_empty`: an envelope or voxel
+# with no cells left, because the shapes miss the grid, have no thickness or
+# lie outside the depth levels.
 .abort_envelope_empty <- function(message) {
   rlang::abort(message, class = "ocean3d_error_envelope_empty", call = NULL)
 }

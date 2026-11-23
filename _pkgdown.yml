@@ -27,6 +27,7 @@ reference:
   - as_vector3d
   - buffer_3d
   - vector3d_to_envelope
+  - vector3d_to_voxel
   - vect_to_envelope
   - envelope_to_voxel
   - voxel_to_envelope
