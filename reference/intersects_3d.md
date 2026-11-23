@@ -12,43 +12,13 @@ tally maps.
 ``` r
 intersects_3d(x, y, ...)
 
-# S4 method for class 'SpatEnvelope,SpatEnvelope'
-intersects_3d(x, y, ...)
-
-# S4 method for class 'SpatVoxel,SpatVoxel'
-intersects_3d(x, y)
-
 # S4 method for class 'SpatEnvelope,SpatVoxel'
 intersects_3d(x, y, bounds = c("midpoint", "top"), ...)
 
 # S4 method for class 'SpatVoxel,SpatEnvelope'
 intersects_3d(x, y, bounds = c("midpoint", "top"), ...)
 
-# S4 method for class 'SpatEnvelope,ANY'
-intersects_3d(x, y, ...)
-
-# S4 method for class 'SpatVoxel,ANY'
-intersects_3d(x, y)
-
-# S4 method for class 'ANY,SpatEnvelope'
-intersects_3d(x, y, ...)
-
-# S4 method for class 'ANY,SpatVoxel'
-intersects_3d(x, y, ...)
-
 # S4 method for class 'ANY,ANY'
-intersects_3d(x, y, ...)
-
-# S4 method for class 'SpatVector3D,SpatEnvelope'
-intersects_3d(x, y, ...)
-
-# S4 method for class 'SpatVector3D,SpatVoxel'
-intersects_3d(x, y, ...)
-
-# S4 method for class 'SpatEnvelope,SpatVector3D'
-intersects_3d(x, y, ...)
-
-# S4 method for class 'SpatVoxel,SpatVector3D'
 intersects_3d(x, y, ...)
 
 # S4 method for class 'SpatVector3D,SpatVector3D'

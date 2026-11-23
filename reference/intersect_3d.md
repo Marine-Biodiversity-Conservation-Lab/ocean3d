@@ -30,12 +30,6 @@ intersect_3d(x, y, ...)
 # S4 method for class 'SpatVoxel,ANY'
 intersect_3d(x, y)
 
-# S4 method for class 'ANY,SpatEnvelope'
-intersect_3d(x, y, ...)
-
-# S4 method for class 'ANY,SpatVoxel'
-intersect_3d(x, y, ...)
-
 # S4 method for class 'ANY,ANY'
 intersect_3d(x, y, ...)
 
