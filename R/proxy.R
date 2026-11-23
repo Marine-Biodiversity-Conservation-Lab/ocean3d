@@ -79,10 +79,8 @@ setValidity("SpatProxy", function(object) {
     }
   }
   depth <- axes$depth$centres
-  if (!is.null(depth) && (anyNA(depth) || any(depth < 0) ||
-                            anyDuplicated(depth))) {
-    return("depths must be distinct metres, positive down")
-  }
+  problem <- if (!is.null(depth)) .depth_problem(depth)
+  if (!is.null(problem)) return(paste("depths", problem))
   if (isTRUE(axes$time$climatology)) {
     if (!identical(as.integer(size(axes$time)), 1L)) {
       return("a climatological time axis must have one step")

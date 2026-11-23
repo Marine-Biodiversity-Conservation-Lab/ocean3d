@@ -17,14 +17,25 @@
   terra::cellSize(x[[1]], unit = "km")
 }
 
-# Internal: two domains can only be combined cell by cell if they are on the
-# same grid. Nothing upstream guarantees this -- the old code took cell areas
-# from the first argument and silently reused them for the second.
-.check_same_grid <- function(x, y, names = c("x", "y")) {
-  if (!terra::compareGeom(x, y, stopOnError = FALSE)) {
-    stop("`", names[1], "` and `", names[2], "` must be on the same grid ",
-         "(CRS, extent, resolution). Project or resample one onto the other ",
-         "first.", call. = FALSE)
+# Internal: two rasters can only be combined cell by cell if they are on the
+# same grid. Checks `x` against the grid of `template`, naming them with the
+# labels `arg` and `grid` (with backticks, e.g. "`mask`"). A CRS mismatch is
+# told apart from an extent or resolution mismatch, since the fix differs
+# (project, or resample). The one producer of `ocean3d_error_grid_mismatch`,
+# for the query verbs, the constructors (through .grid_value()) and the 2D
+# side of a query (.footprint()).
+.check_same_grid <- function(x, template, arg = "`y`", grid = "`x`") {
+  problem <- if (!terra::same.crs(x, template)) {
+    "has a different CRS than {grid}. Project it onto that grid first."
+  } else if (!isTRUE(terra::compareGeom(x, template, crs = FALSE,
+                                        stopOnError = FALSE,
+                                        messages = FALSE))) {
+    paste("does not align with {grid}; its extent or resolution differs.",
+          "Resample it onto that grid first.")
+  }
+  if (!is.null(problem)) {
+    rlang::abort(glue::glue("{arg} ", problem),
+                 class = "ocean3d_error_grid_mismatch", call = NULL)
   }
   invisible(TRUE)
 }
@@ -46,8 +57,8 @@
 }
 
 # Internal: a voxel's occupancy as a 0/1 stack, one layer per depth, ready to
-# multiply by slab thicknesses. Only occupied() passes a non-default `fun`;
-# the query verbs read presence as it stands.
+# multiply by slab thicknesses. occupied() and voxel_to_envelope() pass the
+# caller's `fun`; the query verbs read presence as it stands.
 .voxel_occupancy <- function(x, fun = function(v) !is.na(v)) {
   if (!is.function(fun)) {
     stop("`fun` must take a vector of cell values and return a logical ",
@@ -101,38 +112,36 @@
   list(depths = dx, depth_bounds = if (is.null(bx)) by else bx)
 }
 
-# Internal: bring an envelope up to a voxel's depth levels. This direction, not
-# the reverse: envelope_to_voxel() quantizes, but voxel_to_envelope() fills
-# interior gaps, which would overstate an overlap.
-.promote_to_voxel <- function(e, v, bounds) {
-  # The envelope takes the voxel's edges when it carries them.
-  envelope_to_voxel(e, depths = depths(v), bounds = bounds,
-                    depth_bounds = depth_bounds(v))
-}
-
-# Internal: the class boundary is the contract. A raster that merely happens to
-# carry the right layer names is not one of the package's 3D representations --
-# duck-typing was how these functions used to accept a voxel silently and hand
-# back nonsense for it.
-.stop_not_volume <- function() {
-  stop("input must be a SpatEnvelope or a SpatVoxel, not a bare SpatRaster. ",
-       "Build one with as_envelope() or vect_to_envelope() for a 2.5D ",
-       "min-max envelope, or with as_voxel() for a multi-depth voxel model.",
-       call. = FALSE)
-}
-
-
-# Internal: a 3D input must satisfy its class's validity rules before it is
-# read. terra keeps the SpatVoxel / SpatEnvelope tag through operations that
-# change the layer set, so an object can arrive tagged but not valid; the
-# query verbs check here and say how to rebuild it, instead of failing deeper
-# in on a missing layer name.
-.check_3d <- function(x, arg) {
+# Internal: a 3D input must be one of the classes `class` allows, and satisfy
+# that class's validity rules, before it is read. The class boundary is the
+# contract: a raster that merely carries the right layer names isn't one of
+# the package's 3D representations. terra also keeps the SpatVoxel /
+# SpatEnvelope tag through operations that change the layer set, so an object
+# can arrive tagged but not valid; the checks here say how to build or
+# rebuild it, instead of failing deeper in on a missing layer name.
+.check_3d <- function(x, arg, class = c("SpatVoxel", "SpatEnvelope")) {
+  builders <- c(
+    SpatVoxel = "as_voxel() for a multi-depth voxel",
+    SpatEnvelope = "as_envelope() or vect_to_envelope() for a min-max envelope"
+  )
+  is_class <- vapply(class, function(cl) methods::is(x, cl), logical(1))
+  if (!any(is_class)) {
+    wanted <- glue::glue_collapse(class, sep = ", ", last = " or ")
+    got <- paste(class(x), collapse = "/")
+    hint <- glue::glue_collapse(builders[class], sep = ", or with ")
+    rlang::abort(glue::glue(
+      "`{arg}` must be a {wanted}; got {got}. Build one with {hint}."
+    ), class = "ocean3d_error_not_3d", call = NULL)
+  }
   ok <- methods::validObject(x, test = TRUE)
   if (!isTRUE(ok)) {
-    stop("`", arg, "` is tagged ", class(x)[[1]], " but is not a valid one: ",
-         ok, ". A terra operation probably changed its layers; rebuild it ",
-         "with as_voxel() or as_envelope().", call. = FALSE)
+    tagged <- class[is_class][[1]]
+    rebuild <- c(SpatVoxel = "as_voxel()", SpatEnvelope = "as_envelope()")
+    rlang::abort(glue::glue(
+      "`{arg}` is tagged {tagged} but is not a valid one: {ok}. A terra ",
+      "operation probably changed its layers; rebuild it with ",
+      "{rebuild[[tagged]]}."
+    ), class = "ocean3d_error_invalid_3d", call = NULL)
   }
   invisible(TRUE)
 }
@@ -188,7 +197,9 @@
         "raster, wrap it with as_voxel() so its depth axis is used."
       ), class = "ocean3d_error_footprint_layers", call = NULL)
     }
-    .check_same_grid(template, x)
+    # The 3D side is `x` unless the inputs were swapped to put it first.
+    grid <- if (arg == "x") "`y`" else "`x`"
+    .check_same_grid(x, template, glue::glue("`{arg}`"), grid)
     !is.na(x)
   } else {
     got <- paste(class(x), collapse = "/")

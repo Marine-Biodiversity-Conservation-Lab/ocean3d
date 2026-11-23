@@ -11,6 +11,26 @@
   1e-6 * pmax(1, abs(depths))
 }
 
+# What is wrong with a vector of depths in metres positive down, as a phrase
+# to follow the name of the depths, or NULL when nothing is. The rule every
+# depth axis follows: numeric, no NA, none negative and none repeated. Used by
+# as_voxel(), envelope_to_voxel(), c() on a SpatVoxel (which tests it rather
+# than stopping), the SpatVoxel and SpatProxy validity methods and
+# .prepare_depth_axis().
+.depth_problem <- function(d) {
+  if (!is.numeric(d)) return("must be numeric metres")
+  if (anyNA(d)) return("must all be set; some are NA")
+  if (any(d < 0)) {
+    return(glue::glue("must be positive metres increasing downward; got ",
+                      "{toString(d[d < 0])}"))
+  }
+  if (anyDuplicated(d)) {
+    return(glue::glue("must each be a distinct depth; got duplicate depth(s) ",
+                      "{toString(unique(d[duplicated(d)]))}"))
+  }
+  NULL
+}
+
 # Metres per unit for the supported length units, or NA.
 .length_unit_factor <- function(units) {
   switch(
@@ -89,19 +109,18 @@
   }
   depth_m <- as.numeric(values) * factor
   if (positive == "up") depth_m <- -depth_m
-  if (any(depth_m < 0)) {
-    stop(
-      "The vertical coordinates do not describe supported ",
-      "non-negative depths below the reference surface. ",
-      "Check the sign and vertical reference.",
-      call. = FALSE
-    )
-  }
-  if (anyDuplicated(depth_m)) {
-    stop(
-      "The depth coordinate contains duplicate physical depths.",
-      call. = FALSE
-    )
+  problem <- .depth_problem(depth_m)
+  if (!is.null(problem)) {
+    # Only a negative depth points at the sign or the vertical reference.
+    hint <- if (any(depth_m < 0)) {
+      " Check its sign and vertical reference."
+    } else {
+      ""
+    }
+    rlang::abort(glue::glue(
+      "The depth coordinate's depths below the reference surface ",
+      "{problem}.{hint}"
+    ), class = "ocean3d_error_depth_values", call = NULL)
   }
   list(
     depth_m = depth_m,

@@ -100,4 +100,4 @@ setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {
 #' @rdname volume
 #' @export
 setMethod("volume", "SpatRaster",
-          function(x, per_cell = FALSE, ...) .stop_not_volume())
+          function(x, per_cell = FALSE, ...) .check_3d(x, "x"))

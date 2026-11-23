@@ -18,8 +18,8 @@ envelope_to_voxel(
 \item{x}{SpatEnvelope, e.g. from \code{\link[=as_envelope]{as_envelope()}} or \code{\link[=voxel_to_envelope]{voxel_to_envelope()}}.}
 
 \item{depths}{Array of values that can be coerced into numeric type,
-represents metres depth below sea level. Sorted shallow to deep, and
-deduplicated, before use.}
+represents metres depth below sea level, each depth once. Sorted shallow
+to deep before use.}
 
 \item{values}{Optional numeric or SpatRaster of same CRS, resolution, extent
 as \code{x}. Defines values to write for voxel cells that are within depth
@@ -49,7 +49,7 @@ is given.}
 bottom of the slab of water each depth stands for, in metres, one row per
 element of \code{depths} (or a \code{depth}, \code{lower}, \code{upper} table, as in
 \code{\link[=as_voxel]{as_voxel()}}). When given, these slabs are used instead of \code{bounds}, the
-returned voxel carries them, and \code{depths} must not repeat a depth.}
+returned voxel carries them.}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} with one layer per depth in \code{depths}, on the

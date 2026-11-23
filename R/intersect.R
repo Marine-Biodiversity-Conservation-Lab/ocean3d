@@ -59,7 +59,7 @@ setMethod(
     .no_extra_args(...)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    .check_same_grid(x, y)
+    .check_same_grid(y, x)
 
     x_min <- .envelope_layer(x, "depth_min")
     x_max <- .envelope_layer(x, "depth_max")
@@ -86,7 +86,7 @@ setMethod(
   function(x, y) {
     .check_3d(x, "x")
     .check_3d(y, "y")
-    .check_same_grid(x, y)
+    .check_same_grid(y, x)
     shared <- .shared_depths(x, y)
 
     occ <- .voxel_occupancy(x) * .voxel_occupancy(y)
@@ -105,7 +105,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    intersect_3d(.promote_to_voxel(x, y, bounds), y, ...)
+    promoted <- .promote_to_voxel(x, depths(y), bounds, depth_bounds(y))
+    intersect_3d(promoted, y, ...)
   }
 )
 
@@ -117,7 +118,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    intersect_3d(x, .promote_to_voxel(y, x, bounds), ...)
+    promoted <- .promote_to_voxel(y, depths(x), bounds, depth_bounds(x))
+    intersect_3d(x, promoted, ...)
   }
 )
 
@@ -187,7 +189,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    intersects_3d(.promote_to_voxel(x, y, bounds), y, ...)
+    promoted <- .promote_to_voxel(x, depths(y), bounds, depth_bounds(y))
+    intersects_3d(promoted, y, ...)
   }
 )
 
@@ -199,7 +202,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    intersects_3d(x, .promote_to_voxel(y, x, bounds), ...)
+    promoted <- .promote_to_voxel(y, depths(x), bounds, depth_bounds(x))
+    intersects_3d(x, promoted, ...)
   }
 )
 
@@ -340,8 +344,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(mask, "mask")
-    .check_same_grid(x, mask, c("x", "mask"))
-    keep <- .promote_to_voxel(mask, x, bounds)
+    .check_same_grid(mask, x, "`mask`")
+    keep <- .promote_to_voxel(mask, depths(x), bounds, depth_bounds(x))
     as_voxel(.mask_plain(x, keep, ...), depth_bounds = depth_bounds(x))
   }
 )
@@ -353,7 +357,7 @@ setMethod(
   function(x, mask, ...) {
     .check_3d(x, "x")
     .check_3d(mask, "mask")
-    .check_same_grid(x, mask, c("x", "mask"))
+    .check_same_grid(mask, x, "`mask`")
     # The result keeps the pair's shared edges, whichever voxel carries them,
     # as intersect_3d() does.
     shared <- .shared_depths(x, mask)
@@ -393,7 +397,7 @@ setMethod(
   "mask", c("SpatRaster", "SpatEnvelope"),
   function(x, mask, ...) {
     .check_3d(mask, "mask")
-    .check_same_grid(x, mask, c("x", "mask"))
+    .check_same_grid(mask, x, "`mask`")
     terra::mask(x, terra::ifel(.footprint(mask), 1, NA), ...)
   }
 )
@@ -404,7 +408,7 @@ setMethod(
   "mask", c("SpatRaster", "SpatVoxel"),
   function(x, mask, ...) {
     .check_3d(mask, "mask")
-    .check_same_grid(x, mask, c("x", "mask"))
+    .check_same_grid(mask, x, "`mask`")
     terra::mask(x, terra::ifel(.footprint(mask), 1, NA), ...)
   }
 )

@@ -108,12 +108,7 @@ depths <- function(x) {
 #' depth_bounds(as_voxel(r, depths = c(0.5, 1.5, 3)))
 #' @export
 depth_bounds <- function(x) {
-  if (!methods::is(x, "SpatVoxel")) {
-    rlang::abort(glue::glue(
-      "`x` must be a SpatVoxel; got {paste(class(x), collapse = '/')}. ",
-      "Build one with as_voxel()."
-    ), class = "ocean3d_error_not_voxel", call = NULL)
-  }
+  .check_3d(x, "x", "SpatVoxel")
   # The table is keyed by depth and may hold rows for dropped layers, in any
   # order, or lack rows for some layers: return the rows for the current
   # layers, or NULL if any is missing.

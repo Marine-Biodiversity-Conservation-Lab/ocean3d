@@ -67,9 +67,19 @@ test_that("depth_bounds() is NULL without edges for every layer", {
   expect_null(depth_bounds(c(top, plain)))
 })
 
+test_that("depth_bounds() rejects a tagged voxel that is no longer valid", {
+  v <- as_voxel(terra::rast(make_grid(), nlyrs = 2, vals = 1),
+                depths = c(0, 100))
+  err <- expect_error(depth_bounds(v[[c(2, 1)]]),
+                      class = "ocean3d_error_invalid_3d")
+  expect_match(conditionMessage(err), "`x` is tagged SpatVoxel")
+  expect_match(conditionMessage(err), "rebuild it with as_voxel()",
+               fixed = TRUE)
+})
+
 test_that("depth_bounds() needs a SpatVoxel", {
   r <- terra::rast(make_grid(), nlyrs = 2, vals = 1)
   names(r) <- c("t_depth=0", "t_depth=100")
-  err <- expect_error(depth_bounds(r), class = "ocean3d_error_not_voxel")
+  err <- expect_error(depth_bounds(r), class = "ocean3d_error_not_3d")
   expect_match(conditionMessage(err), "must be a SpatVoxel; got SpatRaster")
 })

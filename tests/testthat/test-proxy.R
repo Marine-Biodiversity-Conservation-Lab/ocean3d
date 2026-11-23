@@ -343,6 +343,19 @@ test_that("a SpatProxy survives saveRDS() and checks its axes", {
          break_it = function(x) {
            x@variable$dim_lengths[["time"]] <- 3L
            x
+         }),
+    # the depth rule of .depth_problem(), as for a SpatVoxel
+    list(label = "a repeated depth",
+         pattern = "depths must each be a distinct depth; got duplicate",
+         break_it = function(x) {
+           x@axes$depth$centres[2L] <- x@axes$depth$centres[1L]
+           x
+         }),
+    list(label = "a negative depth",
+         pattern = "depths must be positive metres increasing downward; got -5",
+         break_it = function(x) {
+           x@axes$depth$centres[1L] <- -5
+           x
          })
   )
   for (case in cases) {

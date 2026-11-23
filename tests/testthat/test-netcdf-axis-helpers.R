@@ -395,9 +395,16 @@ test_that("ambiguous or unsupported depth coordinates are rejected", {
   expect_error(.prepare_depth_axis(c(0, NA_real_), "m"), "finite")
   expect_error(.prepare_depth_axis(numeric(), "m"), "finite")
   expect_error(.prepare_depth_axis(c(0, Inf), "m"), "finite")
-  expect_error(.prepare_depth_axis(c(0, 50, 50), "m"), "duplicate")
-  expect_error(.prepare_depth_axis(c(0, -50), "m", "down"), "reference surface")
-  expect_error(.prepare_depth_axis(c(0, 50), "m", "up"), "reference surface")
+  values <- "ocean3d_error_depth_values"
+  err <- expect_error(.prepare_depth_axis(c(0, 50, 50), "m"), class = values)
+  expect_match(conditionMessage(err), "duplicate depth(s) 50.", fixed = TRUE)
+  expect_no_match(conditionMessage(err), "sign")
+  for (args in list(list(c(0, -50), "m", "down"), list(c(0, 50), "m", "up"))) {
+    err <- expect_error(do.call(.prepare_depth_axis, args), class = values)
+    expect_match(conditionMessage(err),
+                 "reference surface must be positive metres")
+    expect_match(conditionMessage(err), "Check its sign")
+  }
 })
 
 test_that("a stored depth axis must run one way", {
@@ -411,7 +418,9 @@ test_that("a stored depth axis must run one way", {
     "`depth` in {basename(f)} must be strictly increasing or decreasing"
   ))
   # Duplicates are caught first, with their own message.
-  expect_error(.read_depth_axis(nc, "depth", c(0, 50, 50)), "duplicate")
+  err <- expect_error(.read_depth_axis(nc, "depth", c(0, 50, 50)),
+                      class = "ocean3d_error_depth_values")
+  expect_match(conditionMessage(err), "duplicate depth")
   expect_equal(.read_depth_axis(nc, "depth", c(100, 50, 0))$depth_m,
                c(100, 50, 0))
 })

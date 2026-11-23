@@ -82,9 +82,14 @@ as_envelope <- function(x, depth_min, depth_max) {
     }
 
     # Only the non-NA pattern of the footprint matters, never its values.
-    present <- terra::ifel(is.na(x), NA, 1)
-    dmin <- terra::mask(.as_depth_layer(depth_min, "depth_min", x), present)
-    dmax <- terra::mask(.as_depth_layer(depth_max, "depth_max", x), present)
+    # Assigned before ifel() takes it: an error raised while S4 evaluates an
+    # argument for dispatch is reworded.
+    fp <- .footprint(x, x, "x")
+    present <- terra::ifel(fp, 1, NA)
+    dmin <- .grid_value(depth_min, x, "`depth_min`", fill = TRUE)
+    dmax <- .grid_value(depth_max, x, "`depth_max`", fill = TRUE)
+    dmin <- terra::mask(dmin, present)
+    dmax <- terra::mask(dmax, present)
   }
 
   out <- c(dmin, dmax)
@@ -94,28 +99,49 @@ as_envelope <- function(x, depth_min, depth_max) {
   methods::new("SpatEnvelope", out)
 }
 
-# Internal: resolve a depth limit given either as a single number or as a
-# single-layer SpatRaster into a named layer on the grid of `template`.
-.as_depth_layer <- function(value, name, template) {
-  if (inherits(value, "SpatRaster")) {
-    if (terra::nlyr(value) != 1) {
-      stop("`", name, "` must be a single-layer SpatRaster; got ",
-           terra::nlyr(value), " layers.", call. = FALSE)
+# Internal: a value given either as a single number or as a raster on the grid
+# of `template`, checked once for every constructor that takes one: depth
+# limits in as_envelope() and vect_to_envelope(), `values` in
+# envelope_to_voxel() and a profile's weights. `arg` names the value in the
+# message, `grid` the object whose grid it must match, and `layers` the layer
+# counts a raster may have. With `several = TRUE` (vect_to_envelope(), where
+# each value or layer is one more constraint) a raster may have any number of
+# layers and a number may be a vector. Returns the number, or with
+# `fill = TRUE` a layer on `template`'s grid holding it; a raster is returned
+# as it is, once .check_same_grid() has checked its grid.
+.grid_value <- function(value, template, arg, layers = 1, grid = "`x`",
+                        fill = FALSE, several = FALSE) {
+  layers <- unique(layers)
+  is_raster <- methods::is(value, "SpatRaster")
+  problem <- if (is_raster) {
+    n <- terra::nlyr(value)
+    if (!several && !n %in% layers) {
+      counts <- glue::glue_collapse(layers, sep = ", ", last = " or ")
+      want <- if (identical(layers, 1)) "a single-layer SpatRaster" else
+        glue::glue("a SpatRaster with {counts} layers")
+      glue::glue("must be {want}; got {n} layers")
     }
-    if (!terra::compareGeom(value, template, stopOnError = FALSE)) {
-      stop("`", name, "` must be on the same grid (CRS, extent, resolution) ",
-           "as `x`.", call. = FALSE)
-    }
-    out <- value
-  } else {
-    if (!is.numeric(value) || length(value) != 1 || is.na(value)) {
-      stop("`", name, "` must be a single non-missing number or a ",
-           "single-layer SpatRaster.", call. = FALSE)
-    }
-    out <- terra::setValues(terra::rast(template), value)
+  } else if (!is.numeric(value) || anyNA(value) || length(value) == 0 ||
+               (!several && length(value) != 1)) {
+    got <- if (length(value) == 1 && is.na(value)) "NA" else
+      glue::glue("{paste(class(value), collapse = '/')} of length ",
+                 "{length(value)}")
+    want <- if (several) "one or more non-missing numbers" else
+      "a single non-missing number"
+    glue::glue("must be {want} or a SpatRaster on the grid of {grid}; ",
+               "got {got}")
   }
-  names(out) <- name
-  out
+  if (!is.null(problem)) {
+    rlang::abort(glue::glue("{arg} {problem}."),
+                 class = "ocean3d_error_grid_value", call = NULL)
+  }
+  if (is_raster) .check_same_grid(value, template, arg, grid)
+  if (fill && is.numeric(value)) {
+    # remove the 3D class
+    grid_of <- terra::rast(methods::as(template, "SpatRaster"), nlyrs = 1)
+    value <- terra::setValues(grid_of, value)
+  }
+  value
 }
 
 #' Create a voxel object
@@ -231,7 +257,7 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     "`time` selects a time step of a SpatProxy; `x` isn't one."
   }
   if (!is.null(misplaced)) {
-    rlang::abort(misplaced, class = "ocean3d_error_voxel_input", call = NULL)
+    .abort_voxel_input(misplaced)
   }
   if (proxy) {
     if (missing(varname)) varname <- x@variable$name
@@ -269,14 +295,11 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     problem <- if (length(depths) != terra::nlyr(x)) {
       glue::glue("must have one value per layer: got {length(depths)} for ",
                  "{terra::nlyr(x)} layers")
-    } else if (!is.numeric(depths)) {
-      "must be numeric metres"
-    } else if (anyNA(depths)) {
-      "must give every layer a depth; some are NA"
+    } else {
+      .depth_problem(depths)
     }
     if (!is.null(problem)) {
-      rlang::abort(glue::glue("`depths` {problem}."),
-                   class = "ocean3d_error_voxel_input", call = NULL)
+      .abort_voxel_input(glue::glue("`depths` {problem}."))
     }
     d <- as.numeric(depths)
     # Readable names; `names<-` copies the raster first.
@@ -286,16 +309,10 @@ as_voxel <- function(x, depths = NULL, varname = "value",
     terra::depth(x) <- d
   } else {
     d <- depths(x)
-  }
-  if (any(d < 0)) {
-    stop("depths are positive metres increasing downward; got ",
-         toString(d[d < 0]),
-         ". Negate the depths in `depths` or terra::depth().",
-         call. = FALSE)
-  }
-  if (anyDuplicated(d)) {
-    stop("duplicate depth(s): ", toString(unique(d[duplicated(d)])),
-         ". Each layer must be a distinct depth.", call. = FALSE)
+    problem <- .depth_problem(d)
+    if (!is.null(problem)) {
+      .abort_voxel_input(glue::glue("The depths in terra::depth() {problem}."))
+    }
   }
 
   if (!is.null(depth_bounds)) {
@@ -321,6 +338,12 @@ as_voxel <- function(x, depths = NULL, varname = "value",
   methods::new("SpatVoxel", x, depth_edges = edges)
 }
 
+# The one producer of `ocean3d_error_voxel_input`: input as_voxel() or
+# envelope_to_voxel() can't build a voxel from.
+.abort_voxel_input <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_voxel_input", call = NULL)
+}
+
 #' @rdname SpatVoxel-class
 #' @param x A `SpatVoxel`.
 #' @param ... For `c()`: further rasters to combine with `x`, as with terra's
@@ -344,8 +367,7 @@ setMethod("c", "SpatVoxel", function(x, ...) {
   out <- do.call(c, args)
   # A layer without a depth, two layers at one depth or a negative depth
   # isn't a voxel, so the layers stay a plain raster.
-  if (anyNA(d) || length(d) != terra::nlyr(out) || anyDuplicated(d) ||
-        any(d < 0)) {
+  if (length(d) != terra::nlyr(out) || !is.null(.depth_problem(d))) {
     return(out)
   }
   # Layers given deepest first are sorted shallow to deep, as as_voxel()
@@ -527,8 +549,8 @@ setReplaceMethod("[[", c("SpatVoxel", "character"),
 #'
 #' @param x SpatEnvelope, e.g. from [as_envelope()] or [voxel_to_envelope()].
 #' @param depths Array of values that can be coerced into numeric type,
-#'   represents metres depth below sea level. Sorted shallow to deep, and
-#'   deduplicated, before use.
+#'   represents metres depth below sea level, each depth once. Sorted shallow
+#'   to deep before use.
 #' @param values Optional numeric or SpatRaster of same CRS, resolution, extent
 #'   as `x`. Defines values to write for voxel cells that are within depth
 #'   intervals.
@@ -553,7 +575,7 @@ setReplaceMethod("[[", c("SpatVoxel", "character"),
 #'   bottom of the slab of water each depth stands for, in metres, one row per
 #'   element of `depths` (or a `depth`, `lower`, `upper` table, as in
 #'   [as_voxel()]). When given, these slabs are used instead of `bounds`, the
-#'   returned voxel carries them, and `depths` must not repeat a depth.
+#'   returned voxel carries them.
 #'
 #' @returns A [SpatVoxel-class] with one layer per depth in `depths`, on the
 #'   grid of `x`, layers ordered shallow to deep.
@@ -611,10 +633,7 @@ setReplaceMethod("[[", c("SpatVoxel", "character"),
 envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
                               bounds = c("midpoint", "top"),
                               varname = "presence", depth_bounds = NULL) {
-  if (!is(x, "SpatEnvelope")) {
-    stop("Input error for envelope_to_voxel(): `x` needs to be of ",
-         "`SpatEnvelope` class.", call. = FALSE)
-  }
+  .check_3d(x, "x", "SpatEnvelope")
   # Coercion, not class: an integer vector, or a character vector of numbers,
   # is as good as a double here — "hello" is not a depth.
   depths <- suppressWarnings(as.numeric(depths))
@@ -629,10 +648,9 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
     stop("Input error for envelope_to_voxel(): `varname` needs to be a string.",
          call. = FALSE)
   }
-  if (any(depths < 0)) {
-    stop("Input error for envelope_to_voxel(): depths are positive metres ",
-         "increasing downward; got ", toString(depths[depths < 0]),
-         ".", call. = FALSE)
+  problem <- .depth_problem(depths)
+  if (!is.null(problem)) {
+    .abort_voxel_input(glue::glue("`depths` {problem}."))
   }
   # Checked up front rather than on first use, so a bad profile is an error
   # even on an envelope where no cell turns out to be occupied. What the
@@ -645,14 +663,25 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
          call. = FALSE)
   }
 
+  .promote_to_voxel(x, depths, bounds, depth_bounds, values, profile, varname)
+}
+
+# Internal: the work of envelope_to_voxel() on inputs already checked. The
+# query verbs call it directly to put an envelope on a voxel's depth levels
+# (`depths(v)` and `depth_bounds(v)`), since they have checked the envelope
+# themselves and a second validity pass reads a large grid again. This
+# direction, not the reverse: envelope_to_voxel() quantizes, but
+# voxel_to_envelope() fills interior gaps, which would overstate an overlap.
+.promote_to_voxel <- function(x, depths, bounds, depth_bounds = NULL,
+                              values = NULL, profile = NULL,
+                              varname = "presence") {
   # A voxel's layer axis is one layer per depth, shallow to deep, so the
-  # requested levels are put in that form up front. Given edges come along;
-  # with edges, a repeated depth is an error from the edge checks.
+  # requested levels are put in that form up front. Given edges come along.
   if (!is.null(depth_bounds)) {
     depth_bounds <- .depth_edge_table(depths, depth_bounds)
     depth_bounds <- depth_bounds[order(depth_bounds$depth), , drop = FALSE]
   }
-  depths <- sort(unique(depths))
+  depths <- sort(depths)
 
   # Step 1: occupancy. Each level stands for a slab of water, `bounds` (or
   # the given edges) says where its edges fall, and a cell occupies the level
@@ -704,7 +733,7 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 
   # Step 2: values. The magnitude each cell carries, and how `profile` spreads
   # it down the levels that cell occupies.
-  v <- .cell_values(values, x)
+  v <- if (is.null(values)) 1 else .grid_value(values, x, "`values`")
 
   # NULL means the flat shape, which is a profile like any other. Called
   # positionally, so a caller's own profile is free to name its arguments
@@ -755,30 +784,6 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
     },
     stop("Unhandled `bounds`: \"", bounds, "\".", call. = FALSE)
   ) # nolint: unreachable_code_linter. switch() default, not dead code.
-}
-
-# Internal: resolve `values` into the magnitude each cell carries — a single
-# number applying to the whole grid, or a single-layer raster on its grid.
-.cell_values <- function(values, template) {
-  if (is.null(values)) return(1)
-
-  if (inherits(values, "SpatRaster")) {
-    if (terra::nlyr(values) != 1) {
-      stop("`values` must be a single-layer SpatRaster; got ",
-           terra::nlyr(values), " layers.", call. = FALSE)
-    }
-    if (!terra::compareGeom(values, template, stopOnError = FALSE)) {
-      stop("`values` must be on the same grid (CRS, extent, resolution) as ",
-           "`x`.", call. = FALSE)
-    }
-    return(values)
-  }
-
-  if (!is.numeric(values) || length(values) != 1 || is.na(values)) {
-    stop("`values` must be a single non-missing number or a single-layer ",
-         "SpatRaster.", call. = FALSE)
-  }
-  values
 }
 
 #' Collapse Voxel 3D -> Envelope 2.5D
@@ -840,44 +845,19 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 #' terra::values(voxel_to_envelope(edged))
 #' @export
 voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
-  if (!is.function(fun)) {
-    stop("`fun` must be a function returning TRUE/FALSE for a cell value. ",
-         "The former \"extent\" behaviour is the default, ",
-         "function(x) !is.na(x).",
-         call. = FALSE)
-  }
-  if (!is(v, "SpatVoxel")) {
-    stop("`v` must be a SpatVoxel object.")
-  }
-  .check_3d(v, "v")
+  .check_3d(v, "v", "SpatVoxel")
   depths <- depths(v)
   n_cells <- terra::ncell(v)
-  n_depths <- length(depths)
 
   # Hit matrix (cells x depths): does `fun` hold for this cell at this depth?
-  # The stack is read once and `fun` is still applied one depth layer at a
-  # time, so a predicate that reduces over a layer (e.g. `\(x) x > mean(x)`)
-  # keeps its per-depth meaning. `fun` is evaluated on the values rather than
-  # on the SpatRaster so that any ordinary R predicate works, not only
-  # terra-aware ones.
-  vals <- terra::values(v)
-  hit <- matrix(FALSE, nrow = n_cells, ncol = n_depths)
-  for (i in seq_len(n_depths)) {
-    h <- as.logical(fun(vals[, i]))
-    if (length(h) != n_cells) {
-      stop("`fun` must return one TRUE/FALSE per cell value; got ",
-           length(h), " values for ", n_cells, " cells.",
-           call. = FALSE)
-    }
-    h[is.na(h)] <- FALSE
-    hit[, i] <- h
-  }
-  rm(vals)
+  # .voxel_occupancy() applies `fun` one depth layer at a time, so a predicate
+  # that reduces over a layer (e.g. `\(x) x > mean(x)`) keeps its per-depth
+  # meaning, and NA counts as FALSE.
+  hit <- terra::values(.voxel_occupancy(v, fun), mat = TRUE) == 1
 
   # `SpatVoxel` validity guarantees depths are non-NA and sorted shallow to
   # deep, so each row's first and last TRUE column are exactly the envelope
-  # bounds. `max.col()` finds them at C level, which avoids building one
-  # full-size intermediate raster per depth.
+  # bounds. `max.col()` finds them at C level, from the one matrix of hits.
   first_hit <- max.col(hit, ties.method = "first")
   last_hit <- max.col(hit, ties.method = "last")
 
@@ -962,11 +942,7 @@ voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
 #' terra::values(intersect_3d(warm, occupied(effort, function(x) x > 0)))
 #' @export
 occupied <- function(x, fun = function(v) !is.na(v)) {
-  if (!methods::is(x, "SpatVoxel")) {
-    stop("`x` must be a SpatVoxel; got ", paste(class(x), collapse = "/"),
-         ". Build one with as_voxel() or envelope_to_voxel().", call. = FALSE)
-  }
-  .check_3d(x, "x")
+  .check_3d(x, "x", "SpatVoxel")
   .presence_voxel(.voxel_occupancy(x, fun), depths(x),
                   depth_bounds(x))
 }
@@ -989,40 +965,9 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
   }
 
   for (i in seq_along(x)) {
-    el <- x[[i]]
-    label <- if (length(x) == 1L) {
-      glue::glue("`{arg}`")
-    } else {
-      glue::glue("`{arg}` element {i}")
-    }
-
-    if (inherits(el, "SpatRaster")) {
-      if (!terra::same.crs(el, template)) {
-        .abort_envelope_input(glue::glue(
-          "{label} has a different CRS than `template`. ",
-          "Project it onto the template grid first."
-        ))
-      }
-      aligned <- terra::compareGeom(el, template, crs = FALSE,
-                                    stopOnError = FALSE, messages = FALSE)
-      if (!isTRUE(aligned)) {
-        .abort_envelope_input(glue::glue(
-          "{label} does not align with `template`; its extent or ",
-          "resolution differs. Resample it onto the template grid first."
-        ))
-      }
-    } else if (!is.numeric(el)) {
-      .abort_envelope_input(glue::glue(
-        "{label} must be numeric or a SpatRaster, not {class(el)[1]}."
-      ))
-    } else if (anyNA(el)) {
-      # A scalar NA carries no information but, under `na.rm = FALSE`, would
-      # blank every cell of the output. Reject it here where we can say which
-      # argument was at fault instead of reporting an empty envelope later.
-      .abort_envelope_input(glue::glue(
-        "{label} is NA. Drop it, or supply a real depth constraint."
-      ))
-    }
+    label <- if (length(x) == 1L) "`{arg}`" else "`{arg}` element {i}"
+    .grid_value(x[[i]], template, glue::glue(label), grid = "`template`",
+                several = TRUE)
   }
 
   x
@@ -1075,19 +1020,23 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 #' Where a constraint raster is NA at a cell its limit there is unknown, so the
 #' cell is dropped rather than falling back to the remaining constraints.
 #' 
-#' @param polygon sf or SpatVector, for example species ranges or fishery
-#'   footprints.
+#' @param polygon sf, sfc or SpatVector, for example species ranges or
+#'   fishery footprints. Polygons in another CRS are projected onto the CRS
+#'   of `template` first. Every cell a polygon touches is inside.
 #' @param template SpatRaster that defines the horizontal grid of the
 #'   SpatEnvelope output.
 #' @param depth_min List. Can contain both numeric and SpatRasters that match
-#'   CRS, resolution, extent of `template` and contain numeric values. For each
-#'   cell, the maximum across the `depth_min` list parameters is used as output
-#'   SpatEnvelope depth_min layer cell value.
+#'   CRS, resolution, extent of `template` and contain numeric values. A list
+#'   element can be several numbers or a multi-layer SpatRaster; each value
+#'   or layer counts as one constraint. For each cell, the maximum across all
+#'   the constraints is used as output SpatEnvelope depth_min layer cell
+#'   value.
 #' @param depth_max List. Can contain both numeric and SpatRasters that match
-#'   CRS, resolution, extent of `template` and contain numeric values. For each
-#'   cell, the minimum across the `depth_max` list parameters is used as output
-#'   SpatEnvelope depth_max layer cell value. Cells where it isn't deeper
-#'   than `depth_min` are `NA`.
+#'   CRS, resolution, extent of `template` and contain numeric values. A list
+#'   element can be several numbers or a multi-layer SpatRaster; each value
+#'   or layer counts as one constraint. For each cell, the minimum across all
+#'   the constraints is used as output SpatEnvelope depth_max layer cell
+#'   value. Cells where it isn't deeper than `depth_min` are `NA`.
 #' 
 #' @returns SpatEnvelope, with depth_min and depth_max layers. Stops with an
 #'   error if the envelope would have no cells: when the polygons don't
@@ -1098,8 +1047,7 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 #'   already a raster.
 #'
 #' @examples
-#' # A 4x4 study grid, and a range polygon covering its middle. `polygon` and
-#' # `template` must already share a CRS: this function does not reproject.
+#' # A 4x4 study grid, and a range polygon covering its middle.
 #' template <- terra::rast(nrows = 4, ncols = 4, xmin = 0, xmax = 4,
 #'                         ymin = 0, ymax = 4, crs = "EPSG:4326")
 #' poly <- terra::vect("POLYGON ((1 1, 3 1, 3 3, 1 3, 1 1))", crs = "EPSG:4326")
@@ -1130,21 +1078,12 @@ vect_to_envelope <- function(polygon, template, depth_min, depth_max) {
   if (!inherits(polygon, c("sf", "sfc", "SpatVector"))) {
     .abort_envelope_input("`polygon` must be a SpatVector, sf or sfc object.")
   }
-  if (inherits(polygon, "sf") || inherits(polygon, "sfc")) {
-    polygon <- terra::vect(polygon)
-  }
   if (!is(template, "SpatRaster")) {
     .abort_envelope_input("`template` must be a SpatRaster.")
   }
   # Only the grid is used. Drop any class tag so a voxel can serve as the
   # template without its layers reaching the depth-aware mask() methods.
   template <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
-  if (!terra::same.crs(crs(polygon), crs(template))) {
-    .abort_envelope_input(paste0(
-      "`polygon` and `template` have different CRS. Project `polygon` onto ",
-      "the CRS of `template` first."
-    ))
-  }
 
   # Depths stay 8-byte doubles if terra writes to disk; its default 4-byte
   # floats would turn 10.1 m into 10.1000004 m.
@@ -1157,12 +1096,12 @@ vect_to_envelope <- function(polygon, template, depth_min, depth_max) {
   depth_min <- .normalize_depth_inputs(depth_min, template, "depth_min")
   depth_max <- .normalize_depth_inputs(depth_max, template, "depth_max")
 
-  # take first layer in case multi-layer raster
-  all_one <- template[[1]]
-  # make all cell values 1, since mask leaves NAs alone 
-  terra::values(all_one) <- 1
-  # intersect between polygon and template
-  masked <- terra::mask(all_one, polygon) 
+  # The cells the polygons touch, 1 there and NA elsewhere. .footprint()
+  # projects the polygons onto the template's CRS when they differ. Assigned
+  # before ifel() takes it: an error raised while S4 evaluates an argument
+  # for dispatch is reworded.
+  fp <- .footprint(polygon, template, "polygon")
+  masked <- terra::ifel(fp, 1, NA)
   if (terra::global(masked, "notNA")[1, 1] == 0) {
     .abort_envelope_empty(paste0(
       "The polygons don't overlap any cell of `template`, so the envelope ",

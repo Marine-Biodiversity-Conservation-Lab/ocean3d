@@ -106,23 +106,6 @@ profile_equal <- function(ind, depths, n_depths) {
     }
   )
 
-  if (inherits(w, "SpatRaster")) {
-    n <- terra::nlyr(w)
-    if (n != 1 && n != terra::nlyr(ind)) {
-      stop("`profile` must return a SpatRaster with 1 layer or one per depth ",
-           "(", terra::nlyr(ind), "); got ", n, ".", call. = FALSE)
-    }
-    if (!terra::compareGeom(w, ind, stopOnError = FALSE)) {
-      stop("`profile` must return a SpatRaster on the same grid (CRS, extent, ",
-           "resolution) as `x`.", call. = FALSE)
-    }
-    return(w)
-  }
-
-  if (!is.numeric(w) || length(w) != 1 || is.na(w)) {
-    stop("`profile` must return a single non-missing number or a SpatRaster; ",
-         "got ", paste(class(w), collapse = "/"), " of length ", length(w),
-         ".", call. = FALSE)
-  }
-  w
+  .grid_value(w, ind, "The weight `profile` returned",
+              layers = c(1, terra::nlyr(ind)))
 }

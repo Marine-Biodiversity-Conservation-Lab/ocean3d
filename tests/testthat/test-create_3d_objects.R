@@ -23,7 +23,7 @@ test_that("new() refuses an object that breaks the class rules", {
     list(label = "voxel without depths", class = "SpatVoxel",
          object = unset, pattern = "must be set in terra::depth"),
     list(label = "voxel with a repeated depth", class = "SpatVoxel",
-         object = repeated, pattern = "must be distinct"),
+         object = repeated, pattern = "must each be a distinct depth"),
     list(label = "voxel with unsorted layers", class = "SpatVoxel",
          object = unsorted, pattern = "shallow to deep"),
     list(label = "envelope without the two depth layers",
@@ -105,6 +105,28 @@ test_that("as_envelope() is idempotent on its own output", {
   e <- as_envelope(make_footprint(), 0, 200)
 
   expect_identical(terra::values(as_envelope(e)), terra::values(e))
+})
+
+test_that("as_envelope() says how a per-cell limit is off the grid", {
+  fp <- make_footprint()
+  other_crs <- terra::rast(fp, vals = 100)
+  terra::crs(other_crs) <- "EPSG:3857"
+  cases <- list(
+    list(limit = c(terra::rast(fp, vals = 100), terra::rast(fp, vals = 200)),
+         pattern = "`depth_max` must be a single-layer SpatRaster; got 2",
+         class = "ocean3d_error_grid_value"),
+    list(limit = other_crs,
+         pattern = "`depth_max` has a different CRS than `x`",
+         class = "ocean3d_error_grid_mismatch"),
+    list(limit = terra::rast(nrows = 3, ncols = 3, xmin = 0, xmax = 2,
+                             ymin = 0, ymax = 2, vals = 100),
+         pattern = "`depth_max` does not align with `x`",
+         class = "ocean3d_error_grid_mismatch")
+  )
+  for (case in cases) {
+    expect_error(as_envelope(fp, 0, case$limit), case$pattern, fixed = TRUE,
+                 class = case$class)
+  }
 })
 
 test_that("as_envelope() rejects unusable input and says what is wrong", {
@@ -312,7 +334,7 @@ test_that("voxel_to_envelope() rejects a non-SpatVoxel or a non-function fun", {
   expect_s4_class(as_voxel(not_voxel), "SpatVoxel")
 
   v <- as_voxel(make_multidepth_rast())
-  expect_error(voxel_to_envelope(v, "extent"), "must be a function")
+  expect_error(voxel_to_envelope(v, "extent"), "`fun` must take a vector")
 })
 
 test_that("voxel_to_envelope() bounds the depths where `fun` holds", {
@@ -367,6 +389,8 @@ test_that("envelope_to_voxel() rejects invalid input", {
   bad_envel <- make_multidepth_rast()
   good_envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 200)
   fp <- make_footprint()
+  inverted <- good_envel[[c("depth_max", "depth_min")]]
+  names(inverted) <- c("depth_min", "depth_max")
 
   good_depths <- c(0, 50, 100, 150, 200, 300, 600)
   profile_msg <- paste0("`profile` needs to be NULL or a function of ",
@@ -375,7 +399,13 @@ test_that("envelope_to_voxel() rejects invalid input", {
   cases <- list(
     list(label = "`x` not an envelope",
          args = list(x = bad_envel, depths = good_depths),
-         pattern = "`x` needs to be of `SpatEnvelope` class"),
+         pattern = "`x` must be a SpatEnvelope; got",
+         class = "ocean3d_error_not_3d"),
+    # an envelope whose interval runs backwards after a layer swap
+    list(label = "`x` tagged but not valid",
+         args = list(x = inverted, depths = good_depths),
+         pattern = "`x` is tagged SpatEnvelope but is not a valid one",
+         class = "ocean3d_error_invalid_3d"),
     list(label = "non-numeric depths",
          args = list(x = good_envel, depths = c("hello", 100, "depths")),
          pattern = "`depths` needs to be array coercible to numeric type"),
@@ -385,7 +415,8 @@ test_that("envelope_to_voxel() rejects invalid input", {
     # positive-down convention
     list(label = "negative depths",
          args = list(x = good_envel, depths = c(-100, 0, 100)),
-         pattern = "positive metres increasing downward"),
+         pattern = "positive metres increasing downward",
+         class = "ocean3d_error_voxel_input"),
     # A shape is passed as the function itself, so a name that used to select
     # one is now just the wrong type.
     list(label = "profile as a name",
@@ -410,18 +441,33 @@ test_that("envelope_to_voxel() rejects invalid input", {
     list(label = "values on another grid",
          args = list(x = good_envel, depths = c(0, 100),
                      values = terra::rast(nrows = 3, ncols = 3)),
-         pattern = "same grid"),
+         pattern = "`values` does not align with `x`",
+         class = "ocean3d_error_grid_mismatch"),
     list(label = "multi-layer values",
          args = list(x = good_envel, depths = c(0, 100),
                      values = c(terra::rast(fp), terra::rast(fp))),
-         pattern = "must be a single-layer SpatRaster"),
+         pattern = "must be a single-layer SpatRaster",
+         class = "ocean3d_error_grid_value"),
     list(label = "vector values",
          args = list(x = good_envel, depths = c(0, 100), values = c(1, 2)),
-         pattern = "single non-missing number")
+         pattern = "single non-missing number",
+         class = "ocean3d_error_grid_value"),
+    list(label = "NA values",
+         args = list(x = good_envel, depths = c(0, 100), values = NA_real_),
+         pattern = paste("single non-missing number or a SpatRaster on",
+                         "the grid of `x`; got NA."),
+         class = "ocean3d_error_grid_value")
   )
   for (case in cases) {
-    expect_error(do.call(envelope_to_voxel, case$args), case$pattern,
-                 fixed = TRUE, label = case$label)
+    if (is.null(case$class)) {
+      expect_error(do.call(envelope_to_voxel, case$args), case$pattern,
+                   fixed = TRUE, label = case$label)
+    } else {
+      err <- expect_error(do.call(envelope_to_voxel, case$args),
+                          class = case$class, label = case$label)
+      expect_match(conditionMessage(err), case$pattern, fixed = TRUE,
+                   label = case$label)
+    }
   }
 
   # the supplied shapes and the default all have to survive the profile check
@@ -723,13 +769,25 @@ test_that("envelope_to_voxel() presence is the same as values = 1", {
   )
 })
 
-test_that("envelope_to_voxel() sorts and deduplicates the requested depths", {
+test_that("envelope_to_voxel() sorts the requested depths", {
   envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
                        depth_min = 0, depth_max = 300)
 
-  v <- envelope_to_voxel(envel, depths = c(200, 0, 100, 200))
+  v <- envelope_to_voxel(envel, depths = c(200, 0, 100))
 
   expect_named(v, paste0("presence_depth=", c(0, 100, 200)))
+})
+
+test_that("envelope_to_voxel() rejects repeated depths, as as_voxel() does", {
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 0, depth_max = 300)
+
+  err <- expect_error(envelope_to_voxel(envel, depths = c(200, 0, 100, 200)),
+                      class = "ocean3d_error_voxel_input")
+  expect_match(conditionMessage(err),
+               "`depths` must each be a distinct depth; got duplicate",
+               fixed = TRUE)
+  expect_match(conditionMessage(err), "depth(s) 200.", fixed = TRUE)
 })
 
 test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
@@ -775,12 +833,11 @@ test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
 
 test_that("vect_to_envelope() rejects unusable input", {
   input <- "ocean3d_error_envelope_input"
+  grid <- "ocean3d_error_grid_value"
+  mismatch <- "ocean3d_error_grid_mismatch"
   # a raster that doesn't overlap make_polygon()
   elsewhere <- terra::rast(nrows = 5, ncols = 5, xmin = 5, xmax = 10,
                            ymin = 5, ymax = 10, crs = "EPSG:4326")
-  # a template in another CRS
-  mercator <- terra::rast(nrows = 5, ncols = 5, xmin = 0, xmax = 5,
-                          ymin = 0, ymax = 5, crs = "EPSG:3857")
   # depth rasters whose resolution, extent or CRS differ from the template's;
   # with a different CRS but the same extent numbers, terra would otherwise
   # return a wrong answer rather than fail
@@ -801,23 +858,21 @@ test_that("vect_to_envelope() rejects unusable input", {
     list(args = list(poly, elsewhere, 0, 10),
          class = "ocean3d_error_envelope_empty",
          pattern = "The polygons don't overlap any cell of `template`"),
-    list(args = list(poly, mercator, 0, 10), class = input,
-         pattern = "`polygon` and `template` have different CRS."),
-    list(args = list(poly, tmpl, 0, list(10, bad_res)), class = input,
+    list(args = list(poly, tmpl, 0, list(10, bad_res)), class = mismatch,
          pattern = "does not align with `template`"),
-    list(args = list(poly, tmpl, 0, list(10, bad_ext)), class = input,
+    list(args = list(poly, tmpl, 0, list(10, bad_ext)), class = mismatch,
          pattern = "does not align with `template`"),
-    list(args = list(poly, tmpl, 0, list(10, bad_crs)), class = input,
+    list(args = list(poly, tmpl, 0, list(10, bad_crs)), class = mismatch,
          pattern = "different CRS than `template`"),
     list(args = list(poly, tmpl, list(), 10), class = input,
          pattern = "`depth_min` is empty"),
     list(args = list(poly, tmpl, 0, list()), class = input,
          pattern = "`depth_max` is empty"),
-    list(args = list(poly, tmpl, 0, list(10, "deep")), class = input,
-         pattern = "must be numeric or a SpatRaster"),
+    list(args = list(poly, tmpl, 0, list(10, "deep")), class = grid,
+         pattern = "element 2 must be one or more non-missing numbers"),
     # `na.rm = TRUE` would drop an NA silently, widening rather than narrowing.
-    list(args = list(poly, tmpl, 0, list(10, NA_real_)), class = input,
-         pattern = "is NA")
+    list(args = list(poly, tmpl, 0, list(10, NA_real_)), class = grid,
+         pattern = "element 2 must be one or more non-missing numbers.*got NA")
   )
   for (case in cases) {
     expect_error(do.call(vect_to_envelope, case$args), case$pattern,
@@ -825,6 +880,60 @@ test_that("vect_to_envelope() rejects unusable input", {
   }
 
   # TODO: implement check for the depth_min and depth_max inputs
+})
+
+test_that("vect_to_envelope() projects polygons onto the template's CRS", {
+  tmpl <- make_template()
+  # edges inside cells, so projecting doesn't move one onto a cell edge
+  poly <- terra::vect("POLYGON ((1.3 1.3, 3.6 1.3, 3.6 3.6, 1.3 3.6, 1.3 1.3))",
+                      crs = "EPSG:4326")
+  mercator <- terra::project(poly, "EPSG:3857")
+  expected <- vect_to_envelope(poly, tmpl, 0, 100)
+
+  for (p in list(mercator, sf::st_as_sf(mercator))) {
+    e <- vect_to_envelope(p, tmpl, 0, 100)
+    expect_identical(terra::values(e), terra::values(expected))
+  }
+  expect_identical(sum(!is.na(terra::values(expected)[, 1])), 9L)
+
+  # depth rasters aren't projected: another CRS is still an error
+  bad_crs <- terra::rast(tmpl, vals = 50)
+  terra::crs(bad_crs) <- "EPSG:3857"
+  expect_error(vect_to_envelope(mercator, tmpl, 0, list(100, bad_crs)),
+               "`depth_max` element 2 has a different CRS than `template`",
+               class = "ocean3d_error_grid_mismatch")
+})
+
+test_that("vect_to_envelope() counts each value and layer as a constraint", {
+  poly <- make_polygon()
+  tmpl <- make_template()
+  shallow <- terra::rast(tmpl, vals = 300)
+  two <- c(terra::rast(tmpl, vals = 400), terra::rast(tmpl, vals = 250))
+  # the distinct (depth_min, depth_max) pairs of the covered cells
+  limits <- function(e) {
+    v <- terra::values(e)
+    unname(unique(v[stats::complete.cases(v), , drop = FALSE]))
+  }
+
+  # several numbers in one list element, as separate elements
+  expect_identical(limits(vect_to_envelope(poly, tmpl, list(c(10, 20)), 500)),
+                   limits(vect_to_envelope(poly, tmpl, list(10, 20), 500)))
+  expect_identical(
+    limits(vect_to_envelope(poly, tmpl, list(c(10, 20)), 500))[, 1], 20
+  )
+  # a multi-layer raster, as its layers given separately
+  expect_identical(
+    limits(vect_to_envelope(poly, tmpl, 0, list(1000, two))),
+    limits(vect_to_envelope(poly, tmpl, 0, c(list(1000), as.list(two))))
+  )
+  expect_identical(
+    limits(vect_to_envelope(poly, tmpl, 0, two))[, 2], 250
+  )
+  # each element is still checked for NA
+  err <- expect_error(vect_to_envelope(poly, tmpl, list(c(10, NA)), shallow),
+                      class = "ocean3d_error_grid_value")
+  expect_match(conditionMessage(err),
+               "`depth_min` must be one or more non-missing numbers")
 })
 
 test_that("vect_to_envelope() accepts scalar depth_min and depth_max", {
@@ -1427,11 +1536,11 @@ test_that("envelope_to_voxel() places levels with given depth edges", {
 
   expect_error(envelope_to_voxel(e, edge_depths, depth_bounds = shifted[1:2, ]),
                class = "ocean3d_error_bounds")
-  # A repeated depth with edges is an error, not two rows for one level.
+  # A repeated depth with edges is an error, as it is without them.
   expect_error(
     envelope_to_voxel(e, c(0.5, 1.5, 1.5),
                       depth_bounds = cbind(c(0, 1, 1), c(1, 2, 2))),
-    class = "ocean3d_error_axis_order"
+    class = "ocean3d_error_voxel_input"
   )
 })
 

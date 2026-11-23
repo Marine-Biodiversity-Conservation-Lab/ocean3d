@@ -173,6 +173,19 @@ polygons and drops empty results has to handle the error instead. The
 message says how many cells have the limits swapped (or a seafloor above
 `depth_min`), equal, or missing (#114).
 
+`envelope_to_voxel()` and `depth_bounds()` now stop with an error when given
+a `SpatEnvelope` or `SpatVoxel` whose layers no longer match its class, for
+example after a terra operation changed them (#97). They used to use such an
+object without checking it. `envelope_to_voxel()` could then return a wrong
+voxel, such as an empty one for an envelope whose two layers had been
+swapped. `occupied()`, `voxel_to_envelope()`, `volume()`, `intersect_3d()`,
+`intersects_3d()` and `mask()` already rejected such objects. Rebuild the
+object with `as_envelope()` or `as_voxel()` first.
+
+`envelope_to_voxel()` now stops with an error when `depths` repeats a
+depth, as `as_voxel()` does (#97). It used to drop the repeats silently.
+Pass each depth once, for example with `unique(depths)`.
+
 ## New features
 
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
@@ -321,6 +334,12 @@ message says how many cells have the limits swapped (or a seafloor above
   first (#93).
 
 ## Minor improvements
+
+* `vect_to_envelope()` now projects polygons in another CRS onto the CRS of
+  `template`, as the 3D query functions do with polygons (#97). It used to
+  stop with an error asking for the polygons to be projected first. Depth
+  rasters in `depth_min` and `depth_max` must still be on the template's
+  grid, CRS included.
 
 * Functions that take a `SpatEnvelope` check it faster when it is held in
   memory. Envelopes read from a file, or with more than a million cells, are
