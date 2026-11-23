@@ -171,6 +171,10 @@ swapped. `occupied()`, `voxel_to_envelope()`, `volume()`, `intersect_3d()`,
 `intersects_3d()` and `mask()` already rejected such objects. Rebuild the
 object with `as_envelope()` or `as_voxel()` first.
 
+`envelope_to_voxel()` now stops with an error when `depths` repeats a
+depth, as `as_voxel()` does (#97). It used to drop the repeats silently.
+Pass each depth once, for example with `unique(depths)`.
+
 ## New features
 
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and

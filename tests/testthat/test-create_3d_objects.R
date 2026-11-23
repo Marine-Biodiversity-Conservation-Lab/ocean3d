@@ -767,13 +767,25 @@ test_that("envelope_to_voxel() presence is the same as values = 1", {
   )
 })
 
-test_that("envelope_to_voxel() sorts and deduplicates the requested depths", {
+test_that("envelope_to_voxel() sorts the requested depths", {
   envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
                        depth_min = 0, depth_max = 300)
 
-  v <- envelope_to_voxel(envel, depths = c(200, 0, 100, 200))
+  v <- envelope_to_voxel(envel, depths = c(200, 0, 100))
 
   expect_named(v, paste0("presence_depth=", c(0, 100, 200)))
+})
+
+test_that("envelope_to_voxel() rejects repeated depths, as as_voxel() does", {
+  envel <- as_envelope(make_footprint(c(1, 1, 1, 1)),
+                       depth_min = 0, depth_max = 300)
+
+  err <- expect_error(envelope_to_voxel(envel, depths = c(200, 0, 100, 200)),
+                      class = "ocean3d_error_voxel_input")
+  expect_match(conditionMessage(err),
+               "`depths` must each be a distinct depth; got duplicate",
+               fixed = TRUE)
+  expect_match(conditionMessage(err), "depth(s) 200.", fixed = TRUE)
 })
 
 test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
@@ -1478,11 +1490,11 @@ test_that("envelope_to_voxel() places levels with given depth edges", {
 
   expect_error(envelope_to_voxel(e, edge_depths, depth_bounds = shifted[1:2, ]),
                class = "ocean3d_error_bounds")
-  # A repeated depth with edges is an error, not two rows for one level.
+  # A repeated depth with edges is an error, as it is without them.
   expect_error(
     envelope_to_voxel(e, c(0.5, 1.5, 1.5),
                       depth_bounds = cbind(c(0, 1, 1), c(1, 2, 2))),
-    class = "ocean3d_error_axis_order"
+    class = "ocean3d_error_voxel_input"
   )
 })
 

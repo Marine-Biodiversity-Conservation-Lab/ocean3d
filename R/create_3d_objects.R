@@ -547,8 +547,8 @@ setReplaceMethod("[[", c("SpatVoxel", "character"),
 #'
 #' @param x SpatEnvelope, e.g. from [as_envelope()] or [voxel_to_envelope()].
 #' @param depths Array of values that can be coerced into numeric type,
-#'   represents metres depth below sea level. Sorted shallow to deep, and
-#'   deduplicated, before use.
+#'   represents metres depth below sea level, each depth once. Sorted shallow
+#'   to deep before use.
 #' @param values Optional numeric or SpatRaster of same CRS, resolution, extent
 #'   as `x`. Defines values to write for voxel cells that are within depth
 #'   intervals.
@@ -573,7 +573,7 @@ setReplaceMethod("[[", c("SpatVoxel", "character"),
 #'   bottom of the slab of water each depth stands for, in metres, one row per
 #'   element of `depths` (or a `depth`, `lower`, `upper` table, as in
 #'   [as_voxel()]). When given, these slabs are used instead of `bounds`, the
-#'   returned voxel carries them, and `depths` must not repeat a depth.
+#'   returned voxel carries them.
 #'
 #' @returns A [SpatVoxel-class] with one layer per depth in `depths`, on the
 #'   grid of `x`, layers ordered shallow to deep.
@@ -646,8 +646,7 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
     stop("Input error for envelope_to_voxel(): `varname` needs to be a string.",
          call. = FALSE)
   }
-  # Repeated depths are dropped below rather than rejected.
-  problem <- .depth_problem(unique(depths))
+  problem <- .depth_problem(depths)
   if (!is.null(problem)) {
     .abort_voxel_input(glue::glue("`depths` {problem}."))
   }
@@ -663,13 +662,12 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   }
 
   # A voxel's layer axis is one layer per depth, shallow to deep, so the
-  # requested levels are put in that form up front. Given edges come along;
-  # with edges, a repeated depth is an error from the edge checks.
+  # requested levels are put in that form up front. Given edges come along.
   if (!is.null(depth_bounds)) {
     depth_bounds <- .depth_edge_table(depths, depth_bounds)
     depth_bounds <- depth_bounds[order(depth_bounds$depth), , drop = FALSE]
   }
-  depths <- sort(unique(depths))
+  depths <- sort(depths)
 
   # Step 1: occupancy. Each level stands for a slab of water, `bounds` (or
   # the given edges) says where its edges fall, and a cell occupies the level
