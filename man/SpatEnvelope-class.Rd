@@ -10,8 +10,8 @@
 }
 \arguments{
 \item{object}{A \code{SpatEnvelope}. \code{show()} prints the class, the depth range
-(the shallowest \code{depth_min} to the deepest \code{depth_max}), how many cells
-the envelope occupies, and then terra's description of the grid.}
+(the shallowest \code{depth_min} to the deepest \code{depth_max}) and how many
+cells the envelope occupies, then terra's description of the grid.}
 }
 \description{
 A \code{SpatEnvelope} is a \link[terra:SpatRaster]{terra::SpatRaster} with exactly two layers,

@@ -37,10 +37,9 @@ that keeps each layer's depth through later operations.}
 \item{i, j, value}{For \verb{[[<-}: the layer to replace, by number or name, and
 its new values, as with terra. A replaced layer keeps its depth.}
 
-\item{object}{A \code{SpatVoxel}. \code{show()} prints the class, the variable, the
-depth levels, whether the voxel carries depth edges (see
-\code{\link[=depth_bounds]{depth_bounds()}}), the time step, and then terra's description of the
-grid.}
+\item{object}{A \code{SpatVoxel}. \code{show()} prints the class, the depth levels,
+whether the voxel carries depth edges (see \code{\link[=depth_bounds]{depth_bounds()}}) and the
+time, then terra's description of the grid.}
 }
 \description{
 A \code{SpatVoxel} is a \link[terra:SpatRaster]{terra::SpatRaster} in which \strong{depth is the layer index}

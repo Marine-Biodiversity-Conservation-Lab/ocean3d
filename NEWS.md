@@ -188,11 +188,11 @@ Pass each depth once, for example with `unique(depths)`.
 
 ## New features
 
-* Printing a `SpatVoxel` or `SpatEnvelope` now names its class and its 3D
-  information (#61): a voxel's variable, depth levels, whether it carries
-  depth edges and its time step; an envelope's depth range and how many
-  cells it occupies. terra's description of the grid follows. Before, both
-  printed as a plain `SpatRaster`.
+* Printing a `SpatVoxel` or `SpatEnvelope` now shows its class and its 3D
+  information (#61). For a voxel: the depth levels, whether it carries depth
+  edges, and its time. For an envelope: the depth range and how many cells
+  it occupies. terra's description of the grid follows. Before, both printed
+  as a plain `SpatRaster`.
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
   `depth_report`. Longitudes match across the 0-360 and -180-180
   conventions and across the antimeridian.
