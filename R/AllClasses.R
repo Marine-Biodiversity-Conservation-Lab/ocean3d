@@ -18,9 +18,13 @@ NULL
 #'
 #' A `SpatVoxel` is a [terra::SpatRaster] in which **depth is the layer index**
 #' and the cell values are the variable (temperature, oxygen, presence, ...).
-#' Layer names follow the `{variable}_depth={value}` convention and must be
-#' distinct and ordered shallow to deep. The depth axis is grid-wide: every
-#' cell is sampled at the same set of standard depths.
+#' Each layer's depth is stored in terra's own per-layer field,
+#' [terra::depth()], in metres positive down; depths must be set, distinct and
+#' ordered shallow to deep. Read them with [depths()]. [as_voxel()] names the
+#' layers `{variable}_depth={value}` when it sets the depths, as labels for
+#' people to read. The package never reads depths from layer names, so
+#' renaming the layers doesn't change their depths. The depth axis is
+#' grid-wide: every cell is sampled at the same set of standard depths.
 #'
 #' A voxel may have interior gaps — a cell can be NA at one depth and non-NA
 #' at the depths above and below it.
@@ -29,7 +33,6 @@ NULL
 #' the top and bottom of each slab, for example a netCDF file's depth bounds,
 #' set with the `depth_bounds` argument of [as_voxel()] or
 #' [envelope_to_voxel()] and read with [depth_bounds()]. [volume()],
-#' [calc_volume_overlap()],
 #' [envelope_to_voxel()], [voxel_to_envelope()], [intersect_3d()],
 #' [intersects_3d()] and [mask()] use these edges when the voxel has them for
 #' every layer, and work the edges out from the depths with their `bounds`
@@ -42,6 +45,16 @@ NULL
 #' voxel that has edges with one that doesn't, with `c()`, leaves some layers
 #' without edges, so `bounds` applies to the result.
 #'
+#' The depths stay through selecting layers (`[[`, `$`, `subset()`),
+#' replacing a layer with `[[<-`, `c()`, arithmetic, `ifel()`, `crop()` and
+#' `mask()`. The `SpatVoxel` methods for `subset()`, `[[<-` and `c()` keep
+#' them where terra alone would reset them to 0. A few terra operations drop
+#' them, such as `app()`, which also returns a plain `SpatRaster`. The
+#' package's functions then stop with an error; set the depths again with
+#' `as_voxel(x, depths = ...)` or [terra::depth()]. A plain `SpatRaster` (for
+#' example after `methods::as(v, "SpatRaster")`) gets terra's own behaviour:
+#' after a layer subset, its next operation resets the depths.
+#'
 #' @slot depth_edges A data frame with columns `depth`, `lower` and `upper`,
 #'   in metres positive down: the slab each depth stands for, from `lower`
 #'   (its top) to `upper` (its bottom), as in [SpatProxy-class]. It has no
@@ -52,13 +65,13 @@ NULL
 #'
 #' @examples
 #' # Two cells sampled at three standard depths. Build one with as_voxel(),
-#' # which names the layers for you and sorts them shallow to deep.
+#' # which sets the depths and sorts the layers shallow to deep.
 #' r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
 #'                  ymax = 1, nlyrs = 3)
 #' terra::values(r) <- cbind(c(12, 11), c(9, NA), c(6, 5))
 #' v <- as_voxel(r, depths = c(0, 100, 200), varname = "temp")
 #'
-#' names(v)          # depth lives in the layer name
+#' depths(v)         # depth is stored per layer, in terra::depth()
 #' terra::values(v)  # ...and the variable in the cell values
 #'
 #' # Note cell 2: NA at 100 m, but with values above and below it. A voxel can
@@ -69,13 +82,18 @@ NULL
 #' # constructor is idempotent.
 #' methods::is(v, "SpatRaster")
 #' terra::nlyr(terra::crop(v, terra::ext(0, 1, 0, 1)))
-#' identical(names(as_voxel(v)), names(v))
+#' identical(depths(as_voxel(v)), depths(v))
 #'
-#' # Validity is enforced on construction: every layer name must carry its
-#' # depth, and the layers must run shallow to deep.
-#' bad <- r
-#' names(bad) <- c("a", "b", "c")
-#' try(methods::new("SpatVoxel", bad))
+#' # Layer names are labels: renaming keeps the depths.
+#' names(v) <- c("surface", "mid", "deep")
+#' depths(v)
+#'
+#' # Selecting layers keeps their depths through later operations.
+#' depths(terra::crop(v[[2:3]], terra::ext(0, 1, 0, 1)) * 2)
+#'
+#' # The class checks run on construction: the depths must be set, distinct
+#' # and run shallow to deep.
+#' try(methods::new("SpatVoxel", r))
 #' @export
 setClass(
   "SpatVoxel", contains = "SpatRaster",
@@ -295,10 +313,18 @@ setValidity("SpatVector3D", function(object) {
 setClassUnion("SpatVolume", c("SpatVoxel", "SpatEnvelope", "SpatVector3D"))
 
 setValidity("SpatVoxel", function(object) {
-  d <- .parse_depth_layers_names(names(object), error = FALSE)
-  if (anyNA(d)) return("every layer name must follow {variable}_depth={value}")
+  # Depth lives in terra::depth(); layer names are only labels.
+  if (!.has_depths(object)) {
+    return(paste("depths must be set in terra::depth(); set them with",
+                 "as_voxel(x, depths = ...) or terra::depth()"))
+  }
+  d <- terra::depth(object)
+  if (anyNA(d)) return("every layer needs a depth in terra::depth()")
   if (is.unsorted(d)) return("depth layers must be ordered shallow to deep")
-  if (anyDuplicated(d)) return("depth layers must be distinct")
+  if (anyDuplicated(d)) {
+    return(paste("depth layers must be distinct; set them with as_voxel()",
+                 "or terra::depth()"))
+  }
   if (any(d < 0)) return("depths are positive metres increasing downward")
   edges <- object@depth_edges
   if (!identical(names(edges), c("depth", "lower", "upper")) ||
@@ -325,8 +351,8 @@ setValidity("SpatVoxel", function(object) {
 
 # Internal: the row of a depth_edges table for each depth, or NA for a depth
 # it doesn't hold. Depths are matched with .depth_tolerance(), because a depth
-# read back from a layer name (`temp_depth=0.494025`) can differ from the
-# stored one in the last digits.
+# that has been through float32 storage, such as a netCDF file's depth axis,
+# can differ from the stored one in the last digits.
 .edge_rows <- function(edge_depths, depths) {
   tol <- .depth_tolerance(depths)
   vapply(seq_along(depths), function(i) {

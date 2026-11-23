@@ -2,8 +2,7 @@
 % Please edit documentation in R/proxy.R
 \name{as_proxy}
 \alias{as_proxy}
-\title{Describe a gridded netCDF variable without reading its values
-(experimental)}
+\title{Describe gridded data without reading its values (experimental)}
 \usage{
 as_proxy(
   x,
@@ -15,8 +14,9 @@ as_proxy(
 )
 }
 \arguments{
-\item{x}{A netCDF file path, or a connection opened with
-\code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} (netCDF model). A connection is left open.}
+\item{x}{A netCDF file path, several paths for a series of files, a
+connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} (left open), or a
+\link[=SpatVoxel-class]{SpatVoxel}. \code{var} and the dimension arguments apply to files.}
 
 \item{var}{Name of the variable. \code{NULL} (the default) detects it when the
 file holds exactly one data variable.}
@@ -29,26 +29,53 @@ axis. \code{NULL} (the default) detects them from CF metadata (\code{axis},
 A \link[=SpatProxy-class]{SpatProxy}.
 }
 \description{
-\code{as_proxy()} opens one netCDF file, reads the metadata of one variable and
-its coordinates, and returns a \link[=SpatProxy-class]{SpatProxy}. The CF metadata is
-applied here, once, so later steps can rely on each axis being in a fixed
-form. No values of the variable are read.
+\code{as_proxy()} describes one variable of gridded data and returns a
+\link[=SpatProxy-class]{SpatProxy}. The data can be one netCDF file, a series of netCDF
+files, or a \link[=SpatVoxel-class]{SpatVoxel} already in memory. For a netCDF file it
+reads the metadata of the variable and its coordinates and applies the CF
+metadata once, so later steps can rely on each axis being in a fixed form.
+No values of the variable are read.
 }
 \details{
+Besides one file, two sources give the same kind of proxy:
+\itemize{
+\item \strong{A series of files} (several paths): the same variable on the same
+grid and depths in every file, each with its own dated time axis, such as
+one file per day. The files are put in time order and their time axes
+joined into one, in the first file's units. A series stops with an error
+when files repeat or overlap each other's time steps, when a file has no
+dated time axis, or when the files differ in grid (spatial tiles) or in
+the variable's units. The time axis keeps its bounds only when every
+file has them.
+\item \strong{A \link[=SpatVoxel-class]{SpatVoxel} already in memory}: one time step (the voxel's
+\code{\link[terra:time]{terra::time()}} when set), with the voxel's cells, depths and depth
+edges; a voxel without edges gets slabs halfway between its depths, as
+\code{bounds = "midpoint"} gives. The time must be a date or a date-time; a
+date is read as midnight UTC. A voxel whose time is a year, a month or a
+plain number stops with an error: give it a date-time, or remove its
+time with \code{terra::time(v) <- NULL}. \code{\link[=as_voxel]{as_voxel()}} returns the voxel
+itself.
+}
+
+For netCDF files, each axis is put in a fixed form:
 \itemize{
 \item \strong{Longitude and latitude:} cell edges come from the coordinate's CF
 \code{bounds} variable, or halfway between neighbouring centres.
 \item \strong{Depth:} converted to metres positive down from the coordinate's
 \code{units} and \code{positive} attributes. Edges come from the CF bounds, or
-halfway between centres, cut at the surface. A depth axis stored deep to
-shallow is kept in that order and recorded as such.
+halfway between centres, cut at the surface and running half a gap
+below the deepest centre. A voxel read with \code{\link[=as_voxel]{as_voxel()}} keeps these
+edges. A depth axis stored deep to shallow is kept in that order and
+recorded as such.
 \item \strong{Time:} decoded with CFtime. Bounds are attached when the file has
 them; otherwise the axis has none (they aren't inferred). The time axis
 must be strictly increasing; a backwards or out-of-order axis is an
 error that suggests sorting the file, for example with CDO's
 \code{sorttimestamp}. Only the \code{standard}, \code{gregorian} and
-\code{proleptic_gregorian} calendars are supported, and climatological time
-axes aren't supported yet.
+\code{proleptic_gregorian} calendars are supported. A climatological time
+axis with one step, such as a World Ocean Atlas period, is recorded as a
+climatology without a date; climatologies with more steps aren't
+supported yet.
 \item \strong{CRS:} EPSG:4326, unless the variable's \code{grid_mapping} gives another
 geographic CRS as WKT (\code{crs_wkt} or \code{spatial_ref}).
 }
@@ -62,8 +89,7 @@ example an unlimited time dimension with no records).
 \section{Experimental}{
 
 \code{SpatProxy} and \code{\link[=as_proxy]{as_proxy()}} are experimental. Their slots and behaviour
-may change without notice while the core object is built, and no other
-function accepts a \code{SpatProxy} yet.
+may change without notice while the core object is built.
 }
 
 \examples{
@@ -73,6 +99,10 @@ x
 # Each axis in its fixed form: depth in metres, time as a CFtime object.
 x@axes$depth$centres
 x@axes$time$cftime
+
+# Read one time step into memory as a SpatVoxel.
+v <- as_voxel(x, time = 1)
+depths(v)
 }
 \seealso{
 \link[=SpatProxy-class]{SpatProxy}

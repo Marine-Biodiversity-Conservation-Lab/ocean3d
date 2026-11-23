@@ -17,8 +17,8 @@
 #' @param area sf, sfc, or SpatVector. Area polygon to crop the voxel to.
 #'   Reprojected to the voxel's CRS when the two differ.
 #' @param rast_3d [SpatVoxel-class]. Multi-depth raster, e.g. from [as_voxel()]
-#'   or [envelope_to_voxel()]. A netCDF file isn't accepted: load it as a
-#'   `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with [as_voxel()].
+#'   or [envelope_to_voxel()]. A netCDF file isn't accepted: describe it with
+#'   [as_proxy()] and read one time step with [as_voxel()].
 #' @param min_depth Numeric. Shallowest depth in metres. `NULL` (the default)
 #'   starts at the voxel's shallowest layer.
 #' @param max_depth Numeric. Deepest depth in metres. `NULL` (the default) runs

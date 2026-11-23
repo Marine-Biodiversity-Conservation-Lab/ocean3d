@@ -245,7 +245,8 @@ test_that("climatological time axes are recognised by attribute or year 0", {
     list(label = "months since year 0",
          args = list(time = c(0.5, 1.5),
                      time_units = "months since 0000-01-01 00:00:00"),
-         climatology = TRUE, messages = "months since 0000-01-01"),
+         climatology = TRUE,
+         messages = c("months since 0000-01-01", "aren't supported here yet")),
     list(label = "climatology attribute",
          args = list(time = c(0, 1),
                      time_atts = list(climatology = "climatology_bounds")),
@@ -255,7 +256,7 @@ test_that("climatological time axes are recognised by attribute or year 0", {
     f <- do.call(make_grid_file, c(list(depth = NULL), case$args))
     on.exit(unlink(f), add = TRUE)
     if (!case$climatology) {
-      expect_null(check(f), label = case$label)
+      expect_false(check(f), label = case$label)
       next
     }
     err <- expect_error(check(f), class = "ocean3d_error_time_climatology",
@@ -268,6 +269,35 @@ test_that("climatological time axes are recognised by attribute or year 0", {
                    label = case$label)
     }
   }
+})
+
+test_that("a one-step climatology passes when one step is allowed", {
+  check <- function(f) {
+    nc <- ncdf4::nc_open(f)
+    on.exit(ncdf4::nc_close(nc))
+    .check_climatology(nc, "time", basename(f), one_step_ok = TRUE)
+  }
+  units <- "months since 0000-01-01 00:00:00"
+  one <- make_grid_file(depth = NULL, time = 6, time_units = units)
+  several <- make_grid_file(depth = NULL, time = c(0.5, 1.5),
+                            time_units = units)
+  dated <- make_grid_file(depth = NULL, time = 0)
+  on.exit(unlink(c(one, several, dated)), add = TRUE)
+
+  expect_true(check(one))
+  expect_false(check(dated))
+  # A one-step climatology still stops where one step isn't allowed.
+  nc <- ncdf4::nc_open(one)
+  on.exit(ncdf4::nc_close(nc), add = TRUE)
+  expect_error(.check_climatology(nc, "time"),
+               class = "ocean3d_error_time_climatology")
+
+  err <- expect_error(check(several),
+                      class = "ocean3d_error_time_climatology")
+  expect_match(conditionMessage(err), basename(several), fixed = TRUE)
+  expect_match(conditionMessage(err),
+               "one time step is supported, but one with several steps",
+               fixed = TRUE)
 })
 
 test_that("a single monthly step with bounds is read", {

@@ -6,23 +6,26 @@
 \alias{volume,SpatEnvelope-method}
 \alias{volume,SpatVoxel-method}
 \alias{volume,SpatRaster-method}
-\title{Total 3D volume of a rasterized domain}
+\title{3D volume of a rasterized domain}
 \usage{
-volume(x, ...)
+volume(x, per_cell = FALSE, ...)
 
-\S4method{volume}{SpatVector3D}(x, ...)
+\S4method{volume}{SpatVector3D}(x, per_cell = FALSE, ...)
 
-\S4method{volume}{SpatEnvelope}(x, ...)
+\S4method{volume}{SpatEnvelope}(x, per_cell = FALSE, ...)
 
-\S4method{volume}{SpatVoxel}(x, bounds = c("midpoint", "top"))
+\S4method{volume}{SpatVoxel}(x, per_cell = FALSE, bounds = c("midpoint", "top"))
 
-\S4method{volume}{SpatRaster}(x, ...)
+\S4method{volume}{SpatRaster}(x, per_cell = FALSE, ...)
 }
 \arguments{
 \item{x}{A \link[=SpatEnvelope-class]{SpatEnvelope} or \link[=SpatVoxel-class]{SpatVoxel}. A bare SpatRaster is
 rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[=vect_to_envelope]{vect_to_envelope()}} or
-\code{\link[=as_voxel]{as_voxel()}} first. A netCDF file isn't accepted: load it as a
-\code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with \code{\link[=as_voxel]{as_voxel()}}.}
+\code{\link[=as_voxel]{as_voxel()}} first. A netCDF file isn't accepted: describe it with
+\code{\link[=as_proxy]{as_proxy()}} and read one time step with \code{\link[=as_voxel]{as_voxel()}}.}
+
+\item{per_cell}{\code{FALSE} (default) for the total volume, \code{TRUE} for the
+volume of each cell.}
 
 \item{...}{Arguments for the \link[=SpatVoxel-class]{SpatVoxel} method, which are an error
 for an envelope.}
@@ -37,13 +40,16 @@ both. Same argument, same meaning, as in \code{\link[=envelope_to_voxel]{envelop
 for a voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 }
 \value{
-Numeric of length 1. Total volume in km³.
+With \code{per_cell = FALSE}, a number: the total volume in km³. With
+\code{per_cell = TRUE}, a single-layer \code{SpatRaster} named \code{volume} on the grid
+of \code{x}: the volume of each cell in km³, \code{NA} where \code{x} is absent (no
+depth interval, or no occupied level). Its sum is the total.
 }
 \description{
-Sums the occupied volume of a \link[=SpatEnvelope-class]{SpatEnvelope} or a \link[=SpatVoxel-class]{SpatVoxel}
-over the whole grid. Both representations describe a 3D domain over a 2D
-grid, but they store depth in dual roles, so each computes the vertical
-extent differently:
+Measures the occupied volume of a \link[=SpatEnvelope-class]{SpatEnvelope} or a
+\link[=SpatVoxel-class]{SpatVoxel}, as a total over the whole grid or cell by cell. Both
+representations describe a 3D domain over a 2D grid, but they store depth
+in dual roles, so each computes the vertical extent differently:
 }
 \details{
 \describe{
@@ -62,6 +68,18 @@ overlap with the envelope. So a range of 0-100 m discretized onto
 more water than the envelope it came from. Coarse levels overstate; the
 error shrinks as the levels tighten around the range. Where an envelope's
 limits fall exactly on levels under \code{bounds = "top"}, the two agree.
+
+To measure the space two domains share, measure their intersection:
+\code{volume(intersect_3d(a, b))}.
+
+With one envelope and one voxel, \code{\link[=intersect_3d]{intersect_3d()}} places the envelope on
+the voxel's depth levels, so the overlap is measured on those levels while
+\code{volume()} of the envelope uses its own depth limits. To compare the two on
+the same levels, measure the envelope on them too:
+\verb{volume(envelope_to_voxel(a, depths(b), bounds = bounds,}
+\verb{depth_bounds = depth_bounds(b)), bounds = bounds)}. Pass the same \code{bounds}
+to \code{\link[=intersect_3d]{intersect_3d()}} and \code{volume()}; otherwise the overlap and the input
+volumes are measured on different slabs and don't add up.
 }
 \examples{
 fp <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2000,
@@ -84,9 +102,19 @@ gappy[[2]] <- terra::setValues(terra::rast(v[[2]]), NA)
 gappy <- as_voxel(gappy)
 volume(gappy)
 volume(voxel_to_envelope(gappy))
+
+# Per cell: the fourth cell is outside the domain, so it is NA.
+terra::values(volume(e, per_cell = TRUE))
+
+# Overlap with a second domain at 100-300 m: intersect, then measure.
+b <- as_envelope(fp, depth_min = 100, depth_max = 300)
+ov <- intersect_3d(e, b)
+volume(ov)
+terra::values(volume(ov, per_cell = TRUE))
 }
 \seealso{
-\code{\link[=calc_volume_overlap]{calc_volume_overlap()}} for the volume two domains share, and
-\code{\link[=intersect_3d]{intersect_3d()}} for the shared domain itself; \link[=SpatVolume-class]{SpatVolume} for why
-the two representations dispatch separately.
+\code{\link[=intersect_3d]{intersect_3d()}} for the space two domains share, which \code{volume()}
+then measures; \code{\link[=intersects_3d]{intersects_3d()}} for whether two domains share any depth
+in each cell; \link[=SpatVolume-class]{SpatVolume} for why the two representations
+dispatch separately.
 }

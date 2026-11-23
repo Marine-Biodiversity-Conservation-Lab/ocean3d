@@ -48,7 +48,9 @@ test_that("extract_to_area() selects the correct depth range", {
 
     expect_identical(terra::nlyr(out), as.numeric(length(case$depths)),
                      label = case$label)
+    # The crop to the polygon keeps the depths in terra::depth().
     expect_identical(depths(out), case$depths, label = case$label)
+    expect_identical(terra::depth(out), case$depths, label = case$label)
     expect_identical(names(out), paste0("tan_depth=", case$depths),
                      label = case$label)
   }

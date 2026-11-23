@@ -43,7 +43,6 @@ reference:
   desc: Measure 3D objects and their overlap.
   contents:
   - volume
-  - calc_volume_overlap
 - title: Extraction
   desc: >
     Extract environmental values from netCDF files at points, in buffers,

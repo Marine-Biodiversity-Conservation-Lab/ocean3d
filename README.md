@@ -139,9 +139,10 @@ Input: `SpatRaster` layers, tables of points or lines, and polygons (`sf`,
 - `create_study_raster()` — build an empty study-area `SpatRaster`
   covering the combined extent of one or more spatial inputs.
 - `as_voxel()` — wrap a multi-depth `SpatRaster` (or a list of
-  single-depth ones) as a validated `SpatVoxel`, ordered shallow to deep
-  with `{variable}_depth={value}` layer names. This is how gridded data,
-  including netCDF files loaded with terra, enter the voxel model.
+  single-depth ones) as a validated `SpatVoxel`, ordered shallow to deep,
+  with each layer's depth in `terra::depth()`. This is how gridded data,
+  including netCDF files described with `as_proxy()` or loaded with terra,
+  enter the voxel model.
 - `as_envelope()` — define a 3D envelope with two rasters, with `depth_min` 
   and `depth_max` corresponding to the minimum and maximum depths present in 
   given cell. 
@@ -176,13 +177,11 @@ object restricts the domain horizontally without restricting the depths.
 
 Input: `SpatEnvelope` or `SpatVoxel`. A voxel’s volume sums the slab each
 occupied depth level stands for, so interior gaps cost volume instead of
-being filled in. Given one of each, the envelope is discretized onto the
-voxel’s depth levels.
+being filled in.
 
-- `volume()` — total 3D volume (km³) of a rasterized domain.
-- `calc_volume_overlap()` — per-cell depth intervals and volumes for two
-  rasterized domains and their intersection (returns a 9-layer stack).
-  Built on `intersect_3d()`.
+- `volume()` — 3D volume (km³) of a rasterized domain, as a total or per
+  cell (`per_cell = TRUE`). Measure an overlap with
+  `volume(intersect_3d(a, b))`.
 
 ### Summarise: environmental extraction from a `SpatVoxel`
 
@@ -259,7 +258,7 @@ usethis::edit_r_environ()
   caching.
 - `woa_load_nc()` — load a WOA NetCDF and select a statistical field
   (e.g., objectively analyzed climatology), returning a `SpatRaster`
-  with the package’s standard `{variable}_depth={value}` layer names.
+  with one layer per depth, for `as_voxel()`.
 - `woa_cache_dir()` / `woa_cache_clear()` — manage the persistent WOA
   download cache.
 

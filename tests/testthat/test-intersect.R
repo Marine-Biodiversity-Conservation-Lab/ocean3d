@@ -159,28 +159,6 @@ test_that("intersect_3d() accepts polygons as SpatVector, sf and sfc", {
   }
 })
 
-# ---- intersect_3d: composition with volume ----------------------------------
-
-test_that("volume(intersect_3d(a, b)) equals summed calc_volume_overlap()", {
-  depths <- c(0, 50, 100, 150, 200)
-  e1 <- make_range_rast(c(0, 0, NA, 0, 0, 0, 0, 0, 0),
-                        c(100, 100, NA, 100, 100, 100, 120, 100, 100))
-  e2 <- make_range_rast(rep(50, 9),
-                        c(200, 60, 200, 200, 200, 200, 200, 200, 200))
-  v1 <- envelope_to_voxel(e1, depths)
-  v2 <- envelope_to_voxel(e2, depths)
-
-  overlap_sum <- function(x, y) {
-    terra::global(calc_volume_overlap(x, y)[["volume_overlap"]], "sum",
-                  na.rm = TRUE)[[1]]
-  }
-
-  expect_identical(volume(intersect_3d(e1, e2)), overlap_sum(e1, e2))
-  expect_identical(volume(intersect_3d(v1, v2)), overlap_sum(v1, v2))
-  expect_identical(volume(intersect_3d(e1, v2)), overlap_sum(e1, v2))
-  expect_identical(volume(intersect_3d(v1, e2)), overlap_sum(v1, e2))
-})
-
 # ---- intersects_3d ----------------------------------------------------------
 
 # Four cells covering the whole truth table: 1 = both present, depths meet;
@@ -569,6 +547,9 @@ test_that("voxel results keep the depth edges of their inputs", {
 
   expect_equal(edges_of(intersect_3d(field, plain)), edges)
   expect_equal(edges_of(intersect_3d(plain, field)), edges)
+  # An envelope placed on the voxel takes its edges.
+  e_full <- make_range_rast(rep(0, 9), rep(4, 9))
+  expect_equal(edges_of(intersect_3d(e_full, field)), edges)
   expect_equal(edges_of(mask(field, plain)), edges)
   # Masking by a voxel that carries the edges keeps them too, so the result
   # stands for the same water as the intersection.

@@ -74,18 +74,6 @@
   methods::as(occ, "SpatRaster")  # remove the 3D class
 }
 
-# Internal: per-cell occupied volume of a voxel, km^3, from the slab each
-# layer stands for. Summing thickness over occupied layers is what makes an
-# interior gap cost volume, which is the whole reason the voxel path is not
-# just voxel_to_envelope() plus the 2.5D formula.
-.voxel_cell_volume <- function(occ, slab, area_km2) {
-  thickness_m <- slab$upper - slab$lower
-  # The raster stays on the left of the operator: terra mishandles
-  # `numeric <op> SpatRaster`. The vector is recycled layer-wise.
-  occupied_m <- sum(occ * thickness_m)
-  area_km2 * (occupied_m / 1000)
-}
-
 # Internal: 1 where a cell is occupied at any depth, NA elsewhere -- the voxel
 # equivalent of a non-NA envelope cell.
 .voxel_present <- function(occ) {
