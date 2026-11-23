@@ -122,9 +122,9 @@
     )
   }
   standard_name <- .normalise_axis_attribute(
-    .read_time_attribute(nc, coordinate, "standard_name")
+    .read_attribute(nc, coordinate, "standard_name")
   )
-  formula_terms <- .read_time_attribute(nc, coordinate, "formula_terms")
+  formula_terms <- .read_attribute(nc, coordinate, "formula_terms")
   if (!is.null(formula_terms) ||
         grepl("^(ocean|atmosphere)_.*coordinate$", standard_name) ||
         grepl("pressure", standard_name, fixed = TRUE)) {
@@ -136,7 +136,7 @@
       call. = FALSE
     )
   }
-  positive <- .read_time_attribute(nc, coordinate, "positive")
+  positive <- .read_attribute(nc, coordinate, "positive")
   # Heights and altitudes increase upward; CF requires `positive` on them,
   # but do not read a non-compliant height axis as depths below the surface.
   if (is.null(positive) && standard_name %in% c("height", "altitude")) {
@@ -144,7 +144,7 @@
   }
   depth <- .prepare_depth_axis(
     values,
-    units = .read_time_attribute(nc, coordinate, "units"),
+    units = .read_attribute(nc, coordinate, "units"),
     positive = positive
   )
   # A stored axis must run one way, shallow to deep or deep to shallow, as in
@@ -158,11 +158,11 @@
 # the same layout. `values` are the stored coordinate values. Used by buffer
 # extraction and the core object's depth axis.
 .depth_bounds_m <- function(nc, coordinate, values, bounds) {
-  positive <- .read_time_attribute(nc, coordinate, "positive")
+  positive <- .read_attribute(nc, coordinate, "positive")
   if (is.null(positive)) {
     positive <- if (all(values >= 0)) "down" else "up"
   }
-  bounds_positive <- .read_time_attribute(nc, bounds$name, "positive")
+  bounds_positive <- .read_attribute(nc, bounds$name, "positive")
   if (!is.null(bounds_positive) &&
         !identical(tolower(trimws(bounds_positive)),
                    tolower(trimws(positive)))) {
@@ -171,7 +171,7 @@
   }
   # Unique endpoints avoid treating shared edges as duplicate depths.
   endpoints <- unique(as.vector(bounds$values))
-  units <- .read_time_attribute(nc, coordinate, "units")
+  units <- .read_attribute(nc, coordinate, "units")
   converted <- .prepare_depth_axis(endpoints, units, positive)$depth_m
   matrix(converted[match(as.vector(bounds$values), endpoints)], nrow = 2L)
 }

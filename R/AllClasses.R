@@ -5,16 +5,26 @@
 #' @importClassesFrom terra SpatRaster
 NULL
 
+# terra keeps the SpatVoxel / SpatEnvelope subclass through `mask()`, `[[`,
+# arithmetic, `ifel()` and `c()`. A result that isn't a valid 3D object (a
+# single depth layer, a footprint, an overlap stack) must have the class
+# removed with `methods::as(x, "SpatRaster")`, or it comes back wearing a
+# class it doesn't satisfy. The cast drops the 3D class but shares terra's
+# data: replacement functions such as `names<-` copy, but in-place
+# `terra::set.*()` calls on the result change the original too. Calls that
+# remove the class are marked "remove the 3D class".
+
 #' 3D voxel model: one layer per standard depth level
 #'
 #' A `SpatVoxel` is a [terra::SpatRaster] in which **depth is the layer index**
 #' and the cell values are the variable (temperature, oxygen, presence, ...).
 #' Each layer's depth is stored in terra's own per-layer field,
-#' [terra::depth()], in metres positive down; depths must be distinct and
-#' ordered shallow to deep. Read them with [depths()]. Layer names are free:
-#' [as_voxel()] names layers `{variable}_depth={value}` when it sets the
-#' depths, for readability, but renaming them changes nothing. The depth axis
-#' is grid-wide: every cell is sampled at the same set of standard depths.
+#' [terra::depth()], in metres positive down; depths must be set, distinct and
+#' ordered shallow to deep. Read them with [depths()]. [as_voxel()] names the
+#' layers `{variable}_depth={value}` when it sets the depths, as labels for
+#' people to read. The package never reads depths from layer names, so
+#' renaming the layers doesn't change their depths. The depth axis is
+#' grid-wide: every cell is sampled at the same set of standard depths.
 #'
 #' A voxel may have interior gaps — a cell can be NA at one depth and non-NA
 #' at the depths above and below it.
@@ -23,7 +33,6 @@ NULL
 #' the top and bottom of each slab, for example a netCDF file's depth bounds,
 #' set with the `depth_bounds` argument of [as_voxel()] or
 #' [envelope_to_voxel()] and read with [depth_bounds()]. [volume()],
-#' [calc_volume_overlap()],
 #' [envelope_to_voxel()], [voxel_to_envelope()], [intersect_3d()],
 #' [intersects_3d()] and [mask()] use these edges when the voxel has them for
 #' every layer, and work the edges out from the depths with their `bounds`
@@ -35,6 +44,16 @@ NULL
 #' plain `SpatRaster` (`app()`, writing to a file) drops them. Combining a
 #' voxel that has edges with one that doesn't, with `c()`, leaves some layers
 #' without edges, so `bounds` applies to the result.
+#'
+#' The depths stay through selecting layers (`[[`, `$`, `subset()`),
+#' replacing a layer with `[[<-`, `c()`, arithmetic, `ifel()`, `crop()` and
+#' `mask()`. The `SpatVoxel` methods for `subset()`, `[[<-` and `c()` keep
+#' them where terra alone would reset them to 0. A few terra operations drop
+#' them, such as `app()`, which also returns a plain `SpatRaster`. The
+#' package's functions then stop with an error; set the depths again with
+#' `as_voxel(x, depths = ...)` or [terra::depth()]. A plain `SpatRaster` (for
+#' example after `methods::as(v, "SpatRaster")`) gets terra's own behaviour:
+#' after a layer subset, its next operation resets the depths.
 #'
 #' @slot depth_edges A data frame with columns `depth`, `lower` and `upper`,
 #'   in metres positive down: the slab each depth stands for, from `lower`
@@ -65,12 +84,15 @@ NULL
 #' terra::nlyr(terra::crop(v, terra::ext(0, 1, 0, 1)))
 #' identical(depths(as_voxel(v)), depths(v))
 #'
-#' # Layer names are free: renaming keeps the depths.
+#' # Layer names are labels: renaming keeps the depths.
 #' names(v) <- c("surface", "mid", "deep")
 #' depths(v)
 #'
-#' # Validity is enforced on construction: the depths must be distinct and run
-#' # shallow to deep. A raster whose depths were never set reads as all 0 m.
+#' # Selecting layers keeps their depths through later operations.
+#' depths(terra::crop(v[[2:3]], terra::ext(0, 1, 0, 1)) * 2)
+#'
+#' # The class checks run on construction: the depths must be set, distinct
+#' # and run shallow to deep.
 #' try(methods::new("SpatVoxel", r))
 #' @export
 setClass(
@@ -291,7 +313,11 @@ setValidity("SpatVector3D", function(object) {
 setClassUnion("SpatVolume", c("SpatVoxel", "SpatEnvelope", "SpatVector3D"))
 
 setValidity("SpatVoxel", function(object) {
-  # Depth lives in terra::depth(); layer names are free.
+  # Depth lives in terra::depth(); layer names are only labels.
+  if (!.has_depths(object)) {
+    return(paste("depths must be set in terra::depth(); set them with",
+                 "as_voxel(x, depths = ...) or terra::depth()"))
+  }
   d <- terra::depth(object)
   if (anyNA(d)) return("every layer needs a depth in terra::depth()")
   if (is.unsorted(d)) return("depth layers must be ordered shallow to deep")
@@ -325,8 +351,8 @@ setValidity("SpatVoxel", function(object) {
 
 # Internal: the row of a depth_edges table for each depth, or NA for a depth
 # it doesn't hold. Depths are matched with .depth_tolerance(), because a depth
-# read back from a layer name (`temp_depth=0.494025`) can differ from the
-# stored one in the last digits.
+# that has been through float32 storage, such as a netCDF file's depth axis,
+# can differ from the stored one in the last digits.
 .edge_rows <- function(edge_depths, depths) {
   tol <- .depth_tolerance(depths)
   vapply(seq_along(depths), function(i) {
@@ -344,16 +370,32 @@ setValidity("SpatEnvelope", function(object) {
   # grid, which the sibling class avoids because its depths live in the layer
   # names. It is worth paying: without it a tagged raster that terra produced
   # passes as a valid envelope, and volume() returns a negative number.
-  min_of <- function(r) {
-    v <- terra::global(r, "min", na.rm = TRUE)[1, 1]
-    if (is.null(v) || is.na(v)) NA_real_ else v
+  #
+  if (!all(terra::hasValues(object)))
+    return("depth_min and depth_max must have values")
+
+  # A small in-memory raster is read once with terra::values(), which is much
+  # cheaper than two terra::global() calls and a difference raster. Up to
+  # 1e6 cells that copy is at most 16 MB, plus a few vectors of the same
+  # length for the comparisons. A larger or file-backed raster is summarised
+  # by terra::global(), which works in C++ and reads a file in blocks, so it
+  # is never copied into R whole.
+  if (all(terra::inMemory(object)) && terra::ncell(object) <= 1e6) {
+    v <- terra::values(object, mat = TRUE)
+    negative <- any(v[, "depth_min"] < 0, na.rm = TRUE)
+    inverted <- any(v[, "depth_max"] < v[, "depth_min"], na.rm = TRUE)
+  } else {
+    min_of <- function(r) terra::global(r, "min", na.rm = TRUE)[1, 1]
+    dmin <- .envelope_layer(object, "depth_min")
+    negative <- isTRUE(min_of(dmin) < 0)
+    inverted <- isTRUE(min_of(.envelope_layer(object, "depth_max") - dmin) < 0)
   }
-  shallowest <- min_of(.envelope_layer(object, "depth_min"))
-  if (!is.na(shallowest) && shallowest < 0)
-    return("depths are positive metres increasing downward")
-  thinnest <- min_of(.envelope_layer(object, "depth_max") -
-                       .envelope_layer(object, "depth_min"))
-  if (!is.na(thinnest) && thinnest < 0)
-    return("depth_max must be at least depth_min in every cell")
+  # No full stop at the end: .check_3d() appends its own sentence.
+  if (negative) {
+    return(paste("depths are positive metres increasing downward, but",
+                 "`depth_min` has negative values; if these are elevations,",
+                 "flip their sign first"))
+  }
+  if (inverted) return("depth_max must be at least depth_min in every cell")
   TRUE
 })

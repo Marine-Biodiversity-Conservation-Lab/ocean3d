@@ -1,5 +1,6 @@
 # The voxel builder (#113): as_voxel() on a SpatProxy reads one time step
-# into a SpatVoxel. Synthetic files from make_grid_file() (helper-netcdf-grid.R).
+# into a SpatVoxel. Synthetic files from make_grid_file()
+# (helper-netcdf-grid.R).
 
 # The value a voxel holds at each cell centre and depth, against the stored
 # array read in fixed lon, lat, depth order for time step `step`.
@@ -69,6 +70,10 @@ test_that("a voxel keeps the proxy's depth edges", {
   expect_equal(depth_bounds(v)$upper, cmems$proxy@axes$depth$upper)
   expect_equal(depth_bounds(v)$lower[1], 0)
   expect_gt(max(depth_bounds(v)$upper), 2.646)
+  # The voxel has edges, so `bounds` doesn't change its volume, and a subset
+  # measures its share of the whole column.
+  expect_equal(volume(v, bounds = "top"), volume(v))
+  expect_equal(volume(v[[1:2]]) + volume(v[[3]]), volume(v))
 
   # A single level without bounds has no edges to store, so `bounds` applies
   # (note on #113).

@@ -4,26 +4,45 @@
 \name{SpatVoxel-class}
 \alias{SpatVoxel-class}
 \alias{c,SpatVoxel-method}
+\alias{subset,SpatVoxel-method}
+\alias{[[<-,SpatVoxel,numeric-method}
+\alias{[[<-,SpatVoxel,character-method}
 \title{3D voxel model: one layer per standard depth level}
 \usage{
 \S4method{c}{SpatVoxel}(x, ...)
+
+\S4method{subset}{SpatVoxel}(x, subset, negate = FALSE, NSE = FALSE, ...)
+
+\S4method{[[}{SpatVoxel,numeric}(x, i, j) <- value
+
+\S4method{[[}{SpatVoxel,character}(x, i, j) <- value
 }
 \arguments{
-\item{x, ...}{For \code{c()}: a \code{SpatVoxel} and further rasters to combine, as
-with terra's \code{c()}. The result is a \code{SpatVoxel} with each layer's depth
-and the depth edges of every \code{SpatVoxel} among them, or a plain
-\code{SpatRaster} when the layers don't make a valid voxel (for example two
-layers at the same depth).}
+\item{x}{A \code{SpatVoxel}.}
+
+\item{...}{For \code{c()}: further rasters to combine with \code{x}, as with terra's
+\code{c()}. The result is a \code{SpatVoxel} with each layer's depth and the depth
+edges of every \code{SpatVoxel} among them, or a plain \code{SpatRaster} when the
+layers don't make a valid voxel (for example two layers at the same
+depth). For \code{subset()}: passed to terra's \code{subset()}.}
+
+\item{subset, negate, NSE}{For \code{subset()}, which \code{[[} and \code{$} also call: the
+layers to keep, as with terra's \code{subset()}. The result is a \code{SpatVoxel}
+that keeps each layer's depth through later operations.}
+
+\item{i, j, value}{For \verb{[[<-}: the layer to replace, by number or name, and
+its new values, as with terra. A replaced layer keeps its depth.}
 }
 \description{
 A \code{SpatVoxel} is a \link[terra:SpatRaster]{terra::SpatRaster} in which \strong{depth is the layer index}
 and the cell values are the variable (temperature, oxygen, presence, ...).
 Each layer's depth is stored in terra's own per-layer field,
-\code{\link[terra:depth]{terra::depth()}}, in metres positive down; depths must be distinct and
-ordered shallow to deep. Read them with \code{\link[=depths]{depths()}}. Layer names are free:
-\code{\link[=as_voxel]{as_voxel()}} names layers \verb{\{variable\}_depth=\{value\}} when it sets the
-depths, for readability, but renaming them changes nothing. The depth axis
-is grid-wide: every cell is sampled at the same set of standard depths.
+\code{\link[terra:depth]{terra::depth()}}, in metres positive down; depths must be set, distinct and
+ordered shallow to deep. Read them with \code{\link[=depths]{depths()}}. \code{\link[=as_voxel]{as_voxel()}} names the
+layers \verb{\{variable\}_depth=\{value\}} when it sets the depths, as labels for
+people to read. The package never reads depths from layer names, so
+renaming the layers doesn't change their depths. The depth axis is
+grid-wide: every cell is sampled at the same set of standard depths.
 }
 \details{
 A voxel may have interior gaps — a cell can be NA at one depth and non-NA
@@ -33,7 +52,6 @@ Each layer stands for a slab of water around its depth. A voxel can carry
 the top and bottom of each slab, for example a netCDF file's depth bounds,
 set with the \code{depth_bounds} argument of \code{\link[=as_voxel]{as_voxel()}} or
 \code{\link[=envelope_to_voxel]{envelope_to_voxel()}} and read with \code{\link[=depth_bounds]{depth_bounds()}}. \code{\link[=volume]{volume()}},
-\code{\link[=calc_volume_overlap]{calc_volume_overlap()}},
 \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}, \code{\link[=voxel_to_envelope]{voxel_to_envelope()}}, \code{\link[=intersect_3d]{intersect_3d()}},
 \code{\link[=intersects_3d]{intersects_3d()}} and \code{\link[terra:mask]{mask()}} use these edges when the voxel has them for
 every layer, and work the edges out from the depths with their \code{bounds}
@@ -45,6 +63,16 @@ terra operations that keep the \code{SpatVoxel} class (\code{[[}, \code{crop()},
 plain \code{SpatRaster} (\code{app()}, writing to a file) drops them. Combining a
 voxel that has edges with one that doesn't, with \code{c()}, leaves some layers
 without edges, so \code{bounds} applies to the result.
+
+The depths stay through selecting layers (\code{[[}, \code{$}, \code{subset()}),
+replacing a layer with \verb{[[<-}, \code{c()}, arithmetic, \code{ifel()}, \code{crop()} and
+\code{mask()}. The \code{SpatVoxel} methods for \code{subset()}, \verb{[[<-} and \code{c()} keep
+them where terra alone would reset them to 0. A few terra operations drop
+them, such as \code{app()}, which also returns a plain \code{SpatRaster}. The
+package's functions then stop with an error; set the depths again with
+\code{as_voxel(x, depths = ...)} or \code{\link[terra:depth]{terra::depth()}}. A plain \code{SpatRaster} (for
+example after \code{methods::as(v, "SpatRaster")}) gets terra's own behaviour:
+after a layer subset, its next operation resets the depths.
 }
 \section{Slots}{
 
@@ -77,12 +105,15 @@ methods::is(v, "SpatRaster")
 terra::nlyr(terra::crop(v, terra::ext(0, 1, 0, 1)))
 identical(depths(as_voxel(v)), depths(v))
 
-# Layer names are free: renaming keeps the depths.
+# Layer names are labels: renaming keeps the depths.
 names(v) <- c("surface", "mid", "deep")
 depths(v)
 
-# Validity is enforced on construction: the depths must be distinct and run
-# shallow to deep. A raster whose depths were never set reads as all 0 m.
+# Selecting layers keeps their depths through later operations.
+depths(terra::crop(v[[2:3]], terra::ext(0, 1, 0, 1)) * 2)
+
+# The class checks run on construction: the depths must be set, distinct
+# and run shallow to deep.
 try(methods::new("SpatVoxel", r))
 }
 \seealso{

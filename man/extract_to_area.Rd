@@ -11,8 +11,8 @@ extract_to_area(area, rast_3d, min_depth = NULL, max_depth = NULL)
 Reprojected to the voxel's CRS when the two differ.}
 
 \item{rast_3d}{\link[=SpatVoxel-class]{SpatVoxel}. Multi-depth raster, e.g. from \code{\link[=as_voxel]{as_voxel()}}
-or \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. A netCDF file isn't accepted: load it as a
-\code{SpatRaster} (e.g. with \code{\link[=woa_load_nc]{woa_load_nc()}}) and wrap it with \code{\link[=as_voxel]{as_voxel()}}.}
+or \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. A netCDF file isn't accepted: describe it with
+\code{\link[=as_proxy]{as_proxy()}} and read one time step with \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{min_depth}{Numeric. Shallowest depth in metres. \code{NULL} (the default)
 starts at the voxel's shallowest layer.}

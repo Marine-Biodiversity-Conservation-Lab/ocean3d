@@ -42,29 +42,26 @@ test_that("woa_cache_dir is stable across calls", {
   expect_identical(woa_cache_dir(), woa_cache_dir())
 })
 
-test_that("woa_download errors on unknown variable", {
-  expect_error(
-    woa_download("nonsense_variable", period = "annual"),
-    "Unknown variable"
+test_that("woa_download errors on an unknown variable, resolution or period", {
+  # `args` go to woa_download().
+  cases <- list(
+    list(label = "unknown variable",
+         args = list("nonsense_variable", period = "annual"),
+         pattern = "Unknown variable"),
+    list(label = "unknown resolution",
+         args = list("temperature", resolution = "7"),
+         pattern = "Unknown resolution"),
+    list(label = "unknown period name",
+         args = list("temperature", period = "yearly"),
+         pattern = "period must be"),
+    list(label = "unknown period number",
+         args = list("temperature", period = 99),
+         pattern = "Numeric period")
   )
-})
-
-test_that("woa_download errors on unknown resolution", {
-  expect_error(
-    woa_download("temperature", resolution = "7"),
-    "Unknown resolution"
-  )
-})
-
-test_that("woa_download errors on invalid period", {
-  expect_error(
-    woa_download("temperature", period = "yearly"),
-    "period must be"
-  )
-  expect_error(
-    woa_download("temperature", period = 99),
-    "Numeric period"
-  )
+  for (case in cases) {
+    expect_error(do.call(woa_download, case$args), case$pattern,
+                 label = case$label)
+  }
 })
 
 test_that("woa_download caches files and skips re-download", {
@@ -109,6 +106,7 @@ test_that("woa_load_nc errors when file missing", {
   expect_error(woa_load_nc("/no/such/file.nc"), "File not found")
 })
 
+
 test_that("woa_load_nc reads a field as a voxel with WOA's depth bounds", {
   f <- make_woa_file(tempfile(fileext = ".nc"), vars = c("t_an", "t_sd"))
   on.exit(unlink(f), add = TRUE)
@@ -120,6 +118,8 @@ test_that("woa_load_nc reads a field as a voxel with WOA's depth bounds", {
   expect_equal(depth_bounds(v)$lower, c(0, 50))
   expect_equal(depth_bounds(v)$upper, c(50, 150))
   expect_true(terra::same.crs(v, "EPSG:4326"))
+  # The variable's name is kept in terra::varnames(), not read from labels.
+  expect_identical(unique(terra::varnames(v)), "t_an")
   # A WOA period is a climatology without a date.
   expect_false(terra::timeInfo(v)$time)
   # The top-left cell is lat 1.5, lon 0.5: stored values 3 (0 m) and 7.

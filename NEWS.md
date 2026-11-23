@@ -2,26 +2,73 @@
 
 ## Breaking changes
 
+`calc_volume_overlap()` is removed (#150). It returned a nine-layer
+`SpatRaster` that the other 3D functions could only use as a flat 2D layer,
+not as the 3D space it described.
+Intersect with `intersect_3d()`, then measure with `volume()`, which has a
+new `per_cell` argument: `volume(x, per_cell = TRUE)` returns a one-layer
+`SpatRaster` named `volume` with the volume of each cell in km³, `NA` where
+`x` is absent. Each layer of the old stack maps to:
+
+| `calc_volume_overlap(a, b)` layer | Now |
+|---|---|
+| `depth_min_a`, `depth_max_a` | `a` itself (envelope), or `voxel_to_envelope(a)` (voxel) |
+| `depth_min_overlap`, `depth_max_overlap` | `ov <- intersect_3d(a, b)` |
+| `volume_a`, `volume_b` | `volume(a, per_cell = TRUE)`, `volume(b, per_cell = TRUE)` |
+| `volume_overlap` | `volume(ov, per_cell = TRUE)` |
+| `0` where both are present but share no depth | `both <- !is.na(volume(a, per_cell = TRUE)) & !is.na(volume(b, per_cell = TRUE))`, then `terra::ifel(both & is.na(vol_ov), 0, vol_ov)` with `vol_ov <- volume(ov, per_cell = TRUE)` |
+| totals | `volume(a)`, `volume(b)`, `volume(ov)` |
+
+Other changes to callers:
+
+* With an envelope and a voxel, `calc_volume_overlap()` reported the volume of
+  the envelope after placing it on the voxel's depth levels. `volume()` of the
+  envelope uses its own depth limits. To compare it with the overlap on the
+  same levels, use
+  `volume(envelope_to_voxel(a, depths(b), bounds = bounds, depth_bounds = depth_bounds(b)), bounds = bounds)`.
+* Cells with nothing in them are now `NA` everywhere. The old
+  `volume_overlap` layer was the one place that used `0`, for cells where
+  both domains are present but share no depth; build that `0` from the
+  inputs as in the table.
+* `volume()` of a domain with no cells now totals `0`, not `NA`.
+* `per_cell` is the second argument of `volume()`, so a positional
+  `volume(v, "top")` is now an error. Name it: `volume(v, bounds = "top")`.
+* Pass the same `bounds` to `intersect_3d()` and `volume()`; otherwise the
+  overlap and the input volumes are measured on different slabs and don't add
+  up.
+
 A `SpatVoxel` now stores each layer's depth in terra's own per-layer field,
 `terra::depth()`, instead of in its layer names (#113). Before, the depth was
 read from names like `temp_depth=100`, so renaming a layer broke the voxel.
-Now:
+Now the package never reads depths from layer names:
 
-* Layer names are free. `as_voxel()` still names layers
-  `{varname}_depth={value}` when it sets the depths, but renaming them
-  changes nothing.
-* `as_voxel()` takes the depths from `depths`, then from the raster's
-  `terra::depth()`, then from layer names that follow the old pattern, such
-  as those terra gives layers read from netCDF. So existing code that builds
-  voxels from named layers keeps working.
-* `depths()` reads `terra::depth()`.
-* `c()` of voxels keeps each layer's depth, and leaves its inputs unchanged.
-  It returns a plain `SpatRaster` when the layers don't make a valid voxel,
-  for example two layers at the same depth.
+* Renaming a layer doesn't change its depth. `as_voxel()` still names layers
+  `{varname}_depth={value}` when it sets the depths, as labels.
+* `as_voxel()` takes the depths from `depths`, or else from the raster's
+  `terra::depth()`, which terra also sets when it reads a netCDF file. A
+  raster with neither is an error, even if its layers are named
+  `{variable}_depth={value}`. Before, such names were read as depths.
+* `depths()` reads `terra::depth()`, and is an error for a raster without
+  depths. It no longer takes a character vector of layer names. To label a
+  per-layer summary such as `terra::global(v, ...)`, use `depths(v)`: the
+  summary has one row per layer, in layer order.
+* Selecting layers (`v[[2:3]]`, `v$name`, `subset()`) and replacing one with
+  `[[<-` keep each layer's depth through later operations. Without the
+  `SpatVoxel` methods for these, terra would reset the depths to 0, for
+  example in `v[[2:3]] * 2` or a crop of `v[[3]]`.
+* `c()` of voxels keeps each layer's depth. When the layers don't make a
+  valid voxel, for example two layers at the same depth, it returns a plain
+  `SpatRaster`; before, it returned an invalid `SpatVoxel`.
+* A few terra operations, such as `app()`, drop the depths and return a
+  plain `SpatRaster`; the package's functions then stop with an error. Set
+  the depths again with `as_voxel(x, depths = ...)`.
 
-Code that set a voxel's depth by renaming its layers should pass `depths` to
-`as_voxel()` or set `terra::depth()` instead. To keep the depth when saving,
-use `terra::writeCDF()` or `saveRDS(terra::wrap(v))`; GeoTIFF drops it.
+Code that set a voxel's depth through its layer names, or read depths back
+from names, should pass `depths` to `as_voxel()` or set `terra::depth()`,
+and read them with `depths()`. `terra::writeCDF()` and
+`saveRDS(terra::wrap(v))` keep the depths. GeoTIFF doesn't, so a voxel read
+back from GeoTIFF needs `depths`. All three return a plain `SpatRaster`, so
+re-wrap with `as_voxel()` after reading.
 
 `woa_load_nc()` now returns a `SpatVoxel` instead of a plain `SpatRaster`
 (#113). It reads the field's variable (such as `t_an`) through `as_proxy()`
@@ -33,7 +80,7 @@ file must be a WOA netCDF, with variables named `{variable}_{field}`; files
 built by writing rasters with `terra::writeCDF()` no longer load.
 
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
-`calc_volume_overlap()`, `envelope_to_voxel()`, `intersect_3d()`,
+`envelope_to_voxel()`, `intersect_3d()`,
 `intersects_3d()` and `mask()` (#138). The slab of water each depth level
 stands for now runs halfway to the neighbouring levels. This matches World
 Ocean Atlas levels and is closer than `"top"` to Copernicus Marine layers.
@@ -41,7 +88,7 @@ Under the old default each level was the top of its slab and the deepest
 level had no volume. Results change for voxels that don't carry their own
 depth edges (see `depth_bounds` under New features):
 
-* `volume()` and `calc_volume_overlap()` give different volumes. For example,
+* `volume()` gives different volumes. For example,
   levels at 0, 100 and 300 m now stand for 0-50, 50-200 and 200-300 m rather
   than 0-100, 100-300 and none.
 * `envelope_to_voxel()` can place an envelope on different levels, and so
@@ -123,12 +170,32 @@ message says how many cells have the limits swapped (or a seafloor above
   report now also explains outputs that are missing because no observation
   date was supplied for a file with a time dimension.
 * New experimental class `SpatProxy`, built with `as_proxy()`, describes one
-  variable of a netCDF file without reading its values (#113): its axes,
+  variable of gridded data without reading its values (#113): its axes,
   chunk sizes and coordinate reference system (CRS). Depth is in metres
-  positive down and time is a CFtime object. `as_proxy()` stops with an
-  error if the time axis isn't strictly increasing or is a climatology. No
-  other function accepts a `SpatProxy` yet, and it may change without
-  notice.
+  positive down with each level's edges, and time is a CFtime object. The
+  data can be:
+  * one netCDF file;
+  * a series of netCDF files, such as one per day, put in time order and
+    joined into one time axis. The files must hold the same variable on the
+    same grid and depths, and their time steps must not repeat or overlap;
+  * a `SpatVoxel` already in memory, as one time step. Its time must be a
+    date or a date-time.
+
+  A climatology with one time step, such as a World Ocean Atlas file, is
+  read without a date. `as_proxy()` stops with an error if a time axis
+  isn't strictly increasing or is a climatology with more than one step.
+* `as_voxel(proxy, time = ...)` reads one time step of a `SpatProxy` into a
+  `SpatVoxel` (#113), chosen by step number or date. The voxel's extent
+  comes from the cell edges, its CRS is always set, its depths and depth
+  edges come from the proxy, and its date is in `terra::time()`. For a file
+  without depth bounds, the depth edges are halfway between levels, so the
+  voxel's `bounds` argument doesn't apply. Grids that are regular apart from
+  rounding in the stored coordinates are treated as regular; other irregular
+  grids stop with an error.
+
+  `SpatProxy`, `as_proxy()` and reading a `SpatProxy` with `as_voxel()` are
+  experimental and may change without notice while the core object is
+  built.
 * New class `SpatVector3D` for 3D points, lines and polygons, built with
   `as_vector3d()` from a table, sf object or `terra::SpatVector`. Points
   and lines have a depth (positive metres down) and an optional time at
@@ -146,6 +213,24 @@ message says how many cells have the limits swapped (or a seafloor above
   the polygons covering it, so polygons from 0 to 50 m and from 200 to
   300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
   are polygon times, with a message (#114).
+* `volume()` measures `SpatVector3D` polygons: the sum of each polygon's
+  area times its depth range, in km³. Space where polygons overlap is
+  counted once for each polygon, so the total isn't the volume of their
+  union (#115).
+* `intersect_3d()` and `intersects_3d()` accept `SpatVector3D` polygons
+  with a `SpatEnvelope` or `SpatVoxel`, in either order, and `mask()`
+  accepts them as the mask. The polygons are first put on the raster's
+  grid, so a depth gap between overlapping polygons over one cell is filled
+  in. `mask(voxel, polygons)` keeps the voxel's values in the cells and
+  depth levels the polygons reach. Polygons that miss the grid give an
+  empty result, not an error (#115).
+* `intersect_3d()` of two sets of `SpatVector3D` polygons gives a polygon
+  for each pair whose outlines, depth ranges and time intervals overlap,
+  with columns `feature_id_x` and `feature_id_y` naming the pair. Measure
+  the overlap with `volume(intersect_3d(x, y))` (#115).
+* `intersects_3d()` of two sets of `SpatVector3D` polygons gives, for each
+  polygon of `x`, the feature IDs of the polygons of `y` it shares 3D space
+  with, as a list named by the IDs of `x` (#115).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`, and read them with the new
@@ -211,6 +296,21 @@ message says how many cells have the limits swapped (or a seafloor above
   `degrees_north`). They used to be read with the grid indices as longitude
   and latitude. Regrid such data to a regular longitude/latitude grid
   first (#93).
+
+## Minor improvements
+
+* Functions that take a `SpatEnvelope` check it faster when it is held in
+  memory. Envelopes read from a file, or with more than a million cells, are
+  checked as before. On 9-cell test grids, `as_envelope()` is about 5 times
+  faster, `intersect_3d()` about 2 times, `volume()` about 1.6 times and
+  `calc_volume_overlap()` about 1.2 times (#154).
+
+* `as_envelope()`'s depth errors now come from the `SpatEnvelope` validity
+  check, so they start with `invalid class "SpatEnvelope" object:` and use
+  its wording: "depth_max must be at least depth_min in every cell", and for
+  negative depths "depths are positive metres increasing downward, but
+  `depth_min` has negative values; if these are elevations, flip their sign
+  first" (#154).
 
 ## Dependencies
 

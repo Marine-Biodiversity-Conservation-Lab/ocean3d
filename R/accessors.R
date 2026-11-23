@@ -2,25 +2,22 @@
 
 #' Depths of a voxel's layers
 #'
-#' Read the depth axis of a [SpatVoxel-class]. Depth is the layer index in a
-#' voxel, and each layer's depth is stored in terra's own per-layer field,
-#' [terra::depth()]. Layer names are free.
+#' Read the depth of each layer of a [SpatVoxel-class]. Depth is the layer
+#' index in a voxel, and each layer's depth is stored in terra's own per-layer
+#' field, [terra::depth()]. Layer names are labels for people to read: the
+#' depths are never read from them, so renaming the layers doesn't change
+#' them.
 #'
-#' `x` is normally a `SpatVoxel`. A plain [terra::SpatRaster] works too: its
-#' [terra::depth()] when set, otherwise the depths in layer names that follow
-#' the `{variable}_depth={value}` pattern (the names [as_voxel()] gives, and
-#' that terra gives layers read from netCDF). A bare character vector of layer
-#' names is parsed the same way, which is useful for the row names of a
-#' [terra::global()] result.
+#' `x` can also be a plain [terra::SpatRaster] whose depths are set in
+#' [terra::depth()], such as a raster terra read from a netCDF file.
 #'
 #' Depths are positive metres increasing downward.
 #'
-#' @param x A [SpatVoxel-class], a [terra::SpatRaster], or a character vector of
-#'   layer names.
+#' @param x A [SpatVoxel-class], or a [terra::SpatRaster] with its depths set.
 #'
-#' @returns Numeric vector, one depth per layer of `x` (or per element, when `x`
-#'   is character). When depths come from names: `NA` for any name that doesn't
-#'   follow the pattern, and an error when no name does.
+#' @returns Numeric vector, one depth per layer of `x`. An error when the
+#'   depths aren't set, for example after a terra operation that drops them
+#'   (see [SpatVoxel-class]).
 #'
 #' @seealso [as_voxel()], which sets the depths.
 #'
@@ -32,36 +29,44 @@
 #' names(v)
 #' depths(v)
 #'
-#' # A character vector works too, so the depths of a per-layer summary can be
-#' # recovered from its row names.
+#' # A per-layer summary has one row per layer, in layer order, so the voxel's
+#' # depths label it.
 #' per_depth <- terra::global(v, "mean", na.rm = TRUE)
-#' depths(rownames(per_depth))
-#'
-#' # Names that do not follow the convention come back NA, as long as at least
-#' # one name does.
-#' depths(c("temp_depth=0", "not_a_depth_layer"))
+#' per_depth$depth <- depths(v)
+#' per_depth
 #' @export
 depths <- function(x) {
-  if (is.character(x)) {
-    return(.parse_depth_layers_names(x))
-  }
   if (!methods::is(x, "SpatRaster")) {
-    stop("`x` must be a SpatVoxel, a SpatRaster, or a character vector of ",
-         "layer names; got ", paste(class(x), collapse = "/"), ".",
-         call. = FALSE)
+    rlang::abort(glue::glue(
+      "`x` must be a SpatVoxel or a SpatRaster; got ",
+      "{paste(class(x), collapse = '/')}."
+    ), class = "ocean3d_error_depths_input", call = NULL)
   }
-  if (methods::is(x, "SpatVoxel") || .depth_set(x)) return(terra::depth(x))
-  .parse_depth_layers_names(names(x))
+  # as_voxel() reads the depths through here too, so both stop the same way.
+  if (!.has_depths(x)) {
+    rlang::abort(paste(
+      "The raster has no depths in terra::depth(). Pass `depths` to",
+      "as_voxel(), or set them with terra::depth(). Layer names aren't read",
+      "as depths. terra drops the depths in some operations, such as app();",
+      "see ?`SpatVoxel-class`."
+    ), class = "ocean3d_error_no_depths", call = NULL)
+  }
+  terra::depth(x)
 }
 
-# Internal: whether a plain SpatRaster's depths are set with terra::depth().
-# terra flags a raster whose depths were set, but a layer subset keeps the
-# values and drops the flag, so any non-zero depth counts as set too. Unset
-# depths read as 0. A SpatVoxel always has its depths set by as_voxel(), so
-# callers don't ask this of one.
-.depth_set <- function(x) {
-  flag <- tryCatch(x@pntr$hasDepth, error = function(e) FALSE)
-  isTRUE(flag) || any(terra::depth(x) != 0)
+# Internal: whether terra holds the raster's depths. terra sets a flag when
+# depths are set with terra::depth() or read from a netCDF file, even when
+# they are all 0, and clears it whenever an operation resets them to 0
+# (app(), `[[<-`, c(), and anything after a layer subset of a raster in
+# memory). Unset depths also read as 0, so the flag is the only way to tell a
+# 0 m layer from a layer without a depth. A layer subset of a raster in
+# memory keeps the values but clears the flag; the SpatVoxel method for
+# subset() sets it again. terra has no exported accessor for the flag. If a
+# terra release renames it, every raster reads as having no depths, so
+# as_voxel() and depths() stop, and c() of voxels gives a plain SpatRaster,
+# rather than return wrong depths.
+.has_depths <- function(x) {
+  isTRUE(tryCatch(x@pntr$hasDepth, error = function(e) FALSE))
 }
 
 #' Depth edges of a voxel's layers
@@ -69,9 +74,11 @@ depths <- function(x) {
 #' Read the slab of water each layer of a [SpatVoxel-class] stands for, when
 #' the voxel carries its own depth edges. Set them with the `depth_bounds`
 #' argument of [as_voxel()] or [envelope_to_voxel()], for example from a
-#' netCDF file's depth bounds.
+#' netCDF file's depth bounds. A voxel read from a [SpatProxy-class] carries
+#' the proxy's edges, which are halfway between levels when the file has no
+#' depth bounds (see [as_voxel()]).
 #'
-#' [volume()], [calc_volume_overlap()], [envelope_to_voxel()],
+#' [volume()], [envelope_to_voxel()],
 #' [voxel_to_envelope()], [intersect_3d()], [intersects_3d()] and [mask()]
 #' use these edges before their `bounds` argument. A voxel without edges, or
 #' with edges for only some of its layers (for example after `c()` with a
@@ -116,25 +123,4 @@ depth_bounds <- function(x) {
   edges <- edges[row, , drop = FALSE]
   rownames(edges) <- NULL
   edges
-}
-
-# Internal: parse numeric depths from layer names following the
-# `{variable}_depth={value}` pattern: the names terra gives layers read from
-# netCDF, and that voxels had before depths moved to terra::depth(). Returns a
-# numeric vector the same length as its input, NA for any name that does not
-# match. With `error = TRUE` (the default) it stops when no name matches.
-# Used by depths() for plain rasters without terra::depth(), and by
-# as_voxel() with `error = FALSE`, to report bad names itself.
-.parse_depth_layers_names <- function(layer_names, error = TRUE) {
-  depths <- suppressWarnings(
-    as.numeric(stringr::str_extract(layer_names, "(?<=_depth=)-?[0-9.]+"))
-  )
-  if (error && all(is.na(depths))) {
-    stop(
-      "No layer names match the '{variable}_depth={value}' convention. ",
-      "Got: ", toString(utils::head(layer_names)),
-      call. = FALSE
-    )
-  }
-  depths
 }

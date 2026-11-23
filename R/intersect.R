@@ -14,23 +14,39 @@
 # else with the list of accepted types.
 #
 # terra propagates the subclass through its operations, so every result that
-# is not a 3D domain is stripped with .as_plain_raster() before it is returned,
-# and every 3D result is rebuilt through as_envelope() or as_voxel() so the
-# validity rules run.
+# is not a 3D domain has the class removed with methods::as(x, "SpatRaster")
+# before it is returned (see R/AllClasses.R), and every 3D result is rebuilt
+# through as_envelope() or as_voxel() so the validity rules run.
 
-# Internal: the error for a query in which neither side is a 3D object.
-.stop_neither_3d <- function() {
-  stop("neither `x` nor `y` is a SpatEnvelope or a SpatVoxel. A 3D query ",
-       "needs at least one 3D object; build one with as_envelope(), ",
-       "vect_to_envelope() or as_voxel().", call. = FALSE)
+# Internal: the one producer of `ocean3d_error_query_input`, for a pair no
+# method takes: neither side is a 3D object, or SpatVector3D polygons meet
+# something other than an envelope, a voxel or other polygons.
+.stop_neither_3d <- function(x, y) {
+  vector <- methods::is(x, "SpatVector3D") || methods::is(y, "SpatVector3D")
+  message <- if (vector) {
+    other <- if (methods::is(x, "SpatVector3D")) y else x
+    glue::glue(
+      "SpatVector3D polygons can be compared with a SpatEnvelope, a ",
+      "SpatVoxel or other SpatVector3D polygons, not with ",
+      "{class(other)[1L]}. Build 3D polygons from 2D ones with as_vector3d()."
+    )
+  } else {
+    paste0(
+      "neither `x` nor `y` is a SpatEnvelope, a SpatVoxel or SpatVector3D ",
+      "polygons. A 3D query needs at least one 3D object; build one with ",
+      "as_envelope(), vect_to_envelope(), as_voxel() or as_vector3d()."
+    )
+  }
+  rlang::abort(message, class = "ocean3d_error_query_input", call = NULL)
 }
 
 # Internal: a voxel's occupancy as a presence domain: 1 where occupied, NA
 # elsewhere, on the depth levels of `x`, carrying `depth_bounds` if given.
 .presence_voxel <- function(occ, depths, depth_bounds = NULL) {
   out <- terra::ifel(occ > 0, 1, NA)
-  as_voxel(.as_plain_raster(out), depths = depths, varname = "presence",
-           depth_bounds = depth_bounds)
+  # remove the 3D class
+  as_voxel(methods::as(out, "SpatRaster"), depths = depths,
+           varname = "presence", depth_bounds = depth_bounds)
 }
 
 # ---- intersect_3d -----------------------------------------------------------
@@ -115,7 +131,8 @@ setMethod(
     .no_extra_args(...)
     .check_3d(x, "x")
     fp <- .footprint_of(y, x)
-    as_envelope(terra::mask(.as_plain_raster(x), fp))
+    # remove the 3D class
+    as_envelope(terra::mask(methods::as(x, "SpatRaster"), fp))
   }
 )
 
@@ -146,7 +163,7 @@ setMethod("intersect_3d", c("ANY", "SpatVoxel"),
 #' @rdname intersect_3d
 #' @export
 setMethod("intersect_3d", c("ANY", "ANY"),
-          function(x, y, ...) .stop_neither_3d())
+          function(x, y, ...) .stop_neither_3d(x, y))
 
 # ---- intersects_3d ----------------------------------------------------------
 
@@ -160,7 +177,7 @@ setMethod("intersect_3d", c("ANY", "ANY"),
   # ifel() yields 1/0/NA; only as.bool() makes values() give TRUE/FALSE/NA.
   out <- terra::as.bool(out)
   names(out) <- "intersects"
-  .as_plain_raster(out)
+  methods::as(out, "SpatRaster")  # remove the 3D class
 }
 
 #' @rdname intersects_3d
@@ -265,7 +282,7 @@ setMethod("intersects_3d", c("ANY", "SpatVoxel"),
 #' @rdname intersects_3d
 #' @export
 setMethod("intersects_3d", c("ANY", "ANY"),
-          function(x, y, ...) .stop_neither_3d())
+          function(x, y, ...) .stop_neither_3d(x, y))
 
 # ---- mask -------------------------------------------------------------------
 
@@ -294,6 +311,12 @@ setMethod("intersects_3d", c("ANY", "ANY"),
 #'   \item{plain `SpatRaster` masked by an envelope or a voxel}{A cell is kept
 #'     where the mask domain is present at any depth. Without this method
 #'     terra would read the mask's first layer only.}
+#'   \item{anything masked by [SpatVector3D-class] polygons}{The polygons
+#'     are put on the grid of `x` with [vector3d_to_envelope()], then used as
+#'     an envelope mask as above. A voxel keeps its values in the cells and
+#'     levels the polygons reach. Where polygons overlap, a cell gets the
+#'     shallowest top and the deepest bottom, so a depth gap between them is
+#'     kept too. The time intervals are dropped, with a message.}
 #' }
 #'
 #' A voxel or envelope masked by a plain `SpatRaster` or by polygons is
@@ -302,10 +325,11 @@ setMethod("intersects_3d", c("ANY", "ANY"),
 #'
 #' @param x The raster whose values are kept: a [SpatVoxel-class], a
 #'   [SpatEnvelope-class], or a plain `SpatRaster`. A netCDF file isn't
-#'   accepted: load it as a `SpatRaster` (e.g. with [woa_load_nc()]) and wrap
-#'   it with [as_voxel()].
+#'   accepted: describe it with [as_proxy()] and read one time step with
+#'   [as_voxel()].
 #' @param mask The 3D domain to keep `x` inside: a [SpatEnvelope-class] or a
-#'   [SpatVoxel-class] on the same grid as `x`.
+#'   [SpatVoxel-class] on the same grid as `x`, or [SpatVector3D-class]
+#'   polygons, which are put on that grid.
 #' @param bounds Only when one side is an envelope and the other a voxel. How
 #'   the envelope is placed on the voxel's depth levels: `"midpoint"`
 #'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
@@ -348,7 +372,9 @@ NULL
 # Internal: terra's own mask(), reached on plain copies so a method here never
 # dispatches back to itself.
 .mask_plain <- function(x, keep, ...) {
-  terra::mask(.as_plain_raster(x), .as_plain_raster(keep), ...)
+  # remove the 3D class
+  terra::mask(methods::as(x, "SpatRaster"), methods::as(keep, "SpatRaster"),
+              ...)
 }
 
 #' @rdname mask-3d
@@ -427,6 +453,189 @@ setMethod(
     terra::mask(x, .footprint(mask), ...)
   }
 )
+
+# ---- SpatVector3D polygons --------------------------------------------------
+
+# Internal: SpatVector3D polygons on the grid of `template` as an envelope,
+# so the queries above compare them with an envelope or voxel cell by cell,
+# as SPEC.md ("Intersect: spatial query") plans. No polygons, polygons that
+# miss the grid and polygons with no thickness give an empty envelope instead
+# of vector3d_to_envelope()'s errors: sharing no space is an answer here, as
+# it is for two envelopes, and intersect_3d() of two polygon sets can return
+# no polygons. Callers assign its result before passing it on: an error
+# raised while S4 evaluates an argument for dispatch loses its class.
+.polygons_on_grid <- function(x, template) {
+  # Checked first, so empty points or lines are still an error.
+  .check_polygons(x)
+  empty <- function(...) {
+    # remove the 3D class
+    grid <- methods::as(template[[1]], "SpatRaster")
+    out <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
+    names(out) <- c("depth_min", "depth_max")
+    as_envelope(out)
+  }
+  if (length(x) == 0L) return(empty())
+  tryCatch(vector3d_to_envelope(x, template),
+           ocean3d_error_envelope_empty = empty)
+}
+
+#' @rdname intersect_3d
+#' @export
+setMethod("intersect_3d", c("SpatVector3D", "SpatEnvelope"),
+          function(x, y, ...) {
+            polygons <- .polygons_on_grid(x, y)
+            intersect_3d(polygons, y, ...)
+          })
+
+#' @rdname intersect_3d
+#' @export
+setMethod("intersect_3d", c("SpatVector3D", "SpatVoxel"),
+          function(x, y, ...) {
+            polygons <- .polygons_on_grid(x, y)
+            intersect_3d(polygons, y, ...)
+          })
+
+#' @rdname intersect_3d
+#' @export
+setMethod("intersect_3d", c("SpatEnvelope", "SpatVector3D"),
+          function(x, y, ...) intersect_3d(y, x, ...))
+
+#' @rdname intersect_3d
+#' @export
+setMethod("intersect_3d", c("SpatVoxel", "SpatVector3D"),
+          function(x, y, ...) intersect_3d(y, x, ...))
+
+#' @rdname intersects_3d
+#' @export
+setMethod("intersects_3d", c("SpatVector3D", "SpatEnvelope"),
+          function(x, y, ...) {
+            polygons <- .polygons_on_grid(x, y)
+            intersects_3d(polygons, y, ...)
+          })
+
+#' @rdname intersects_3d
+#' @export
+setMethod("intersects_3d", c("SpatVector3D", "SpatVoxel"),
+          function(x, y, ...) {
+            polygons <- .polygons_on_grid(x, y)
+            intersects_3d(polygons, y, ...)
+          })
+
+#' @rdname intersects_3d
+#' @export
+setMethod("intersects_3d", c("SpatEnvelope", "SpatVector3D"),
+          function(x, y, ...) intersects_3d(y, x, ...))
+
+#' @rdname intersects_3d
+#' @export
+setMethod("intersects_3d", c("SpatVoxel", "SpatVector3D"),
+          function(x, y, ...) intersects_3d(y, x, ...))
+
+# Two sets of polygons: every pair whose outlines, depth ranges and times
+# overlap gives one polygon, as sf::st_intersection() does in 2D.
+#' @rdname intersect_3d
+#' @export
+setMethod(
+  "intersect_3d", c("SpatVector3D", "SpatVector3D"),
+  function(x, y, ...) {
+    .no_extra_args(...)
+    .check_polygons(x)
+    .check_polygons(y)
+    resolution <- unique(stats::na.omit(c(x@time_resolution,
+                                          y@time_resolution)))
+    if (length(resolution) > 1L) {
+      rlang::abort(paste0(
+        "One set of polygons has dates and the other has hours, so their ",
+        "times can't be compared. Rebuild one with as_vector3d() from ",
+        "times of the same kind."
+      ), class = "ocean3d_error_time_resolution_differ", call = NULL)
+    }
+    as_pieces <- function(v, suffix) {
+      f <- v@features
+      out <- sf::st_sf(f[c("feature_id", "depth_min", "depth_max",
+                           "time_start", "time_end")],
+                       geometry = f$geometry)
+      names(out)[1:5] <- paste0(names(out)[1:5], suffix)
+      # Depths and times hold for the whole polygon, which tells sf not to
+      # warn that they might not.
+      sf::st_agr(out) <- "constant"
+      out
+    }
+    pairs <- sf::st_intersection(as_pieces(x, "_x"), as_pieces(y, "_y"))
+
+    depth_min <- pmax(pairs$depth_min_x, pairs$depth_min_y)
+    depth_max <- pmin(pairs$depth_max_x, pairs$depth_max_y)
+    # A polygon without a time is there at any time, so the pair takes the
+    # other polygon's interval. Intervals are closed: with dates, both
+    # include their end day, so two that share a day overlap on it.
+    time_start <- pmax(pairs$time_start_x, pairs$time_start_y, na.rm = TRUE)
+    time_end <- pmin(pairs$time_end_x, pairs$time_end_y, na.rm = TRUE)
+    # Outlines that only share an edge or corner give lines or points,
+    # which have no area; a collection keeps its polygon parts.
+    geometry <- lapply(sf::st_geometry(pairs), function(g) {
+      if (inherits(g, "GEOMETRYCOLLECTION")) {
+        # On one geometry, st_collection_extract() and st_union() give a
+        # geometry, not a column, so the parts go in a column first.
+        parts <- sf::st_sfc(sf::st_collection_extract(g, "POLYGON"))
+        g <- sf::st_union(parts)[[1]]
+      }
+      g
+    })
+    geometry <- sf::st_sfc(geometry, crs = 4326)
+    polygonal <- sf::st_geometry_type(geometry) %in%
+      c("POLYGON", "MULTIPOLYGON") & !sf::st_is_empty(geometry)
+    # Strict `>`, as for envelopes: depth ranges that only touch share no
+    # water.
+    keep <- polygonal & depth_max > depth_min &
+      (is.na(time_start) | time_start <= time_end)
+
+    features <- data.frame(
+      feature_id = as.character(seq_len(sum(keep))),
+      depth_min = depth_min[keep],
+      depth_max = depth_max[keep],
+      time_start = time_start[keep],
+      time_end = time_end[keep],
+      feature_id_x = pairs$feature_id_x[keep],
+      feature_id_y = pairs$feature_id_y[keep],
+      stringsAsFactors = FALSE
+    )
+    features$geometry <- geometry[keep]
+    .new_vector3d("polygons",
+                  if (length(resolution)) resolution else NA_character_,
+                  features = features)
+  }
+)
+
+# Two sets of polygons: for each polygon of `x`, the polygons of `y` it
+# shares 3D space with. The pairs come from intersect_3d(), so the two always
+# agree. That builds every shared outline, which a yes/no answer doesn't
+# need; testing outlines with a predicate that ignores shared edges, then
+# depths and times, would be faster for large sets.
+#' @rdname intersects_3d
+#' @export
+setMethod(
+  "intersects_3d", c("SpatVector3D", "SpatVector3D"),
+  function(x, y, ...) {
+    shared <- as.data.frame(intersect_3d(x, y, ...))
+    ids_x <- as.data.frame(x)$feature_id
+    ids_y <- as.data.frame(y)$feature_id
+    hits <- split(shared$feature_id_y, factor(shared$feature_id_x, ids_x))
+    # In the order of `y`, as sf::st_intersects() lists them.
+    lapply(hits, function(h) ids_y[ids_y %in% h])
+  }
+)
+
+# One signature serves voxels, envelopes and plain rasters: the polygons go
+# on the grid of `x`, and mask() then dispatches to the envelope methods
+# above for that class of `x`.
+#' @rdname mask-3d
+#' @export
+setMethod("mask", c("SpatRaster", "SpatVector3D"),
+          function(x, mask, ...) {
+            polygons <- .polygons_on_grid(mask, x)
+            mask(x, polygons, ...)
+          })
+
 # ---- terra::intersect() guard -----------------------------------------------
 
 #' @rdname intersect_3d

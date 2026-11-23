@@ -28,9 +28,9 @@
 # Time bounds (from .read_bounds()) must use the coordinate's calendar.
 # Shared by buffer extraction and the core object, which read time bounds.
 .check_time_bounds_calendar <- function(nc, time_dim, bounds) {
-  calendar <- .read_time_attribute(nc, time_dim, "calendar")
+  calendar <- .read_attribute(nc, time_dim, "calendar")
   if (is.null(calendar)) calendar <- "standard"
-  bounds_calendar <- .read_time_attribute(nc, bounds$name, "calendar")
+  bounds_calendar <- .read_attribute(nc, bounds$name, "calendar")
   if (!is.null(bounds_calendar) &&
         !identical(tolower(bounds_calendar), tolower(calendar))) {
     stop("Time bounds and coordinate use different calendars.",
@@ -39,32 +39,40 @@
   invisible(NULL)
 }
 
-# Whether a time axis is a climatology: one with a CF `climatology`
+# Checks for a climatological time axis: one with a CF `climatology`
 # attribute, or months or years counted from year 0 (WOA's `months since
 # 0000-01-01`, which CFtime can't decode). Days or hours since year 0 (as in
-# MATLAB datenums) are ordinary dates.
-.is_climatology <- function(nc, time_dim) {
-  units <- .read_time_attribute(nc, time_dim, "units")
+# MATLAB datenums) are ordinary dates. An ordinary time axis returns FALSE
+# invisibly, and a climatology stops with `ocean3d_error_time_climatology`.
+# With `one_step_ok = TRUE`, as in the core object, a climatology with one
+# time step returns TRUE instead, for the caller to record without a date.
+# Buffer extraction stops on every climatology; point and track extraction
+# accept climatologies and report them instead. `file` names the file in the
+# message.
+.check_climatology <- function(nc, time_dim, file = NULL,
+                               one_step_ok = FALSE) {
+  units <- .read_attribute(nc, time_dim, "units")
   units_ok <- is.character(units) && length(units) == 1L && !is.na(units)
   year_zero <- units_ok &&
     grepl("^\\s*(months?|years?)\\s+since\\s+0+-", units, ignore.case = TRUE)
-  year_zero || !is.null(.read_time_attribute(nc, time_dim, "climatology"))
-}
-
-# Stops on a climatological time axis (see .is_climatology()). Buffer
-# extraction stops here; the core object stops only for a climatology with
-# more than one step; point and track extraction accept climatologies and
-# report them instead. `file` names the file in the message.
-.check_climatology <- function(nc, time_dim, file = NULL) {
-  if (!.is_climatology(nc, time_dim)) return(invisible(NULL))
-  units <- .read_time_attribute(nc, time_dim, "units")
-  units_ok <- is.character(units) && length(units) == 1L && !is.na(units)
+  if (!year_zero && is.null(.read_attribute(nc, time_dim, "climatology"))) {
+    return(invisible(FALSE))
+  }
+  if (one_step_ok && identical(as.integer(nc$dim[[time_dim]]$len), 1L)) {
+    return(TRUE)
+  }
   where <- if (is.null(file)) "" else glue::glue(" in {file}")
   shown <- if (units_ok) glue::glue(" (units '{units}')") else ""
+  supported <- if (one_step_ok) {
+    paste("A climatology with one time step is supported, but one with",
+          "several steps isn't yet; use a file with one step, or a dataset",
+          "with an ordinary dated time axis.")
+  } else {
+    paste("Climatological time axes aren't supported here yet; use a",
+          "dataset with an ordinary dated time axis.")
+  }
   rlang::abort(glue::glue(
-    "The time axis `{time_dim}`{where} is a climatology{shown}. ",
-    "Climatological time axes aren't supported here yet; use a dataset ",
-    "with an ordinary dated time axis."
+    "The time axis `{time_dim}`{where} is a climatology{shown}. {supported}"
   ), class = "ocean3d_error_time_climatology", call = NULL)
 }
 
@@ -77,7 +85,7 @@
 # Bounds must contain their time step. Used by the decoder below and by the
 # core object's time axis (as_proxy()).
 .netcdf_time_axis <- function(nc, time_dim, bounds = NULL) {
-  units <- .read_time_attribute(nc, time_dim, "units")
+  units <- .read_attribute(nc, time_dim, "units")
 
   if (!is.character(units) || length(units) != 1L ||
         is.na(units) || !nzchar(trimws(units))) {
@@ -91,7 +99,7 @@
   }
 
   calendar <- .check_time_calendar(
-    .read_time_attribute(nc, time_dim, "calendar"), time_dim
+    .read_attribute(nc, time_dim, "calendar"), time_dim
   )
 
   values <- as.vector(.get_dim_values(nc, time_dim))

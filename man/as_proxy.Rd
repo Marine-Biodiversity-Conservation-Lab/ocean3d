@@ -2,8 +2,7 @@
 % Please edit documentation in R/proxy.R
 \name{as_proxy}
 \alias{as_proxy}
-\title{Describe a gridded netCDF variable without reading its values
-(experimental)}
+\title{Describe gridded data without reading its values (experimental)}
 \usage{
 as_proxy(
   x,
@@ -15,8 +14,9 @@ as_proxy(
 )
 }
 \arguments{
-\item{x}{A netCDF file path, or a connection opened with
-\code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} (netCDF model). A connection is left open.}
+\item{x}{A netCDF file path, several paths for a series of files, a
+connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} (left open), or a
+\link[=SpatVoxel-class]{SpatVoxel}. \code{var} and the dimension arguments apply to files.}
 
 \item{var}{Name of the variable. \code{NULL} (the default) detects it when the
 file holds exactly one data variable.}
@@ -29,19 +29,44 @@ axis. \code{NULL} (the default) detects them from CF metadata (\code{axis},
 A \link[=SpatProxy-class]{SpatProxy}.
 }
 \description{
-\code{as_proxy()} opens one netCDF file, reads the metadata of one variable and
-its coordinates, and returns a \link[=SpatProxy-class]{SpatProxy}. The CF metadata is
-applied here, once, so later steps can rely on each axis being in a fixed
-form. No values of the variable are read.
+\code{as_proxy()} describes one variable of gridded data and returns a
+\link[=SpatProxy-class]{SpatProxy}. The data can be one netCDF file, a series of netCDF
+files, or a \link[=SpatVoxel-class]{SpatVoxel} already in memory. For a netCDF file it
+reads the metadata of the variable and its coordinates and applies the CF
+metadata once, so later steps can rely on each axis being in a fixed form.
+No values of the variable are read.
 }
 \details{
+Besides one file, two sources give the same kind of proxy:
+\itemize{
+\item \strong{A series of files} (several paths): the same variable on the same
+grid and depths in every file, each with its own dated time axis, such as
+one file per day. The files are put in time order and their time axes
+joined into one, in the first file's units. A series stops with an error
+when files repeat or overlap each other's time steps, when a file has no
+dated time axis, or when the files differ in grid (spatial tiles) or in
+the variable's units. The time axis keeps its bounds only when every
+file has them.
+\item \strong{A \link[=SpatVoxel-class]{SpatVoxel} already in memory}: one time step (the voxel's
+\code{\link[terra:time]{terra::time()}} when set), with the voxel's cells, depths and depth
+edges; a voxel without edges gets slabs halfway between its depths, as
+\code{bounds = "midpoint"} gives. The time must be a date or a date-time; a
+date is read as midnight UTC. A voxel whose time is a year, a month or a
+plain number stops with an error: give it a date-time, or remove its
+time with \code{terra::time(v) <- NULL}. \code{\link[=as_voxel]{as_voxel()}} returns the voxel
+itself.
+}
+
+For netCDF files, each axis is put in a fixed form:
 \itemize{
 \item \strong{Longitude and latitude:} cell edges come from the coordinate's CF
 \code{bounds} variable, or halfway between neighbouring centres.
 \item \strong{Depth:} converted to metres positive down from the coordinate's
 \code{units} and \code{positive} attributes. Edges come from the CF bounds, or
-halfway between centres, cut at the surface. A depth axis stored deep to
-shallow is kept in that order and recorded as such.
+halfway between centres, cut at the surface and running half a gap
+below the deepest centre. A voxel read with \code{\link[=as_voxel]{as_voxel()}} keeps these
+edges. A depth axis stored deep to shallow is kept in that order and
+recorded as such.
 \item \strong{Time:} decoded with CFtime. Bounds are attached when the file has
 them; otherwise the axis has none (they aren't inferred). The time axis
 must be strictly increasing; a backwards or out-of-order axis is an

@@ -38,9 +38,11 @@
   nms <- names(extra)
   nms <- if (is.null(nms)) rep("", length(extra)) else nms
   nms[nms == ""] <- "<unnamed>"
-  stop("unused argument(s): ", toString(nms),
-       ". `bounds` applies to SpatVoxel input only; a SpatEnvelope ",
-       "carries its depth interval per cell.", call. = FALSE)
+  rlang::abort(glue::glue(
+    "unused argument(s): {toString(nms)}. `bounds` applies only when one ",
+    "input is a SpatVoxel; envelopes and polygons carry their own depth ",
+    "intervals."
+  ), class = "ocean3d_error_unused_argument", call = NULL)
 }
 
 # Internal: a voxel's occupancy as a 0/1 stack, one layer per depth, ready to
@@ -58,7 +60,7 @@
     # depth-aware methods in R/intersect.R, so strip it first. `fun` reads
     # values rather than the SpatRaster, so ordinary R predicates work: on a
     # one-layer SpatRaster, `v > mean(v)` compares the layer against itself.
-    layer <- .as_plain_raster(x[[i]])
+    layer <- methods::as(x[[i]], "SpatRaster")  # remove the 3D class
     hit <- as.logical(fun(terra::values(layer)[, 1]))
     if (length(hit) != n_cells) {
       stop("`fun` must return one TRUE/FALSE per cell value; got ",
@@ -71,19 +73,7 @@
   }))
   names(occ) <- names(x)
   # terra tags the stack with the voxel's class; occupancy is not a voxel.
-  .as_plain_raster(occ)
-}
-
-# Internal: per-cell occupied volume of a voxel, km^3, from the slab each
-# layer stands for. Summing thickness over occupied layers is what makes an
-# interior gap cost volume, which is the whole reason the voxel path is not
-# just voxel_to_envelope() plus the 2.5D formula.
-.voxel_cell_volume <- function(occ, slab, area_km2) {
-  thickness_m <- slab$upper - slab$lower
-  # The raster stays on the left of the operator: terra mishandles
-  # `numeric <op> SpatRaster`. The vector is recycled layer-wise.
-  occupied_m <- sum(occ * thickness_m)
-  area_km2 * (occupied_m / 1000)
+  methods::as(occ, "SpatRaster")  # remove the 3D class
 }
 
 # Internal: 1 where a cell is occupied at any depth, NA elsewhere -- the voxel
@@ -156,26 +146,18 @@
 # Internal: one depth layer of an envelope as a plain SpatRaster. `[[` keeps
 # the SpatEnvelope tag on a single layer, which is both invalid and, since a
 # tagged raster dispatches to the depth-aware methods in R/intersect.R,
-# hazardous to compute with. Every internal that reads an envelope's layers
-# goes through here.
+# hazardous to compute with. Internals that compute with an envelope's
+# layers read them through here; the validity method's in-memory check reads
+# the cell values directly.
 .envelope_layer <- function(x, which = c("depth_min", "depth_max")) {
   which <- match.arg(which)
-  .as_plain_raster(x[[which]])
+  methods::as(x[[which]], "SpatRaster")  # remove the 3D class
 }
 
 # Internal: where an envelope is present, as a plain logical layer without NA.
 .envelope_present <- function(x) {
   !is.na(.envelope_layer(x, "depth_min")) &
     !is.na(.envelope_layer(x, "depth_max"))
-}
-
-# Internal: drop the SpatVoxel / SpatEnvelope class tag. terra propagates the
-# subclass through nearly every operation (`mask()`, `[[`, arithmetic,
-# `ifel()`, `c()`), so anything that is not a 3D domain -- a predicate layer, a
-# footprint, an overlap stack -- must be stripped explicitly or it comes back
-# wearing a class it does not satisfy. `as()` copies; it does not alias.
-.as_plain_raster <- function(x) {
-  methods::as(x, "SpatRaster")
 }
 
 # Internal: where a 3D object is present at any depth, as a plain single-layer
@@ -191,7 +173,7 @@
          call. = FALSE)
   }
   names(out) <- "footprint"
-  .as_plain_raster(out)
+  methods::as(out, "SpatRaster")  # remove the 3D class
 }
 
 # Internal: the 2D side of a spatial query as a footprint on `template`'s grid,
@@ -208,7 +190,10 @@
     if (!terra::same.crs(y, template)) {
       y <- terra::project(y, terra::crs(template))
     }
-    ones <- terra::setValues(terra::rast(.as_plain_raster(template[[1]])), 1)
+    # remove the 3D class
+    ones <- terra::setValues(
+      terra::rast(methods::as(template[[1]], "SpatRaster")), 1
+    )
     out <- terra::mask(ones, y)
   } else if (inherits(y, "SpatRaster")) {
     if (terra::nlyr(y) != 1) {
@@ -225,5 +210,5 @@
          paste(class(y), collapse = "/"), ".", call. = FALSE)
   }
   names(out) <- "footprint"
-  .as_plain_raster(out)
+  methods::as(out, "SpatRaster")  # remove the 3D class
 }

@@ -55,32 +55,93 @@ test_that("lines join each id's rows in row order", {
   expect_identical(tr@time_resolution, "datetime")
 })
 
-test_that("invalid vertices are rejected with a clear error", {
+test_that("invalid points and lines are rejected with a clear error", {
+  # `args` go to as_vector3d(). Errors are ocean3d_error_vector3d unless
+  # `unclassed` is TRUE; `fixed` matches `pattern` as a fixed string.
   obs <- data.frame(lon = c(150, 151), lat = c(-20, -21), depth = c(10, 35))
   cases <- list(
-    list(x = transform(obs, depth = c(10, NA)),
-         why = "every vertex needs a depth"),
-    list(x = transform(obs, depth = c(-5, 10)), why = "positive metres"),
-    list(x = transform(obs, lat = c(-20, -95)), why = "latitudes within")
+    list(label = "missing depth",
+         args = list(transform(obs, depth = c(10, NA))),
+         pattern = "every vertex needs a depth", fixed = TRUE),
+    list(label = "negative depth",
+         args = list(transform(obs, depth = c(-5, 10))),
+         pattern = "positive metres", fixed = TRUE),
+    list(label = "latitude past the pole",
+         args = list(transform(obs, lat = c(-20, -95))),
+         pattern = "latitudes within", fixed = TRUE),
+    list(label = "factor depth",
+         args = list(transform(obs, depth = factor(c("10", "35")))),
+         pattern = "`depth` must be numeric, but it is factor"),
+    list(label = "text longitude",
+         args = list(transform(obs, lon = c("150", "151"))),
+         pattern = "`lon` must be numeric, but it is character"),
+    list(label = "line with one vertex",
+         args = list(dive()[1, ], type = "lines", id = "tag", time = "when"),
+         pattern = "at least two vertices"),
+    list(label = "lines without `id`", args = list(dive(), type = "lines"),
+         pattern = "Lines need `id`"),
+    list(label = "missing line ID",
+         args = list(local({
+           d <- dive()
+           d$tag[2] <- NA
+           d
+         }), type = "lines", id = "tag"),
+         pattern = "feature IDs must be non-missing"),
+    list(label = "repeated point IDs",
+         args = list(transform(obs, id = c(1, 1)), id = "id"),
+         pattern = "each point needs its own ID"),
+    list(label = "time column without `time`",
+         args = list(transform(obs, time = Sys.time())),
+         pattern = "time = \"time\"", fixed = TRUE, unclassed = TRUE),
+    list(label = "depth range for points",
+         args = list(dive(), depth_min = 0, depth_max = 10),
+         pattern = "are for polygons"),
+    # IDs must be unique for sf lines.
+    list(label = "sf lines sharing an ID",
+         args = list(local({
+           s <- dive_sf()
+           s$tag <- c("A", "A")
+           s
+         }), id = "tag"),
+         pattern = "separate lines would be joined"),
+    list(label = "sf line without an ID",
+         args = list(local({
+           s <- dive_sf()
+           s$tag <- c("A", NA)
+           s
+         }), id = "tag"),
+         pattern = "its own non-missing ID"),
+    list(label = "sf lines without Z coordinates",
+         args = list(sf::st_sf(geometry = sf::st_sfc(
+           sf::st_linestring(matrix(c(150, -20, 151, -21), ncol = 2,
+                                    byrow = TRUE)),
+           crs = 4326
+         ))),
+         pattern = "Z coordinates"),
+    # Rejected, not dropped.
+    list(label = "sf line with an empty geometry",
+         args = list(local({
+           s <- dive_sf()
+           sf::st_geometry(s)[[2]] <- sf::st_linestring(
+             matrix(numeric(0), ncol = 4), dim = "XYZM"
+           )
+           s
+         }), id = "tag"),
+         pattern = "Row 2 of `x` has an empty geometry", fixed = TRUE),
+    # An attribute named like a vertex column stops, not vanishes.
+    list(label = "sf line attribute named `time`",
+         args = list(local({
+           s <- dive_sf()
+           s$time <- as.Date(c("2020-01-01", "2020-01-02"))
+           s
+         }), id = "tag"),
+         pattern = "Column names time are used by SpatVector3D", fixed = TRUE)
   )
   for (case in cases) {
-    err <- expect_error(as_vector3d(case$x), class = "ocean3d_error_vector3d")
-    expect_match(conditionMessage(err), case$why, fixed = TRUE)
+    class <- if (isTRUE(case$unclassed)) NULL else "ocean3d_error_vector3d"
+    expect_error(do.call(as_vector3d, case$args), case$pattern, class = class,
+                 fixed = isTRUE(case$fixed), label = case$label)
   }
-
-  one_vertex <- dive()[1, ]
-  expect_error(
-    as_vector3d(one_vertex, type = "lines", id = "tag", time = "when"),
-    "at least two vertices", class = "ocean3d_error_vector3d"
-  )
-  expect_error(as_vector3d(dive(), type = "lines"),
-               "Lines need `id`", class = "ocean3d_error_vector3d")
-  expect_error(
-    as_vector3d(transform(obs, id = c(1, 1)), id = "id"),
-    "each point needs its own ID", class = "ocean3d_error_vector3d"
-  )
-  expect_error(as_vector3d(transform(obs, time = Sys.time())),
-               "time = \"time\"", fixed = TRUE)
 })
 
 test_that("sf lines take depth from minus Z and time from M", {
@@ -100,44 +161,6 @@ test_that("sf points take depth from a column", {
                ignore_attr = TRUE)
 })
 
-test_that("coordinates and depths must be numeric, not factors or text", {
-  obs <- data.frame(lon = c(150, 151), lat = c(-20, -21))
-  obs$depth <- factor(c("10", "35"))
-  expect_error(as_vector3d(obs), "`depth` must be numeric, but it is factor",
-               class = "ocean3d_error_vector3d")
-  obs$depth <- c(10, 35)
-  obs$lon <- c("150", "151")
-  expect_error(as_vector3d(obs), "`lon` must be numeric, but it is character",
-               class = "ocean3d_error_vector3d")
-})
-
-test_that("feature IDs must be present, and unique for sf lines", {
-  d <- dive()
-  d$tag[2] <- NA
-  expect_error(as_vector3d(d, type = "lines", id = "tag"),
-               "feature IDs must be non-missing",
-               class = "ocean3d_error_vector3d")
-
-  s <- dive_sf()
-  s$tag <- c("A", "A")
-  expect_error(as_vector3d(s, id = "tag"),
-               "separate lines would be joined",
-               class = "ocean3d_error_vector3d")
-  s$tag <- c("A", NA)
-  expect_error(as_vector3d(s, id = "tag"),
-               "its own non-missing ID",
-               class = "ocean3d_error_vector3d")
-})
-
-test_that("sf lines without Z coordinates need a depth", {
-  flat <- sf::st_sf(geometry = sf::st_sfc(
-    sf::st_linestring(matrix(c(150, -20, 151, -21), ncol = 2, byrow = TRUE)),
-    crs = 4326
-  ))
-  expect_error(as_vector3d(flat), "Z coordinates",
-               class = "ocean3d_error_vector3d")
-})
-
 test_that("sf input in a geographic CRS other than WGS84 is transformed", {
   # EPSG:4807 (NTF Paris) is longitude/latitude, but in grads from the Paris
   # meridian, so its coordinates differ from WGS84's.
@@ -155,23 +178,6 @@ test_that("sf input in a geographic CRS other than WGS84 is transformed", {
   points <- as.data.frame(as_vector3d(points_paris))
   expect_equal(points$lon, obs$lon, tolerance = 1e-6)
   expect_equal(points$lat, obs$lat, tolerance = 1e-6)
-})
-
-test_that("sf lines with empty geometries are rejected, not dropped", {
-  s <- dive_sf()
-  sf::st_geometry(s)[[2]] <- sf::st_linestring(matrix(numeric(0), ncol = 4),
-                                               dim = "XYZM")
-  expect_error(as_vector3d(s, id = "tag"),
-               "Row 2 of `x` has an empty geometry",
-               class = "ocean3d_error_vector3d", fixed = TRUE)
-})
-
-test_that("sf line attributes named like vertex columns stop, not vanish", {
-  s <- dive_sf()
-  s$time <- as.Date(c("2020-01-01", "2020-01-02"))
-  expect_error(as_vector3d(s, id = "tag"),
-               "Column names time are used by SpatVector3D",
-               class = "ocean3d_error_vector3d", fixed = TRUE)
 })
 
 test_that("points and lines have no volume but are 3D shapes", {
@@ -255,14 +261,6 @@ test_that("polygon start and end times keep their hours and one resolution", {
   expect_equal(f$time_start, a$from)
   expect_equal(f$time_end, a$to)
   expect_identical(p@time_resolution, "datetime")
-
-  # A Date start with a POSIXct end would otherwise lose the end's hours.
-  a$from <- as.Date(c("2020-01-01", "2020-02-01"))
-  expect_error(
-    as_vector3d(a, depth_min = 0, depth_max = 50, time = c("from", "to")),
-    "`from` and `to` must both be dates or both have hours",
-    class = "ocean3d_error_vector3d", fixed = TRUE
-  )
 })
 
 test_that("polygons come from SpatVector, MULTIPOLYGON and other CRSs", {
@@ -285,59 +283,74 @@ test_that("polygons come from SpatVector, MULTIPOLYGON and other CRSs", {
 })
 
 test_that("invalid polygon input is rejected with a clear error", {
-  a <- areas()
-  expect_error(as_vector3d(a), "Polygons need `depth_min` and `depth_max`",
-               class = "ocean3d_error_vector3d")
-  expect_error(as_vector3d(a, depth_min = 0, depth_max = c(50, 60)),
-               "must each be one number or the name of a column",
-               class = "ocean3d_error_vector3d")
-  expect_error(as_vector3d(a, depth_min = 300, depth_max = 200),
-               "depth_min must not be deeper than depth_max",
-               class = "ocean3d_error_vector3d")
-  expect_error(as_vector3d(a, depth_min = -5, depth_max = 200),
-               "positive metres", class = "ocean3d_error_vector3d")
-  a$top_text <- c("0", "10")
-  expect_error(as_vector3d(a, depth_min = "top_text", depth_max = 200),
-               "`top_text` must be numeric, but it is character",
-               class = "ocean3d_error_vector3d")
-
-  a <- areas()
-  a$name <- "reef"
-  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50, id = "name"),
-               "each polygon needs its own ID",
-               class = "ocean3d_error_vector3d")
-
-  a <- areas()
-  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50,
-                           time = c("to", "from")),
-               "time_start must not be after time_end",
-               class = "ocean3d_error_vector3d")
-  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50,
-                           time = c("from", "to", "from")),
-               "one column (a single time) or two", fixed = TRUE,
-               class = "ocean3d_error_vector3d")
-
-  a$depth_min <- 1
-  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50),
-               "Column names depth_min are used by SpatVector3D",
-               class = "ocean3d_error_vector3d", fixed = TRUE)
-
-  a <- areas()
-  sf::st_geometry(a)[[2]] <- sf::st_polygon()
-  expect_error(as_vector3d(a, depth_min = 0, depth_max = 50),
-               "Row 2 of `x` has an empty geometry", fixed = TRUE,
-               class = "ocean3d_error_vector3d")
-})
-
-test_that("depth_min and depth_max are only for polygons", {
-  expect_error(as_vector3d(dive(), depth_min = 0, depth_max = 10),
-               "are for polygons", class = "ocean3d_error_vector3d")
-})
-
-test_that("volume() on polygons says it isn't supported yet", {
-  p <- as_vector3d(areas(), depth_min = 0, depth_max = 50)
-  expect_error(volume(p), "doesn't support SpatVector3D polygons yet",
-               class = "ocean3d_error_volume_type")
+  # Each row's polygons are areas(), changed by `change` if it has one, and
+  # `args` are the other arguments to as_vector3d(). `fixed` matches
+  # `pattern` as a fixed string.
+  depths <- list(depth_min = 0, depth_max = 50)
+  cases <- list(
+    list(label = "no depths", args = list(),
+         pattern = "Polygons need `depth_min` and `depth_max`"),
+    list(label = "two depth_max values",
+         args = list(depth_min = 0, depth_max = c(50, 60)),
+         pattern = "must each be one number or the name of a column"),
+    list(label = "depth_min deeper than depth_max",
+         args = list(depth_min = 300, depth_max = 200),
+         pattern = "depth_min must not be deeper than depth_max"),
+    list(label = "negative depth_min",
+         args = list(depth_min = -5, depth_max = 200),
+         pattern = "positive metres"),
+    list(label = "text depth column",
+         change = function(a) {
+           a$top_text <- c("0", "10")
+           a
+         },
+         args = list(depth_min = "top_text", depth_max = 200),
+         pattern = "`top_text` must be numeric, but it is character"),
+    list(label = "repeated polygon IDs",
+         change = function(a) {
+           a$name <- "reef"
+           a
+         },
+         args = c(depths, list(id = "name")),
+         pattern = "each polygon needs its own ID"),
+    list(label = "start after end",
+         args = c(depths, list(time = c("to", "from"))),
+         pattern = "time_start must not be after time_end"),
+    list(label = "three time columns",
+         args = c(depths, list(time = c("from", "to", "from"))),
+         pattern = "one column (a single time) or two", fixed = TRUE),
+    # A Date start with a POSIXct end would otherwise lose the end's hours.
+    list(label = "Date start with a POSIXct end",
+         change = function(a) {
+           a$to <- as.POSIXct(c("2020-01-01 09:15", "2020-02-02 00:00"),
+                              tz = "UTC")
+           a
+         },
+         args = c(depths, list(time = c("from", "to"))),
+         pattern = "`from` and `to` must both be dates or both have hours",
+         fixed = TRUE),
+    list(label = "attribute named depth_min",
+         change = function(a) {
+           a$depth_min <- 1
+           a
+         },
+         args = depths,
+         pattern = "Column names depth_min are used by SpatVector3D",
+         fixed = TRUE),
+    list(label = "empty geometry",
+         change = function(a) {
+           sf::st_geometry(a)[[2]] <- sf::st_polygon()
+           a
+         },
+         args = depths, pattern = "Row 2 of `x` has an empty geometry",
+         fixed = TRUE)
+  )
+  for (case in cases) {
+    a <- if (is.null(case$change)) areas() else case$change(areas())
+    expect_error(do.call(as_vector3d, c(list(a), case$args)), case$pattern,
+                 class = "ocean3d_error_vector3d", fixed = isTRUE(case$fixed),
+                 label = case$label)
+  }
 })
 
 # Buffers -------------------------------------------------------------------
@@ -428,58 +441,72 @@ test_that("buffers across the antimeridian go the short way", {
 })
 
 test_that("buffer_3d() rejects inputs it can't buffer", {
+  # `args` go to buffer_3d(); `fixed` matches `pattern` as a fixed string.
   pts <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 5))
-  err <- "ocean3d_error_vector3d"
-  expect_error(buffer_3d(data.frame(lon = 1, lat = 1, depth = 1), 1, 1),
-               "must be SpatVector3D points or lines", class = err)
-  polygons <- buffer_3d(pts, 1, 1)
-  expect_error(buffer_3d(polygons, 1, 1), "already have a depth range",
-               class = err)
-  for (radius in list(0, -1, 10000, c(1, 2), "5", NA_real_)) {
-    expect_error(buffer_3d(pts, radius, 1), "`radius_km` must be",
-                 class = err)
-  }
-  for (window in list(-1, c(1, 2), NA_real_, "5")) {
-    expect_error(buffer_3d(pts, 1, window), "`depth_window` must be",
-                 class = err)
-  }
-  expect_error(buffer_3d(pts, 1, 1, time_window = 1),
-               "needs a time at every vertex. Feature 1 of `x` has no time",
-               class = err)
-  expect_error(buffer_3d(pts, 1, 1, time_window = -1),
-               "`time_window` must be", class = err)
   dated <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 5,
                                   date = as.Date("2020-01-01")),
                        time = "date")
-  expect_error(buffer_3d(dated, 1, 1, time_window = 0.5),
-               "must be whole days", class = err)
+  partly_timed <- local({
+    d <- dive()
+    d$when[2] <- NA
+    as_vector3d(d, type = "lines", id = "tag", time = "when")
+  })
+  partly_timed_msg <- "Line A of `x` has a time at some vertices but not others"
+  cases <- c(
+    list(
+      list(label = "a data frame",
+           args = list(data.frame(lon = 1, lat = 1, depth = 1), 1, 1),
+           pattern = "must be SpatVector3D points or lines"),
+      list(label = "polygons", args = list(buffer_3d(pts, 1, 1), 1, 1),
+           pattern = "already have a depth range")
+    ),
+    lapply(list(0, -1, 10000, c(1, 2), "5", NA_real_), function(radius) {
+      list(label = paste("radius_km", deparse(radius)),
+           args = list(pts, radius, 1), pattern = "`radius_km` must be")
+    }),
+    lapply(list(-1, c(1, 2), NA_real_, "5"), function(window) {
+      list(label = paste("depth_window", deparse(window)),
+           args = list(pts, 1, window), pattern = "`depth_window` must be")
+    }),
+    list(
+      list(label = "time_window for untimed points",
+           args = list(pts, 1, 1, time_window = 1),
+           pattern = paste("needs a time at every vertex.",
+                           "Feature 1 of `x` has no time")),
+      list(label = "negative time_window",
+           args = list(pts, 1, 1, time_window = -1),
+           pattern = "`time_window` must be"),
+      list(label = "part-day time_window for dates",
+           args = list(dated, 1, 1, time_window = 0.5),
+           pattern = "must be whole days"),
+      list(label = "no features",
+           args = list(as_vector3d(data.frame(lon = numeric(), lat = numeric(),
+                                              depth = numeric())), 1, 1),
+           pattern = "has no points or lines"),
+      # Columns named like polygon columns stop, not duplicate.
+      list(label = "attribute named geometry",
+           args = list(as_vector3d(data.frame(lon = 150, lat = -20, depth = 5,
+                                              geometry = "x")), 5, 0),
+           pattern = "Column names geometry are used by SpatVector3D"),
+      list(label = "line timed at some vertices, no time_window",
+           args = list(partly_timed, 5, 0, time_window = NULL),
+           pattern = partly_timed_msg, fixed = TRUE),
+      list(label = "line timed at some vertices, with a time_window",
+           args = list(partly_timed, 5, 0, time_window = 1),
+           pattern = partly_timed_msg, fixed = TRUE)
+    )
+  )
+  for (case in cases) {
+    expect_error(do.call(buffer_3d, case$args), case$pattern,
+                 class = "ocean3d_error_vector3d", fixed = isTRUE(case$fixed),
+                 label = case$label)
+  }
+
   # A window computed in floating point that is a whole day to within
   # rounding counts as one.
   near_day <- buffer_3d(dated, 1, 1, time_window = 1 + 1e-12)
   expect_equal(as.data.frame(near_day)$time_end,
                as.POSIXct("2020-01-02", tz = "UTC"))
-
-  empty <- as_vector3d(data.frame(lon = numeric(), lat = numeric(),
-                                  depth = numeric()))
-  expect_error(buffer_3d(empty, 1, 1), "has no points or lines", class = err)
-})
-
-test_that("columns named like polygon columns stop, not duplicate", {
-  obs <- data.frame(lon = 150, lat = -20, depth = 5, geometry = "x")
-  expect_error(buffer_3d(as_vector3d(obs), 5, 0),
-               "Column names geometry are used by SpatVector3D",
-               class = "ocean3d_error_vector3d")
-})
-
-test_that("a line timed at only some vertices stops", {
-  d <- dive()
-  d$when[2] <- NA
-  tracks <- as_vector3d(d, type = "lines", id = "tag", time = "when")
-  for (window in list(NULL, 1)) {
-    expect_error(buffer_3d(tracks, 5, 0, time_window = window),
-                 "Line A of `x` has a time at some vertices but not others",
-                 class = "ocean3d_error_vector3d", fixed = TRUE)
-  }
 })
 
 test_that("vertices stored out of order are buffered in line order", {
@@ -556,33 +583,48 @@ test_that("a buffered detection becomes an envelope with its depth window", {
 })
 
 test_that("vector3d_to_envelope() rejects inputs it can't convert", {
-  err <- "ocean3d_error_envelope_input"
+  # `x` and `template` go to vector3d_to_envelope(); `fixed` matches
+  # `pattern` as a fixed string.
+  input <- "ocean3d_error_envelope_input"
   empty <- "ocean3d_error_envelope_empty"
   pts <- as_vector3d(data.frame(lon = 151, lat = -20.5, depth = 5))
-  expect_error(vector3d_to_envelope(pts, envelope_grid()),
-               "These are points; buffer_3d() turns them into polygons",
-               class = err, fixed = TRUE)
-  expect_error(vector3d_to_envelope(areas(), envelope_grid()),
-               "must be SpatVector3D polygons", class = err)
   p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
-  expect_error(vector3d_to_envelope(p, matrix(1)),
-               "`template` must be a SpatRaster", class = err)
-  far <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 1, ymin = 0,
-                     ymax = 1, crs = "EPSG:4326")
-  expect_error(vector3d_to_envelope(p, far), "don't overlap any cell",
-               class = empty)
-  none <- p
-  none@features <- p@features[0, ]
-  expect_error(vector3d_to_envelope(none, envelope_grid()),
-               "`x` has no polygons", class = err)
-  no_crs <- terra::rast(nrows = 2, ncols = 2, xmin = 150, xmax = 153,
-                        ymin = -21, ymax = -20, crs = "")
-  expect_error(vector3d_to_envelope(p, no_crs), "`template` has no CRS",
-               class = err)
-  flat <- buffer_3d(pts, radius_km = 20, depth_window = 0)
-  expect_error(vector3d_to_envelope(flat, envelope_grid()),
-               "Every polygon has `depth_min` equal to `depth_max`.*buffer_3d",
-               class = empty)
+  cases <- list(
+    list(label = "points", x = pts, template = envelope_grid(),
+         class = "ocean3d_error_vector3d_type",
+         pattern = "these are points. buffer_3d() turns points into polygons",
+         fixed = TRUE),
+    list(label = "sf polygons", x = areas(), template = envelope_grid(),
+         class = input, pattern = "must be SpatVector3D polygons"),
+    list(label = "matrix template", x = p, template = matrix(1),
+         class = input, pattern = "`template` must be a SpatRaster"),
+    list(label = "template away from the polygons", x = p,
+         template = terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 1,
+                                ymin = 0, ymax = 1, crs = "EPSG:4326"),
+         class = empty, pattern = "don't overlap any cell"),
+    list(label = "no polygons",
+         x = local({
+           none <- p
+           none@features <- p@features[0, ]
+           none
+         }),
+         template = envelope_grid(), class = input,
+         pattern = "`x` has no polygons"),
+    list(label = "template without a CRS", x = p,
+         template = terra::rast(nrows = 2, ncols = 2, xmin = 150, xmax = 153,
+                                ymin = -21, ymax = -20, crs = ""),
+         class = input, pattern = "`template` has no CRS"),
+    list(label = "polygons with no thickness",
+         x = buffer_3d(pts, radius_km = 20, depth_window = 0),
+         template = envelope_grid(), class = empty,
+         pattern = paste0("Every polygon has `depth_min` equal to ",
+                          "`depth_max`.*buffer_3d"))
+  )
+  for (case in cases) {
+    expect_error(vector3d_to_envelope(case$x, case$template), case$pattern,
+                 class = case$class, fixed = isTRUE(case$fixed),
+                 label = case$label)
+  }
 })
 
 test_that("cells with no thickness are dropped", {

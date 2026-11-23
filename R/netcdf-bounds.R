@@ -49,7 +49,7 @@
 # non-finite values, different units from the coordinate) are an error:
 # declared edges are used as given, never replaced by inferred ones.
 .read_bounds <- function(nc, coordinate, n) {
-  name <- .read_time_attribute(nc, coordinate, "bounds")
+  name <- .read_attribute(nc, coordinate, "bounds")
   if (is.null(name)) return(NULL)
   unusable <- function(problem) {
     .abort_bounds(coordinate, basename(nc$filename), problem)
@@ -93,8 +93,8 @@
     return(unusable("must contain two finite endpoints per coordinate"))
   }
 
-  coordinate_units <- .read_time_attribute(nc, coordinate, "units")
-  bounds_units <- .read_time_attribute(nc, name, "units")
+  coordinate_units <- .read_attribute(nc, coordinate, "units")
+  bounds_units <- .read_attribute(nc, name, "units")
   if (!is.null(bounds_units) && !is.null(coordinate_units) &&
         !.same_units(bounds_units, coordinate_units)) {
     unusable(glue::glue(
@@ -267,7 +267,7 @@
     }
   }
   bounds <- .read_bounds(nc, coordinate, length(raw))
-  units <- .read_time_attribute(nc, coordinate, "units")
+  units <- .read_attribute(nc, coordinate, "units")
   calendar <- NULL
   direction_basis <- NULL
 
@@ -295,7 +295,7 @@
     }
   } else {
     centres <- as.numeric(.decode_netcdf_time(nc, coordinate))
-    calendar <- .read_time_attribute(nc, coordinate, "calendar")
+    calendar <- .read_attribute(nc, coordinate, "calendar")
     if (is.null(calendar)) calendar <- "standard"
     if (!is.null(bounds)) {
       .check_time_bounds_calendar(nc, coordinate, bounds)

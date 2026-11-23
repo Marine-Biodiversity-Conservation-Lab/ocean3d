@@ -7,21 +7,24 @@
 as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL, time = NULL)
 }
 \arguments{
-\item{x}{A \link[=SpatProxy-class]{SpatProxy}, a SpatRaster with its depths in
-\code{\link[terra:depth]{terra::depth()}} or in \verb{\{variable\}_depth=\{value\}} layer names, a list of
-single-depth SpatRasters, or an existing \link[=SpatVoxel-class]{SpatVoxel}. This is how
-gridded data enter the \code{SpatVoxel} model: describe a netCDF file with
-\code{\link[=as_proxy]{as_proxy()}} and pass the proxy here, which reads one time step. netCDF
-paths aren't accepted directly.}
+\item{x}{A \link[=SpatProxy-class]{SpatProxy}, a SpatRaster, a list of SpatRasters (one per
+depth, combined with \code{\link[terra:rast]{terra::rast()}}, which keeps their depths only when
+each has them set; otherwise pass \code{depths}), or an existing
+\link[=SpatVoxel-class]{SpatVoxel}. This is how gridded data
+enter the \code{SpatVoxel} model: describe a netCDF file with \code{\link[=as_proxy]{as_proxy()}} and
+pass the proxy here, which reads one time step. netCDF paths aren't
+accepted directly.}
 
 \item{depths}{Optional numeric vector, one depth per layer, in metres. When
 supplied, it sets the depths, and the layers are named
 \verb{\{varname\}_depth=\{value\}}, replacing any existing names. Required if \code{x}
-has neither \code{\link[terra:depth]{terra::depth()}} nor depths in its layer names.}
+has no depths in \code{\link[terra:depth]{terra::depth()}}. Leave it out, and \code{depth_bounds} too,
+for a \link[=SpatProxy-class]{SpatProxy}, which gives its own.}
 
 \item{varname}{Character. Variable name used in the layer names built from
 \code{depths}, or from a proxy's depths, where it defaults to the proxy's
-variable name. Ignored otherwise.}
+variable name; it is also stored in \code{\link[terra:varnames]{terra::varnames()}}, which renaming
+the layers keeps. Ignored otherwise.}
 
 \item{depth_bounds}{Optional two-column matrix or data frame: the top and
 bottom of the slab of water each layer stands for, in metres positive
@@ -35,9 +38,10 @@ layers; a voxel without edges uses the \code{bounds} argument of the functions
 it is passed to.}
 
 \item{time}{For a \link[=SpatProxy-class]{SpatProxy} only: the time step to read, as a step
-number or a date or date-time matched exactly at its own resolution (so
-\code{"2020-01-02"} selects that day). \code{NULL} (the default) reads the only
-step of a proxy that has one; a proxy with more needs \code{time}.}
+number, or a date or date-time that matches one step exactly. A date such
+as \code{"2020-01-02"} matches the step on that day; with several steps a day,
+give a date-time. \code{NULL} (the default) reads the only step of a proxy
+that has one; a proxy with more needs \code{time}.}
 }
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} whose layers are ordered shallow to deep.
@@ -45,27 +49,39 @@ A \link[=SpatVoxel-class]{SpatVoxel} whose layers are ordered shallow to deep.
 \description{
 Wrap a multi-depth raster as a \link[=SpatVoxel-class]{SpatVoxel}: the validated 3D form used
 throughout the package, with one layer per standard depth. Each layer's
-depth is stored in \code{\link[terra:depth]{terra::depth()}}.
+depth is stored in \code{\link[terra:depth]{terra::depth()}}. Given a \link[=SpatProxy-class]{SpatProxy},
+\code{as_voxel()} reads one time step of it into memory instead. Reading a
+\code{SpatProxy} is experimental, like the class itself (see \link[=SpatProxy-class]{SpatProxy}),
+and may change without notice while the core object is built.
 }
 \details{
-The depths come from, in order: \code{depths}; the raster's own
-\code{\link[terra:depth]{terra::depth()}}, when set; or layer names following the
-\verb{\{variable\}_depth=\{value\}} pattern, which terra gives layers read from
-netCDF and which voxels had before their depths moved to
-\code{\link[terra:depth]{terra::depth()}}. Names are read only to fill \code{\link[terra:depth]{terra::depth()}}; after that
-they are free.
+A voxel read from a proxy carries the proxy's depth edges (see
+\code{\link[=depth_bounds]{depth_bounds()}}): the file's depth bounds, or, for a file without them
+(such as Copernicus Marine), edges halfway between levels, from the
+surface to half a gap below the deepest level. Because the voxel has
+edges, the \code{bounds} argument of \code{\link[=volume]{volume()}} and the other 3D functions
+doesn't apply to it, and each layer stands for the same slab of water
+whichever layers are selected. To use other edges, pass them with
+\code{as_voxel(v, depth_bounds = ...)}. A single level without bounds has no
+edges, so \code{bounds} applies.
 
-Most terra operations (\code{crop()}, \code{mask()}, \code{[[}, arithmetic, \code{c()})
-propagate the class and the depths, so a \code{SpatVoxel} normally survives
-them; a few, such as \code{mean()}, return a plain \code{SpatRaster} instead.
-Re-wrapping is cheap either way, since \code{as_voxel()} is idempotent — given a
-valid \code{SpatVoxel} and no \code{depths} it returns it untouched.
+The depths come from \code{depths} when it is given, and otherwise from the
+raster's own \code{\link[terra:depth]{terra::depth()}}, which terra also sets when it reads a netCDF
+file. A raster with neither is an error: layer names are labels, never
+read as depths.
 
-Propagating the class does not re-run the validity rules, so an operation
-that changes the raster layer set can leave an object still labelled
-\code{SpatVoxel} even if invalid (for example \code{v[[c(1, 1)]]}, two layers at the
-same depth). Passing an invalid \code{SpatVoxel} to \code{as_voxel()} checks it as it
-would a plain raster: unsorted layers are sorted, and the rest is an error.
+Most terra operations (\code{crop()}, \code{mask()}, \code{[[}, arithmetic, \code{c()}) keep
+the class and the depths; a few, such as \code{mean()}, return a plain
+\code{SpatRaster} instead. Re-wrapping is cheap either way: given a valid
+\code{SpatVoxel} and no \code{depths}, \code{as_voxel()} returns it untouched.
+
+Keeping the class doesn't re-run the class checks, so an operation that
+changes the layers can leave an object labelled \code{SpatVoxel} that isn't a
+valid one (for example \code{v[[c(1, 1)]]}, two layers at the same depth).
+\code{as_voxel()} checks such an object as it would a plain raster: unsorted
+layers are sorted, and the rest is an error. A voxel whose depths terra
+dropped, for example in \code{app()}, needs \code{depths} again (see
+\link[=SpatVoxel-class]{SpatVoxel}).
 
 Depths are positive metres increasing downward, matching the World Ocean
 Atlas convention. Negative depths are an error rather than being silently
@@ -85,10 +101,11 @@ names(v)
 terra::depth(r) <- c(200, 0, 100)
 depths(as_voxel(r))
 
-# old-style names are read when terra::depth() isn't set
-old <- terra::rast(nrows = 2, ncols = 2, nlyrs = 2, vals = 1)
-names(old) <- c("temp_depth=0", "temp_depth=50")
-depths(as_voxel(old))
+# layer names aren't read as depths: a raster without terra::depth() needs
+# `depths`
+named <- terra::rast(nrows = 2, ncols = 2, nlyrs = 2, vals = 1)
+names(named) <- c("temp_depth=0", "temp_depth=50")
+try(as_voxel(named))
 
 # carry each layer's slab of water, as a netCDF file's depth bounds give it
 v <- as_voxel(r, depth_bounds = cbind(c(150, 0, 50), c(250, 50, 150)))

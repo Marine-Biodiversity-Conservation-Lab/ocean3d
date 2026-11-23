@@ -20,10 +20,12 @@ layer. The data frame can be passed back as \code{depth_bounds} to
 Read the slab of water each layer of a \link[=SpatVoxel-class]{SpatVoxel} stands for, when
 the voxel carries its own depth edges. Set them with the \code{depth_bounds}
 argument of \code{\link[=as_voxel]{as_voxel()}} or \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}, for example from a
-netCDF file's depth bounds.
+netCDF file's depth bounds. A voxel read from a \link[=SpatProxy-class]{SpatProxy} carries
+the proxy's edges, which are halfway between levels when the file has no
+depth bounds (see \code{\link[=as_voxel]{as_voxel()}}).
 }
 \details{
-\code{\link[=volume]{volume()}}, \code{\link[=calc_volume_overlap]{calc_volume_overlap()}}, \code{\link[=envelope_to_voxel]{envelope_to_voxel()}},
+\code{\link[=volume]{volume()}}, \code{\link[=envelope_to_voxel]{envelope_to_voxel()}},
 \code{\link[=voxel_to_envelope]{voxel_to_envelope()}}, \code{\link[=intersect_3d]{intersect_3d()}}, \code{\link[=intersects_3d]{intersects_3d()}} and \code{\link[terra:mask]{mask()}}
 use these edges before their \code{bounds} argument. A voxel without edges, or
 with edges for only some of its layers (for example after \code{c()} with a

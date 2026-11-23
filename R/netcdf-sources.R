@@ -92,7 +92,7 @@
     function(name) {
       atts <- c("bounds", "climatology", "coordinates", "grid_mapping")
       unlist(lapply(atts, function(att) {
-        value <- .read_time_attribute(nc, name, att)
+        value <- .read_attribute(nc, name, att)
         if (is.character(value)) {
           sub(":$", "", unlist(strsplit(value, "[[:space:]]+")))
         }
