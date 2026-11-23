@@ -167,7 +167,10 @@
     !is.na(.envelope_layer(x, "depth_min")) &
       !is.na(.envelope_layer(x, "depth_max"))
   } else if (methods::is(x, "SpatVoxel")) {
-    sum(.voxel_occupancy(x)) > 0
+    # The same rule as .voxel_occupancy(): a cell is occupied at a level where
+    # it is not NA. allNA() reads that in one pass, without pulling each
+    # layer into R.
+    !terra::allNA(methods::as(x, "SpatRaster"))  # remove the 3D class
   } else if (inherits(x, "SpatVector")) {
     if (!terra::same.crs(x, template)) {
       x <- terra::project(x, terra::crs(template))
@@ -179,17 +182,20 @@
     !is.na(terra::mask(ones, x))
   } else if (inherits(x, "SpatRaster")) {
     if (terra::nlyr(x) != 1) {
-      stop("`", arg, "` must be a single-layer footprint when it is a plain ",
-           "SpatRaster; got ", terra::nlyr(x), " layers. If it is a ",
-           "multi-depth raster, wrap it with as_voxel() so its depth axis is ",
-           "used.", call. = FALSE)
+      rlang::abort(glue::glue(
+        "`{arg}` must be a single-layer footprint when it is a plain ",
+        "SpatRaster; got {terra::nlyr(x)} layers. If it is a multi-depth ",
+        "raster, wrap it with as_voxel() so its depth axis is used."
+      ), class = "ocean3d_error_footprint_layers", call = NULL)
     }
     .check_same_grid(template, x)
     !is.na(x)
   } else {
-    stop("`", arg, "` must be a SpatEnvelope, a SpatVoxel, a single-layer ",
-         "SpatRaster footprint, or polygons (SpatVector, sf, sfc); got ",
-         paste(class(x), collapse = "/"), ".", call. = FALSE)
+    got <- paste(class(x), collapse = "/")
+    rlang::abort(glue::glue(
+      "`{arg}` must be a SpatEnvelope, a SpatVoxel, a single-layer ",
+      "SpatRaster footprint, or polygons (SpatVector, sf, sfc); got {got}."
+    ), class = "ocean3d_error_footprint_type", call = NULL)
   }
   names(out) <- "footprint"
   methods::as(out, "SpatRaster")  # remove the 3D class
