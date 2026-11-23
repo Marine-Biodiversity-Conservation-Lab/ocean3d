@@ -76,12 +76,6 @@
   methods::as(occ, "SpatRaster")  # remove the 3D class
 }
 
-# Internal: 1 where a cell is occupied at any depth, NA elsewhere -- the voxel
-# equivalent of a non-NA envelope cell.
-.voxel_present <- function(occ) {
-  terra::ifel(sum(occ) > 0, 1, NA)
-}
-
 # Internal: the shared depth levels of two voxels, and their shared depth
 # edges: whichever voxel carries them, or NULL when neither does. Resampling
 # one onto the other would be a guess about the vertical axis the caller is
@@ -154,60 +148,54 @@
   methods::as(x[[which]], "SpatRaster")  # remove the 3D class
 }
 
-# Internal: where an envelope is present, as a plain logical layer without NA.
-.envelope_present <- function(x) {
-  !is.na(.envelope_layer(x, "depth_min")) &
-    !is.na(.envelope_layer(x, "depth_max"))
-}
+# Internal: where `x` is present, as a plain single-layer logical SpatRaster
+# named "footprint": TRUE where present, FALSE elsewhere, never NA. Callers
+# that mask with it wrap it in terra::ifel(fp, 1, NA).
+#
+# An envelope cell is present when both depth layers are non-NA, a voxel cell
+# when it is occupied at any level. The 2D side of a query is put on
+# `template`'s grid: a plain SpatRaster is read by its non-NA pattern and must
+# be single-layer and already on the grid. Polygons (SpatVector, sf, sfc) are
+# projected onto the template's CRS when they differ, then rasterised with the
+# rule vect_to_envelope() uses: terra::mask()'s default, under which every
+# cell a polygon touches is inside. Anything else is rejected, naming `arg`,
+# with the list of accepted types.
+.footprint <- function(x, template = NULL, arg = "y") {
+  if (inherits(x, c("sf", "sfc"))) x <- terra::vect(x)
 
-# Internal: where a 3D object is present at any depth, as a plain single-layer
-# SpatRaster: 1 where present, NA elsewhere. An envelope cell is present when
-# both depth layers are non-NA; a voxel cell when it is occupied at any level.
-.footprint <- function(x) {
   out <- if (methods::is(x, "SpatEnvelope")) {
-    terra::ifel(.envelope_present(x), 1, NA)
+    !is.na(.envelope_layer(x, "depth_min")) &
+      !is.na(.envelope_layer(x, "depth_max"))
   } else if (methods::is(x, "SpatVoxel")) {
-    .voxel_present(.voxel_occupancy(x))
-  } else {
-    stop("internal: .footprint() expects a SpatEnvelope or SpatVoxel.",
-         call. = FALSE)
-  }
-  names(out) <- "footprint"
-  methods::as(out, "SpatRaster")  # remove the 3D class
-}
-
-# Internal: the 2D side of a spatial query as a footprint on `template`'s grid,
-# 1 where present and NA elsewhere. A SpatRaster is read by its non-NA pattern
-# and must be single-layer and already on the grid. Polygons (SpatVector, sf,
-# sfc) are projected onto the template's CRS when they differ, then rasterised
-# with the rule vect_to_envelope() uses: terra::mask()'s default, under which
-# every cell a polygon touches is inside. Anything else is rejected with the
-# list of accepted types.
-.footprint_of <- function(y, template, arg = "y") {
-  if (inherits(y, c("sf", "sfc"))) y <- terra::vect(y)
-
-  if (inherits(y, "SpatVector")) {
-    if (!terra::same.crs(y, template)) {
-      y <- terra::project(y, terra::crs(template))
+    # The same rule as .voxel_occupancy(): a cell is occupied at a level where
+    # it is not NA. allNA() reads that in one pass, without pulling each
+    # layer into R.
+    !terra::allNA(methods::as(x, "SpatRaster"))  # remove the 3D class
+  } else if (inherits(x, "SpatVector")) {
+    if (!terra::same.crs(x, template)) {
+      x <- terra::project(x, terra::crs(template))
     }
     # remove the 3D class
     ones <- terra::setValues(
       terra::rast(methods::as(template[[1]], "SpatRaster")), 1
     )
-    out <- terra::mask(ones, y)
-  } else if (inherits(y, "SpatRaster")) {
-    if (terra::nlyr(y) != 1) {
-      stop("`", arg, "` must be a single-layer footprint when it is a plain ",
-           "SpatRaster; got ", terra::nlyr(y), " layers. If it is a ",
-           "multi-depth raster, wrap it with as_voxel() so its depth axis is ",
-           "used.", call. = FALSE)
+    !is.na(terra::mask(ones, x))
+  } else if (inherits(x, "SpatRaster")) {
+    if (terra::nlyr(x) != 1) {
+      rlang::abort(glue::glue(
+        "`{arg}` must be a single-layer footprint when it is a plain ",
+        "SpatRaster; got {terra::nlyr(x)} layers. If it is a multi-depth ",
+        "raster, wrap it with as_voxel() so its depth axis is used."
+      ), class = "ocean3d_error_footprint_layers", call = NULL)
     }
-    .check_same_grid(template, y)
-    out <- terra::ifel(is.na(y), NA, 1)
+    .check_same_grid(template, x)
+    !is.na(x)
   } else {
-    stop("`", arg, "` must be a SpatEnvelope, a SpatVoxel, a single-layer ",
-         "SpatRaster footprint, or polygons (SpatVector, sf, sfc); got ",
-         paste(class(y), collapse = "/"), ".", call. = FALSE)
+    got <- paste(class(x), collapse = "/")
+    rlang::abort(glue::glue(
+      "`{arg}` must be a SpatEnvelope, a SpatVoxel, a single-layer ",
+      "SpatRaster footprint, or polygons (SpatVector, sf, sfc); got {got}."
+    ), class = "ocean3d_error_footprint_type", call = NULL)
   }
   names(out) <- "footprint"
   methods::as(out, "SpatRaster")  # remove the 3D class

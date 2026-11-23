@@ -59,8 +59,8 @@ setMethod(
     occupied_m <- sum(occ * thickness_m)
     # Occupancy is 0 at unoccupied levels, so a cell with none would read 0;
     # masking makes it NA, as outside an envelope.
-    vol_rast <- terra::mask(.cell_area_km2(x) * (occupied_m / 1000),
-                            .voxel_present(occ))
+    vol_rast <- terra::ifel(.footprint(x),
+                            .cell_area_km2(x) * (occupied_m / 1000), NA)
 
     .volume_result(vol_rast, per_cell)
   }

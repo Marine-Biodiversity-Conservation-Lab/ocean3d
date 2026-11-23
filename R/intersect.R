@@ -130,7 +130,10 @@ setMethod(
   function(x, y, ...) {
     .no_extra_args(...)
     .check_3d(x, "x")
-    fp <- .footprint_of(y, x)
+    # Assigned before ifel() takes it: an error raised while S4 evaluates an
+    # argument for dispatch is reworded.
+    fp <- .footprint(y, x)
+    fp <- terra::ifel(fp, 1, NA)
     # remove the 3D class
     as_envelope(terra::mask(methods::as(x, "SpatRaster"), fp))
   }
@@ -142,83 +145,40 @@ setMethod(
   "intersect_3d", c("SpatVoxel", "ANY"),
   function(x, y) {
     .check_3d(x, "x")
-    fp <- .footprint_of(y, x)
+    fp <- .footprint(y, x)
+    fp <- terra::ifel(fp, 1, NA)
     occ <- terra::mask(.voxel_occupancy(x), fp, updatevalue = 0)
     .presence_voxel(occ, depths(x), depth_bounds(x))
   }
 )
 
+# Internal: whether `x` is a gridded 3D object. Not the SpatVolume union,
+# which also holds SpatVector3D polygons.
+.is_grid_3d <- function(x) {
+  methods::is(x, "SpatEnvelope") || methods::is(x, "SpatVoxel")
+}
+
 # Intersection is symmetric, so a 2D object in first position is the same
-# query the other way round.
+# query the other way round. Both inputs are checked here first, so an error
+# names the argument as the caller passed it. Any other pair has no 3D object
+# to answer on.
 #' @rdname intersect_3d
 #' @export
-setMethod("intersect_3d", c("ANY", "SpatEnvelope"),
-          function(x, y, ...) intersect_3d(y, x, ...))
-
-#' @rdname intersect_3d
-#' @export
-setMethod("intersect_3d", c("ANY", "SpatVoxel"),
-          function(x, y, ...) intersect_3d(y, x, ...))
-
-#' @rdname intersect_3d
-#' @export
-setMethod("intersect_3d", c("ANY", "ANY"),
-          function(x, y, ...) .stop_neither_3d(x, y))
+setMethod("intersect_3d", c("ANY", "ANY"), function(x, y, ...) {
+  if (.is_grid_3d(y)) {
+    .check_3d(y, "y")
+    .footprint(x, y, "x")
+    return(intersect_3d(y, x, ...))
+  }
+  .stop_neither_3d(x, y)
+})
 
 # ---- intersects_3d ----------------------------------------------------------
 
-# Internal: the tri-state answer from a per-cell hit layer and the two
-# presence layers. `hit` is NA wherever either side is absent, so it is
-# flattened to FALSE before the presence logic runs; "neither present" is
-# applied last because it is the only case that stays NA.
-.intersects_answer <- function(hit, present_x, present_y) {
-  hit <- terra::ifel(is.na(hit), FALSE, hit)
-  out <- terra::ifel(!present_x & !present_y, NA, present_x & present_y & hit)
-  # ifel() yields 1/0/NA; only as.bool() makes values() give TRUE/FALSE/NA.
-  out <- terra::as.bool(out)
-  names(out) <- "intersects"
-  methods::as(out, "SpatRaster")  # remove the 3D class
-}
-
-#' @rdname intersects_3d
-#' @export
-setMethod(
-  "intersects_3d", c("SpatEnvelope", "SpatEnvelope"),
-  function(x, y, ...) {
-    .no_extra_args(...)
-    .check_3d(x, "x")
-    .check_3d(y, "y")
-    .check_same_grid(x, y)
-
-    x_min <- .envelope_layer(x, "depth_min")
-    x_max <- .envelope_layer(x, "depth_max")
-    y_min <- .envelope_layer(y, "depth_min")
-    y_max <- .envelope_layer(y, "depth_max")
-
-    overlap_min <- terra::ifel(x_min > y_min, x_min, y_min)
-    overlap_max <- terra::ifel(x_max < y_max, x_max, y_max)
-    # Strict `>`: intervals that only touch do not intersect.
-    .intersects_answer(overlap_max > overlap_min,
-                       .envelope_present(x), .envelope_present(y))
-  }
-)
-
-#' @rdname intersects_3d
-#' @export
-setMethod(
-  "intersects_3d", c("SpatVoxel", "SpatVoxel"),
-  function(x, y) {
-    .check_3d(x, "x")
-    .check_3d(y, "y")
-    .check_same_grid(x, y)
-    .shared_depths(x, y)
-
-    occ_x <- .voxel_occupancy(x)
-    occ_y <- .voxel_occupancy(y)
-    .intersects_answer(sum(occ_x * occ_y) > 0, sum(occ_x) > 0, sum(occ_y) > 0)
-  }
-)
-
+# Two objects intersect in a cell where intersect_3d() keeps any of it. Only
+# the envelope/voxel pairs need methods of their own: the envelope goes onto
+# the voxel's levels first, as in intersect_3d(), so that its footprint is
+# the promoted one and `bounds` reaches the promotion.
 #' @rdname intersects_3d
 #' @export
 setMethod(
@@ -243,46 +203,41 @@ setMethod(
   }
 )
 
-# 2D input has no depth axis, so the test is whether both are present.
+# Every other pair, in either order. intersect_3d() checks the inputs and
+# raises `ocean3d_error_query_input` for a pair with no 3D object, so it runs
+# first. It builds the shared domain, which can be empty; an empty envelope
+# or voxel is valid, so that costs one more validity check and nothing else.
 #' @rdname intersects_3d
 #' @export
 setMethod(
-  "intersects_3d", c("SpatEnvelope", "ANY"),
+  "intersects_3d", c("ANY", "ANY"),
   function(x, y, ...) {
-    .no_extra_args(...)
-    .check_3d(x, "x")
-    present_x <- .envelope_present(x)
-    present_y <- !is.na(.footprint_of(y, x))
-    .intersects_answer(present_x & present_y, present_x, present_y)
+    # Polygons go on the other object's grid as an envelope, then take the
+    # envelope methods, including the promotion onto a voxel's levels.
+    # Assigned first: an error raised while S4 evaluates an argument for
+    # dispatch loses its class.
+    if (methods::is(x, "SpatVector3D") && .is_grid_3d(y)) {
+      polygons <- .polygons_on_grid(x, y)
+      return(intersects_3d(polygons, y, ...))
+    }
+    if (methods::is(y, "SpatVector3D") && .is_grid_3d(x)) {
+      polygons <- .polygons_on_grid(y, x)
+      return(intersects_3d(x, polygons, ...))
+    }
+
+    shared <- intersect_3d(x, y, ...)
+    grid <- if (.is_grid_3d(x)) x else y
+    present_x <- .footprint(x, grid)
+    present_y <- .footprint(y, grid)
+    # The shared domain lies where both are present, so its footprint is the
+    # answer there; FALSE where only one is, NA where neither is.
+    out <- terra::ifel(present_x | present_y, .footprint(shared), NA)
+    # ifel() yields 1/0/NA; only as.bool() makes values() give TRUE/FALSE/NA.
+    out <- terra::as.bool(out)
+    names(out) <- "intersects"
+    methods::as(out, "SpatRaster")  # remove the 3D class
   }
 )
-
-#' @rdname intersects_3d
-#' @export
-setMethod(
-  "intersects_3d", c("SpatVoxel", "ANY"),
-  function(x, y) {
-    .check_3d(x, "x")
-    present_x <- sum(.voxel_occupancy(x)) > 0
-    present_y <- !is.na(.footprint_of(y, x))
-    .intersects_answer(present_x & present_y, present_x, present_y)
-  }
-)
-
-#' @rdname intersects_3d
-#' @export
-setMethod("intersects_3d", c("ANY", "SpatEnvelope"),
-          function(x, y, ...) intersects_3d(y, x, ...))
-
-#' @rdname intersects_3d
-#' @export
-setMethod("intersects_3d", c("ANY", "SpatVoxel"),
-          function(x, y, ...) intersects_3d(y, x, ...))
-
-#' @rdname intersects_3d
-#' @export
-setMethod("intersects_3d", c("ANY", "ANY"),
-          function(x, y, ...) .stop_neither_3d(x, y))
 
 # ---- mask -------------------------------------------------------------------
 
@@ -439,7 +394,7 @@ setMethod(
   function(x, mask, ...) {
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
-    terra::mask(x, .footprint(mask), ...)
+    terra::mask(x, terra::ifel(.footprint(mask), 1, NA), ...)
   }
 )
 
@@ -450,7 +405,7 @@ setMethod(
   function(x, mask, ...) {
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
-    terra::mask(x, .footprint(mask), ...)
+    terra::mask(x, terra::ifel(.footprint(mask), 1, NA), ...)
   }
 )
 
@@ -504,32 +459,6 @@ setMethod("intersect_3d", c("SpatEnvelope", "SpatVector3D"),
 #' @export
 setMethod("intersect_3d", c("SpatVoxel", "SpatVector3D"),
           function(x, y, ...) intersect_3d(y, x, ...))
-
-#' @rdname intersects_3d
-#' @export
-setMethod("intersects_3d", c("SpatVector3D", "SpatEnvelope"),
-          function(x, y, ...) {
-            polygons <- .polygons_on_grid(x, y)
-            intersects_3d(polygons, y, ...)
-          })
-
-#' @rdname intersects_3d
-#' @export
-setMethod("intersects_3d", c("SpatVector3D", "SpatVoxel"),
-          function(x, y, ...) {
-            polygons <- .polygons_on_grid(x, y)
-            intersects_3d(polygons, y, ...)
-          })
-
-#' @rdname intersects_3d
-#' @export
-setMethod("intersects_3d", c("SpatEnvelope", "SpatVector3D"),
-          function(x, y, ...) intersects_3d(y, x, ...))
-
-#' @rdname intersects_3d
-#' @export
-setMethod("intersects_3d", c("SpatVoxel", "SpatVector3D"),
-          function(x, y, ...) intersects_3d(y, x, ...))
 
 # Two sets of polygons: every pair whose outlines, depth ranges and times
 # overlap gives one polygon, as sf::st_intersection() does in 2D.

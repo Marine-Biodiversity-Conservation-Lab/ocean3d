@@ -8,8 +8,6 @@
 \alias{intersect_3d,SpatVoxel,SpatEnvelope-method}
 \alias{intersect_3d,SpatEnvelope,ANY-method}
 \alias{intersect_3d,SpatVoxel,ANY-method}
-\alias{intersect_3d,ANY,SpatEnvelope-method}
-\alias{intersect_3d,ANY,SpatVoxel-method}
 \alias{intersect_3d,ANY,ANY-method}
 \alias{intersect_3d,SpatVector3D,SpatEnvelope-method}
 \alias{intersect_3d,SpatVector3D,SpatVoxel-method}
@@ -40,10 +38,6 @@ intersect_3d(x, y, ...)
 \S4method{intersect_3d}{SpatEnvelope,ANY}(x, y, ...)
 
 \S4method{intersect_3d}{SpatVoxel,ANY}(x, y)
-
-\S4method{intersect_3d}{ANY,SpatEnvelope}(x, y, ...)
-
-\S4method{intersect_3d}{ANY,SpatVoxel}(x, y, ...)
 
 \S4method{intersect_3d}{ANY,ANY}(x, y, ...)
 

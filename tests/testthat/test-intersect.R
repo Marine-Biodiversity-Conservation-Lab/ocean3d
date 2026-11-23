@@ -491,6 +491,22 @@ test_that("the 3D verbs reject input they cannot compare", {
   }
 })
 
+test_that("a bad 2D input is named as the caller passed it", {
+  a <- make_range_rast(rep(0, 9), rep(100, 9))
+  fp <- make_grid(vals = rep(1, 9))
+  for (query in list(intersect_3d, intersects_3d)) {
+    expect_error(query(a, c(fp, fp)), "`y` must be a single-layer footprint",
+                 class = "ocean3d_error_footprint_layers")
+    expect_error(query(c(fp, fp), a), "`x` must be a single-layer footprint",
+                 class = "ocean3d_error_footprint_layers")
+    expect_error(query("hello", a), "`x` must be a SpatEnvelope.*got character",
+                 class = "ocean3d_error_footprint_type")
+  }
+  # The 3D side is checked before the pair is swapped.
+  broken <- a[["depth_min"]]
+  expect_error(intersects_3d(fp, broken), "`y` is tagged SpatEnvelope")
+})
+
 test_that("the query verbs reject a tagged object that is no longer valid", {
   a <- make_range_rast(rep(0, 9), rep(100, 9))
   # `[[` keeps the SpatEnvelope tag on a single layer.

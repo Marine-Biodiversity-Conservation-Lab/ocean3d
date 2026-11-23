@@ -2,49 +2,19 @@
 % Please edit documentation in R/AllGenerics.R, R/intersect.R
 \name{intersects_3d}
 \alias{intersects_3d}
-\alias{intersects_3d,SpatEnvelope,SpatEnvelope-method}
-\alias{intersects_3d,SpatVoxel,SpatVoxel-method}
 \alias{intersects_3d,SpatEnvelope,SpatVoxel-method}
 \alias{intersects_3d,SpatVoxel,SpatEnvelope-method}
-\alias{intersects_3d,SpatEnvelope,ANY-method}
-\alias{intersects_3d,SpatVoxel,ANY-method}
-\alias{intersects_3d,ANY,SpatEnvelope-method}
-\alias{intersects_3d,ANY,SpatVoxel-method}
 \alias{intersects_3d,ANY,ANY-method}
-\alias{intersects_3d,SpatVector3D,SpatEnvelope-method}
-\alias{intersects_3d,SpatVector3D,SpatVoxel-method}
-\alias{intersects_3d,SpatEnvelope,SpatVector3D-method}
-\alias{intersects_3d,SpatVoxel,SpatVector3D-method}
 \alias{intersects_3d,SpatVector3D,SpatVector3D-method}
 \title{Do two objects share any 3D space?}
 \usage{
 intersects_3d(x, y, ...)
 
-\S4method{intersects_3d}{SpatEnvelope,SpatEnvelope}(x, y, ...)
-
-\S4method{intersects_3d}{SpatVoxel,SpatVoxel}(x, y)
-
 \S4method{intersects_3d}{SpatEnvelope,SpatVoxel}(x, y, bounds = c("midpoint", "top"), ...)
 
 \S4method{intersects_3d}{SpatVoxel,SpatEnvelope}(x, y, bounds = c("midpoint", "top"), ...)
 
-\S4method{intersects_3d}{SpatEnvelope,ANY}(x, y, ...)
-
-\S4method{intersects_3d}{SpatVoxel,ANY}(x, y)
-
-\S4method{intersects_3d}{ANY,SpatEnvelope}(x, y, ...)
-
-\S4method{intersects_3d}{ANY,SpatVoxel}(x, y, ...)
-
 \S4method{intersects_3d}{ANY,ANY}(x, y, ...)
-
-\S4method{intersects_3d}{SpatVector3D,SpatEnvelope}(x, y, ...)
-
-\S4method{intersects_3d}{SpatVector3D,SpatVoxel}(x, y, ...)
-
-\S4method{intersects_3d}{SpatEnvelope,SpatVector3D}(x, y, ...)
-
-\S4method{intersects_3d}{SpatVoxel,SpatVector3D}(x, y, ...)
 
 \S4method{intersects_3d}{SpatVector3D,SpatVector3D}(x, y, ...)
 }
