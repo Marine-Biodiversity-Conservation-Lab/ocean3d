@@ -152,12 +152,22 @@ setMethod(
   }
 )
 
+# Internal: whether `x` is a gridded 3D object. Not the SpatVolume union,
+# which also holds SpatVector3D polygons.
+.is_grid_3d <- function(x) {
+  methods::is(x, "SpatEnvelope") || methods::is(x, "SpatVoxel")
+}
+
 # Intersection is symmetric, so a 2D object in first position is the same
-# query the other way round. Any other pair has no 3D object to answer on.
+# query the other way round. Both inputs are checked here first, so an error
+# names the argument as the caller passed it. Any other pair has no 3D object
+# to answer on.
 #' @rdname intersect_3d
 #' @export
 setMethod("intersect_3d", c("ANY", "ANY"), function(x, y, ...) {
-  if (methods::is(y, "SpatEnvelope") || methods::is(y, "SpatVoxel")) {
+  if (.is_grid_3d(y)) {
+    .check_3d(y, "y")
+    .footprint(x, y, "x")
     return(intersect_3d(y, x, ...))
   }
   .stop_neither_3d(x, y)
@@ -202,26 +212,23 @@ setMethod(
 setMethod(
   "intersects_3d", c("ANY", "ANY"),
   function(x, y, ...) {
-    is_grid <- function(v) {
-      methods::is(v, "SpatEnvelope") || methods::is(v, "SpatVoxel")
-    }
     # Polygons go on the other object's grid as an envelope, then take the
     # envelope methods, including the promotion onto a voxel's levels.
     # Assigned first: an error raised while S4 evaluates an argument for
     # dispatch loses its class.
-    if (methods::is(x, "SpatVector3D") && is_grid(y)) {
+    if (methods::is(x, "SpatVector3D") && .is_grid_3d(y)) {
       polygons <- .polygons_on_grid(x, y)
       return(intersects_3d(polygons, y, ...))
     }
-    if (methods::is(y, "SpatVector3D") && is_grid(x)) {
+    if (methods::is(y, "SpatVector3D") && .is_grid_3d(x)) {
       polygons <- .polygons_on_grid(y, x)
       return(intersects_3d(x, polygons, ...))
     }
 
     shared <- intersect_3d(x, y, ...)
-    grid <- if (is_grid(x)) x else y
-    present_x <- .footprint(x, grid, "x")
-    present_y <- .footprint(y, grid, "y")
+    grid <- if (.is_grid_3d(x)) x else y
+    present_x <- .footprint(x, grid)
+    present_y <- .footprint(y, grid)
     # The shared domain lies where both are present, so its footprint is the
     # answer there; FALSE where only one is, NA where neither is.
     out <- terra::ifel(present_x | present_y, .footprint(shared), NA)
