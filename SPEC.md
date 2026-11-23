@@ -34,9 +34,9 @@ An analysis in `ocean3d` has three steps, and each analysis function belongs to 
 
 | Step | Question | Exists now | Planned additions |
 |---|---|---|---|
-| Build | What is the 3D shape or grid? | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `envelope_to_voxel()`, `voxel_to_envelope()`, `occupied()`, `create_study_raster()`, `as_vector3d()`, `buffer_3d()`, `vector3d_to_envelope()`, data loaders (`woa_download()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()`) | track sampling |
-| Intersect | Where do they meet? | `intersect_3d()`, `intersects_3d()`, `mask()` | the same functions for `SpatVector3D` (polygons with envelopes, voxels and other polygons done; points and lines to come); a coverage function that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
-| Summarise | How much, and what values? | `volume()` (total or per cell; total only for `SpatVector3D` polygons) | `summarise_3d()` for statistics on intersect results |
+| Build | What is the 3D shape or grid? | `as_voxel()`, `as_envelope()`, `vect_to_envelope()`, `envelope_to_voxel()`, `voxel_to_envelope()`, `occupied()`, `create_study_raster()`, `as_vector3d()`, `buffer_3d()`, `vector3d_to_envelope()`, data loaders (`woa_download()`, `load_gebco_bathymetry()`, `gfw_effort_to_raster()`) | track sampling; subsetting a `SpatVector3D` by feature; time matching in `as_voxel()` for a `SpatProxy` (a time step, or a list of steps for a time window) |
+| Intersect | Where do they meet? | `intersect_3d()`, `intersects_3d()`, `mask()` | the same functions for `SpatVector3D` (polygons with envelopes, voxels and other polygons done; points to come; lines go through `buffer_3d()` or track sampling) |
+| Summarise | How much, and what values? | `volume()` (total or per cell; total only for `SpatVector3D` polygons) | `summarise_3d()` for statistics on the values in a voxel, such as one masked to a shape |
 
 The planned functions are added alongside the existing ones: every function in "Exists now" stays, and the existing intersect functions gain methods for `SpatVector3D`. One existing function is removed: `woa_load_nc()`, whose job `as_proxy()` and `as_voxel()` now do for any netCDF file (#157). Voxels store depth in `terra::depth()` rather than in layer names (see [Direction](#direction-a-hybrid)).
 
@@ -45,7 +45,7 @@ The Getting Started vignette follows the three steps: it builds a species' 3D ra
 Rules:
 
 - The functions for each step are exported, so users can stop after any step, inspect the result, or use their own shapes or statistics.
-- Arguments with the same meaning have the same name and default in every step (#101). Input checks are shared (#104).
+- Arguments with the same meaning have the same name and default in every step, and input checks are shared (#116).
 - New features go into one step, not into a function that combines steps. A new shape (e.g. an ellipsoid buffer) is a builder; a new statistic is an option of the summary function.
 
 **Combined functions.** The extraction functions run the steps together in one call: they turn the input into a shape, find the data cells inside it and compute a statistic. The same work is written separately for points, buffers, tracks and areas, with different arguments for the same idea (#101, #104, #105); `extract_to_buffer()` alone has about 2100 lines and 36 arguments. Once the three steps exist, the work they do moves into the steps, and each function either stays as a short wrapper or is retired:
@@ -58,9 +58,9 @@ Each function maps onto the three steps as follows:
 
 | Function | Build | Intersect | Summarise |
 |---|---|---|---|
-| `extract_to_point()` | points, one per row | one cell per point | none (the value) |
-| `extract_to_buffer()` | points, buffered into polygons (radius × depth window × time window) | cells and weights per polygon | per row |
-| `extract_to_area()` | one polygon × depth band | `mask()` or coverage | optional |
+| `extract_to_point()` | points, one per row; the voxel at each point's time step | `mask()` at each point's cell and depth level | none (the value) |
+| `extract_to_buffer()` | points, buffered into polygons (radius × depth window × time window); the voxels for each buffer's time steps | `mask()` per buffer | per row |
+| `extract_to_area()` | one polygon × depth band | `mask()` | optional |
 | `extract_to_track()` | lines, sampled into points (optionally buffered) | as for points or polygons | per sample, then per track |
 
 How the planned functions work is described in [Extraction on the three steps](#extraction-on-the-three-steps).
@@ -145,13 +145,13 @@ The netCDF model keeps 4D data (lon, lat, depth, time) and its CF metadata intac
 
 ### Planned: one model (#99)
 
-This section is the plan from #99, decided with the stars and ncdfCF trial (#112). The core object (`SpatProxy`, experimental) is implemented: it reads a netCDF file, a series of files or a voxel in memory, and builds a `SpatVoxel` for one time step. The coverage step and time-aware analysis aren't built yet (see [Order of work](#order-of-work), steps 5 and 7).
+This section is the plan from #99, decided with the stars and ncdfCF trial (#112). The core object (`SpatProxy`, experimental) is implemented: it reads a netCDF file, a series of files or a voxel in memory, and builds a `SpatVoxel` for one time step. Time matching for shapes, the point methods, `summarise_3d()` and volume through time aren't built yet (see [Order of work](#order-of-work), steps 5, 7 and 8).
 
 #### Requirements
 
 1. **Time-aware 3D analysis.** Time is a real dimension of the core object (the single object that will describe gridded data; see [Direction](#direction-a-hybrid)). Volume, overlap and profiles work through time (for example seasonal habitat volume, or overlap by month), not only on a static voxel. Volume through time is planned in #159.
 2. **Lazy reads for data larger than memory.** Opening a dataset doesn't read its values, every operation reads only the slices it needs, and heavy processing runs per time step, or per tile within a time step, so peak memory follows the size of one slice or tile rather than the whole dataset.
-3. **CF-correct metadata** for the grids in scope: time units on the standard calendars, sub-daily steps, depth units and direction, bounds and longitude conventions. The current code gets this only partly right (13 of the trial's 29 cases): #71–#75 set the behaviour to keep, and #88–#96 are the bugs to fix.
+3. **CF-correct metadata** for the grids in scope: time units on the standard calendars, sub-daily steps, depth units and direction, bounds and longitude conventions. The current code gets this only partly right (13 of the trial's 29 cases): #71–#75 set the behaviour to keep. Of the bugs #88–#96, #88–#93 and #95 are fixed; #94 and #96 were closed, and their cases are tests for time matching in `as_voxel()` (#115).
 
 None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on its own (see [the trial](#first-step-stars-and-ncdfcf-trial-112)). **Decision:** ocean3d builds its own core object, reads with ncdf4 and decodes time with CFtime; terra works on slices once they are in memory; stars is used only to read remote Zarr; ncdfCF is not a dependency for now. Agreed by Jay Matsushiba on 2 November 2026 (#112).
 
@@ -159,11 +159,11 @@ None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on 
 
 - **Core object (`SpatProxy`):** the package's own description of a gridded variable, built with `as_proxy()`. It holds no values.
   - **Name:** in terra, "proxy" means described but not loaded, as in `SpatVectorProxy`. A `SpatVoxel` is one time step of a `SpatProxy` loaded into memory. Named by Jay Matsushiba on 3 November 2026.
-  - **Sources:** one netCDF file, a series of files, a remote Zarr store, or a `SpatVoxel` already in memory, so voxels go through the same coverage step as files. Files, series and voxels are implemented (#152); Zarr is planned (#151).
+  - **Sources:** one netCDF file, a series of files, a remote Zarr store, or a `SpatVoxel` already in memory, so files and voxels are read the same way. Files, series and voxels are implemented (#152); Zarr is planned (#151).
     - **A series** is several files holding the same variable on the same grid and depths, each with time steps that have calendar dates, such as one file per day. The package sorts the files by time and joins their time axes into one, in the first file's units. It stops with an error if time steps repeat or overlap, a file has no time axis, or files are on different grids (spatial tiles). Time bounds are kept only when every file has them.
     - **A voxel in memory** becomes a core object with one time step, keeping the voxel's date (if it has one), cells, depths and depth edges.
   - **Contents:** the variable with its chunk layout (the blocks the file is stored and compressed in), and each axis in a fixed form: longitude and latitude with cell edges, depth in metres positive down with edges and the original storage order, time as a CFtime object with bounds, and the coordinate reference system (CRS). It doesn't store packing (values stored as integers with a scale factor), because ncdf4 unpacks values when it reads, or a longitude convention label, because longitudes can be matched without one (#131).
-  - **CF handling happens once, when the core object is built:** axes are recognised from `axis`, `standard_name`, `units` and `positive` on dimension coordinates (#93); longitude axes with steps over 180° aren't supported (#95, closed); explicit bounds are used before inferred edges; depth is converted to metres positive down; time is decoded with CFtime; files in a series are ordered and checked, and the rule for choosing between them is applied here (#94, #96). Later steps only use the result.
+  - **CF handling happens once, when the core object is built:** axes are recognised from `axis`, `standard_name`, `units` and `positive` on dimension coordinates (#93); longitude axes with steps over 180° aren't supported (#95, closed); explicit bounds are used before inferred edges; depth is converted to metres positive down; time is decoded with CFtime; files in a series are ordered and checked. Later steps only use the result. Choosing the time step for a shape happens when `as_voxel()` reads it (#115, which has the cases from the closed #94 and #96).
   - **Bad cell bounds stop:** every reader that uses cell bounds checks them the same way (positive widths, each cell contains its centre, no overlaps, and for horizontal buffers no overlaps around the globe), and stops with an error that names the file. Point extraction doesn't read time bounds, since it matches observations to time steps. Agreed by Jay Matsushiba on 18 November 2026 (#131), replacing the 3 November 2026 decision in #123 to mark bad time bounds unavailable.
   - **Role:** it turns a request (features, a time step, a tile) into read windows (which file, and which index ranges to read), and one-time-step `SpatVoxel` views are built from it.
   - **Not a `stars_proxy`:** the layout borrows stars' table of dimensions (values or offset and step, edges, reference system), but stars' proxy operations read far more than they needed, lost metadata when sliced, and couldn't hand real Copernicus data to terra, and stars has no place for the fields above.
@@ -193,12 +193,12 @@ None of the packages tested (stars, ncdfCF, terra and ncdf4) meets all three on 
   - **No depths from layer names:** `terra::depth()` is the only record of a voxel's depths, and layer names are never read as depths, not even on input. A raster whose layers are named `{variable}_depth={value}` but whose depths aren't set (existing code, or a voxel written to GeoTIFF) needs `depths`. `depths()` no longer takes a character vector of names; a per-layer summary is labelled with `depths()` of the voxel. Decided by Jay Matsushiba on 20 November 2026 (#152), replacing the 2 November 2026 decision to read such names once on input.
   - **Saving:** with `saveRDS(terra::wrap(v))` or `terra::writeCDF()`, which keep depth and time. GeoTIFF loses depth, so a voxel read back from it needs `depths`. All three save routes tested lose the class, so a reloaded voxel goes back through `as_voxel()`.
   - **API change:** moving depths to `terra::depth()` is a breaking change, in NEWS (#152).
-- **Block reads:** ncdf4 reads one box of index space per call (`ncvar_get()` with `start` and `count`), and compressed netCDF-4 decompresses whole chunks. Today the extraction functions make one call per observation, or per buffer cell and time step. The coverage step plans reads instead: features are grouped by file and time chunk, each box is aligned to the file's chunk edges (`nc$var[[var]]$chunksizes`) and capped in size, sparse groups are split, and boxes are split at the longitude seam and between files. Each feature's cells are then picked from the array in memory, so each chunk is read once.
-- **Extraction:** `extract_to_point()`, `extract_to_buffer()` and `extract_to_track()` either become wrappers over the three steps that keep their arguments and output, or are retired in favour of workflow vignettes (see [Combined functions](#package-design-build-intersect-summarise) and [Extraction on the three steps](#extraction-on-the-three-steps)). Either way, opening, CF handling and choosing between files happen in the core object, the matching rules and weights move into the coverage step, and the statistics into `summarise_3d()`. The steps accept any source of the core object: a netCDF file or series, a Zarr store, or a `SpatVoxel`. Area extraction becomes polygon coverage on the core object, so it works on netCDF files and voxels alike, whether or not `extract_to_area()` is kept.
+- **Block reads:** ncdf4 reads one box of index space per call (`ncvar_get()` with `start` and `count`), and compressed netCDF-4 decompresses whole chunks. Today the extraction functions make one call per observation, or per buffer cell and time step. In the three steps, each shape is read on its own, as one cropped window per time step (`crop()` then `as_voxel()`). Block reads for many shapes (grouping them by file and time chunk, with boxes aligned to the file's chunk edges) were planned with a coverage function, which was dropped on 23 November 2026 (#115). A faster path for many points is parked (#163).
+- **Extraction:** `extract_to_point()`, `extract_to_buffer()` and `extract_to_track()` either become wrappers over the three steps that keep their arguments and output, or are retired in favour of workflow vignettes (see [Combined functions](#package-design-build-intersect-summarise) and [Extraction on the three steps](#extraction-on-the-three-steps)). Either way, opening and CF handling happen in the core object, matching a shape to a time step moves into `as_voxel()`, matching a point to a cell and depth level into the point methods of `intersect_3d()` and `mask()`, and the statistics into `summarise_3d()`. The steps accept any source of the core object: a netCDF file or series, a Zarr store, or a `SpatVoxel`. Area extraction becomes `mask()` on a voxel read from the core object, so it works on netCDF files and voxels alike, whether or not `extract_to_area()` is kept.
 
 #### Open questions
 
-- **Nearest depth with missing layers:** `extract_to_point()` skips missing layers when choosing the nearest depth. Whether the point rule in the coverage step keeps this (#115).
+- **Nearest depth with missing layers:** `extract_to_point()` skips missing layers when choosing the nearest depth. Whether the point methods of `intersect_3d()` and `mask()` keep this (#115).
 - **Zarr layouts:** Copernicus Marine serves each product chunked by time step (for maps) and by location (for time series). How the core object records both and which one each step reads (#151).
 - **Combined extraction functions:** keep each as a wrapper over the three steps, or retire it in favour of a workflow vignette (#116; see [Combined functions](#package-design-build-intersect-summarise)).
 - **ncdfCF:** revisit at its 1.0 release or if native model grids come into scope.
@@ -245,7 +245,7 @@ Rules:
 
 #### Extraction on the three steps
 
-The three steps are the package design (see [Package design](#package-design-build-intersect-summarise)). This section plans the parts extraction still needs: a coverage function and `summarise_3d()`. Function names marked "planned" are working names, to be settled in the issue for each step.
+The three steps are the package design (see [Package design](#package-design-build-intersect-summarise)). This section plans the parts extraction still needs: picking out one shape, time matching in `as_voxel()`, point methods for the intersect functions, and `summarise_3d()`. Users loop over their shapes, one at a time, as a vignette will show. Decided by Jay Matsushiba on 23 November 2026 (#115, #116), replacing the planned coverage function (`coverage_3d()`), its table of cells and weights, and its block reads. Function names marked "planned" are working names, to be settled in the issue for each step.
 
 *1. Build.* `SpatVector3D` builders create shapes without reading the data they will be compared with.
 
@@ -265,28 +265,35 @@ Names follow the existing converters: `as_<class>()` builds an object of that cl
 - A `SpatVector3D` holds one or more features, each with an ID that the later steps keep. One row of an observation table becomes one point; a buffer around it becomes one polygon.
 - Sampling a track (vertices, even spacing, one sample per cell) is a build step: it turns lines into points, which can then be buffered. The check that each track segment stays in water belongs here too, so invalid samples are marked before anything is read.
 - Converting between classes (`SpatVector3D` polygons to `SpatEnvelope` on a template grid, envelope to voxel) is also a build step.
+- *(planned)* `x[i]` picks out features of a `SpatVector3D`, keeping their IDs, so a loop can take one shape at a time.
+- Reading the data for a shape is a build step too: `as_voxel(crop(proxy, shape), time = shape)` reads only the cells around the shape. *(planned)* `time` takes a date-time or a shape, and the time step is chosen by the nearest or exact rule (`time_match`, from `extract_to_point()`). One time gives one voxel; a time window, or a shape with a time interval, gives a list of voxels, one per time step it covers, even when that is one.
 
-*2. Intersect.* Intersection finds where shapes and data meet. In extraction, it is the only step that reads the source data, and it reads only the cells, depths and time steps the shapes touch.
+*2. Intersect.* Intersection finds where shapes and data meet. It doesn't read files: the data for a shape were read into a voxel in the build step.
 
-- Shape with shape: `intersect_3d()`, `intersects_3d()` and `mask()` keep their current meaning and gain methods for `SpatVector3D`. The result is a shape, not data values.
-- Source with shape: a new function (working name `coverage_3d(source, shapes)`) returns a coverage table: one row per feature and source cell, with the cell's value, its depth and time step, and its weight. The weight depends on the geometry type:
-  - polygons: the polygon's volume inside the cell (covered area × depth overlap) times the time overlap;
-  - lines: the length of line inside the cell, or the time spent in it;
-  - points: one cell per point with weight 1, picked by the existing nearest or exact matching rules for depth and time (`method`, `time_match`). Those rules move here from `extract_to_point()`.
-- Reads go through the core object: its CF handling (time, depth, bounds) and its choice between files and tiles were done when it was built, so this step only asks it for read windows.
-- Many features are read in blocks, so each block of the source is read once rather than once per shape.
+- `intersect_3d()`, `intersects_3d()` and `mask()` keep their current meaning and gain methods for `SpatVector3D`. `intersect_3d()` returns the shared space, which is a shape, not data values: a voxel result holds `1` where a level is shared and `NA` elsewhere.
+- A cell and level count in full when a shape covers them. There are no partial-coverage weights (the share of a cell's area, depth or time a shape covers) for now.
+- *(planned)* A point covers one cell and one depth level, matched by the nearest or exact depth rule (`method`, from `extract_to_point()`).
+- Lines aren't supported: `buffer_3d()` turns them into polygons, and track sampling turns them into points (#105).
+- `mask(v, shape)` keeps the voxel's values in the cells and levels the shape covers. Overlapping shapes put on one grid are merged, so the loop takes one shape at a time to keep them apart.
 
-*3. Summarise.* Summaries work on the coverage table only. They don't read files or handle geometry, so they can be tested on small hand-written tables.
+*3. Summarise.* *(planned)* `summarise_3d()` summarises the values in a voxel, typically one masked to a shape, or in a list of voxels, one per time step. It doesn't read files or handle geometry, so it can be tested on small synthetic voxels.
 
 ```r
-coverage <- coverage_3d(source, shapes)
-summarise_3d(coverage, statistic = c("mean", "sd"), weighting = "weighted",
-             min_valid_fraction = 0.8, by = "id")
+results <- lapply(seq_len(length(buffers)), function(i) {
+  s  <- buffers[i]
+  vs <- as_voxel(crop(proxy, s), time = s)   # one voxel per time step the buffer covers
+  out <- do.call(rbind, lapply(vs, function(v) summarise_3d(mask(v, s), "mean")))
+  cbind(id = i, out)
+})
 ```
 
-- One set of statistic names for every shape type: mean, sd, min, max, median, and `most_similar` with a target column. One `weighting` argument: `"weighted"` uses the coverage weights, `"equal"` ignores them.
-- `by` sets the grouping: per feature (one buffer), or across features (all samples along a track, weighted by distance or duration). This replaces the separate per-buffer and per-track summaries in the removed `extract_to_buffered_track()` (#105).
-- `volume()` measures shapes rather than values, so it stays as it is; for polygons, the coverage weights sum to the volume.
+- Every non-`NA` value counts, across all cells and depth levels.
+- Statistics: mean, sd, min, max and median.
+- `weighting = "volume"` weights each value by its cell's volume, from `volume(x, per_cell = TRUE)`, because cells shrink towards the poles and depth levels range from a few metres to 100 m or more thick. `"equal"` counts each value once.
+- `by = NULL` gives one row; `"depth"` gives one row per depth level, a profile, which over a list of voxels is a profile through time (#159); `"time"` gives one row per voxel in a list.
+- The result is a data frame with a column per statistic and `n`, the number of values used, so users can drop summaries built on too few values.
+- Left out for now: `min_valid_fraction` (the smallest share of a shape that must have data, which after `mask()` can't be told from cells outside the shape), `most_similar` (the value closest to a target, with its location) and partial weights. Summaries across the samples of a track are planned with track sampling (#105).
+- `volume()` measures shapes rather than values, so it stays as it is.
 
 #### Order of work
 
@@ -298,8 +305,8 @@ Each step has its own issue, and each PR branches off `main`. Status as of 23 No
 4. **Replace the internal CF time decoding with CFtime and fix time matching** (#111), with the time tests from #71–#75 as reference behaviour, fixing #88–#92. The time helpers move out of `R/extract_to_points.R` into `R/netcdf-time.R`. *Done:* the decoder (#88, #90, #92) in #121, then matching (#89, #91 and the midnight case of #71) in #122. Non-standard calendars stay unsupported, with a clear error (see Direction, Time decoding). Must be done before step 5, because the core object's time axis is a CFtime object.
 5. **Build the core object** (#113). *Done:* time bounds are decoded with CFtime's bounds support (#123), and the time tests call the shared helpers directly (#127). The first PR (#131) adds the experimental `SpatProxy` class and `as_proxy()`. It describes one variable of one netCDF file without reading values: its chunk sizes, the axes in fixed form, time running forwards only (see Direction, Time decoding) and the CRS. The second PR (#143) adds the internal reader for one read window, which returns the values with the axes in the order lon, lat, depth, time. The third (#152) moves voxel depths to `terra::depth()`, adds the voxel builder (`as_voxel()` on a `SpatProxy`), reads climatologies with one time step, and accepts a series of files or a `SpatVoxel` in memory as sources. The fourth (#157), the last of #113, adds `terra::crop()` for a `SpatProxy`, so that only an area is read, and removes `woa_load_nc()`, whose job `as_proxy()` and `as_voxel()` now do. Split out of #113: volume through time, including reads in groups of depth layers when one time step is too large for memory (#159); remote Zarr (#151); extraction on the core object (#116). After the core object: the utility that writes a time-sorted copy of a file (see Direction, Time decoding).
 6. **Add `SpatVector3D`** with `geomtype()`, `as_vector3d()` and sf input: points and lines with per-vertex depth and time, and polygons with constant top and bottom and an optional time interval. Then `buffer_3d()` and `vector3d_to_envelope()` (#114). *Done:* points and lines (#124), polygons (#132), `buffer_3d()` (#144) and `vector3d_to_envelope()` (#145).
-7. **Add the coverage function** and `intersect_3d()` / `intersects_3d()` / `mask()` / `volume()` methods for `SpatVector3D` (#115), with block reads for many features. *In progress:* the first PR (#158, merged 23 November 2026) adds `volume()` for polygons, `intersect_3d()`, `intersects_3d()` and `mask()` between polygons and an envelope or voxel, and `intersect_3d()` and `intersects_3d()` between two sets of polygons. Next: points and lines (with polygons and with a grid), `vector3d_to_voxel()` (puts polygons on a voxel's levels without filling depth gaps), then the coverage function, which needs step 5. This is where the slow buffer reads measured in the trial are replaced.
-8. **Add `summarise_3d()` and workflow vignettes** for points, buffers, tracks and areas. Then, one function per PR, either reimplement each extraction function as a build → intersect → summarise wrapper or deprecate it in favour of its vignette (#116). *Not started.*
+7. **Add `intersect_3d()` / `intersects_3d()` / `mask()` / `volume()` methods for `SpatVector3D`, and what the per-shape loop needs** (#115). *In progress:* the first PR (#158, merged 23 November 2026) adds `volume()` for polygons, `intersect_3d()`, `intersects_3d()` and `mask()` between polygons and an envelope or voxel, and `intersect_3d()` and `intersects_3d()` between two sets of polygons. Next: `x[i]` for a `SpatVector3D`, points in the intersect functions, time matching in `as_voxel()` for a `SpatProxy`, a vignette with the per-shape loop, and `vector3d_to_voxel()` (puts polygons on a voxel's levels without filling depth gaps). The coverage function planned here was dropped on 23 November 2026 (see [Extraction on the three steps](#extraction-on-the-three-steps)).
+8. **Add `summarise_3d()` on voxels and workflow vignettes** for points, buffers, tracks and areas. Then, one function per PR, either reimplement each extraction function as a build → intersect → summarise wrapper or deprecate it in favour of its vignette (#116). *Not started.*
 9. **Add track sampling** as a build step and buffered tracks (#105); then named shapes, raster and function surfaces for polygons (#117). *Not started.*
 
 The existing tests for both models, including the buffer and track tests, define the expected behaviour. They keep passing for functions kept as wrappers; for a function that is retired, the same checks move onto the three steps (same inputs, same values) before it is deprecated. New tests check that the same synthetic data gives the same values from a netCDF file, the core object and the matching `SpatVoxel`. API changes (`woa_load_nc()` removed, what the voxel constructors return, depths stored in `terra::depth()` instead of layer names, time in volume and overlap, any retired extraction function) need NEWS entries and should settle before the rOpenSci and CRAN submissions (#12).
@@ -327,9 +334,9 @@ Three functions handle pairs of 3D objects (`SpatEnvelope`, `SpatVoxel`, and `Sp
 - **Vector with vector**: `intersect_3d()` intersects the geometries, the depths and the time intervals. Time intervals include both ends, a feature without a time overlaps any time, and features whose times don't overlap don't intersect.
   - Two polygon sets give one polygon per overlapping pair (footprints and depth intervals intersected), numbered, with `feature_id_x` and `feature_id_y` naming the pair.
   - `intersects_3d()` of two polygon sets returns, for each feature of `x`, the IDs of the features of `y` it shares space with, as `sf::st_intersects()` does.
-  - *(planned)* A point or line with a polygon gives the points or parts of lines inside it.
-- **Vector with envelope or voxel**: polygons are evaluated on the raster's grid (as in `vector3d_to_envelope()`) and compared cell by cell as two envelopes are. Where polygons overlap over a cell, the depth gap between them is filled. `mask(voxel, x)` keeps the voxel values in the cells and levels `x` reaches. *(planned)* `vector3d_to_voxel()` will put polygons on a voxel's levels one level at a time and keep the gap; points and lines will be compared in the cells and levels they pass through.
-- **Vector with a data source**: the coverage function, not these three, returns data values, with each cell's partial coverage as a weight (see [Summarise: extraction](#summarise-extraction)).
+  - *(planned)* Points with polygons give the points inside them. Lines aren't supported: `buffer_3d()` turns them into polygons, and track sampling into points (#105).
+- **Vector with envelope or voxel**: polygons are evaluated on the raster's grid (as in `vector3d_to_envelope()`) and compared cell by cell as two envelopes are. Where polygons overlap over a cell, the depth gap between them is filled. `mask(voxel, x)` keeps the voxel values in the cells and levels `x` reaches. *(planned)* `vector3d_to_voxel()` will put polygons on a voxel's levels one level at a time and keep the gap; points will be compared in the cell and depth level each one matches, by the nearest or exact depth rule.
+- **Vector with a data source**: no separate function. `as_voxel(crop(proxy, shape), time = shape)` reads the data around a shape, and `mask()` keeps the values inside it; users loop over shapes (see [Extraction on the three steps](#extraction-on-the-three-steps)).
 
 These functions are the intersect step of the [package design](#package-design-build-intersect-summarise).
 
@@ -337,14 +344,14 @@ These functions are the intersect step of the [package design](#package-design-b
 
 ### Summarise: extraction
 
-The `extract_to_*()` functions below exist now and combine two or three steps; each is planned to become a wrapper over them. Volume extraction uses `mask()` from the intersect step, followed by a summary; see [Package design](#package-design-build-intersect-summarise). Items marked *(planned)* aren't implemented yet.
+The `extract_to_*()` functions below exist now and combine two or three steps; each is to be kept as a wrapper over the steps or retired (#116). Volume extraction uses `mask()` from the intersect step, followed by a summary; see [Package design](#package-design-build-intersect-summarise). Items marked *(planned)* aren't implemented yet.
 
 - **Point extraction**. `extract_to_point()` extracts the nearest value from netCDF files (e.g. environmental data) to an input point based on its longitude, latitude, depth, and, when available, time.
 - **Buffer extraction**. `extract_to_buffer()` summarises netCDF values within a geodesic circle × depth window × time window around each observation, with cell coverage, layer thickness and time weighting, or picks the value closest to a target.
 - **Track extraction**. `extract_to_track()` samples points along ordered tracks (e.g. tagging data), extracts netCDF values at them, and can summarise per track.
 - **Area extraction**. `extract_to_area()` crops a `SpatVoxel` (e.g. environmental data) to an input polygon and depth band. 
 - **Volume extraction**. `mask(voxel, shape)` keeps a `SpatVoxel`'s values (e.g. environmental data) inside a 3D volume and sets the rest to `NA`. The volume is a `SpatEnvelope` (2.5D, e.g. a species range from `vect_to_envelope()` bounded by the seafloor) or a presence `SpatVoxel` (3D). With an envelope, `bounds` sets whether a depth level counts when the envelope reaches its top or its midpoint. The Getting Started vignette uses this to get temperatures within a species' 3D range.
-- **Extraction at a `SpatVector3D`** *(planned)*. The coverage function (working name `coverage_3d()`) returns the source cells each feature touches with their weights (one cell per point, length or time along lines, volume × time overlap in polygons), and `summarise_3d()` turns them into statistics. Observations are points, tracks are lines, and buffers and areas are polygons, so this one path replaces the separate code in each function above.
+- **Extraction at a `SpatVector3D`** *(planned)*. For each shape, `as_voxel(crop(proxy, shape), time = shape)` reads its time steps, `mask()` keeps the values in the cells and levels it covers, and `summarise_3d()` turns them into statistics. Observations are points, buffers and areas are polygons, and tracks are sampled into points, so this one path replaces the separate code in each function above.
 
 ### Summarise: volume calculations
 - **Calculate the volume occupied by 2.5D representation**. Each rasterized range stores presence plus `depth_min/depth_max` per cell, clamped to the seafloor. Volume is the sum of `cell_area × (depth_max - depth_min)` over present cells. The overlap between two shapes is the volume of `intersect_3d()`'s result, measured the same way.
