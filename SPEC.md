@@ -370,4 +370,4 @@ The `extract_to_*()` functions below exist now and combine two or three steps; e
 
 ## Future directions
 
-Ideas not yet started are tracked as GitHub issues, e.g. 3D species distribution modelling ([#108](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/108)).
+Ideas not yet started are tracked as GitHub issues. 3D species distribution modelling, once planned here (#108), is being developed in a separate package, [pathlyXYZ](https://github.com/jmenblaz/pathlyXYZ).
