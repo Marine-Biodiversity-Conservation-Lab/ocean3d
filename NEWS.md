@@ -88,7 +88,9 @@ argument of `volume()`, `mask()` and the other 3D functions doesn't apply
 to it. WOA's bounds are halfway between its standard levels, so results with
 the default `bounds = "midpoint"` don't change; `bounds = "top"` no longer
 does anything. `woa_download()`'s help page lists the variable and field
-codes.
+codes, and the new article "Working with World Ocean Atlas data" shows how
+to read each variable and statistical field, monthly and seasonal files
+included.
 
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
 `envelope_to_voxel()`, `intersect_3d()`,

@@ -71,7 +71,8 @@ of observations), \code{sd} (standard deviation), \code{se} (standard error), \c
 objectively analyzed mean minus the annual one), \code{gp} (number of grid
 squares with a statistical mean within the radius of influence), \code{sdo}
 (objectively analyzed standard deviation) and \code{sea} (standard error of the
-analysis). See the WOA 2023 Product Documentation:
+analysis). The article "Working with World Ocean Atlas data", on the
+package website, shows each step. See the WOA 2023 Product Documentation:
 \url{https://repository.library.noaa.gov/view/noaa/70581}.
 
 The voxel carries WOA's own depth bounds (\code{\link[=depth_bounds]{depth_bounds()}}), its CRS

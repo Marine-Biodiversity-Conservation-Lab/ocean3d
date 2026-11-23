@@ -243,7 +243,8 @@ woa_cache_clear <- function(confirm = TRUE) {
 #' objectively analyzed mean minus the annual one), `gp` (number of grid
 #' squares with a statistical mean within the radius of influence), `sdo`
 #' (objectively analyzed standard deviation) and `sea` (standard error of the
-#' analysis). See the WOA 2023 Product Documentation:
+#' analysis). The article "Working with World Ocean Atlas data", on the
+#' package website, shows each step. See the WOA 2023 Product Documentation:
 #' <https://repository.library.noaa.gov/view/noaa/70581>.
 #'
 #' The voxel carries WOA's own depth bounds ([depth_bounds()]), its CRS
