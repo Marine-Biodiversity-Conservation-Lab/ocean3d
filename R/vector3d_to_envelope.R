@@ -46,16 +46,10 @@
 #' terra::values(e)
 #' @export
 vector3d_to_envelope <- function(x, template) {
-  if (!methods::is(x, "SpatVector3D") || x@type != "polygons") {
-    hint <- if (methods::is(x, "SpatVector3D")) {
-      glue::glue(" These are {x@type}; buffer_3d() turns them into polygons.")
-    } else {
-      ""
-    }
-    .abort_envelope_input(
-      glue::glue("`x` must be SpatVector3D polygons.{hint}")
-    )
+  if (!methods::is(x, "SpatVector3D")) {
+    .abort_envelope_input("`x` must be SpatVector3D polygons.")
   }
+  .check_polygons(x)
   if (!inherits(template, "SpatRaster")) {
     .abort_envelope_input(
       "`template` must be a SpatRaster that defines the grid."

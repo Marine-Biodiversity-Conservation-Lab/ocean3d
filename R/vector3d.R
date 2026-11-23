@@ -298,6 +298,20 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   )
 }
 
+# The one producer of `ocean3d_error_vector3d_type`: SpatVector3D points or
+# lines where polygons are needed, from vector3d_to_envelope() and the 3D
+# queries in R/intersect.R (which take points and lines later, #115). The
+# message names no argument, because the polygons can be `x`, `y` or `mask`.
+.check_polygons <- function(x) {
+  if (x@type != "polygons") {
+    rlang::abort(glue::glue(
+      "This needs polygons, but these are {x@type}. buffer_3d() turns ",
+      "{x@type} into polygons."
+    ), class = "ocean3d_error_vector3d_type", call = NULL)
+  }
+  invisible(x)
+}
+
 # The one producer of `ocean3d_error_vector3d`: input that can't become a
 # SpatVector3D. Every check in as_vector3d() and buffer_3d() and the class's
 # validity rules report through it.
@@ -325,6 +339,8 @@ setMethod("show", "SpatVector3D", function(object) {
   cat("class      : SpatVector3D\n")
   cat("geometry   :", object@type, "\n")
   cat("features   :", length(object), "\n")
+  # An empty result, such as intersect_3d() of polygons that share nothing.
+  if (length(object) == 0L) return(invisible(object))
   if (object@type == "polygons") {
     f <- object@features
     depths <- c(min(f$depth_min), max(f$depth_max))
@@ -356,18 +372,3 @@ as.data.frame.SpatVector3D <- function(x, row.names = NULL, # nolint
                                        ...) {
   if (x@type == "polygons") x@features else x@vertices
 }
-
-#' @rdname volume
-#' @export
-setMethod("volume", "SpatVector3D", function(x, ...) {
-  message <- if (x@type == "polygons") {
-    "volume() doesn't support SpatVector3D polygons yet."
-  } else {
-    glue::glue(
-      "These are {x@type}, which have no volume. Volume is defined for ",
-      "shapes with a depth range: voxels, envelopes and polygons. ",
-      "buffer_3d() turns {x@type} into polygons."
-    )
-  }
-  rlang::abort(message, class = "ocean3d_error_volume_type", call = NULL)
-})

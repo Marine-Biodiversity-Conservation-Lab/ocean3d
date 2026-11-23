@@ -585,3 +585,283 @@ test_that("voxel pairs with different depth edges stop", {
     expect_match(conditionMessage(err), "different depth edges")
   }
 })
+
+# SpatVector3D polygons (#115) ----------------------------------------------
+
+test_that("intersect_3d() of polygons and an envelope compares depths", {
+  for (result in list(intersect_3d(polygons_0_100(), envelope_50_200()),
+                      intersect_3d(envelope_50_200(), polygons_0_100()))) {
+    expect_s4_class(result, "SpatEnvelope")
+    vals <- terra::values(result)
+    expect_identical(sum(inside()), 9L)
+    expect_true(all(vals[inside(), "depth_min"] == 50))
+    expect_true(all(vals[inside(), "depth_max"] == 100))
+    expect_true(all(is.na(vals[!inside(), ])))
+  }
+  # The overlap is 9 cells x 50 m, half the polygons' 100 m. The tolerance
+  # allows for the polygons' geodesic edges (see test-volume.R).
+  overlap <- volume(intersect_3d(polygons_0_100(), envelope_50_200()))
+  expect_equal(overlap, volume(polygons_0_100()) / 2, tolerance = 1e-3)
+})
+
+test_that("intersect_3d() of polygons and a voxel uses the voxel's levels", {
+  voxel <- envelope_to_voxel(envelope_50_200(), depths = c(0, 50, 100, 150))
+  polygons <- polygons_0_100()
+  on_grid <- vector3d_to_envelope(polygons, voxel)
+  expect_identical(
+    terra::values(intersect_3d(polygons, voxel, bounds = "top")),
+    terra::values(intersect_3d(on_grid, voxel, bounds = "top"))
+  )
+  expect_identical(terra::values(intersect_3d(voxel, polygons)),
+                   terra::values(intersect_3d(on_grid, voxel)))
+  expect_s4_class(intersect_3d(voxel, polygons), "SpatVoxel")
+})
+
+test_that("intersects_3d() of polygons tests depth overlap per cell", {
+  deep <- as_envelope(make_template(1), depth_min = 300, depth_max = 400)
+  cases <- list(
+    list(label = "overlapping depths", y = envelope_50_200(), inside = TRUE),
+    list(label = "disjoint depths", y = deep, inside = FALSE)
+  )
+  for (case in cases) {
+    for (answer in list(intersects_3d(polygons_0_100(), case$y),
+                        intersects_3d(case$y, polygons_0_100()))) {
+      vals <- terra::values(answer)[, 1]
+      expect_true(all(vals[inside()] == case$inside), label = case$label)
+      # Outside the polygons only the envelope is present.
+      expect_false(any(vals[!inside()]), label = case$label)
+    }
+  }
+})
+
+test_that("polygons that miss the grid share no space", {
+  far <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(rbind(
+    c(20, 20), c(21, 20), c(21, 21), c(20, 21), c(20, 20)
+  ))), crs = 4326))
+  far <- as_vector3d(far, depth_min = 0, depth_max = 100)
+  shared <- intersect_3d(far, envelope_50_200())
+  expect_s4_class(shared, "SpatEnvelope")
+  expect_true(all(is.na(terra::values(shared))))
+  expect_false(any(terra::values(intersects_3d(far, envelope_50_200()))))
+})
+
+test_that("mask() by polygons keeps values where they reach", {
+  # Levels 0, 100 and 200 m stand for 0-50, 50-150 and 150-200 m, so the
+  # polygons' 0-100 m reaches the first two.
+  layers <- lapply(1:3, function(i) make_template(i))
+  voxel <- as_voxel(terra::rast(layers), depths = c(0, 100, 200),
+                    varname = "temp")
+  masked <- mask(voxel, polygons_0_100())
+  expect_s4_class(masked, "SpatVoxel")
+  vals <- terra::values(masked)
+  expect_true(all(vals[inside(), 1:2] == rep(1:2, each = 9)))
+  expect_true(all(is.na(vals[inside(), 3])))
+  expect_true(all(is.na(vals[!inside(), ])))
+
+  # An envelope is kept whole where the depths overlap; a plain raster where
+  # the polygons are.
+  expect_identical(
+    terra::values(mask(envelope_50_200(), polygons_0_100())),
+    terra::values(mask(envelope_50_200(),
+                       vector3d_to_envelope(polygons_0_100(), make_template())))
+  )
+  plain <- terra::values(mask(make_template(7), polygons_0_100()))[, 1]
+  expect_identical(!is.na(plain), inside())
+})
+
+test_that("an empty polygon set shares no space with a grid", {
+  far <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(rbind(
+    c(20, 20), c(21, 20), c(21, 21), c(20, 21), c(20, 20)
+  ))), crs = 4326))
+  far <- as_vector3d(far, depth_min = 0, depth_max = 100)
+  # intersect_3d() of two polygon sets that share nothing has no polygons.
+  none <- intersect_3d(polygons_0_100(), far)
+  expect_identical(length(none), 0L)
+
+  shared <- intersect_3d(none, envelope_50_200())
+  expect_s4_class(shared, "SpatEnvelope")
+  expect_true(all(is.na(terra::values(shared))))
+  expect_false(any(terra::values(intersects_3d(envelope_50_200(), none))))
+  masked <- mask(envelope_50_200(), none)
+  expect_true(all(is.na(terra::values(masked))))
+})
+
+test_that("comparing polygons with a grid drops their times with a message", {
+  dated <- sf::st_sf(day = as.Date("2020-01-01"),
+                     geometry = sf::st_geometry(make_polygon()))
+  dated <- as_vector3d(dated, time = "day", depth_min = 0, depth_max = 100)
+  expect_message(intersect_3d(dated, envelope_50_200()),
+                 class = "ocean3d_message_time_dropped")
+})
+
+test_that("points and lines aren't compared with a grid yet", {
+  points <- as_vector3d(data.frame(lon = 2.5, lat = 2.5, depth = 10))
+  for (call in list(function() intersect_3d(points, envelope_50_200()),
+                    function() intersects_3d(envelope_50_200(), points),
+                    function() mask(envelope_50_200(), points))) {
+    expect_error(call(), "This needs polygons, but these are points",
+                 class = "ocean3d_error_vector3d_type")
+    expect_error(call(), "buffer_3d() turns points into polygons",
+                 class = "ocean3d_error_vector3d_type", fixed = TRUE)
+  }
+})
+
+test_that("intersect_3d() of two polygon sets shares outline, depth and time", {
+  square <- function(x0, x1) {
+    sf::st_polygon(list(rbind(c(x0, 0), c(x1, 0), c(x1, 1), c(x0, 1),
+                              c(x0, 0))))
+  }
+  # a1 and a2: 0-100 m, 1 to 15 January.
+  a <- sf::st_sf(id = c("a1", "a2"),
+                 start = as.Date("2020-01-01"), end = as.Date("2020-01-15"),
+                 geometry = sf::st_sfc(square(0, 2), square(5, 6), crs = 4326))
+  a <- as_vector3d(a, id = "id", time = c("start", "end"),
+                   depth_min = 0, depth_max = 100)
+  # b1 overlaps a1 in outline and depth; b2 overlaps a1 in outline but only
+  # touches its depth range; b3 overlaps a2. No times.
+  b <- sf::st_sf(id = c("b1", "b2", "b3"), top = c(50, 100, 0),
+                 geometry = sf::st_sfc(square(1, 3), square(0, 1),
+                                       square(5.5, 7), crs = 4326))
+  b <- as_vector3d(b, id = "id", depth_min = "top", depth_max = 200)
+
+  shared <- intersect_3d(a, b)
+  expect_s4_class(shared, "SpatVector3D")
+  f <- as.data.frame(shared)
+  expect_identical(f$feature_id_x, c("a1", "a2"))
+  expect_identical(f$feature_id_y, c("b1", "b3"))
+  expect_identical(f$depth_min, c(50, 0))
+  expect_identical(f$depth_max, c(100, 100))
+  # b has no times, so the pairs keep a's interval.
+  expect_identical(f$time_start, a@features$time_start)
+  expect_identical(shared@time_resolution, "daily")
+  # a1 and b1 share a 1 x 1 degree square over 50-100 m.
+  one_square <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(square(1, 2),
+                                                            crs = 4326)),
+                            depth_min = 50, depth_max = 100)
+  expect_equal(volume(intersect_3d(a, b)),
+               volume(one_square) + volume(as_vector3d(
+                 sf::st_sf(geometry = sf::st_sfc(square(5.5, 6), crs = 4326)),
+                 depth_min = 0, depth_max = 100
+               )),
+               # s2 puts the new corners where the geodesic edges cross, a
+               # little off the parallels.
+               tolerance = 1e-4)
+})
+
+test_that("intersects_3d() of polygon sets lists the pairs that share space", {
+  square <- function(x0, x1) {
+    sf::st_polygon(list(rbind(c(x0, 0), c(x1, 0), c(x1, 1), c(x0, 1),
+                              c(x0, 0))))
+  }
+  a <- sf::st_sf(id = c("a1", "a2", "a3"),
+                 geometry = sf::st_sfc(square(0, 2), square(5, 6),
+                                       square(10, 11), crs = 4326))
+  a <- as_vector3d(a, id = "id", depth_min = 0, depth_max = 100)
+  # b1 and b3 overlap a1 in outline and depth; b2 overlaps a1 but only
+  # touches its depth range; b4 only shares an edge with a2; nothing meets
+  # a3.
+  b <- sf::st_sf(id = c("b3", "b2", "b1", "b4"), top = c(0, 100, 50, 0),
+                 geometry = sf::st_sfc(square(1, 3), square(0, 1),
+                                       square(1.5, 2), square(6, 7),
+                                       crs = 4326))
+  b <- as_vector3d(b, id = "id", depth_min = "top", depth_max = 200)
+
+  expect_identical(intersects_3d(a, b),
+                   list(a1 = c("b3", "b1"), a2 = character(0),
+                        a3 = character(0)))
+  # The other way round lists the same pairs from b's side.
+  expect_identical(intersects_3d(b, a),
+                   list(b3 = "a1", b2 = character(0), b1 = "a1",
+                        b4 = character(0)))
+})
+
+test_that("intersect_3d() of polygon sets keeps the polygon part of a mix", {
+  # With planar geometry, a two-part polygon that overlaps a square in one
+  # part and only touches it in the other gives a polygon and a line.
+  old <- suppressMessages(sf::sf_use_s2(FALSE))
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  square <- function(x0, x1) {
+    rbind(c(x0, 0), c(x1, 0), c(x1, 1), c(x0, 1), c(x0, 0))
+  }
+  two_parts <- sf::st_multipolygon(list(list(square(0, 1)),
+                                        list(square(3, 4))))
+  x <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(two_parts, crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  y <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(square(0.5, 3))),
+                                       crs = 4326))
+  y <- as_vector3d(y, depth_min = 0, depth_max = 100)
+
+  shared <- suppressMessages(intersect_3d(x, y))
+  expect_identical(length(shared), 1L)
+  geometry <- as.data.frame(shared)$geometry
+  expect_identical(as.character(sf::st_geometry_type(geometry)), "POLYGON")
+  expect_identical(unname(sf::st_bbox(geometry)[c("xmin", "xmax")]),
+                   c(0.5, 1))
+})
+
+test_that("intersect_3d() of polygon sets compares time intervals", {
+  on_days <- function(start, end) {
+    p <- sf::st_sf(start = as.Date(start), end = as.Date(end),
+                   geometry = sf::st_geometry(make_polygon()))
+    as_vector3d(p, time = c("start", "end"), depth_min = 0, depth_max = 100)
+  }
+  january <- on_days("2020-01-01", "2020-01-15")
+  cases <- list(
+    list(label = "overlapping days", y = on_days("2020-01-10", "2020-01-20"),
+         n = 1L, start = "2020-01-10", end = "2020-01-15"),
+    # Dates include their end day, so sharing 15 January is an overlap.
+    list(label = "one shared day", y = on_days("2020-01-15", "2020-01-31"),
+         n = 1L, start = "2020-01-15", end = "2020-01-15"),
+    list(label = "next day", y = on_days("2020-01-16", "2020-01-31"),
+         n = 0L)
+  )
+  for (case in cases) {
+    shared <- intersect_3d(january, case$y)
+    expect_identical(length(shared), case$n, label = case$label)
+    if (case$n > 0L) {
+      f <- as.data.frame(shared)
+      expect_identical(format(f$time_start), case$start, label = case$label)
+      expect_identical(format(f$time_end), case$end, label = case$label)
+    }
+  }
+  # Sharing nothing is an empty result, with no volume.
+  expect_identical(volume(intersect_3d(january,
+                                       on_days("2021-01-01", "2021-01-02"))),
+                   0)
+
+  # With hours, windows that meet at one instant overlap at that instant,
+  # so a polygon at a single time can meet one whose window ends then.
+  at_hours <- function(start, end) {
+    p <- sf::st_sf(start = as.POSIXct(start, tz = "UTC"),
+                   end = as.POSIXct(end, tz = "UTC"),
+                   geometry = sf::st_geometry(make_polygon()))
+    as_vector3d(p, time = c("start", "end"), depth_min = 0, depth_max = 100)
+  }
+  meeting <- intersect_3d(at_hours("2020-01-05 06:00", "2020-01-05 12:00"),
+                          at_hours("2020-01-05 12:00", "2020-01-05 18:00"))
+  expect_identical(length(meeting), 1L)
+  expect_identical(as.data.frame(meeting)$time_start,
+                   as.data.frame(meeting)$time_end)
+
+  hourly <- sf::st_sf(time = as.POSIXct("2020-01-05 06:00", tz = "UTC"),
+                      geometry = sf::st_geometry(make_polygon()))
+  hourly <- as_vector3d(hourly, time = "time", depth_min = 0, depth_max = 10)
+  expect_error(intersect_3d(january, hourly), "dates and the other has hours",
+               class = "ocean3d_error_time_resolution_differ")
+})
+
+test_that("intersect_3d() of polygon sets rejects points and lines", {
+  points <- as_vector3d(data.frame(lon = 2.5, lat = 2.5, depth = 10))
+  expect_error(intersect_3d(polygons_0_100(), points),
+               "This needs polygons, but these are points",
+               class = "ocean3d_error_vector3d_type")
+  # A 2D object isn't a second set of polygons.
+  flat <- sf::st_geometry(make_polygon())
+  for (call in list(function() intersect_3d(polygons_0_100(), flat),
+                    function() intersects_3d(flat, polygons_0_100()))) {
+    err <- expect_error(call(), class = "ocean3d_error_query_input")
+    expect_match(conditionMessage(err),
+                 "SpatVector3D polygons can be compared with")
+    expect_match(conditionMessage(err), "not with sfc_POLYGON")
+  }
+})
