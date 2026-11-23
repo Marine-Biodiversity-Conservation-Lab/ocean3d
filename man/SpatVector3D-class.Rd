@@ -41,10 +41,7 @@ kept.}
 
 \item{j, drop}{Not used; \code{j} must be left out.}
 
-\item{proj, describe, parse}{For \code{crs()}: as in \code{\link[terra:crs]{terra::crs()}}. The
-coordinates of a \code{SpatVector3D} are always longitude and latitude on
-WGS84 (EPSG:4326). With \code{ext()}, terra functions that take an area,
-such as \code{crop()} of a \link[=SpatProxy-class]{SpatProxy}, take a \code{SpatVector3D} too.}
+\item{proj, describe, parse}{For \code{crs()}: as in \code{\link[terra:crs]{terra::crs()}}.}
 
 \item{row.names, optional}{Not used.}
 }
@@ -53,9 +50,13 @@ such as \code{crop()} of a \link[=SpatProxy-class]{SpatProxy}, take a \code{Spat
 which can be none.
 
 \code{ext()}: the features' horizontal extent as a \link[terra:SpatExtent]{terra::SpatExtent}
-in longitude and latitude. A shape that crosses the 180th meridian
-spans -180 to 180, so a \code{\link[terra:crop]{terra::crop()}} with it would take a band right
-round the globe: crop each side separately.
+in longitude and latitude. A shape that crosses the antimeridian spans
+-180 to 180, so a \code{\link[terra:crop]{terra::crop()}} with it keeps every longitude: crop
+each side separately. A \code{SpatVector3D} with no features has no extent,
+and \code{ext()} stops.
+
+\code{crs()}: WGS84 (EPSG:4326), the CRS of every \code{SpatVector3D}, in
+the form chosen with \code{proj}, \code{describe} or \code{parse}.
 
 \code{as.data.frame()}: the vertex table for points and lines, or the
 polygon table, with its sf geometry column, for polygons.

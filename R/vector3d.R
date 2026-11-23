@@ -313,8 +313,9 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 }
 
 # The one producer of `ocean3d_error_vector3d`: input that can't become a
-# SpatVector3D. Every check in as_vector3d() and buffer_3d() and the class's
-# validity rules report through it.
+# SpatVector3D, or a SpatVector3D that can't answer what is asked of it.
+# Every check in as_vector3d() and buffer_3d(), the class's validity rules, a
+# bad subscript in `[` and ext() of an empty object report through it.
 .abort_vector3d <- function(message) {
   rlang::abort(message, class = "ocean3d_error_vector3d", call = NULL)
 }
@@ -378,10 +379,13 @@ setMethod("[", "SpatVector3D", function(x, i, j, ..., drop = TRUE) {
       "A SpatVector3D is subset by feature only: use `x[i]`, not `x[i, j]`."
     )
   }
-  ids <- if (x@type == "polygons") x@features$feature_id else
-    unique(x@vertices$feature_id)
+  # The polygon table or the vertex table; polygon IDs are unique already.
+  ids <- unique(as.data.frame(x)$feature_id)
   n <- length(ids)
   if (missing(i)) i <- seq_len(n)
+  if (n == 0L && length(i)) {
+    .abort_vector3d("`x` has no features to pick from.")
+  }
   if (is.factor(i)) i <- as.character(i)
   # Positions, logicals and IDs all become positions, in the order asked.
   chosen <- if (is.character(i)) {
@@ -393,10 +397,10 @@ setMethod("[", "SpatVector3D", function(x, i, j, ..., drop = TRUE) {
     }
     match(i, ids)
   } else if (is.logical(i)) {
-    if (length(i) != n) {
+    if (length(i) != n || anyNA(i)) {
       .abort_vector3d(glue::glue(
-        "A logical `i` must have one value per feature: got {length(i)} for ",
-        "{n} features."
+        "A logical `i` must have one TRUE or FALSE per feature: got ",
+        "{length(i)} values, {sum(is.na(i))} of them NA, for {n} features."
       ))
     }
     which(i)
@@ -415,22 +419,30 @@ setMethod("[", "SpatVector3D", function(x, i, j, ..., drop = TRUE) {
       "{class(i)[1L]}."
     ))
   }
+  # Feature IDs stay unique, so a feature can be picked once.
+  if (anyDuplicated(chosen)) {
+    repeated <- unique(ids[chosen[duplicated(chosen)]])
+    .abort_vector3d(glue::glue(
+      "Each feature can be picked once, but `i` repeats feature ",
+      "{toString(repeated)}."
+    ))
+  }
   if (x@type == "polygons") {
     return(.new_vector3d(x@type, x@time_resolution,
                          features = x@features[chosen, , drop = FALSE]))
   }
-  v <- x@vertices
-  keep <- match(v$feature_id, ids[chosen])
-  v <- v[!is.na(keep), , drop = FALSE]
-  v <- v[order(keep[!is.na(keep)], v$vertex), , drop = FALSE]
+  # Features in the order asked, vertices in order along each line.
+  v <- x@vertices[x@vertices$feature_id %in% ids[chosen], , drop = FALSE]
+  v <- v[order(match(v$feature_id, ids[chosen]), v$vertex), , drop = FALSE]
   .new_vector3d(x@type, x@time_resolution, vertices = v)
 })
 
 #' @rdname SpatVector3D-class
 #' @return `ext()`: the features' horizontal extent as a [terra::SpatExtent]
-#'   in longitude and latitude. A shape that crosses the 180th meridian
-#'   spans -180 to 180, so a [terra::crop()] with it would take a band right
-#'   round the globe: crop each side separately.
+#'   in longitude and latitude. A shape that crosses the antimeridian spans
+#'   -180 to 180, so a [terra::crop()] with it keeps every longitude: crop
+#'   each side separately. A `SpatVector3D` with no features has no extent,
+#'   and `ext()` stops.
 #' @export
 setMethod("ext", "SpatVector3D", function(x, ...) {
   if (length(x) == 0L) {
@@ -443,10 +455,9 @@ setMethod("ext", "SpatVector3D", function(x, ...) {
 })
 
 #' @rdname SpatVector3D-class
-#' @param proj,describe,parse For `crs()`: as in [terra::crs()]. The
-#'   coordinates of a `SpatVector3D` are always longitude and latitude on
-#'   WGS84 (EPSG:4326). With `ext()`, terra functions that take an area,
-#'   such as `crop()` of a [SpatProxy-class], take a `SpatVector3D` too.
+#' @param proj,describe,parse For `crs()`: as in [terra::crs()].
+#' @return `crs()`: WGS84 (EPSG:4326), the CRS of every `SpatVector3D`, in
+#'   the form chosen with `proj`, `describe` or `parse`.
 #' @export
 setMethod("crs", "SpatVector3D",
           function(x, proj = FALSE, describe = FALSE, parse = FALSE) {

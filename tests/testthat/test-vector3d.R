@@ -399,13 +399,19 @@ test_that("`[` picks features by position, logical or ID, in that order", {
   expect_s4_class(none, "SpatVector3D")
   expect_identical(length(polygons[c(FALSE, FALSE)]), 0L)
 
+  # A feature can be picked once, whatever the geometry type.
   bad <- list(
     list(call = quote(pts[1, 2]), pattern = "by feature only"),
     list(call = quote(pts["z"]), pattern = "No feature has ID z"),
     list(call = quote(pts[4]), pattern = "whole numbers from 1 to 3"),
     list(call = quote(pts[c(-1, 2)]), pattern = "all positive or all negative"),
-    list(call = quote(pts[c(TRUE, FALSE)]), pattern = "one value per feature"),
-    list(call = quote(pts[list(1)]), pattern = "got list")
+    list(call = quote(pts[c(TRUE, FALSE)]), pattern = "one TRUE or FALSE"),
+    list(call = quote(pts[c(TRUE, NA, FALSE)]), pattern = "1 of them NA"),
+    list(call = quote(pts[c(1, 1, 2)]), pattern = "repeats feature 1"),
+    list(call = quote(lines[c("A", "A")]), pattern = "repeats feature A"),
+    list(call = quote(polygons[c(2, 2)]), pattern = "repeats feature bank"),
+    list(call = quote(pts[list(1)]), pattern = "got list"),
+    list(call = quote(none[1]), pattern = "no features to pick from")
   )
   for (case in bad) {
     expect_error(eval(case$call), case$pattern,
