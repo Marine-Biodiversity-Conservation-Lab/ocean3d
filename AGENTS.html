@@ -99,7 +99,7 @@
 <li>Test the shared internals the core object will reuse (#113) directly: time decoding and matching, the netCDF readers and similar helpers. Tests through the combined extraction functions (<code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, <code><a href="reference/extract2d.html">extract2d()</a></code> and the like) would need rewriting if those functions are retired (#116).</li>
 <li>Don’t flag a direct test of one of these helpers as a convention breach.</li>
 </ul></li>
-<li>Check conditions with <code>expect_error()</code> / <code>expect_warning()</code> using <code>class =</code>, plus <code>expect_match()</code> on the parts of the message that matter.</li>
+<li>Check conditions with <code>expect_error()</code> / <code>expect_warning()</code> using <code>class =</code>, and check the parts of the message that matter. Either form is fine: the same call (<code>expect_error(x, "phrase", class = "k")</code>, which in testthat edition 3 fails if the class or the message is wrong), or <code>expect_match()</code> on the returned condition. In table-driven tests, prefer the one-call form, so a row that stops raising its condition fails only that row.</li>
 <li>Use <code>skip_if_not_installed()</code> only for packages in <code>Suggests</code> (e.g. lwgeom). Packages in <code>Imports</code>, such as ncdf4, are always installed, so a skip for them never triggers and only adds noise.</li>
 </ul></div>
 <div class="section level2">
