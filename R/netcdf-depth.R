@@ -15,7 +15,8 @@
 # to follow the name of the depths, or NULL when nothing is. The rule every
 # depth axis follows: numeric, no NA, none negative and none repeated. Used by
 # as_voxel(), envelope_to_voxel(), c() on a SpatVoxel (which tests it rather
-# than stopping) and .prepare_depth_axis().
+# than stopping), the SpatVoxel and SpatProxy validity methods and
+# .prepare_depth_axis().
 .depth_problem <- function(d) {
   if (!is.numeric(d)) return("must be numeric metres")
   if (anyNA(d)) return("must all be set; some are NA")
