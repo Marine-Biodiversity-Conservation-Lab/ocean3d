@@ -21,25 +21,47 @@ make_effort <- function(rows) {
 # 0..5 in both dimensions, EPSG:4326. Cells are 1 deg square so
 # longitude/latitude maps to integer cell indices cleanly.
 
-test_that("per-gear totals round-trip from effort table to raster", {
-  # Create test data
-  effort <- make_effort(list(
-    lat      = c(0.5, 1.5, 0.5, 2.5, 3.5),
-    lon      = c(0.5, 1.5, 2.5, 3.5, 4.5),
-    geartype = c("trawlers", "trawlers", "drifting_longlines",
-                 "drifting_longlines", "set_gillnets"),
-    hours    = c(10,  5,  3,  7,  2)
-  ))
-  grid <- make_template()
+test_that("layer totals round-trip from effort table to raster", {
+  # `args` are the other arguments to gfw_effort_to_raster(); `totals` are the
+  # summed effort in each layer, named by layer.
+  cases <- list(
+    list(label = "per gear",
+         effort = make_effort(list(
+           lat      = c(0.5, 1.5, 0.5, 2.5, 3.5),
+           lon      = c(0.5, 1.5, 2.5, 3.5, 4.5),
+           geartype = c("trawlers", "trawlers", "drifting_longlines",
+                        "drifting_longlines", "set_gillnets"),
+           hours    = c(10,  5,  3,  7,  2)
+         )),
+         args = list(),
+         totals = c(effort_trawlers = 15, effort_drifting_longlines = 10,
+                    effort_set_gillnets = 2)),
+    # Custom `value` and `layer_by` columns are honoured.
+    list(label = "custom value and layer_by columns",
+         effort = data.frame(
+           Lat = c(0.5, 1.5),
+           Lon = c(0.5, 1.5),
+           flag = c("BGD", "IND"),
+           hours_total = c(4, 6),
+           stringsAsFactors = FALSE
+         ),
+         args = list(layer_by = "flag", value = "hours_total"),
+         totals = c(effort_BGD = 4, effort_IND = 6))
+  )
+  for (case in cases) {
+    out <- do.call(gfw_effort_to_raster,
+                   c(list(case$effort, make_template()), case$args))
 
-  out <- gfw_effort_to_raster(effort, grid)
-
-  totals <- terra::global(out, "sum", na.rm = TRUE)$sum
-  names(totals) <- names(out)
-
-  expect_identical(totals[["effort_trawlers"]], 15)
-  expect_identical(totals[["effort_drifting_longlines"]], 10)
-  expect_identical(totals[["effort_set_gillnets"]], 2)
+    # expect_setequal() has no `label`; the same names in any order.
+    expect_identical(sort(names(out)), sort(names(case$totals)),
+                     label = case$label)
+    totals <- terra::global(out, "sum", na.rm = TRUE)$sum
+    names(totals) <- names(out)
+    for (layer in names(case$totals)) {
+      expect_identical(totals[[layer]], case$totals[[layer]],
+                       label = paste0(case$label, ": ", layer))
+    }
+  }
 })
 
 test_that("output has one layer per gear class, named effort_<level>", {
@@ -111,30 +133,6 @@ test_that("missing required columns produce an informative error", {
     gfw_effort_to_raster(bad, grid),
     "Apparent Fishing Hours"
   )
-})
-
-test_that("custom `value` and `layer_by` columns are honoured", {
-  # Create test data
-  effort <- data.frame(
-    Lat = c(0.5, 1.5),
-    Lon = c(0.5, 1.5),
-    flag = c("BGD", "IND"),
-    hours_total = c(4, 6),
-    stringsAsFactors = FALSE
-  )
-  grid <- make_template()
-
-  out <- gfw_effort_to_raster(
-    effort, grid,
-    layer_by = "flag",
-    value = "hours_total"
-  )
-
-  expect_setequal(names(out), c("effort_BGD", "effort_IND"))
-  totals <- terra::global(out, "sum", na.rm = TRUE)$sum
-  names(totals) <- names(out)
-  expect_identical(totals[["effort_BGD"]], 4)
-  expect_identical(totals[["effort_IND"]], 6)
 })
 
 test_that("points in EPSG:4326 are reprojected onto a non-4326 grid", {

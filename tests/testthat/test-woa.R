@@ -25,29 +25,26 @@ test_that("woa_cache_dir is stable across calls", {
   expect_identical(woa_cache_dir(), woa_cache_dir())
 })
 
-test_that("woa_download errors on unknown variable", {
-  expect_error(
-    woa_download("nonsense_variable", period = "annual"),
-    "Unknown variable"
+test_that("woa_download errors on an unknown variable, resolution or period", {
+  # `args` go to woa_download().
+  cases <- list(
+    list(label = "unknown variable",
+         args = list("nonsense_variable", period = "annual"),
+         pattern = "Unknown variable"),
+    list(label = "unknown resolution",
+         args = list("temperature", resolution = "7"),
+         pattern = "Unknown resolution"),
+    list(label = "unknown period name",
+         args = list("temperature", period = "yearly"),
+         pattern = "period must be"),
+    list(label = "unknown period number",
+         args = list("temperature", period = 99),
+         pattern = "Numeric period")
   )
-})
-
-test_that("woa_download errors on unknown resolution", {
-  expect_error(
-    woa_download("temperature", resolution = "7"),
-    "Unknown resolution"
-  )
-})
-
-test_that("woa_download errors on invalid period", {
-  expect_error(
-    woa_download("temperature", period = "yearly"),
-    "period must be"
-  )
-  expect_error(
-    woa_download("temperature", period = 99),
-    "Numeric period"
-  )
+  for (case in cases) {
+    expect_error(do.call(woa_download, case$args), case$pattern,
+                 label = case$label)
+  }
 })
 
 test_that("woa_download caches files and skips re-download", {
@@ -92,38 +89,33 @@ test_that("woa_load_nc errors when file missing", {
   expect_error(woa_load_nc("/no/such/file.nc"), "File not found")
 })
 
-test_that(paste("woa_load_nc catches layer names that do not match WOA",
-                "one-letter code for oceanographic variables"), {
-  # Build two tiny synthetic NetCDFs matching the WOA layer-naming convention.
-  tmp <- tempfile("woa_mon_"); dir.create(tmp)
-  on.exit(unlink(tmp, recursive = TRUE))
-
-  f1 <- file.path(tmp, "m01.nc")
-  make_file(f1, list(`do_sea_depth=0` = c(1, 2, 3, 4),
-                     `do_sea_depth=100` = c(5, 6, 7, 8)))
-
-  expect_error(
-    woa_load_nc(file.path(tmp, "m01.nc"), field = "sea"),
-    paste("check raster layer names. For WOA data, oceanographic variable",
-          "one-letter code must be one of: t, s, o, O, A, n, p, i, I.")
+test_that("woa_load_nc catches layer names that don't follow the WOA codes", {
+  # Each row builds a tiny synthetic NetCDF with layers named `prefix` plus
+  # `_depth=0` and `_depth=100`; `args` are the other arguments to
+  # woa_load_nc().
+  cases <- list(
+    list(label = "variable code that isn't one letter", prefix = "do_sea",
+         args = list(field = "sea"),
+         pattern = paste("check raster layer names. For WOA data,",
+                         "oceanographic variable one-letter code must be",
+                         "one of: t, s, o, O, A, n, p, i, I.")),
+    list(label = "unknown field code", prefix = "o_inc", args = list(),
+         pattern = paste("check raster layer names. For WOA data, field code",
+                         "must be one of: an, mn, dd, sd, se, oa, gp, sdo,",
+                         "sea."))
   )
-})
+  for (case in cases) {
+    tmp <- tempfile("woa_mon_")
+    dir.create(tmp)
+    on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+    f1 <- file.path(tmp, "m01.nc")
+    layers <- list(c(1, 2, 3, 4), c(5, 6, 7, 8))
+    names(layers) <- paste0(case$prefix, c("_depth=0", "_depth=100"))
+    make_file(f1, layers)
 
-test_that(paste("woa_load_nc catches layer names that do not match WOA code",
-                "for abbreviated fields"), {
-  # Build two tiny synthetic NetCDFs matching the WOA layer-naming convention.
-  tmp <- tempfile("woa_mon_"); dir.create(tmp)
-  on.exit(unlink(tmp, recursive = TRUE))
-
-  f1 <- file.path(tmp, "m01.nc")
-  make_file(f1, list(`o_inc_depth=0` = c(1, 2, 3, 4),
-                     `o_inc_depth=100` = c(5, 6, 7, 8)))
-
-  expect_error(
-    woa_load_nc(file.path(tmp, "m01.nc")),
-    paste("check raster layer names. For WOA data, field code must be one",
-          "of: an, mn, dd, sd, se, oa, gp, sdo, sea.")
-  )
+    expect_error(do.call(woa_load_nc, c(list(f1), case$args)), case$pattern,
+                 label = case$label)
+  }
 })
 
 test_that(paste("woa_load_nc provides descriptive error if standard field",

@@ -138,71 +138,44 @@ test_that("a custom profile may return one weight per depth", {
 
 # profile return values ----
 
-test_that("envelope_to_voxel() rejects a profile with a bad layer count", {
-  envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
-
-  expect_error(
-    envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
-                      profile = function(ind, depths, n_depths) ind[[1:2]]),
-    paste0("`profile` must return a SpatRaster with 1 layer or one per ",
-           "depth (4); got 2"),
-    fixed = TRUE
-  )
-})
-
-test_that("envelope_to_voxel() rejects an off-grid profile raster", {
+test_that("envelope_to_voxel() rejects a profile that doesn't return weights", {
   envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
   other <- terra::rast(nrows = 3, ncols = 3, xmin = 0, xmax = 3,
                        ymin = 0, ymax = 3, vals = 1)
+  not_weight <- paste("`profile` must return a single non-missing number",
+                      "or a SpatRaster")
+  failed <- "`profile` failed when called with (ind, depths, n_depths)"
 
-  expect_error(
-    envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
-                      profile = function(ind, depths, n_depths) other),
-    "`profile` must return a SpatRaster on the same grid",
-    fixed = TRUE
+  # Each `message` is a fixed string the error must contain.
+  cases <- list(
+    list(label = "two layers for four depths",
+         profile = function(ind, depths, n_depths) ind[[1:2]],
+         message = paste0("`profile` must return a SpatRaster with 1 layer ",
+                          "or one per depth (4); got 2")),
+    list(label = "raster on another grid",
+         profile = function(ind, depths, n_depths) other,
+         message = "`profile` must return a SpatRaster on the same grid"),
+    list(label = "text", profile = function(ind, depths, n_depths) "half",
+         message = not_weight),
+    list(label = "three numbers",
+         profile = function(ind, depths, n_depths) c(1, 2, 3),
+         message = "of length 3"),
+    list(label = "NULL", profile = function(ind, depths, n_depths) NULL,
+         message = not_weight),
+    # A failing profile is reported as the profile's failure.
+    list(label = "profile that stops",
+         profile = function(ind, depths, n_depths) stop("nope"),
+         message = paste0(failed, ": nope")),
+    # A profile that can't take the three arguments fails the same way,
+    # rather than surfacing R's bare "unused argument" from inside the call.
+    list(label = "profile with one argument", profile = function(ind) 1,
+         message = failed)
   )
-})
-
-test_that("envelope_to_voxel() rejects a profile returning a non-weight", {
-  envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
-  depths <- c(0, 100, 200, 300)
-
-  expect_error(
-    envelope_to_voxel(envel, depths = depths,
-                      profile = function(ind, depths, n_depths) "half"),
-    "`profile` must return a single non-missing number or a SpatRaster",
-    fixed = TRUE
-  )
-  expect_error(
-    envelope_to_voxel(envel, depths = depths,
-                      profile = function(ind, depths, n_depths) c(1, 2, 3)),
-    "of length 3",
-    fixed = TRUE
-  )
-  expect_error(
-    envelope_to_voxel(envel, depths = depths,
-                      profile = function(ind, depths, n_depths) NULL),
-    "`profile` must return a single non-missing number or a SpatRaster",
-    fixed = TRUE
-  )
-})
-
-test_that("a failing profile is reported as the profile's failure", {
-  envel <- as_envelope(make_footprint(), depth_min = 0, depth_max = 350)
-
-  expect_error(
-    envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
-                      profile = function(ind, depths, n_depths) stop("nope")),
-    "`profile` failed when called with (ind, depths, n_depths): nope",
-    fixed = TRUE
-  )
-
-  # a profile that cannot take the three arguments fails the same way, rather
-  # than surfacing R's bare "unused argument" from inside the call
-  expect_error(
-    envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
-                      profile = function(ind) 1),
-    "`profile` failed when called with (ind, depths, n_depths)",
-    fixed = TRUE
-  )
+  for (case in cases) {
+    expect_error(
+      envelope_to_voxel(envel, depths = c(0, 100, 200, 300),
+                        profile = case$profile),
+      case$message, fixed = TRUE, label = case$label
+    )
+  }
 })

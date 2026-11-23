@@ -2,34 +2,23 @@
 # Input validation
 # ---------------------------------------------------------------------------
 
-test_that("fetch_species_assessments errors when no input provided", {
-  expect_error(
-    fetch_species_assessments(api_key = Sys.getenv("IUCN_REDLIST_KEY")),
-    "Exactly one"
+test_that("fetch_species_assessments needs exactly one input", {
+  # `inputs` are the arguments given besides `api_key`.
+  cases <- list(
+    list(label = "no input", inputs = list()),
+    list(label = "two inputs",
+         inputs = list(sis_ids = 1, species_names = "Sphyrna lewini")),
+    list(label = "all three inputs",
+         inputs = list(sis_ids = 1, species_names = "Sphyrna lewini",
+                       group_code = "sharks_and_rays"))
   )
-})
-
-test_that("fetch_species_assessments errors when multiple inputs provided", {
-  expect_error(
-    fetch_species_assessments(
-      api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
-      sis_ids       = 1,
-      species_names = "Sphyrna lewini"
-    ),
-    "Exactly one"
-  )
-})
-
-test_that("fetch_species_assessments errors when all three inputs provided", {
-  expect_error(
-    fetch_species_assessments(
-      api_key       = Sys.getenv("IUCN_REDLIST_KEY"),
-      sis_ids       = 1,
-      species_names = "Sphyrna lewini",
-      group_code    = "sharks_and_rays"
-    ),
-    "Exactly one"
-  )
+  for (case in cases) {
+    expect_error(
+      do.call(fetch_species_assessments,
+              c(list(api_key = Sys.getenv("IUCN_REDLIST_KEY")), case$inputs)),
+      "Exactly one", label = case$label
+    )
+  }
 })
 
 # ---------------------------------------------------------------------------

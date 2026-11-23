@@ -1,16 +1,19 @@
-test_that("depths() reads the depth axis of a SpatVoxel", {
+test_that("depths() reads terra::depth() of voxels and plain rasters", {
   v <- as_voxel(make_multidepth_rast(depths = c(0, 100, 200, 300)))
-  expect_identical(depths(v), c(0, 100, 200, 300))
-})
-
-test_that("depths() reads terra::depth() of a plain SpatRaster", {
   r <- make_multidepth_rast(depths = c(0, 50, 100, 500))
   expect_false(methods::is(r, "SpatVoxel"))
-  expect_identical(depths(r), c(0, 50, 100, 500))
   # A depth set to 0 m counts as set.
   surface <- terra::rast(nrows = 2, ncols = 2, vals = 1)
   terra::depth(surface) <- 0
-  expect_identical(depths(surface), 0)
+
+  cases <- list(
+    list(label = "SpatVoxel", x = v, depths = c(0, 100, 200, 300)),
+    list(label = "plain SpatRaster", x = r, depths = c(0, 50, 100, 500)),
+    list(label = "one layer at 0 m", x = surface, depths = 0)
+  )
+  for (case in cases) {
+    expect_identical(depths(case$x), case$depths, label = case$label)
+  }
 })
 
 test_that("depths() never reads layer names", {
