@@ -849,7 +849,6 @@ test_that("vect_to_envelope() rejects unusable input", {
                          ymin = 0, ymax = 5, vals = 50, crs = "EPSG:3857")
   poly <- make_polygon()
   tmpl <- make_template()
-  deep <- terra::rast(tmpl, vals = 50)
 
   cases <- list(
     list(args = list("test", tmpl, 0, 10), class = input,
@@ -872,15 +871,10 @@ test_that("vect_to_envelope() rejects unusable input", {
     list(args = list(poly, tmpl, 0, list()), class = input,
          pattern = "`depth_max` is empty"),
     list(args = list(poly, tmpl, 0, list(10, "deep")), class = grid,
-         pattern = "element 2 must be a single non-missing number"),
+         pattern = "element 2 must be one or more non-missing numbers"),
     # `na.rm = TRUE` would drop an NA silently, widening rather than narrowing.
     list(args = list(poly, tmpl, 0, list(10, NA_real_)), class = grid,
-         pattern = "element 2 must be a single non-missing number.*got NA"),
-    # each constraint is one number or one layer
-    list(args = list(poly, tmpl, list(c(10, 20)), 100), class = grid,
-         pattern = "`depth_min` must be a single non-missing number"),
-    list(args = list(poly, tmpl, 0, list(10, c(deep, deep))), class = grid,
-         pattern = "element 2 must be a single-layer SpatRaster; got 2")
+         pattern = "element 2 must be one or more non-missing numbers.*got NA")
   )
   for (case in cases) {
     expect_error(do.call(vect_to_envelope, case$args), case$pattern,
@@ -888,6 +882,38 @@ test_that("vect_to_envelope() rejects unusable input", {
   }
 
   # TODO: implement check for the depth_min and depth_max inputs
+})
+
+test_that("vect_to_envelope() counts each value and layer as a constraint", {
+  poly <- make_polygon()
+  tmpl <- make_template()
+  shallow <- terra::rast(tmpl, vals = 300)
+  two <- c(terra::rast(tmpl, vals = 400), terra::rast(tmpl, vals = 250))
+  # the distinct (depth_min, depth_max) pairs of the covered cells
+  limits <- function(e) {
+    v <- terra::values(e)
+    unname(unique(v[stats::complete.cases(v), , drop = FALSE]))
+  }
+
+  # several numbers in one list element, as separate elements
+  expect_identical(limits(vect_to_envelope(poly, tmpl, list(c(10, 20)), 500)),
+                   limits(vect_to_envelope(poly, tmpl, list(10, 20), 500)))
+  expect_identical(
+    limits(vect_to_envelope(poly, tmpl, list(c(10, 20)), 500))[, 1], 20
+  )
+  # a multi-layer raster, as its layers given separately
+  expect_identical(
+    limits(vect_to_envelope(poly, tmpl, 0, list(1000, two))),
+    limits(vect_to_envelope(poly, tmpl, 0, c(list(1000), as.list(two))))
+  )
+  expect_identical(
+    limits(vect_to_envelope(poly, tmpl, 0, two))[, 2], 250
+  )
+  # each element is still checked for NA
+  err <- expect_error(vect_to_envelope(poly, tmpl, list(c(10, NA)), shallow),
+                      class = "ocean3d_error_grid_value")
+  expect_match(conditionMessage(err),
+               "`depth_min` must be one or more non-missing numbers")
 })
 
 test_that("vect_to_envelope() accepts scalar depth_min and depth_max", {

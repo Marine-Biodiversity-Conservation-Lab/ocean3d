@@ -101,16 +101,18 @@ as_envelope <- function(x, depth_min, depth_max) {
 # limits in as_envelope() and vect_to_envelope(), `values` in
 # envelope_to_voxel() and a profile's weights. `arg` names the value in the
 # message, `grid` the object whose grid it must match, and `layers` the layer
-# counts a raster may have. Returns the number, or with `fill = TRUE` a layer
-# on `template`'s grid holding it; a raster is returned as it is. A CRS
-# mismatch is told apart from an extent or resolution mismatch, since the fix
-# differs (project, or resample).
+# counts a raster may have. With `several = TRUE` (vect_to_envelope(), where
+# each value or layer is one more constraint) a raster may have any number of
+# layers and a number may be a vector. Returns the number, or with
+# `fill = TRUE` a layer on `template`'s grid holding it; a raster is returned
+# as it is. A CRS mismatch is told apart from an extent or resolution
+# mismatch, since the fix differs (project, or resample).
 .grid_value <- function(value, template, arg, layers = 1, grid = "`x`",
-                        fill = FALSE) {
+                        fill = FALSE, several = FALSE) {
   layers <- unique(layers)
   problem <- if (methods::is(value, "SpatRaster")) {
     n <- terra::nlyr(value)
-    if (!n %in% layers) {
+    if (!several && !n %in% layers) {
       counts <- glue::glue_collapse(layers, sep = ", ", last = " or ")
       want <- if (identical(layers, 1)) "a single-layer SpatRaster" else
         glue::glue("a SpatRaster with {counts} layers")
@@ -124,12 +126,15 @@ as_envelope <- function(x, depth_min, depth_max) {
       glue::glue("does not align with {grid}; its extent or resolution ",
                  "differs. Resample it onto that grid first")
     }
-  } else if (!is.numeric(value) || length(value) != 1 || is.na(value)) {
+  } else if (!is.numeric(value) || anyNA(value) || length(value) == 0 ||
+               (!several && length(value) != 1)) {
     got <- if (length(value) == 1 && is.na(value)) "NA" else
       glue::glue("{paste(class(value), collapse = '/')} of length ",
                  "{length(value)}")
-    glue::glue("must be a single non-missing number or a SpatRaster on the ",
-               "grid of {grid}; got {got}")
+    want <- if (several) "one or more non-missing numbers" else
+      "a single non-missing number"
+    glue::glue("must be {want} or a SpatRaster on the grid of {grid}; ",
+               "got {got}")
   }
   if (!is.null(problem)) {
     rlang::abort(glue::glue("{arg} {problem}."),
@@ -952,7 +957,8 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 
   for (i in seq_along(x)) {
     label <- if (length(x) == 1L) "`{arg}`" else "`{arg}` element {i}"
-    .grid_value(x[[i]], template, glue::glue(label), grid = "`template`")
+    .grid_value(x[[i]], template, glue::glue(label), grid = "`template`",
+                several = TRUE)
   }
 
   x
@@ -1010,14 +1016,17 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
 #' @param template SpatRaster that defines the horizontal grid of the
 #'   SpatEnvelope output.
 #' @param depth_min List. Can contain both numeric and SpatRasters that match
-#'   CRS, resolution, extent of `template` and contain numeric values. For each
-#'   cell, the maximum across the `depth_min` list parameters is used as output
-#'   SpatEnvelope depth_min layer cell value.
+#'   CRS, resolution, extent of `template` and contain numeric values. A list
+#'   element can be several numbers or a multi-layer SpatRaster; each value
+#'   or layer counts as one constraint. For each cell, the maximum across all
+#'   the constraints is used as output SpatEnvelope depth_min layer cell
+#'   value.
 #' @param depth_max List. Can contain both numeric and SpatRasters that match
-#'   CRS, resolution, extent of `template` and contain numeric values. For each
-#'   cell, the minimum across the `depth_max` list parameters is used as output
-#'   SpatEnvelope depth_max layer cell value. Cells where it isn't deeper
-#'   than `depth_min` are `NA`.
+#'   CRS, resolution, extent of `template` and contain numeric values. A list
+#'   element can be several numbers or a multi-layer SpatRaster; each value
+#'   or layer counts as one constraint. For each cell, the minimum across all
+#'   the constraints is used as output SpatEnvelope depth_max layer cell
+#'   value. Cells where it isn't deeper than `depth_min` are `NA`.
 #' 
 #' @returns SpatEnvelope, with depth_min and depth_max layers. Stops with an
 #'   error if the envelope would have no cells: when the polygons don't

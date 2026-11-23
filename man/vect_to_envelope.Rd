@@ -14,15 +14,18 @@ footprints.}
 SpatEnvelope output.}
 
 \item{depth_min}{List. Can contain both numeric and SpatRasters that match
-CRS, resolution, extent of \code{template} and contain numeric values. For each
-cell, the maximum across the \code{depth_min} list parameters is used as output
-SpatEnvelope depth_min layer cell value.}
+CRS, resolution, extent of \code{template} and contain numeric values. A list
+element can be several numbers or a multi-layer SpatRaster; each value
+or layer counts as one constraint. For each cell, the maximum across all
+the constraints is used as output SpatEnvelope depth_min layer cell
+value.}
 
 \item{depth_max}{List. Can contain both numeric and SpatRasters that match
-CRS, resolution, extent of \code{template} and contain numeric values. For each
-cell, the minimum across the \code{depth_max} list parameters is used as output
-SpatEnvelope depth_max layer cell value. Cells where it isn't deeper
-than \code{depth_min} are \code{NA}.}
+CRS, resolution, extent of \code{template} and contain numeric values. A list
+element can be several numbers or a multi-layer SpatRaster; each value
+or layer counts as one constraint. For each cell, the minimum across all
+the constraints is used as output SpatEnvelope depth_max layer cell
+value. Cells where it isn't deeper than \code{depth_min} are \code{NA}.}
 }
 \value{
 SpatEnvelope, with depth_min and depth_max layers. Stops with an

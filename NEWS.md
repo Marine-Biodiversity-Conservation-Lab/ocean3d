@@ -151,17 +151,6 @@ polygons and drops empty results has to handle the error instead. The
 message says how many cells have the limits swapped (or a seafloor above
 `depth_min`), equal, or missing (#114).
 
-`vect_to_envelope()` now stops with an error when a `depth_min` or
-`depth_max` constraint is a multi-layer `SpatRaster` or a numeric vector
-inside one list element (`list(c(10, 20))`) (#97). Both used to be accepted,
-and each layer or value counted as a separate constraint: per cell, the
-deepest `depth_min` and the shallowest `depth_max` across all of them won.
-Each constraint must now be a single number or a single-layer `SpatRaster`
-on the grid of `template`, as in `as_envelope()`. To keep the old result,
-give each layer or number its own list element: `c(list(500), as.list(r))`
-for a raster `r`, and `list(10, 20)` or a plain vector `c(10, 20)` for
-numbers.
-
 `envelope_to_voxel()` and `depth_bounds()` now stop with an error when given
 a `SpatEnvelope` or `SpatVoxel` whose layers no longer match its class, for
 example after a terra operation changed them (#97). They used to use such an
