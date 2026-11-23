@@ -1,0 +1,124 @@
+# summarise_3d() (#116): statistics of a voxel's values across its cells and
+# depth levels. make_grid()'s LAEA cells are 1 km x 1 km, so volume weights
+# are the slab thicknesses.
+
+# A 3 x 3 voxel on two levels, 0 and 100 m, whose slabs are 50 m each under
+# "midpoint": cell 1 is NA at 0 m, cell 9 at both levels.
+two_levels <- function() {
+  make_voxel(cbind(c(NA, 2:8, NA), c(11:18, NA)), c(0, 100), varname = "temp")
+}
+
+test_that("statistics run over every value, weighted by volume or equally", {
+  # One cell at seven levels, slabs 5, 10, 10, 10, 35, 80 and 50 m thick.
+  r <- terra::rast(make_grid(1, 1), nlyrs = 7)
+  terra::values(r) <- t(c(20, 19, 18, 17, 16, 8, 4))
+  v <- as_voxel(r, depths = c(0, 10, 20, 30, 40, 100, 200), varname = "temp")
+  values <- c(20, 19, 18, 17, 16, 8, 4)
+  thickness <- c(5, 10, 10, 10, 35, 80, 50)
+
+  weighted <- summarise_3d(v, statistic = c("mean", "sd", "min", "max",
+                                            "median"))
+  expect_identical(names(weighted),
+                   c("time", "mean", "sd", "min", "max", "median", "n"))
+  expect_equal(weighted$mean, sum(values * thickness) / sum(thickness))
+  w <- thickness / sum(thickness)
+  expect_equal(weighted$sd,
+               sqrt(sum(w * (values - weighted$mean)^2) / sum(w * (1 - w))))
+  expect_identical(weighted[c("min", "max")], data.frame(min = 4, max = 20))
+  # Half the water (100 m of 200 m) is reached within the 8 degree level.
+  expect_identical(weighted$median, 8)
+  expect_identical(weighted$n, 7L)
+  expect_true(is.na(weighted$time))
+
+  # Equal weights agree with base R.
+  equal <- summarise_3d(v, statistic = c("mean", "sd", "median"),
+                        weighting = "equal")
+  expect_equal(equal$mean, mean(values))
+  expect_equal(equal$sd, stats::sd(values))
+  expect_equal(equal$median, stats::median(values))
+
+  # The columns follow the order asked for.
+  expect_identical(names(summarise_3d(v, statistic = c("max", "mean"))),
+                   c("time", "max", "mean", "n"))
+})
+
+test_that("the median averages the middle pair under equal weights", {
+  v <- make_voxel(cbind(c(1, 2, 3, 4, rep(NA, 5)), rep(NA, 9)), c(0, 100))
+  expect_identical(summarise_3d(v, "median", weighting = "equal")$median, 2.5)
+  expect_identical(summarise_3d(v, "median")$median, 2.5)
+})
+
+test_that("values and weights pair up across cells and levels", {
+  v <- two_levels()
+  # 50 m slabs everywhere, so the weighted mean equals the equal one here.
+  out <- summarise_3d(v)
+  expect_equal(out$mean, mean(c(2:8, 11:18)))
+  expect_identical(out$n, 15L)
+  expect_equal(out$mean, summarise_3d(v, weighting = "equal")$mean)
+
+  # `bounds` moves the weights: under "top" the 100 m level has no height, so
+  # only the 0 m level counts.
+  expect_equal(summarise_3d(v, bounds = "top")$mean, mean(2:8))
+  # Stored edges win over `bounds`: 0 m stands for 10 m and 100 m for 90 m.
+  edged <- as_voxel(v, depth_bounds = cbind(c(0, 10), c(10, 100)))
+  expect_equal(summarise_3d(edged)$mean,
+               (10 * sum(2:8) + 90 * sum(11:18)) / (10 * 7 + 90 * 8))
+})
+
+test_that("by = 'depth' gives one row per level and 'time' one per voxel", {
+  v <- two_levels()
+  by_depth <- summarise_3d(v, statistic = c("mean", "max"), by = "depth")
+  expect_identical(names(by_depth),
+                   c("time", "depth", "mean", "max", "n"))
+  expect_identical(by_depth$depth, c(0, 100))
+  expect_equal(by_depth$mean, c(mean(2:8), mean(11:18)))
+  expect_identical(by_depth$n, c(7L, 8L))
+  expect_identical(summarise_3d(v, by = "time"), summarise_3d(v))
+})
+
+test_that("a list of voxels gives one row per time step, with its time", {
+  v <- two_levels()
+  later <- v + 1
+  terra::time(v) <- rep(as.Date("2020-01-01"), 2)
+  terra::time(later) <- rep(as.POSIXct("2020-01-02 06:00", tz = "UTC"), 2)
+
+  out <- summarise_3d(list(v, later))
+  expect_equal(out$time, as.POSIXct(c("2020-01-01 00:00", "2020-01-02 06:00"),
+                                    tz = "UTC"))
+  expect_equal(out$mean, summarise_3d(v)$mean + c(0, 1))
+
+  # Steps aren't pooled with by = "depth": two rows per step.
+  by_depth <- summarise_3d(list(v, later), by = "depth")
+  expect_identical(by_depth$depth, c(0, 100, 0, 100))
+  expect_identical(format(by_depth$time, "%d"), c("01", "01", "02", "02"))
+})
+
+test_that("a voxel with no values gives NA with n = 0", {
+  out <- summarise_3d(make_voxel(NA, c(0, 100)), c("mean", "sd", "median"))
+  expect_identical(out[c("mean", "sd", "median", "n")],
+                   data.frame(mean = NA_real_, sd = NA_real_,
+                              median = NA_real_, n = 0L))
+  # A single value has no standard deviation.
+  one <- make_voxel(cbind(c(5, rep(NA, 8)), rep(NA, 9)), c(0, 100))
+  expect_identical(summarise_3d(one, "sd")$sd, NA_real_)
+})
+
+test_that("summarise_3d() rejects input it can't summarise", {
+  v <- two_levels()
+  cases <- list(
+    list(x = make_range_rast(rep(0, 9), rep(100, 9)), args = list(),
+         pattern = "got SpatEnvelope"),
+    list(x = methods::as(v, "SpatRaster"), args = list(),
+         pattern = "got SpatRaster"),
+    list(x = list(v, 1), args = list(), pattern = "list with other objects"),
+    list(x = list(), args = list(), pattern = "must be a SpatVoxel"),
+    list(x = v, args = list(by = "cell"), pattern = "`by` must be NULL")
+  )
+  for (case in cases) {
+    expect_error(do.call(summarise_3d, c(list(case$x), case$args)),
+                 case$pattern, class = "ocean3d_error_summarise_input")
+  }
+  expect_error(summarise_3d(v, statistic = "mode"), "should be one of")
+  # A tagged voxel that is no longer valid is rejected as elsewhere.
+  expect_error(summarise_3d(v[[c(1, 1)]]), class = "ocean3d_error_invalid_3d")
+})
