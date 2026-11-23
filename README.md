@@ -139,9 +139,10 @@ Input: `SpatRaster` layers, tables of points or lines, and polygons (`sf`,
 - `create_study_raster()` — build an empty study-area `SpatRaster`
   covering the combined extent of one or more spatial inputs.
 - `as_voxel()` — wrap a multi-depth `SpatRaster` (or a list of
-  single-depth ones) as a validated `SpatVoxel`, ordered shallow to deep
-  with `{variable}_depth={value}` layer names. This is how gridded data,
-  including netCDF files loaded with terra, enter the voxel model.
+  single-depth ones) as a validated `SpatVoxel`, ordered shallow to deep,
+  with each layer's depth in `terra::depth()`. This is how gridded data,
+  including netCDF files described with `as_proxy()` or loaded with terra,
+  enter the voxel model.
 - `as_envelope()` — define a 3D envelope with two rasters, with `depth_min` 
   and `depth_max` corresponding to the minimum and maximum depths present in 
   given cell. 
@@ -267,7 +268,7 @@ usethis::edit_r_environ()
   caching.
 - `woa_load_nc()` — load a WOA NetCDF and select a statistical field
   (e.g., objectively analyzed climatology), returning a `SpatRaster`
-  with the package’s standard `{variable}_depth={value}` layer names.
+  with one layer per depth, for `as_voxel()`.
 - `woa_cache_dir()` / `woa_cache_clear()` — manage the persistent WOA
   download cache.
 

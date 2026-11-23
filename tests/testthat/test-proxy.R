@@ -16,6 +16,19 @@ proxy_error <- function(...) {
   )
 }
 
+# Adds a `crs` grid-mapping variable to `temp`, with the mapping name and WKT
+# given.
+add_mapping <- function(f, name = NULL, wkt = NULL, grid_mapping = "crs") {
+  nc <- ncdf4::nc_open(f, write = TRUE)
+  nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def("crs", "", list(),
+                                              prec = "integer"))
+  ncdf4::nc_close(nc)
+  atts <- Filter(Negate(is.null), list(grid_mapping_name = name,
+                                       crs_wkt = wkt))
+  do.call(set_atts, c(list(f, "crs"), atts))
+  set_atts(f, "temp", grid_mapping = grid_mapping)
+}
+
 test_that("an ordinary lon, lat, depth and time grid is described", {
   f <- make_grid_file()
   on.exit(unlink(f), add = TRUE)
@@ -81,19 +94,51 @@ test_that("depth is metres positive down in its storage order", {
                       depth_bounds = rbind(c(0, -10), c(-10, -20)))
   expect_equal(heights@axes$depth$centres, c(5, 15))
   expect_equal(heights@axes$depth$upper, c(10, 20))
-
-  f <- make_grid_file(depth = c(5, 15, 10))
-  on.exit(unlink(f), add = TRUE)
-  err <- expect_error(as_proxy(f), class = "ocean3d_error_axis_order")
-  expect_match(conditionMessage(err),
-               "`depth` in .*\\.nc must be strictly increasing")
 })
 
-test_that("depth bounds that don't contain their centres are rejected", {
-  f <- make_grid_file(depth = c(5, 15),
-                      depth_bounds = rbind(c(20, 30), c(30, 40)))
-  on.exit(unlink(f), add = TRUE)
-  expect_error(as_proxy(f), "must contain their centres")
+test_that("axes as_proxy() can't describe stop with a clear error", {
+  # `args` go to make_grid_file(); `bounds_calendar` is then set on the time
+  # bounds. Rows without a class check only the message.
+  cases <- list(
+    list(label = "depth not increasing", args = list(depth = c(5, 15, 10)),
+         class = "ocean3d_error_axis_order",
+         pattern = "`depth` in .*\\.nc must be strictly increasing"),
+    list(label = "depth bounds missing their centres",
+         args = list(depth = c(5, 15),
+                     depth_bounds = rbind(c(20, 30), c(30, 40))),
+         pattern = "must contain their centres"),
+    list(label = "time without units",
+         args = list(time = c(0, 1, 1), time_units = ""),
+         pattern = "has no usable `units` attribute"),
+    list(label = "non-finite time offsets", args = list(time = c(3, 2, NaN, 1)),
+         pattern = "must contain finite numeric offsets"),
+    list(label = "time bounds in another calendar",
+         args = list(time = c(0.5, 1.5), time_bounds = rbind(c(0, 1), c(1, 2))),
+         bounds_calendar = "noleap", pattern = "use different calendars"),
+    list(label = "overlapping time bounds",
+         args = list(time = c(0.5, 1.5),
+                     time_bounds = rbind(c(0, 0.8), c(1.2, 2))),
+         class = "ocean3d_error_bounds",
+         pattern = "Bounds for `time` in .* overlap\\."),
+    list(label = "unsupported calendar", args = list(calendar = "noleap"),
+         class = "ocean3d_error_calendar"),
+    # A WOA-style monthly climatology of more than one step, which CFtime
+    # can't read; one step is accepted (tested below). The calendar and
+    # climatology checks are tested directly in test-netcdf-time.R.
+    list(label = "monthly climatology",
+         args = list(time = c(0.5, 1.5),
+                     time_units = "months since 0000-01-01 00:00:00"),
+         class = "ocean3d_error_time_climatology")
+  )
+  for (case in cases) {
+    f <- do.call(make_grid_file, case$args)
+    on.exit(unlink(f), add = TRUE)
+    if (!is.null(case$bounds_calendar)) {
+      set_atts(f, "time_bnds", calendar = case$bounds_calendar)
+    }
+    expect_error(as_proxy(f), case$pattern, class = case$class,
+                 label = case$label)
+  }
 })
 
 test_that("a grid without depth or time has no such axis", {
@@ -134,18 +179,6 @@ test_that("a time axis that isn't increasing stops and names the file", {
                fixed = TRUE)
 })
 
-test_that("bad time units, offsets or bounds calendars get their own error", {
-  no_units <- make_grid_file(time = c(0, 1, 1), time_units = "")
-  non_finite <- make_grid_file(time = c(3, 2, NaN, 1))
-  calendars <- make_grid_file(time = c(0.5, 1.5),
-                              time_bounds = rbind(c(0, 1), c(1, 2)))
-  on.exit(unlink(c(no_units, non_finite, calendars)), add = TRUE)
-  expect_error(as_proxy(no_units), "has no usable `units` attribute")
-  expect_error(as_proxy(non_finite), "must contain finite numeric offsets")
-  set_atts(calendars, "time_bnds", calendar = "noleap")
-  expect_error(as_proxy(calendars), "use different calendars")
-})
-
 test_that("contiguous netCDF-4 storage has no chunk sizes", {
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
@@ -184,73 +217,47 @@ test_that("longitude and latitude need coordinate variables", {
   expect_match(conditionMessage(err), "`lon` has no coordinate variable")
 })
 
-test_that("rotated-pole grid mappings are rejected", {
-  add_mapping <- function(f, name = NULL, wkt = NULL) {
-    nc <- ncdf4::nc_open(f, write = TRUE)
-    nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def("crs", "", list(),
-                                                prec = "integer"))
-    if (!is.null(name)) ncdf4::ncatt_put(nc, "crs", "grid_mapping_name", name)
-    if (!is.null(wkt)) ncdf4::ncatt_put(nc, "crs", "crs_wkt", wkt)
-    ncdf4::ncatt_put(nc, "temp", "grid_mapping", "crs")
-    ncdf4::nc_close(nc)
-  }
-  named <- make_grid_file()
-  derived <- make_grid_file()
-  on.exit(unlink(c(named, derived)), add = TRUE)
-  # A rotated mapping name, even with a geographic WKT.
-  add_mapping(named, "rotated_latitude_longitude", terra::crs("EPSG:4326"))
-  expect_error(as_proxy(named), class = "ocean3d_error_grid_mapping")
-  # A rotated-pole WKT, which terra::is.lonlat() calls lon/lat.
-  rotated <- terra::crs(paste("+proj=ob_tran +o_proj=longlat +o_lon_p=0",
-                              "+o_lat_p=37.5 +lon_0=357.5 +datum=WGS84"))
-  add_mapping(derived, wkt = rotated)
-  expect_error(as_proxy(derived), class = "ocean3d_error_grid_mapping")
-})
-
-test_that("overlapping time bounds stop", {
-  f <- make_grid_file(time = c(0.5, 1.5),
-                      time_bounds = rbind(c(0, 0.8), c(1.2, 2)))
-  on.exit(unlink(f), add = TRUE)
-  err <- expect_error(as_proxy(f), class = "ocean3d_error_bounds")
-  expect_match(conditionMessage(err), "Bounds for `time` in .* overlap\\.")
-})
-
-test_that("unsupported calendars and climatologies stop", {
-  calendar <- proxy_error(calendar = "noleap")
-  expect_s3_class(calendar$error, "ocean3d_error_calendar")
-
-  # WOA-style monthly climatology, which CFtime can't read. The calendar and
-  # climatology checks are tested directly in test-netcdf-time.R.
-  woa <- proxy_error(time = c(0.5, 1.5),
-                     time_units = "months since 0000-01-01 00:00:00")
-  expect_s3_class(woa$error, "ocean3d_error_time_climatology")
+test_that("a one-step climatology is recorded without a date", {
+  # A World Ocean Atlas period: one step of `months since 0000-01-01`.
+  x <- proxy_of(time = 6, time_units = "months since 0000-01-01 00:00:00")
+  expect_true(x@axes$time$climatology)
+  expect_null(x@axes$time$cftime)
+  expect_identical(x@axes$time$units, "months since 0000-01-01 00:00:00")
+  expect_true(methods::validObject(x))
+  expect_match(capture.output(print(x))[8], "time .*: climatology, 1 step")
 })
 
 test_that("the CRS comes from a geographic grid mapping", {
-  add_mapping <- function(f, wkt, grid_mapping = "crs") {
-    nc <- ncdf4::nc_open(f, write = TRUE)
-    nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def("crs", "", list(),
-                                                prec = "integer"))
-    ncdf4::ncatt_put(nc, "crs", "crs_wkt", wkt)
-    ncdf4::ncatt_put(nc, "temp", "grid_mapping", grid_mapping)
-    ncdf4::nc_close(nc)
-  }
-  f <- make_grid_file()
-  g <- make_grid_file()
-  h <- make_grid_file(depth = NULL, time = NULL)
-  on.exit(unlink(c(f, g, h)), add = TRUE)
-
-  # The grid-mapping variable isn't data, so `var` is detected.
   etrs89 <- terra::crs("EPSG:4258")
-  add_mapping(f, etrs89)
-  expect_identical(as_proxy(f)@crs, etrs89)
+  # `crs` is the CRS the proxy gets; rows without one are rejected.
+  cases <- list(
+    list(label = "ETRS89", wkt = etrs89, crs = etrs89),
+    list(label = "rotated mapping name with a geographic WKT",
+         name = "rotated_latitude_longitude", wkt = terra::crs("EPSG:4326")),
+    # terra::is.lonlat() calls this lon/lat.
+    list(label = "rotated-pole WKT",
+         wkt = terra::crs(paste("+proj=ob_tran +o_proj=longlat +o_lon_p=0",
+                                "+o_lat_p=37.5 +lon_0=357.5 +datum=WGS84"))),
+    list(label = "projected WKT", wkt = terra::crs("EPSG:3857"))
+  )
+  for (case in cases) {
+    f <- make_grid_file()
+    on.exit(unlink(f), add = TRUE)
+    add_mapping(f, case$name, case$wkt)
+    if (is.null(case$crs)) {
+      expect_error(as_proxy(f), class = "ocean3d_error_grid_mapping",
+                   label = case$label)
+    } else {
+      # The grid-mapping variable isn't data, so `var` is detected.
+      expect_identical(as_proxy(f)@crs, case$crs, label = case$label)
+    }
+  }
 
-  add_mapping(g, terra::crs("EPSG:3857"))
-  expect_error(as_proxy(g), class = "ocean3d_error_grid_mapping")
-
+  h <- make_grid_file(depth = NULL, time = NULL)
+  on.exit(unlink(h), add = TRUE)
   # Point extraction detects the variable the same way, also with CF's
   # extended form of the attribute.
-  add_mapping(h, etrs89, grid_mapping = "crs: lat lon")
+  add_mapping(h, wkt = etrs89, grid_mapping = "crs: lat lon")
   expect_equal(
     extract_to_point(nc = h, lon = 1.5, lat = 10.5, method = "2d"), 2
   )
@@ -269,7 +276,7 @@ test_that("an open connection is read and left open", {
   expect_identical(nc$var$temp$name, "temp")
   expect_no_error(ncdf4::ncvar_get(nc, "temp"))
 
-  expect_error(as_proxy(c(f, f)), class = "ocean3d_error_proxy_input")
+  expect_error(as_proxy(1), class = "ocean3d_error_proxy_input")
 })
 
 test_that("unlimited, empty and unsaved time axes", {
@@ -317,17 +324,31 @@ test_that("a SpatProxy survives saveRDS() and checks its axes", {
                x@axes$time$cftime$get_bounds())
   expect_true(methods::validObject(y))
 
-  bad <- y
-  bad@axes$lon$lower <- bad@axes$lon$lower[-1L]
-  expect_error(methods::validObject(bad), "lon axis needs a dimension")
-
-  # Problems give a message, not an R error from inside the check.
-  bad <- y
-  bad@axes$lat$dim <- "nope"
-  expect_error(methods::validObject(bad), "lat axis needs a dimension")
-  bad <- y
-  bad@variable$dim_lengths[["time"]] <- 3L
-  expect_error(methods::validObject(bad), "one offset per time step")
+  # `break_it` damages a copy of `y`. Problems give a message, not an R error
+  # from inside the check.
+  cases <- list(
+    list(label = "lon edges one short", pattern = "lon axis needs a dimension",
+         break_it = function(x) {
+           x@axes$lon$lower <- x@axes$lon$lower[-1L]
+           x
+         }),
+    list(label = "lat on an unknown dimension",
+         pattern = "lat axis needs a dimension",
+         break_it = function(x) {
+           x@axes$lat$dim <- "nope"
+           x
+         }),
+    list(label = "more time steps than offsets",
+         pattern = "one offset per time step",
+         break_it = function(x) {
+           x@variable$dim_lengths[["time"]] <- 3L
+           x
+         })
+  )
+  for (case in cases) {
+    expect_error(methods::validObject(case$break_it(y)), case$pattern,
+                 label = case$label)
+  }
 })
 
 test_that("the print shows each axis", {
@@ -355,15 +376,15 @@ test_that("the print shows each axis", {
     "dimensions : 3 x 2 (lon x lat)"
   ))
   expect_identical(bare[7:8], c("depth      : none", "time       : none"))
+
+  # A file without units: NULL units, and just the name on the variable line.
+  no_units <- proxy_of(depth = NULL, time = NULL, var_units = "")
+  expect_null(no_units@variable$units)
+  expect_identical(capture.output(print(no_units))[3], "variable   : temp")
 })
 
-# The index-window reader. The file must outlive the proxy, so each test
-# removes it at the end.
-proxy_and_file <- function(...) {
-  f <- make_grid_file(...)
-  list(proxy = as_proxy(f, var = "temp"), file = f)
-}
-
+# The index-window reader. proxy_and_file() is in helper-netcdf-grid.R; the
+# file must outlive the proxy, so each test removes it at the end.
 stored_values <- function(f) {
   nc <- ncdf4::nc_open(f)
   on.exit(ncdf4::nc_close(nc))

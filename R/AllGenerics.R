@@ -59,8 +59,8 @@ NULL
 #' @param x A [SpatEnvelope-class], a [SpatVoxel-class], or
 #'   [SpatVector3D-class] polygons. A bare SpatRaster is
 #'   rejected; build one with [as_envelope()], [vect_to_envelope()] or
-#'   [as_voxel()] first. A netCDF file isn't accepted: load it as a
-#'   `SpatRaster` (e.g. with [woa_load_nc()]) and wrap it with [as_voxel()].
+#'   [as_voxel()] first. A netCDF file isn't accepted: describe it with
+#'   [as_proxy()] and read one time step with [as_voxel()].
 #' @param per_cell `FALSE` (default) for the total volume, `TRUE` for the
 #'   volume of each cell. Not for [SpatVector3D-class] polygons.
 #' @param ... Arguments for the [SpatVoxel-class] method, which are an error

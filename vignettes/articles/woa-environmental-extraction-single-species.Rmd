@@ -186,9 +186,12 @@ species occupies. The colour scale is locked to the global temperature range so
 colours are comparable across frames.
 
 ```{r figure-1-animation}
+# Each layer's depth, looked up by layer name: depths() reads them from the
+# voxel.
+layer_depth <- stats::setNames(depths(masked), names(masked))
 long_df <- terra::as.data.frame(masked, xy = TRUE, na.rm = FALSE) |>
   pivot_longer(cols = -c(x, y), names_to = "layer", values_to = "value") |>
-  mutate(depth = depths(layer)) |>
+  mutate(depth = unname(layer_depth[layer])) |>
   filter(!is.na(value))
 
 # Lock the legend to the global min/max so colour mapping is identical per

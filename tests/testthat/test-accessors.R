@@ -1,46 +1,40 @@
-test_that("depths() reads the depth axis of a SpatVoxel", {
+test_that("depths() reads terra::depth() of voxels and plain rasters", {
   v <- as_voxel(make_multidepth_rast(depths = c(0, 100, 200, 300)))
+  r <- make_multidepth_rast(depths = c(0, 50, 100, 500))
+  expect_false(methods::is(r, "SpatVoxel"))
+  # A depth set to 0 m counts as set.
+  surface <- terra::rast(nrows = 2, ncols = 2, vals = 1)
+  terra::depth(surface) <- 0
+
+  cases <- list(
+    list(label = "SpatVoxel", x = v, depths = c(0, 100, 200, 300)),
+    list(label = "plain SpatRaster", x = r, depths = c(0, 50, 100, 500)),
+    list(label = "one layer at 0 m", x = surface, depths = 0)
+  )
+  for (case in cases) {
+    expect_identical(depths(case$x), case$depths, label = case$label)
+  }
+})
+
+test_that("depths() never reads layer names", {
+  # Names in the `{variable}_depth={value}` pattern but no terra::depth().
+  r <- terra::rast(nrows = 2, ncols = 2, nlyrs = 2, vals = 1)
+  names(r) <- c("t_depth=0", "t_depth=100")
+  err <- expect_error(depths(r), class = "ocean3d_error_no_depths")
+  expect_match(conditionMessage(err), "no depths in terra::depth\\(\\)")
+  expect_match(conditionMessage(err), "Layer names aren't read as depths")
+
+  # Renamed layers keep their depths.
+  v <- as_voxel(make_multidepth_rast(depths = c(0, 100, 200, 300)))
+  names(v) <- c("t_depth=9", "a", "b", "c")
   expect_identical(depths(v), c(0, 100, 200, 300))
 })
 
-test_that("depths() works on a plain SpatRaster with conforming names", {
-  r <- make_multidepth_rast(depths = c(0, 50, 100, 500))
-  expect_false(methods::is(r, "SpatVoxel"))
-  expect_identical(depths(r), c(0, 50, 100, 500))
-})
-
-test_that("depths() accepts a character vector of layer names", {
-  expect_identical(depths(c("t_an_depth=0", "t_an_depth=1500")), c(0, 1500))
-})
-
-test_that("depths() recovers depths from terra::global() row names", {
-  v <- as_voxel(make_multidepth_rast(depths = c(0, 100, 200, 300)))
-  per_depth <- terra::global(v, "mean", na.rm = TRUE)
-  expect_identical(depths(rownames(per_depth)), c(0, 100, 200, 300))
-})
-
-test_that("depths() returns NA for names that do not follow the convention", {
-  expect_identical(depths(c("t_an_depth=0", "nope")), c(0, NA))
-})
-
-test_that("depths() errors when no name follows the convention", {
-  expect_error(depths("nope"), "'\\{variable\\}_depth=\\{value\\}'")
-
-  r <- terra::rast(nrows = 2, ncols = 2)
-  terra::values(r) <- 1:4
-  names(r) <- "not_a_depth_layer"
-  expect_error(depths(r), "'\\{variable\\}_depth=\\{value\\}'")
-})
-
-test_that("depths() parses decimal and negative values in names", {
-  # Negative depths are rejected by as_voxel(), but the parser itself is the
-  # shared primitive and must report what the name actually says.
-  expect_identical(depths(c("x_depth=2.5", "x_depth=-5")), c(2.5, -5))
-})
-
-test_that("depths() rejects input that is neither a raster nor character", {
-  expect_error(depths(1:3), "SpatVoxel")
-  expect_error(depths(NULL), "SpatVoxel")
+test_that("depths() rejects input that isn't a raster", {
+  for (x in list(1:3, NULL, "t_an_depth=0")) {
+    err <- expect_error(depths(x), class = "ocean3d_error_depths_input")
+    expect_match(conditionMessage(err), "must be a SpatVoxel or a SpatRaster")
+  }
 })
 
 test_that("depth_bounds() reads a voxel's edges for its current layers", {

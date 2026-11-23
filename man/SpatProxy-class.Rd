@@ -19,15 +19,17 @@ describes vector data on disk. Build one with \code{\link[=as_proxy]{as_proxy()}
 }
 \details{
 A \code{SpatProxy} is the planned core data object of ocean3d (SPEC.md, "Data
-model"). Later versions will read one time step of it into memory as a
-\link[=SpatVoxel-class]{SpatVoxel}.
+model"). \code{\link[=as_voxel]{as_voxel()}} reads one time step of it into memory as a
+\link[=SpatVoxel-class]{SpatVoxel}, with the proxy's depths, depth edges, CRS and date.
 }
 \section{Slots}{
 
 \describe{
-\item{\code{source}}{A list: \code{type} (\code{"netcdf"}) and \code{path}, the full path of the
-file. A path rather than an open connection, so the object can be saved
-with \code{\link[base:saveRDS]{base::saveRDS()}}.}
+\item{\code{source}}{A list with \code{type} and where the data are: for \code{"netcdf"},
+\code{path}, the full path of the file (a path rather than an open connection,
+so the object can be saved with \code{\link[base:saveRDS]{base::saveRDS()}}); for \code{"series"},
+\code{path}, the files in time order, and \code{steps}, the number of time steps
+in each; for \code{"voxel"}, \code{voxel}, the \link[=SpatVoxel-class]{SpatVoxel} in memory.}
 
 \item{\code{variable}}{A list: \code{name}, \code{units}, \code{long_name}, \code{dims} (the
 variable's dimension names in ncdf4 order), \code{dim_lengths}, \code{axis_dims}
@@ -41,7 +43,9 @@ the edges come from (\code{"bounds"}, \code{"inferred"}, or \code{"none"} for a 
 cell without bounds). \code{depth} is in metres positive down and also has
 \code{storage} (\code{"shallow_first"} or \code{"deep_first"}). \code{time} holds \code{dim},
 \code{cftime} (a CFtime object, with the file's bounds attached when it has
-them) and \code{edges} (\code{"bounds"} or \code{"none"}).}
+them) and \code{edges} (\code{"bounds"} or \code{"none"}). A one-step climatology, such
+as a World Ocean Atlas period, has \code{climatology = TRUE}, its \code{units} and
+no \code{cftime}.}
 
 \item{\code{crs}}{The coordinate reference system, as text.}
 }}
@@ -49,8 +53,7 @@ them) and \code{edges} (\code{"bounds"} or \code{"none"}).}
 \section{Experimental}{
 
 \code{SpatProxy} and \code{\link[=as_proxy]{as_proxy()}} are experimental. Their slots and behaviour
-may change without notice while the core object is built, and no other
-function accepts a \code{SpatProxy} yet.
+may change without notice while the core object is built.
 }
 
 \seealso{

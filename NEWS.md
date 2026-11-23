@@ -37,6 +37,39 @@ Other changes to callers:
   overlap and the input volumes are measured on different slabs and don't add
   up.
 
+A `SpatVoxel` now stores each layer's depth in terra's own per-layer field,
+`terra::depth()`, instead of in its layer names (#113). Before, the depth was
+read from names like `temp_depth=100`, so renaming a layer broke the voxel.
+Now the package never reads depths from layer names:
+
+* Renaming a layer doesn't change its depth. `as_voxel()` still names layers
+  `{varname}_depth={value}` when it sets the depths, as labels.
+* `as_voxel()` takes the depths from `depths`, or else from the raster's
+  `terra::depth()`, which terra also sets when it reads a netCDF file. A
+  raster with neither is an error, even if its layers are named
+  `{variable}_depth={value}`. Before, such names were read as depths.
+* `depths()` reads `terra::depth()`, and is an error for a raster without
+  depths. It no longer takes a character vector of layer names. To label a
+  per-layer summary such as `terra::global(v, ...)`, use `depths(v)`: the
+  summary has one row per layer, in layer order.
+* Selecting layers (`v[[2:3]]`, `v$name`, `subset()`) and replacing one with
+  `[[<-` keep each layer's depth through later operations. Without the
+  `SpatVoxel` methods for these, terra would reset the depths to 0, for
+  example in `v[[2:3]] * 2` or a crop of `v[[3]]`.
+* `c()` of voxels keeps each layer's depth. When the layers don't make a
+  valid voxel, for example two layers at the same depth, it returns a plain
+  `SpatRaster`; before, it returned an invalid `SpatVoxel`.
+* A few terra operations, such as `app()`, drop the depths and return a
+  plain `SpatRaster`; the package's functions then stop with an error. Set
+  the depths again with `as_voxel(x, depths = ...)`.
+
+Code that set a voxel's depth through its layer names, or read depths back
+from names, should pass `depths` to `as_voxel()` or set `terra::depth()`,
+and read them with `depths()`. `terra::writeCDF()` and
+`saveRDS(terra::wrap(v))` keep the depths. GeoTIFF doesn't, so a voxel read
+back from GeoTIFF needs `depths`. All three return a plain `SpatRaster`, so
+re-wrap with `as_voxel()` after reading.
+
 `bounds` now defaults to `"midpoint"` instead of `"top"` in `volume()`,
 `envelope_to_voxel()`, `intersect_3d()`,
 `intersects_3d()` and `mask()` (#138). The slab of water each depth level
@@ -128,12 +161,32 @@ message says how many cells have the limits swapped (or a seafloor above
   report now also explains outputs that are missing because no observation
   date was supplied for a file with a time dimension.
 * New experimental class `SpatProxy`, built with `as_proxy()`, describes one
-  variable of a netCDF file without reading its values (#113): its axes,
+  variable of gridded data without reading its values (#113): its axes,
   chunk sizes and coordinate reference system (CRS). Depth is in metres
-  positive down and time is a CFtime object. `as_proxy()` stops with an
-  error if the time axis isn't strictly increasing or is a climatology. No
-  other function accepts a `SpatProxy` yet, and it may change without
-  notice.
+  positive down with each level's edges, and time is a CFtime object. The
+  data can be:
+  * one netCDF file;
+  * a series of netCDF files, such as one per day, put in time order and
+    joined into one time axis. The files must hold the same variable on the
+    same grid and depths, and their time steps must not repeat or overlap;
+  * a `SpatVoxel` already in memory, as one time step. Its time must be a
+    date or a date-time.
+
+  A climatology with one time step, such as a World Ocean Atlas file, is
+  read without a date. `as_proxy()` stops with an error if a time axis
+  isn't strictly increasing or is a climatology with more than one step.
+* `as_voxel(proxy, time = ...)` reads one time step of a `SpatProxy` into a
+  `SpatVoxel` (#113), chosen by step number or date. The voxel's extent
+  comes from the cell edges, its CRS is always set, its depths and depth
+  edges come from the proxy, and its date is in `terra::time()`. For a file
+  without depth bounds, the depth edges are halfway between levels, so the
+  voxel's `bounds` argument doesn't apply. Grids that are regular apart from
+  rounding in the stored coordinates are treated as regular; other irregular
+  grids stop with an error.
+
+  `SpatProxy`, `as_proxy()` and reading a `SpatProxy` with `as_voxel()` are
+  experimental and may change without notice while the core object is
+  built.
 * New class `SpatVector3D` for 3D points, lines and polygons, built with
   `as_vector3d()` from a table, sf object or `terra::SpatVector`. Points
   and lines have a depth (positive metres down) and an optional time at

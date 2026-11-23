@@ -118,7 +118,11 @@ exported function rather than deleting them.
   - Don't flag a direct test of one of these helpers as a convention
     breach.
 - Check conditions with `expect_error()` / `expect_warning()` using `class =`,
-  plus `expect_match()` on the parts of the message that matter.
+  and check the parts of the message that matter. Either form is fine: the
+  same call (`expect_error(x, "phrase", class = "k")`, which in testthat
+  edition 3 fails if the class or the message is wrong), or `expect_match()`
+  on the returned condition. In table-driven tests, prefer the one-call form,
+  so a row that stops raising its condition fails only that row.
 - Use `skip_if_not_installed()` only for packages in `Suggests` (e.g.
   lwgeom). Packages in `Imports`, such as ncdf4, are always installed, so a
   skip for them never triggers and only adds noise.

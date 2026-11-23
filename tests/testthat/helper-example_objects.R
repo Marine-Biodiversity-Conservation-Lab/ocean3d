@@ -8,7 +8,9 @@ make_multidepth_rast <- function(depths = c(0, 100, 200, 300),
   r <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2, ymin = 0, ymax = 2)
   lays <- lapply(vals, function(v) terra::setValues(r, v))
   out <- terra::rast(lays)
+  # Depths and names, as terra gives a raster read from netCDF.
   names(out) <- paste0(varname, "_depth=", depths)
+  terra::depth(out) <- depths
   out
 }
 # Helpers for 3D-object tests: a lon/lat template grid and a polygon inside

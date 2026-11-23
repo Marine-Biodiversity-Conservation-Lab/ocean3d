@@ -15,17 +15,18 @@ setOldClass(c("CFTime", "R6"))
 #' describes vector data on disk. Build one with [as_proxy()].
 #'
 #' A `SpatProxy` is the planned core data object of ocean3d (SPEC.md, "Data
-#' model"). Later versions will read one time step of it into memory as a
-#' [SpatVoxel-class].
+#' model"). [as_voxel()] reads one time step of it into memory as a
+#' [SpatVoxel-class], with the proxy's depths, depth edges, CRS and date.
 #'
 #' @section Experimental:
 #' `SpatProxy` and [as_proxy()] are experimental. Their slots and behaviour
-#' may change without notice while the core object is built, and no other
-#' function accepts a `SpatProxy` yet.
+#' may change without notice while the core object is built.
 #'
-#' @slot source A list: `type` (`"netcdf"`) and `path`, the full path of the
-#'   file. A path rather than an open connection, so the object can be saved
-#'   with [base::saveRDS()].
+#' @slot source A list with `type` and where the data are: for `"netcdf"`,
+#'   `path`, the full path of the file (a path rather than an open connection,
+#'   so the object can be saved with [base::saveRDS()]); for `"series"`,
+#'   `path`, the files in time order, and `steps`, the number of time steps
+#'   in each; for `"voxel"`, `voxel`, the [SpatVoxel-class] in memory.
 #' @slot variable A list: `name`, `units`, `long_name`, `dims` (the
 #'   variable's dimension names in ncdf4 order), `dim_lengths`, `axis_dims`
 #'   (the dimension of each axis), `singleton_dims` (other dimensions of
@@ -37,7 +38,9 @@ setOldClass(c("CFTime", "R6"))
 #'   cell without bounds). `depth` is in metres positive down and also has
 #'   `storage` (`"shallow_first"` or `"deep_first"`). `time` holds `dim`,
 #'   `cftime` (a CFtime object, with the file's bounds attached when it has
-#'   them) and `edges` (`"bounds"` or `"none"`).
+#'   them) and `edges` (`"bounds"` or `"none"`). A one-step climatology, such
+#'   as a World Ocean Atlas period, has `climatology = TRUE`, its `units` and
+#'   no `cftime`.
 #' @slot crs The coordinate reference system, as text.
 #'
 #' @seealso [as_proxy()]
@@ -80,7 +83,11 @@ setValidity("SpatProxy", function(object) {
                             anyDuplicated(depth))) {
     return("depths must be distinct metres, positive down")
   }
-  if (!is.null(axes$time)) {
+  if (isTRUE(axes$time$climatology)) {
+    if (!identical(as.integer(size(axes$time)), 1L)) {
+      return("a climatological time axis must have one step")
+    }
+  } else if (!is.null(axes$time)) {
     time <- axes$time$cftime
     if (!inherits(time, "CFTime") || !isTRUE(all(diff(time$offsets) > 0)) ||
           !identical(length(time$offsets), as.integer(size(axes$time)))) {
@@ -91,27 +98,53 @@ setValidity("SpatProxy", function(object) {
   TRUE
 })
 
-#' Describe a gridded netCDF variable without reading its values
-#' (experimental)
+#' Describe gridded data without reading its values (experimental)
 #'
-#' `as_proxy()` opens one netCDF file, reads the metadata of one variable and
-#' its coordinates, and returns a [SpatProxy-class]. The CF metadata is
-#' applied here, once, so later steps can rely on each axis being in a fixed
-#' form. No values of the variable are read.
+#' `as_proxy()` describes one variable of gridded data and returns a
+#' [SpatProxy-class]. The data can be one netCDF file, a series of netCDF
+#' files, or a [SpatVoxel-class] already in memory. For a netCDF file it
+#' reads the metadata of the variable and its coordinates and applies the CF
+#' metadata once, so later steps can rely on each axis being in a fixed form.
+#' No values of the variable are read.
+#'
+#' Besides one file, two sources give the same kind of proxy:
+#'
+#' * **A series of files** (several paths): the same variable on the same
+#'   grid and depths in every file, each with its own dated time axis, such as
+#'   one file per day. The files are put in time order and their time axes
+#'   joined into one, in the first file's units. A series stops with an error
+#'   when files repeat or overlap each other's time steps, when a file has no
+#'   dated time axis, or when the files differ in grid (spatial tiles) or in
+#'   the variable's units. The time axis keeps its bounds only when every
+#'   file has them.
+#' * **A [SpatVoxel-class] already in memory**: one time step (the voxel's
+#'   [terra::time()] when set), with the voxel's cells, depths and depth
+#'   edges; a voxel without edges gets slabs halfway between its depths, as
+#'   `bounds = "midpoint"` gives. The time must be a date or a date-time; a
+#'   date is read as midnight UTC. A voxel whose time is a year, a month or a
+#'   plain number stops with an error: give it a date-time, or remove its
+#'   time with `terra::time(v) <- NULL`. [as_voxel()] returns the voxel
+#'   itself.
+#'
+#' For netCDF files, each axis is put in a fixed form:
 #'
 #' * **Longitude and latitude:** cell edges come from the coordinate's CF
 #'   `bounds` variable, or halfway between neighbouring centres.
 #' * **Depth:** converted to metres positive down from the coordinate's
 #'   `units` and `positive` attributes. Edges come from the CF bounds, or
-#'   halfway between centres, cut at the surface. A depth axis stored deep to
-#'   shallow is kept in that order and recorded as such.
+#'   halfway between centres, cut at the surface and running half a gap
+#'   below the deepest centre. A voxel read with [as_voxel()] keeps these
+#'   edges. A depth axis stored deep to shallow is kept in that order and
+#'   recorded as such.
 #' * **Time:** decoded with CFtime. Bounds are attached when the file has
 #'   them; otherwise the axis has none (they aren't inferred). The time axis
 #'   must be strictly increasing; a backwards or out-of-order axis is an
 #'   error that suggests sorting the file, for example with CDO's
 #'   `sorttimestamp`. Only the `standard`, `gregorian` and
-#'   `proleptic_gregorian` calendars are supported, and climatological time
-#'   axes aren't supported yet.
+#'   `proleptic_gregorian` calendars are supported. A climatological time
+#'   axis with one step, such as a World Ocean Atlas period, is recorded as a
+#'   climatology without a date; climatologies with more steps aren't
+#'   supported yet.
 #' * **CRS:** EPSG:4326, unless the variable's `grid_mapping` gives another
 #'   geographic CRS as WKT (`crs_wkt` or `spatial_ref`).
 #'
@@ -123,8 +156,9 @@ setValidity("SpatProxy", function(object) {
 #'
 #' @inheritSection SpatProxy-class Experimental
 #'
-#' @param x A netCDF file path, or a connection opened with
-#'   [ncdf4::nc_open()] (netCDF model). A connection is left open.
+#' @param x A netCDF file path, several paths for a series of files, a
+#'   connection opened with [ncdf4::nc_open()] (left open), or a
+#'   [SpatVoxel-class]. `var` and the dimension arguments apply to files.
 #' @param var Name of the variable. `NULL` (the default) detects it when the
 #'   file holds exactly one data variable.
 #' @param lon_dim,lat_dim,depth_dim,time_dim Names of the dimensions for each
@@ -140,14 +174,23 @@ setValidity("SpatProxy", function(object) {
 #' # Each axis in its fixed form: depth in metres, time as a CFtime object.
 #' x@axes$depth$centres
 #' x@axes$time$cftime
+#'
+#' # Read one time step into memory as a SpatVoxel.
+#' v <- as_voxel(x, time = 1)
+#' depths(v)
 #' @export
 as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
                      depth_dim = NULL, time_dim = NULL) {
-  if (!.is_ncdf4(x) && !(is.character(x) && length(x) == 1L && !is.na(x))) {
-    rlang::abort(
-      "`x` must be one netCDF file path or an open ncdf4 connection.",
-      class = "ocean3d_error_proxy_input", call = NULL
-    )
+  if (methods::is(x, "SpatVoxel")) return(.voxel_to_proxy(x))
+  paths <- is.character(x) && length(x) >= 1L && !anyNA(x)
+  if (!.is_ncdf4(x) && !paths) {
+    rlang::abort(paste(
+      "`x` must be a netCDF file path, several paths (a series), an open",
+      "ncdf4 connection or a SpatVoxel."
+    ), class = "ocean3d_error_proxy_input", call = NULL)
+  }
+  if (paths && length(x) > 1L) {
+    return(.series_to_proxy(x, var, lon_dim, lat_dim, depth_dim, time_dim))
   }
   type <- if (.is_ncdf4(x)) "connection" else "path"
   opened <- .open_source(list(source = x, type = type))
@@ -199,11 +242,15 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     }
     path <- normalizePath(path)
   }
+  # Units are NULL when the file gives none, as for a voxel source; ncdf4's
+  # own `units` is "" then.
+  units <- .read_attribute(nc, var, "units")
+  if (!is.null(units) && !nzchar(trimws(units))) units <- NULL
   methods::new(
     "SpatProxy",
     source = list(type = "netcdf", path = path),
     variable = list(
-      name = var, units = info$units, long_name = info$longname,
+      name = var, units = units, long_name = info$longname,
       dims = dims$var_dims,
       dim_lengths = stats::setNames(as.integer(info$varsize), dims$var_dims),
       axis_dims = dims[c("lon", "lat", "depth", "time")],
@@ -234,10 +281,17 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 
 # The time axis as a CFtime object, with the file's bounds attached when it
 # has them. Time must run strictly forwards (SPEC.md, "Time runs forwards
-# only"); the core object doesn't reorder it.
+# only"); the core object doesn't reorder it. A one-step climatology is
+# recorded without a CFtime object.
 .proxy_time_axis <- function(nc, dim, path) {
   file <- basename(path)
-  .check_climatology(nc, dim, file)
+  # A one-step climatology, such as a World Ocean Atlas period, has no date
+  # CFtime can decode: it is recorded as a climatology, with its units. A
+  # climatology with more steps stops here.
+  if (.check_climatology(nc, dim, file, one_step_ok = TRUE)) {
+    return(list(dim = dim, cftime = NULL, edges = "none", climatology = TRUE,
+                units = .read_attribute(nc, dim, "units")))
+  }
   offsets <- as.vector(.get_dim_values(nc, dim))
   units <- .read_attribute(nc, dim, "units")
   usable <- is.numeric(offsets) && all(is.finite(offsets)) &&
@@ -308,15 +362,229 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   if (is.null(wkt)) "EPSG:4326" else wkt
 }
 
-# Reads one index window of a SpatProxy's variable with a single ncdf4 call.
-# `window` is a named list with up to one element per axis (`lon`, `lat`,
-# `depth`, `time`): the first and last index to read, in storage order (so for
-# a deep-first depth axis, index 1 is the deepest level). An axis left out is
-# read whole; an axis the variable doesn't have counts as one of length 1.
-# Returns the values as a 4D array in the fixed order lon, lat, depth, time,
-# with length 1 for an axis the variable doesn't have. ncdf4 applies the scale
-# and offset, and sets cells equal to `missing_value` (or `_FillValue` when
-# there is no `missing_value`) to NA.
+# A series of netCDF files as one SpatProxy: the same variable on the same
+# grid in every file, each with its own time axis, ordered by time and
+# joined into one axis in the first file's units (#94, #96). Each file is
+# described and checked by as_proxy() first.
+.series_to_proxy <- function(paths, var, lon_dim, lat_dim, depth_dim,
+                             time_dim) {
+  stop_series <- function(problem) {
+    rlang::abort(glue::glue("{problem}."),
+                 class = "ocean3d_error_proxy_series", call = NULL)
+  }
+  full <- normalizePath(paths, mustWork = FALSE)
+  if (anyDuplicated(full)) {
+    stop_series(glue::glue(
+      "{basename(full[duplicated(full)][1])} appears more than once in the ",
+      "series"
+    ))
+  }
+  parts <- lapply(paths, as_proxy, var = var, lon_dim = lon_dim,
+                  lat_dim = lat_dim, depth_dim = depth_dim,
+                  time_dim = time_dim)
+  file_name <- function(p) basename(p@source$path)
+  first <- parts[[1L]]
+  for (p in parts) {
+    if (is.null(p@axes$time) || isTRUE(p@axes$time$climatology)) {
+      stop_series(glue::glue(
+        "{file_name(p)} has no dated time axis. Every file in a series ",
+        "needs one, so its steps can be placed in time order"
+      ))
+    }
+    if (!identical(p@variable$name, first@variable$name)) {
+      stop_series(glue::glue(
+        "{file_name(p)} holds `{p@variable$name}`, not ",
+        "`{first@variable$name}`. A series is one variable"
+      ))
+    }
+    if (!identical(p@variable$units, first@variable$units)) {
+      units <- vapply(list(p, first), function(q) {
+        u <- q@variable$units
+        if (is.null(u)) "without units" else paste("in", u)
+      }, character(1))
+      stop_series(glue::glue(
+        "{file_name(p)} gives `{p@variable$name}` {units[1]}, but ",
+        "{file_name(first)} gives it {units[2]}. A series needs one unit; ",
+        "convert the files first"
+      ))
+    }
+    # The same grid: the same dimensions in the same order and CRS, and the
+    # same longitude, latitude and depth cells. Time may differ.
+    spatial <- setdiff(p@variable$dims, p@variable$axis_dims$time)
+    cells <- lapply(list(p, first), function(q) {
+      lapply(q@axes[c("lon", "lat", "depth")], function(axis) {
+        axis[c("centres", "lower", "upper")]
+      })
+    })
+    same_grid <- identical(p@variable$dims, first@variable$dims) &&
+      identical(p@variable$axis_dims, first@variable$axis_dims) &&
+      identical(p@crs, first@crs) &&
+      identical(p@variable$dim_lengths[spatial],
+                first@variable$dim_lengths[spatial]) &&
+      isTRUE(all.equal(cells[[1L]], cells[[2L]]))
+    if (!same_grid) {
+      stop_series(glue::glue(
+        "{file_name(p)} has a different grid from {file_name(first)}. A ",
+        "series needs the same grid and depths in every file; spatial tiles ",
+        "aren't supported"
+      ))
+    }
+  }
+  first_date <- vapply(parts, function(p) {
+    as.numeric(p@axes$time$cftime$as_timestamp(asPOSIX = TRUE)[1L])
+  }, numeric(1))
+  parts <- parts[order(first_date)]
+
+  # One time axis, in the first file's units.
+  axis <- parts[[1L]]@axes$time$cftime
+  for (p in parts[-1L]) {
+    # CFtime warns about overlapping steps; the errors below say which file.
+    joined <- suppressWarnings(
+      axis + .cftime_to_units_of(p@axes$time$cftime, axis)
+    )
+    steps <- diff(joined$offsets)
+    if (any(steps == 0)) {
+      # A repeated step, as within one file.
+      when <- joined$as_timestamp()[which(steps == 0)[1L] + 1L]
+      .abort_repeated_time(
+        glue::glue("Time step {when} is also in an earlier file of the series"),
+        file_name(p),
+        paste("Each time step must come from one file; leave out the file",
+              "or the steps it repeats.")
+      )
+    }
+    if (any(steps < 0)) {
+      stop_series(glue::glue(
+        "{file_name(p)} overlaps the time steps of an earlier file. Each ",
+        "file's steps must come after the previous file's"
+      ))
+    }
+    axis <- joined
+  }
+  bounded <- all(vapply(parts, function(p) {
+    identical(p@axes$time$edges, "bounds")
+  }, logical(1)))
+
+  out <- parts[[1L]]
+  steps <- vapply(parts, function(p) {
+    p@variable$dim_lengths[[p@axes$time$dim]]
+  }, integer(1))
+  out@source <- list(type = "series",
+                     path = vapply(parts, function(p) p@source$path, ""),
+                     steps = steps)
+  out@variable$dim_lengths[[out@axes$time$dim]] <- sum(steps)
+  out@axes$time <- list(dim = out@axes$time$dim, cftime = axis,
+                        edges = if (bounded) "bounds" else "none")
+  methods::validObject(out)
+  out
+}
+
+# A CFtime axis in the units of `target`, with its bounds, so the two can be
+# joined with `+`. Unchanged when the units already match.
+.cftime_to_units_of <- function(cftime, target) {
+  if (identical(cftime$cal$definition, target$cal$definition) &&
+        identical(cftime$cal$name, target$cal$name)) {
+    return(cftime)
+  }
+  out <- CFtime::CFtime(target$cal$definition, target$cal$name,
+                        cftime$as_timestamp())
+  bounds <- cftime$get_bounds(format = "%Y-%m-%dT%H:%M:%S")
+  if (!is.null(bounds)) {
+    # The bounds are converted as a flat vector, not in time order.
+    offsets <- suppressWarnings(CFtime::CFtime(
+      target$cal$definition, target$cal$name, as.vector(bounds)
+    )$offsets)
+    out$set_bounds(matrix(offsets, nrow = 2L))
+  }
+  out
+}
+
+# A SpatVoxel already in memory as a SpatProxy, so voxels and files go
+# through the same steps. One time step: the voxel's date when it has one.
+# Cell edges come from the raster; depth edges from the voxel's stored edges,
+# or the slabs its default `bounds` ("midpoint") gives.
+.voxel_to_proxy <- function(v) {
+  v <- as_voxel(v)
+  nc <- terra::ncol(v)
+  nr <- terra::nrow(v)
+  half <- terra::res(v) / 2
+  lon <- terra::xFromCol(v, seq_len(nc))
+  lat <- terra::yFromRow(v, seq_len(nr))
+  d <- depths(v)
+  stored <- depth_bounds(v)
+  slabs <- .depth_slabs(d, "midpoint", stored)
+  dated <- isTRUE(terra::timeInfo(v)$time)
+  # terra::time() is a date-time (step "seconds") or a date ("days"); a
+  # year, a year and month, a month of the year or a plain number has no
+  # date to place on the time axis, so it stops rather than being guessed
+  # or dropped.
+  step <- if (dated) terra::timeInfo(v)$step
+  if (dated && !step %in% c("seconds", "days")) {
+    what <- c(years = "a year", yearmonths = "a year and month",
+              months = "a month of the year")[step]
+    if (is.na(what)) what <- "a plain number"
+    rlang::abort(glue::glue(
+      "The voxel's time is {what} ({format(terra::time(v)[1L])}), not a ",
+      "date or date-time, so it can't be placed on a time axis. Give it a ",
+      "date-time with terra::time(), or remove it with ",
+      "`terra::time(v) <- NULL`."
+    ), class = "ocean3d_error_voxel_time", call = NULL)
+  }
+  # A date is midnight UTC.
+  seconds <- if (dated) {
+    as.numeric(as.POSIXct(terra::time(v)[1L], tz = "UTC"))
+  }
+  dims <- c("lon", "lat", "depth", if (dated) "time")
+  lengths <- c(lon = nc, lat = nr, depth = terra::nlyr(v),
+               if (dated) c(time = 1L))
+  # The variable's name from terra's own field, which as_voxel() sets and
+  # terra keeps through renaming, subsetting and arithmetic; layer names are
+  # labels and aren't read. "value", as_voxel()'s default, when the voxel
+  # has no single variable name.
+  name <- unique(terra::varnames(v))
+  if (length(name) != 1L || is.na(name) || !nzchar(name)) name <- "value"
+  units <- terra::units(v)[1L]
+  crs <- terra::crs(v)
+  methods::new(
+    "SpatProxy",
+    source = list(type = "voxel", voxel = v),
+    variable = list(
+      name = name, units = if (nzchar(units)) units, long_name = NULL,
+      dims = dims, dim_lengths = vapply(lengths, as.integer, integer(1)),
+      axis_dims = list(lon = "lon", lat = "lat", depth = "depth",
+                       time = if (dated) "time"),
+      singleton_dims = character(0), chunksizes = NULL
+    ),
+    axes = list(
+      lon = list(dim = "lon", centres = lon, lower = lon - half[1L],
+                 upper = lon + half[1L], edges = "bounds"),
+      lat = list(dim = "lat", centres = lat, lower = lat - half[2L],
+                 upper = lat + half[2L], edges = "bounds"),
+      depth = list(dim = "depth", centres = d, lower = slabs$lower,
+                   upper = slabs$upper,
+                   edges = if (is.null(stored)) "inferred" else "bounds",
+                   storage = "shallow_first"),
+      time = if (dated) {
+        list(dim = "time", edges = "none", cftime = CFtime::CFtime(
+          "seconds since 1970-01-01 00:00:00", "standard", seconds
+        ))
+      }
+    ),
+    crs = crs
+  )
+}
+
+# Reads one index window of a SpatProxy's variable. `window` is a named list
+# with up to one element per axis (`lon`, `lat`, `depth`, `time`): the first
+# and last index to read, in storage order (so for a deep-first depth axis,
+# index 1 is the deepest level). An axis left out is read whole; an axis the
+# variable doesn't have counts as one of length 1. Returns the values as a 4D
+# array in the fixed order lon, lat, depth, time, with length 1 for an axis
+# the variable doesn't have. For a netCDF file, one ncdf4 call reads the
+# window, and ncdf4 applies the scale and offset and sets cells equal to
+# `missing_value` (or `_FillValue` when there is no `missing_value`) to NA. A
+# series reads each file's share of the time window and joins them; a voxel
+# in memory gives its own values.
 .read_proxy_window <- function(x, window = list()) {
   variable <- x@variable
   axes <- c("lon", "lat", "depth", "time")
@@ -329,8 +597,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       "lon, lat, depth and time."
     ), class = "ocean3d_error_read_window", call = NULL)
   }
-  index_list <- list()
-  shape <- stats::setNames(rep(1L, 4L), axes)
+  spans <- list()
   for (axis in axes) {
     dim <- variable$axis_dims[[axis]]
     n <- if (is.null(dim)) 1L else variable$dim_lengths[[dim]]
@@ -343,16 +610,59 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         "whole numbers from 1 to {n}, with first <= last."
       ), class = "ocean3d_error_read_window", call = NULL)
     }
+    spans[[axis]] <- as.integer(span)
+  }
+
+  source <- x@source
+  if (identical(source$type, "voxel")) {
+    v <- source$voxel
+    # terra's cells run west to east, then north to south: the storage order
+    # the proxy recorded.
+    values <- array(terra::values(v),
+                    c(terra::ncol(v), terra::nrow(v), terra::nlyr(v), 1L))
+    keep <- lapply(spans, function(s) seq(s[1L], s[2L]))
+    return(values[keep$lon, keep$lat, keep$depth, keep$time, drop = FALSE])
+  }
+  if (!identical(source$type, "series")) {
+    return(.read_file_window(source$path, variable, spans,
+                             variable$dim_lengths))
+  }
+  # A series: each file's share of the time window, joined along time, the
+  # slowest-varying axis of the fixed order.
+  time_dim <- variable$axis_dims$time
+  last <- cumsum(source$steps)
+  first <- last - source$steps + 1L
+  parts <- list()
+  for (i in which(first <= spans$time[2L] & last >= spans$time[1L])) {
+    local <- spans
+    local$time <- c(max(spans$time[1L], first[i]),
+                    min(spans$time[2L], last[i])) - first[i] + 1L
+    lengths <- variable$dim_lengths
+    lengths[[time_dim]] <- source$steps[i]
+    parts[[length(parts) + 1L]] <- .read_file_window(source$path[i], variable,
+                                                     local, lengths)
+  }
+  shape <- vapply(spans, function(s) s[2L] - s[1L] + 1L, integer(1))
+  array(unlist(parts, use.names = FALSE), unname(shape))
+}
+
+# One file's index window for .read_proxy_window(): `spans` per axis, and
+# `dim_lengths` the variable's dimension sizes in that file. The indices are
+# only right for the file the proxy described, so a file whose variable is
+# gone or has other dimensions stops.
+.read_file_window <- function(path, variable, spans, dim_lengths) {
+  axes <- c("lon", "lat", "depth", "time")
+  index_list <- list()
+  shape <- stats::setNames(rep(1L, 4L), axes)
+  for (axis in axes) {
+    dim <- variable$axis_dims[[axis]]
     if (is.null(dim)) next
-    shape[[axis]] <- as.integer(span[2L] - span[1L] + 1L)
-    index_list[[dim]] <- list(start = as.integer(span[1L]),
+    shape[[axis]] <- spans[[axis]][2L] - spans[[axis]][1L] + 1L
+    index_list[[dim]] <- list(start = spans[[axis]][1L],
                               count = shape[[axis]])
   }
   sc <- .build_start_count(variable$dims, index_list, variable$singleton_dims)
 
-  # The indices are only right for the file the proxy described: the same
-  # variable with the same dimensions in the same order.
-  path <- x@source$path
   file <- basename(path)
   nc <- if (.is_url(path) || file.exists(path)) ncdf4::nc_open(path)
   if (!is.null(nc)) on.exit(ncdf4::nc_close(nc), add = TRUE)
@@ -362,8 +672,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   } else if (is.null(info)) {
     glue::glue("{file} no longer has the variable `{variable$name}`")
   } else if (!identical(vapply(info$dim, `[[`, "", "name"), variable$dims) ||
-               !identical(as.integer(info$varsize),
-                          unname(variable$dim_lengths))) {
+               !identical(as.integer(info$varsize), unname(dim_lengths))) {
     glue::glue(
       "Variable `{variable$name}` in {file} no longer has the dimensions ",
       "this SpatProxy describes"
@@ -393,6 +702,135 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # without a local file.
 .is_url <- function(path) grepl("^[A-Za-z][A-Za-z0-9+.-]*://", path)
 
+# The voxel builder (SPEC.md, "SpatVoxel / SpatEnvelope", Builder): one time
+# step of a SpatProxy read into memory as a SpatVoxel, for as_voxel(). The
+# raster's extent comes from the cell edges and its CRS from the proxy; depth
+# goes in terra::depth() with the proxy's depth edges, and the date of the
+# step in terra::time().
+.proxy_to_voxel <- function(x, time, varname) {
+  # A voxel already in memory is its own only time step.
+  if (identical(x@source$type, "voxel")) {
+    .proxy_time_step(x, time)
+    return(x@source$voxel)
+  }
+  axes <- x@axes
+  if (is.null(axes$depth)) {
+    rlang::abort(glue::glue(
+      "Variable `{x@variable$name}` has no depth axis, so it isn't a voxel. ",
+      "Read 2D data with terra::rast()."
+    ), class = "ocean3d_error_proxy_no_depth", call = NULL)
+  }
+  step <- .proxy_time_step(x, time)
+  window <- if (is.null(step)) list() else list(time = c(step, step))
+  values <- .read_proxy_window(x, window)
+
+  # terra's cells run west to east, then north to south.
+  lon <- .regular_extent(axes$lon, "longitude")
+  lat <- .regular_extent(axes$lat, "latitude")
+  lon_order <- order(axes$lon$centres)
+  lat_order <- order(axes$lat$centres, decreasing = TRUE)
+  n_depth <- length(axes$depth$centres)
+  r <- terra::rast(nrows = length(lat_order), ncols = length(lon_order),
+                   nlyrs = n_depth, xmin = lon$min, xmax = lon$max,
+                   ymin = lat$min, ymax = lat$max, crs = x@crs)
+  terra::values(r) <- matrix(values[lon_order, lat_order, , 1L, drop = FALSE],
+                             ncol = n_depth)
+
+  depth_bounds <- if (!identical(axes$depth$edges, "none")) {
+    cbind(axes$depth$lower, axes$depth$upper)
+  }
+  v <- as_voxel(r, depths = axes$depth$centres, varname = varname,
+                depth_bounds = depth_bounds)
+  if (!is.null(x@variable$units)) terra::units(v) <- x@variable$units
+  if (!is.null(step) && !isTRUE(axes$time$climatology)) {
+    date <- axes$time$cftime$as_timestamp(asPOSIX = TRUE)[step]
+    terra::time(v) <- rep(date, terra::nlyr(v))
+  }
+  v
+}
+
+# The index of the time step `time` selects: a step number, or a date or
+# date-time matched exactly at its own resolution (a date selects that day).
+# NULL when the proxy has no time axis. Without `time`, a proxy with one step
+# (or a one-step climatology) gives that step, and one with more is an error.
+.proxy_time_step <- function(x, time) {
+  axis <- x@axes$time
+  if (is.null(axis)) {
+    if (!is.null(time)) {
+      rlang::abort(glue::glue(
+        "Variable `{x@variable$name}` has no time axis, so `time` can't ",
+        "select a step."
+      ), class = "ocean3d_error_proxy_time", call = NULL)
+    }
+    return(NULL)
+  }
+  n <- x@variable$dim_lengths[[axis$dim]]
+  if (is.null(time)) {
+    if (n == 1L) return(1L)
+    rlang::abort(glue::glue(
+      "Variable `{x@variable$name}` has {n} time steps. Choose one with ",
+      "`time`, a step number or a date."
+    ), class = "ocean3d_error_proxy_time", call = NULL)
+  }
+  if (is.numeric(time) && length(time) == 1L && !is.na(time) &&
+        time == round(time)) {
+    if (time >= 1 && time <= n) return(as.integer(time))
+    rlang::abort(glue::glue("`time` must be a step from 1 to {n}."),
+                 class = "ocean3d_error_proxy_time", call = NULL)
+  }
+  if (isTRUE(axis$climatology)) {
+    rlang::abort(
+      "The time axis is a climatology, so `time` can only be step 1.",
+      class = "ocean3d_error_proxy_time", call = NULL
+    )
+  }
+  dates <- axis$cftime$as_timestamp(asPOSIX = TRUE)
+  step <- if (length(time) == 1L) {
+    .match_time_index(dates, time, time_match = "exact")
+  } else {
+    NA_integer_
+  }
+  if (is.na(step)) {
+    shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
+                   collapse = " to ")
+    rlang::abort(glue::glue(
+      "No time step matches `time` ({toString(format(time))}). The steps run ",
+      "from {shown} UTC; give a step number, or a date or date-time that ",
+      "matches one."
+    ), class = "ocean3d_error_proxy_time", call = NULL)
+  }
+  step
+}
+
+# The extent of a regular horizontal axis: `min` and `max` from its cell
+# edges, once the cells are checked to be regular. Coordinates stored as
+# float32 are rarely exactly regular: rounding builds up along the axis (about
+# 0.02% of a cell on Copernicus Marine's 1/12 degree grid), so each centre may
+# sit up to 0.1% of a cell from where a regular grid puts it. A truly
+# irregular axis can't be a terra raster and stops.
+.regular_extent <- function(axis, label) {
+  centres <- sort(axis$centres)
+  lower <- min(axis$lower)
+  upper <- max(axis$upper)
+  n <- length(centres)
+  if (!(upper > lower)) {
+    rlang::abort(glue::glue(
+      "The {label} axis has a single cell without bounds, so its width isn't ",
+      "known. Add cell bounds to the file."
+    ), class = "ocean3d_error_irregular_grid", call = NULL)
+  }
+  step <- (upper - lower) / n
+  expected <- lower + step * (seq_len(n) - 0.5)
+  tol <- max(4 * .interval_tolerance(axis$lower, axis$upper), 1e-3 * step)
+  if (any(abs(centres - expected) > tol)) {
+    rlang::abort(glue::glue(
+      "The {label} axis isn't regular: its cells differ in width. A ",
+      "SpatVoxel needs a regular grid; regrid the data first."
+    ), class = "ocean3d_error_irregular_grid", call = NULL)
+  }
+  list(min = lower, max = upper)
+}
+
 #' @rdname SpatProxy-class
 #' @param object A `SpatProxy`.
 #' @export
@@ -412,9 +850,21 @@ setMethod("show", "SpatProxy", function(object) {
   time_bounds <- if (identical(axes$time$edges, "bounds")) "with" else "no"
   lines <- c(
     class = "SpatProxy (experimental)",
-    source = basename(object@source$path),
-    variable = glue::glue(
-      "{variable$name} ({variable$units}){chunks}"
+    source = switch(
+      object@source$type,
+      voxel = "SpatVoxel in memory",
+      series = glue::glue(
+        "{length(object@source$path)} files, ",
+        "{basename(object@source$path[1L])} to ",
+        "{basename(object@source$path[length(object@source$path)])}"
+      ),
+      basename(object@source$path)
+    ),
+    # Units are NULL when the data give none.
+    variable = paste0(
+      variable$name,
+      if (!is.null(variable$units)) glue::glue(" ({variable$units})"),
+      chunks
     ),
     dimensions = glue::glue(
       "{sizes(variable$dim_lengths)} ({paste(names(dims), collapse = ' x ')})"
@@ -431,13 +881,25 @@ setMethod("show", "SpatProxy", function(object) {
       "{extent(axes$depth$centres)} m, {length(axes$depth$centres)} levels, ",
       "{sub('_', ' ', axes$depth$storage)}, {edges(axes$depth)}"
     ),
-    time = if (is.null(axes$time)) "none" else glue::glue(
-      "{paste(axes$time$cftime$range(), collapse = ' to ')}, ",
-      "{length(axes$time$cftime)} steps, {axes$time$cftime$cal$name} ",
-      "calendar, {time_bounds} bounds"
-    ),
-    crs = if (grepl("^EPSG:", object@crs)) object@crs else
+    time = if (is.null(axes$time)) {
+      "none"
+    } else if (isTRUE(axes$time$climatology)) {
+      glue::glue("climatology, 1 step ({axes$time$units})")
+    } else {
+      n_steps <- length(axes$time$cftime)
+      steps <- if (n_steps == 1L) "1 step" else glue::glue("{n_steps} steps")
+      glue::glue(
+        "{paste(axes$time$cftime$range(), collapse = ' to ')}, {steps}, ",
+        "{axes$time$cftime$cal$name} calendar, {time_bounds} bounds"
+      )
+    },
+    crs = if (!nzchar(object@crs)) {
+      "none"
+    } else if (grepl("^EPSG:", object@crs)) {
+      object@crs
+    } else {
       terra::crs(object@crs, describe = TRUE)$name
+    }
   )
   cat(sprintf("%-10s : %s", names(lines), lines), sep = "\n")
   invisible(object)

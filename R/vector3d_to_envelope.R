@@ -98,14 +98,23 @@ vector3d_to_envelope <- function(x, template) {
                       terra::shift(polygons, dx = -360))
   }
   # Each cell's shallowest top and deepest bottom over the polygons touching
-  # it, picked as terra::mask() picks cells in vect_to_envelope(). Depths stay
-  # doubles: terra's default of 4-byte floats would turn 10.1 m into
-  # 10.1000004 m.
-  doubles <- list(datatype = "FLT8S")
-  top <- terra::rasterize(polygons, grid, field = "depth_min", fun = "min",
-                          touches = TRUE, wopt = doubles)
-  bottom <- terra::rasterize(polygons, grid, field = "depth_max", fun = "max",
-                             touches = TRUE, wopt = doubles)
+  # it, picked as terra::mask() picks cells in vect_to_envelope(). terra
+  # rasterizes polygon values as 4-byte floats (since 1.9-60 whatever the
+  # datatype asked for), which would turn 10.1 m into 10.1000004 m. So each
+  # polygon's rank among the depths is rasterized instead: ranks are whole
+  # numbers, which floats hold exactly, and the lowest or highest rank picks
+  # the same polygon as the lowest or highest depth. The depths are then
+  # looked up as doubles.
+  extreme <- function(field, fun) {
+    given <- terra::values(polygons)[[field]]
+    levels <- sort(unique(given))
+    polygons$rank <- match(given, levels)
+    rank <- terra::rasterize(polygons, grid, field = "rank", fun = fun,
+                             touches = TRUE)
+    terra::setValues(rank, levels[terra::values(rank)[, 1]])
+  }
+  top <- extreme("depth_min", "min")
+  bottom <- extreme("depth_max", "max")
   # vect_to_envelope() keeps the cells the polygons touch, drops cells with
   # no thickness, and stops if none are left.
   vect_to_envelope(polygons, grid, depth_min = top, depth_max = bottom)
