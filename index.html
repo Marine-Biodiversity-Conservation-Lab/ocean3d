@@ -41,6 +41,7 @@
     <li><a class="dropdown-item" href="articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
     <li><a class="dropdown-item" href="articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
+    <li><a class="dropdown-item" href="articles/working-with-woa.html">Working with World Ocean Atlas data</a></li>
     <li><a class="dropdown-item" href="articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul>
 </li>
@@ -195,7 +196,7 @@
 </tr>
 </tbody>
 </table>
-<p>The two don’t convert into each other yet. A voxel from <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> and <code><a href="reference/as_voxel.html">as_voxel()</a></code> can’t be passed to <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, and a netCDF file can’t be passed to <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> or <code><a href="reference/volume.html">volume()</a></code>. To use a netCDF file with the voxel functions, load it as a <code>SpatRaster</code> (e.g. with <code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code>) and wrap it with <code><a href="reference/as_voxel.html">as_voxel()</a></code>. Merging the two into one model with time is planned in <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99" class="external-link">#99</a>. The first, experimental part of that model is <code><a href="reference/as_proxy.html">as_proxy()</a></code>. It describes one variable of a netCDF file as a <code>SpatProxy</code> without reading its values. No other function accepts a <code>SpatProxy</code> yet.</p>
+<p>A function takes only its own model: a voxel can’t be passed to <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, and a netCDF file can’t be passed to <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> or <code><a href="reference/volume.html">volume()</a></code>. Merging the two into one model with time is planned in <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99" class="external-link">#99</a>. Its first, experimental part is <code><a href="reference/as_proxy.html">as_proxy()</a></code>, which describes a netCDF file (such as a World Ocean Atlas file from <code><a href="reference/woa_download.html">woa_download()</a></code>), a series of files or a voxel in memory as a <code>SpatProxy</code> without reading its values. To use a netCDF file with the voxel functions, describe it with <code><a href="reference/as_proxy.html">as_proxy()</a></code>, crop it to your area with <code><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">terra::crop()</a></code>, and read one time step with <code><a href="reference/as_voxel.html">as_voxel()</a></code>; only the cropped cells are read.</p>
 </div>
 <div class="section level3">
 <h3 id="build-3d-objects">Build: 3D objects<a class="anchor" aria-label="anchor" href="#build-3d-objects"></a>
@@ -311,9 +312,7 @@
 </h4>
 <ul>
 <li>
-<code><a href="reference/woa_download.html">woa_download()</a></code> — download WOA 2023 NetCDF files (temperature, salinity, dissolved oxygen, oxygen saturation, AOU, nitrate, phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with caching.</li>
-<li>
-<code><a href="reference/woa_load_nc.html">woa_load_nc()</a></code> — load a WOA NetCDF and select a statistical field (e.g., objectively analyzed climatology), returning a <code>SpatRaster</code> with one layer per depth, for <code><a href="reference/as_voxel.html">as_voxel()</a></code>.</li>
+<code><a href="reference/woa_download.html">woa_download()</a></code> — download WOA 2023 NetCDF files (temperature, salinity, dissolved oxygen, oxygen saturation, AOU, nitrate, phosphate, silicate, density) at 0.25°, 1°, or 5° resolution, with caching. Read a field with <code>as_proxy(file, var = "t_an")</code>, crop it, and read it with <code><a href="reference/as_voxel.html">as_voxel()</a></code>; its help page lists the variable and field codes.</li>
 <li>
 <code><a href="reference/woa_cache_dir.html">woa_cache_dir()</a></code> / <code><a href="reference/woa_cache_clear.html">woa_cache_clear()</a></code> — manage the persistent WOA download cache.</li>
 </ul>

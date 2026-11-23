@@ -31,6 +31,7 @@ describes vector data on disk. Build one with as_proxy()."></head><body>
     <li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
     <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
+    <li><a class="dropdown-item" href="../articles/working-with-woa.html">Working with World Ocean Atlas data</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -60,6 +61,9 @@ describes vector data on disk. Build one with <code><a href="as_proxy.html">as_p
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># S4 method for class 'SpatProxy'</span></span>
+<span><span class="fu">crop</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S4 method for class 'SpatProxy'</span></span>
 <span><span class="fu">show</span><span class="op">(</span><span class="va">object</span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -67,7 +71,30 @@ describes vector data on disk. Build one with <code><a href="as_proxy.html">as_p
     <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
 
-<dl><dt id="arg-object">object<a class="anchor" aria-label="anchor" href="#arg-object"></a></dt>
+<dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
+<dd><p>A <code>SpatProxy</code>.</p></dd>
+
+
+<dt id="arg-y">y<a class="anchor" aria-label="anchor" href="#arg-y"></a></dt>
+<dd><p>For <code>crop()</code>: the area to keep, as a <a href="https://rspatial.github.io/terra/reference/SpatExtent-class.html" class="external-link">terra::SpatExtent</a> or
+anything with an extent (<a href="https://rspatial.github.io/terra/reference/SpatRaster-class.html" class="external-link">terra::SpatRaster</a>, <a href="https://rspatial.github.io/terra/reference/SpatVector-class.html" class="external-link">terra::SpatVector</a>, or an
+sf object). The result keeps the cells whose longitude and latitude
+ranges overlap the area's extent, still without reading values, so
+<code><a href="as_voxel.html">as_voxel()</a></code> then reads only those cells from the file. A polygon is cut
+to its extent; to keep only the cells inside it, mask the voxel with it
+afterwards. An area in another CRS is projected first, and on a
+longitude-latitude grid an extent in the other longitude convention (0 to
+360 or -180 to 180) finds its cells too. An area that crosses the edge of
+the grid's longitudes (the
+antimeridian on a -180 to 180 grid) can't be read as one window and
+stops; crop each side separately.</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Not used.</p></dd>
+
+
+<dt id="arg-object">object<a class="anchor" aria-label="anchor" href="#arg-object"></a></dt>
 <dd><p>A <code>SpatProxy</code>.</p></dd>
 
 </dl></div>

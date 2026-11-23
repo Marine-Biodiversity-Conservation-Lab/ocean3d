@@ -39,6 +39,7 @@
     <li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
     <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
+    <li><a class="dropdown-item" href="../articles/working-with-woa.html">Working with World Ocean Atlas data</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul>
 </li>
@@ -248,7 +249,7 @@ datasets or requiring API credentials.</p>
 <p>For real-world applications, <code>ocean3d</code> provides several
 functions to facilitate data acquisition and preparation. These include
 <code><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code> for bathymetric data from GEBCO,
-<code><a href="../reference/woa_download.html">woa_download()</a></code> and <code><a href="../reference/woa_load_nc.html">woa_load_nc()</a></code> for
+<code><a href="../reference/woa_download.html">woa_download()</a></code> (read with <code><a href="../reference/as_proxy.html">as_proxy()</a></code>) for
 environmental data from the World Ocean Atlas, and
 <code><a href="../reference/fetch_species_assessments.html">fetch_species_assessments()</a></code> for retrieving species
 information, including depth limits, from the IUCN Red List API.</p>
@@ -479,8 +480,8 @@ them.</p>
 information across our study area at five different depth levels.</p>
 <p><strong>Working with real data:</strong> Instead of generating
 artificial temperature rasters, we could obtain environmental data from
-the World Ocean Atlas using <code><a href="../reference/woa_download.html">woa_download()</a></code> and
-<code><a href="../reference/woa_load_nc.html">woa_load_nc()</a></code>.</p>
+the World Ocean Atlas using <code><a href="../reference/woa_download.html">woa_download()</a></code>, then read it
+with <code><a href="../reference/as_proxy.html">as_proxy()</a></code> and <code><a href="../reference/as_voxel.html">as_voxel()</a></code>.</p>
 </div>
 <div class="section level3">
 <h3 id="visualising-our-3d-environmental-data">2.4. Visualising our 3D environmental data<a class="anchor" aria-label="anchor" href="#visualising-our-3d-environmental-data"></a>
@@ -1134,11 +1135,12 @@ additional uncertainty into the analysis.</p></li>
 <li><p><code><a href="../reference/load_gebco_bathymetry.html">load_gebco_bathymetry()</a></code> loads GEBCO bathymetric data
 from NetCDF files, providing information about seafloor depth that can
 be used to constrain species’ potential vertical distributions.</p></li>
-<li><p><code><a href="../reference/woa_download.html">woa_download()</a></code> and <code><a href="../reference/woa_load_nc.html">woa_load_nc()</a></code>
-provide access to World Ocean Atlas 2023 climatologies. They allow you
-to download and prepare environmental variables, including temperature,
-salinity, dissolved oxygen and nutrients, at different geographical
-resolutions and temporal scales.</p></li>
+<li><p><code><a href="../reference/woa_download.html">woa_download()</a></code> provides access to World Ocean Atlas
+2023 climatologies, which <code><a href="../reference/as_proxy.html">as_proxy()</a></code>,
+<code><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">terra::crop()</a></code> and <code><a href="../reference/as_voxel.html">as_voxel()</a></code> then read for
+your study area. You can download environmental variables, including
+temperature, salinity, dissolved oxygen and nutrients, at different
+geographical resolutions and temporal scales.</p></li>
 <li><p><code>copernicus_load()</code> is being developed to facilitate
 access to Copernicus Marine products, including oceanographic datasets
 with temporal and vertical dimensions. Unlike climatological datasets,

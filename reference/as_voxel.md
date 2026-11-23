@@ -32,8 +32,10 @@ as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL, time = NULL)
   This is how gridded data enter the `SpatVoxel` model: describe a
   netCDF file with
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
-  and pass the proxy here, which reads one time step. netCDF paths
-  aren't accepted directly.
+  and pass the proxy here, which reads one time step. Crop the proxy
+  first with
+  [`terra::crop()`](https://rspatial.github.io/terra/reference/crop.html)
+  to read only part of the grid. netCDF paths aren't accepted directly.
 
 - depths:
 

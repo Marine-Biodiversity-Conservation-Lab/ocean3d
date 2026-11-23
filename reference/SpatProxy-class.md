@@ -10,10 +10,40 @@ describes vector data on disk. Build one with
 
 ``` r
 # S4 method for class 'SpatProxy'
+crop(x, y, ...)
+
+# S4 method for class 'SpatProxy'
 show(object)
 ```
 
 ## Arguments
+
+- x:
+
+  A `SpatProxy`.
+
+- y:
+
+  For `crop()`: the area to keep, as a
+  [terra::SpatExtent](https://rspatial.github.io/terra/reference/SpatExtent-class.html)
+  or anything with an extent
+  ([terra::SpatRaster](https://rspatial.github.io/terra/reference/SpatRaster-class.html),
+  [terra::SpatVector](https://rspatial.github.io/terra/reference/SpatVector-class.html),
+  or an sf object). The result keeps the cells whose longitude and
+  latitude ranges overlap the area's extent, still without reading
+  values, so
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  then reads only those cells from the file. A polygon is cut to its
+  extent; to keep only the cells inside it, mask the voxel with it
+  afterwards. An area in another CRS is projected first, and on a
+  longitude-latitude grid an extent in the other longitude convention (0
+  to 360 or -180 to 180) finds its cells too. An area that crosses the
+  edge of the grid's longitudes (the antimeridian on a -180 to 180 grid)
+  can't be read as one window and stops; crop each side separately.
+
+- ...:
+
+  Not used.
 
 - object:
 

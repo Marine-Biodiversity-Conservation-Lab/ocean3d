@@ -19,5 +19,7 @@
   for](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/depth-levels.md):
 - [Depth-Stratified Fishing Effort from Global Fishing
   Watch](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/gfw-fishing-effort-3d.md):
+- [Working with World Ocean Atlas
+  data](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/working-with-woa.md):
 - [Extracting 3D Environmental Data for a Single
   Species](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/woa-environmental-extraction-single-species.md):

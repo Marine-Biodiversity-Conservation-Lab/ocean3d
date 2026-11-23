@@ -39,6 +39,7 @@
     <li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
     <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
+    <li><a class="dropdown-item" href="../articles/working-with-woa.html">Working with World Ocean Atlas data</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul>
 </li>
@@ -183,20 +184,19 @@ filtering.</p>
 <span><span class="co"># canonical study grid.</span></span>
 <span><span class="va">t_annual_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/woa_download.html">woa_download</a></span><span class="op">(</span><span class="st">"temperature"</span>, period <span class="op">=</span> <span class="st">"annual"</span>,</span>
 <span>                              resolution <span class="op">=</span> <span class="st">"0.25"</span><span class="op">)</span></span>
-<span><span class="va">t_annual</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/woa_load_nc.html">woa_load_nc</a></span><span class="op">(</span><span class="va">t_annual_path</span>, field <span class="op">=</span> <span class="st">"an"</span><span class="op">)</span></span>
+<span><span class="co"># Describe the objectively analyzed mean, `t_an`, without reading it.</span></span>
+<span><span class="va">t_annual</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_proxy.html">as_proxy</a></span><span class="op">(</span><span class="va">t_annual_path</span>, var <span class="op">=</span> <span class="st">"t_an"</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># Crop to the species range (plus a ~1 degree margin) before any heavy work.</span></span>
-<span><span class="co"># WOA ships globally, but the bathymetry projection, envelope construction, and</span></span>
-<span><span class="co"># per-depth masking all cost in proportion to grid size. A circumglobal range</span></span>
-<span><span class="co"># whose bbox spans the antimeridian makes this a no-op.</span></span>
+<span><span class="co"># Crop to the species range (plus a ~1 degree margin) before reading. WOA</span></span>
+<span><span class="co"># ships globally, and only the cropped cells are read from the file; the</span></span>
+<span><span class="co"># bathymetry projection, envelope construction and per-depth masking also</span></span>
+<span><span class="co"># cost in proportion to grid size. A circumglobal range reads the whole grid.</span></span>
 <span><span class="va">range_ext</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/intersect.html" class="external-link">intersect</a></span><span class="op">(</span></span>
 <span>  <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/vect.html" class="external-link">vect</a></span><span class="op">(</span><span class="va">sp_range</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span> <span class="fl">1</span>,</span>
 <span>  <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="op">-</span><span class="fl">180</span>, <span class="fl">180</span>, <span class="op">-</span><span class="fl">90</span>, <span class="fl">90</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># as_voxel() re-wraps after the crop: terra operations propagate the class but</span></span>
-<span><span class="co"># do not re-run its validity rules, so wrapping is how the depth axis is</span></span>
-<span><span class="co"># re-checked. It is idempotent, so this is cheap.</span></span>
+<span><span class="co"># Read the cropped area as a SpatVoxel, with WOA's own depth bounds.</span></span>
 <span><span class="va">t_annual</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_voxel.html">as_voxel</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">crop</a></span><span class="op">(</span><span class="va">t_annual</span>, <span class="va">range_ext</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># Derive the study grid from the cropped raster so the envelope and the voxel</span></span>

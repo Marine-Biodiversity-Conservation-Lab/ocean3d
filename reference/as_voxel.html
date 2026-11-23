@@ -35,6 +35,7 @@ and may change without notice while the core object is built."></head><body>
     <li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
     <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
+    <li><a class="dropdown-item" href="../articles/working-with-woa.html">Working with World Ocean Atlas data</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -78,7 +79,8 @@ depth, combined with <code><a href="https://rspatial.github.io/terra/reference/r
 each has them set; otherwise pass <code>depths</code>), or an existing
 <a href="SpatVoxel-class.html">SpatVoxel</a>. This is how gridded data
 enter the <code>SpatVoxel</code> model: describe a netCDF file with <code><a href="as_proxy.html">as_proxy()</a></code> and
-pass the proxy here, which reads one time step. netCDF paths aren't
+pass the proxy here, which reads one time step. Crop the proxy first with
+<code><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">terra::crop()</a></code> to read only part of the grid. netCDF paths aren't
 accepted directly.</p></dd>
 
 

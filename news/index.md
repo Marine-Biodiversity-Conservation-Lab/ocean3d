@@ -107,6 +107,37 @@ voxel read back from GeoTIFF needs `depths`. All three return a plain
 [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
 after reading.
 
+`woa_load_nc()` is removed
+([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)).
+It loaded one field of a World Ocean Atlas file as a plain `SpatRaster`.
+Read a WOA file like any other netCDF file: describe the field with
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+naming its variable (`{code}_{field}`, such as `t_an`; leave out `var`
+to list the file’s variables), crop it to your area with
+[`terra::crop()`](https://rspatial.github.io/terra/reference/crop.html),
+and read it with
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md):
+
+``` r
+
+temp <- as_proxy(woa_download("temperature"), var = "t_an")
+v <- as_voxel(terra::crop(temp, study_area))
+```
+
+Only the cropped cells are read from the file. The voxel carries WOA’s
+own depth bounds, its CRS (EPSG:4326) and no date, since a WOA file is a
+climatology for one period. Because it has depth bounds, the `bounds`
+argument of
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
+[`mask()`](https://rspatial.github.io/terra/reference/mask.html) and the
+other 3D functions doesn’t apply to it. WOA’s bounds are halfway between
+its standard levels, so results with the default `bounds = "midpoint"`
+don’t change; `bounds = "top"` no longer does anything.
+[`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md)’s
+help page lists the variable and field codes, and the new article
+“Working with World Ocean Atlas data” shows how to read each variable
+and statistical field, monthly and seasonal files included.
+
 `bounds` now defaults to `"midpoint"` instead of `"top"` in
 [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md),
 [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md),
@@ -261,9 +292,20 @@ how many cells have the limits swapped (or a seafloor above
   regular apart from rounding in the stored coordinates are treated as
   regular; other irregular grids stop with an error.
 
+- [`terra::crop()`](https://rspatial.github.io/terra/reference/crop.html)
+  of a `SpatProxy` keeps the cells that overlap an area (an extent,
+  raster, vector or sf object), still without reading values, so
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  then reads only those cells from the file
+  ([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)).
+  An area in another CRS is projected first, and an extent in the other
+  longitude convention (0 to 360 or -180 to 180) finds its cells. An
+  area that crosses the edge of the grid’s longitudes stops; crop each
+  side separately.
+
   `SpatProxy`,
-  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
-  and reading a `SpatProxy` with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+  cropping a `SpatProxy` and reading one with
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   are experimental and may change without notice while the core object
   is built.

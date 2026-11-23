@@ -29,6 +29,7 @@ skipped on subsequent calls unless force = TRUE."></head><body>
     <li><a class="dropdown-item" href="../articles/bangladesh-fisheries-3d-overlap.html">3D Volume Overlap Between Species and Fisheries</a></li>
     <li><a class="dropdown-item" href="../articles/depth-levels.html">Depth levels and the slabs they stand for</a></li>
     <li><a class="dropdown-item" href="../articles/gfw-fishing-effort-3d.html">Depth-Stratified Fishing Effort from Global Fishing Watch</a></li>
+    <li><a class="dropdown-item" href="../articles/working-with-woa.html">Working with World Ocean Atlas data</a></li>
     <li><a class="dropdown-item" href="../articles/woa-environmental-extraction-single-species.html">Extracting 3D Environmental Data for a Single Species</a></li>
   </ul></li>
 <li class="nav-item"><a class="nav-link" href="../news/index.html">Changelog</a></li>
@@ -120,6 +121,37 @@ file is reported before downloading. A full set of WOA files can be many
 gigabytes — supply <code>output_dir</code> to direct the cache elsewhere (HPC scratch,
 external drive, etc.).</p>
     </div>
+    <div class="section level2">
+    <h2 id="reading-the-files">Reading the files<a class="anchor" aria-label="anchor" href="#reading-the-files"></a></h2>
+
+
+<p>Describe a downloaded file with <code><a href="as_proxy.html">as_proxy()</a></code>, naming the field's variable,
+then read it with <code><a href="as_voxel.html">as_voxel()</a></code>. Crop the proxy to your area first with
+<code><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">terra::crop()</a></code>, so that only those cells are read from the file. Each
+file holds one variable per statistical field, named <code>{code}_{field}</code>, such
+as <code>t_an</code> for the objectively analyzed temperature. Leave out <code>var</code> and
+<code><a href="as_proxy.html">as_proxy()</a></code> lists the file's variables.</p>
+<p>The variable codes are <code>t</code> (temperature), <code>s</code> (salinity), <code>o</code> (dissolved
+oxygen), <code>O</code> (oxygen saturation), <code>A</code> (AOU), <code>n</code> (nitrate), <code>p</code>
+(phosphate), <code>i</code> (silicate) and <code>I</code> (density). The field codes are <code>an</code>
+(objectively analyzed climatology), <code>mn</code> (statistical mean), <code>dd</code> (number
+of observations), <code>sd</code> (standard deviation), <code>se</code> (standard error), <code>oa</code>
+(statistical mean minus the objectively analyzed mean), <code>ma</code> (the period's
+objectively analyzed mean minus the annual one), <code>gp</code> (number of grid
+squares with a statistical mean within the radius of influence), <code>sdo</code>
+(objectively analyzed standard deviation) and <code>sea</code> (standard error of the
+analysis). The article "Working with World Ocean Atlas data", on the
+package website, shows each step. See the WOA 2023 Product Documentation:
+<a href="https://repository.library.noaa.gov/view/noaa/70581" class="external-link">https://repository.library.noaa.gov/view/noaa/70581</a>.</p>
+<p>The voxel carries WOA's own depth bounds (<code><a href="depth_bounds.html">depth_bounds()</a></code>), its CRS
+(EPSG:4326) and no date, since a WOA file is a climatology for one period.
+For the same reason, the 12 monthly (or 4 seasonal) files can't be joined
+as one series with <code><a href="as_proxy.html">as_proxy()</a></code>: open each file on its own.
+Because the voxel has depth bounds, the <code>bounds</code> argument of <code><a href="volume.html">volume()</a></code>,
+<code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code> and the other 3D functions doesn't apply to it. WOA's bounds are
+halfway between its standard levels, which is what their default,
+<code>bounds = "midpoint"</code>, gives.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
@@ -129,7 +161,12 @@ external drive, etc.).</p>
 <span class="r-in"><span><span class="va">tmp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/file.path.html" class="external-link">file.path</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempdir</a></span><span class="op">(</span><span class="op">)</span>, <span class="st">"woa"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">f</span> <span class="op">&lt;-</span> <span class="fu">woa_download</span><span class="op">(</span><span class="st">"temperature"</span>, period <span class="op">=</span> <span class="st">"annual"</span>, resolution <span class="op">=</span> <span class="st">"1"</span>,</span></span>
 <span class="r-in"><span>                  output_dir <span class="op">=</span> <span class="va">tmp</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="fu"><a href="woa_load_nc.html">woa_load_nc</a></span><span class="op">(</span><span class="va">f</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Describe the objectively analyzed mean without reading it, crop it to a</span></span></span>
+<span class="r-in"><span><span class="co"># study area, and read only that area as a SpatVoxel</span></span></span>
+<span class="r-in"><span><span class="va">temp</span> <span class="op">&lt;-</span> <span class="fu"><a href="as_proxy.html">as_proxy</a></span><span class="op">(</span><span class="va">f</span>, var <span class="op">=</span> <span class="st">"t_an"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">v</span> <span class="op">&lt;-</span> <span class="fu"><a href="as_voxel.html">as_voxel</a></span><span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">crop</a></span><span class="op">(</span><span class="va">temp</span>, <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/ext.html" class="external-link">ext</a></span><span class="op">(</span><span class="op">-</span><span class="fl">20</span>, <span class="op">-</span><span class="fl">10</span>, <span class="fl">30</span>, <span class="fl">40</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="depth_bounds.html">depth_bounds</a></span><span class="op">(</span><span class="va">v</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># All 12 monthly files, downloaded in parallel, into the default cache</span></span></span>
 <span class="r-in"><span><span class="va">monthly</span> <span class="op">&lt;-</span> <span class="fu">woa_download</span><span class="op">(</span><span class="st">"temperature"</span>, period <span class="op">=</span> <span class="st">"monthly"</span>,</span></span>

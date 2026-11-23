@@ -110,8 +110,6 @@ Download, cache and load public datasets.
   : Load GEBCO bathymetry raster
 - [`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md)
   : Download a WOA NetCDF file (with caching)
-- [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
-  : Load a WOA NetCDF file
 - [`woa_cache_dir()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_dir.md)
   : WOA cache directory
 - [`woa_cache_clear()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_cache_clear.md)
@@ -128,7 +126,8 @@ Download, cache and load public datasets.
 Describe a gridded netCDF variable without reading its values. Not yet
 accepted by other functions.
 
-- [`show(`*`<SpatProxy>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+- [`crop(`*`<SpatProxy>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+  [`show(`*`<SpatProxy>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
   : A gridded dataset described but not loaded (experimental)
 - [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
   : Describe gridded data without reading its values (experimental)

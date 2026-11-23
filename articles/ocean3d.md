@@ -165,8 +165,8 @@ facilitate data acquisition and preparation. These include
 [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md)
 for bathymetric data from GEBCO,
 [`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md)
-and
-[`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
+(read with
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md))
 for environmental data from the World Ocean Atlas, and
 [`fetch_species_assessments()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/fetch_species_assessments.md)
 for retrieving species information, including depth limits, from the
@@ -441,9 +441,11 @@ study area at five different depth levels.
 **Working with real data:** Instead of generating artificial temperature
 rasters, we could obtain environmental data from the World Ocean Atlas
 using
-[`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md)
+[`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md),
+then read it with
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
 and
-[`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md).
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 
 ### 2.4. Visualising our 3D environmental data
 
@@ -1095,12 +1097,14 @@ the *Getting started: preparing our data* section.
   vertical distributions.
 
 - [`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md)
+  provides access to World Ocean Atlas 2023 climatologies, which
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+  [`terra::crop()`](https://rspatial.github.io/terra/reference/crop.html)
   and
-  [`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md)
-  provide access to World Ocean Atlas 2023 climatologies. They allow you
-  to download and prepare environmental variables, including
-  temperature, salinity, dissolved oxygen and nutrients, at different
-  geographical resolutions and temporal scales.
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  then read for your study area. You can download environmental
+  variables, including temperature, salinity, dissolved oxygen and
+  nutrients, at different geographical resolutions and temporal scales.
 
 - `copernicus_load()` is being developed to facilitate access to
   Copernicus Marine products, including oceanographic datasets with
