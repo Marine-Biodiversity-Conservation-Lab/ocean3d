@@ -156,9 +156,9 @@ setValidity("SpatProxy", function(object) {
 #'
 #' @inheritSection SpatProxy-class Experimental
 #'
-#' @param x A netCDF file path, several paths for a series of files, a
-#'   connection opened with [ncdf4::nc_open()] (left open), or a
-#'   [SpatVoxel-class]. `var` and the dimension arguments apply to files.
+#' @param x A netCDF file path or URL (e.g. OPeNDAP or NCZarr), several
+#'   paths for a series of files, a connection opened with
+#'   [ncdf4::nc_open()] (left open), or a [SpatVoxel-class]. `var` and the dimension arguments apply to files.
 #' @param var Name of the variable. `NULL` (the default) detects it when the
 #'   file holds exactly one data variable.
 #' @param lon_dim,lat_dim,depth_dim,time_dim Names of the dimensions for each
@@ -623,9 +623,16 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     keep <- lapply(spans, function(s) seq(s[1L], s[2L]))
     return(values[keep$lon, keep$lat, keep$depth, keep$time, drop = FALSE])
   }
+  # A proxy cut down with crop() reads its window at an offset in the file,
+  # and checks the file against the file's own dimension lengths.
+  file_spans <- spans
+  for (axis in names(source$offset)) {
+    file_spans[[axis]] <- spans[[axis]] + source$offset[[axis]]
+  }
+  file_lengths <- if (is.null(source$file_lengths)) variable$dim_lengths else
+    source$file_lengths
   if (!identical(source$type, "series")) {
-    return(.read_file_window(source$path, variable, spans,
-                             variable$dim_lengths))
+    return(.read_file_window(source$path, variable, file_spans, file_lengths))
   }
   # A series: each file's share of the time window, joined along time, the
   # slowest-varying axis of the fixed order.
@@ -634,10 +641,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   first <- last - source$steps + 1L
   parts <- list()
   for (i in which(first <= spans$time[2L] & last >= spans$time[1L])) {
-    local <- spans
+    local <- file_spans
     local$time <- c(max(spans$time[1L], first[i]),
                     min(spans$time[2L], last[i])) - first[i] + 1L
-    lengths <- variable$dim_lengths
+    lengths <- file_lengths
     lengths[[time_dim]] <- source$steps[i]
     parts[[length(parts) + 1L]] <- .read_file_window(source$path[i], variable,
                                                      local, lengths)
@@ -664,8 +671,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   sc <- .build_start_count(variable$dims, index_list, variable$singleton_dims)
 
   file <- basename(path)
-  nc <- if (.is_url(path) || file.exists(path)) ncdf4::nc_open(path)
-  if (!is.null(nc)) on.exit(ncdf4::nc_close(nc), add = TRUE)
+  opened <- tryCatch(.open_source(list(source = path, type = "path")),
+                     ocean3d_error_netcdf_missing = function(e) NULL)
+  on.exit(.close_source(opened), add = TRUE)
+  nc <- opened$nc
   info <- if (!is.null(nc)) nc$var[[variable$name]]
   changed <- if (is.null(nc)) {
     glue::glue("Can't find {path}")
@@ -697,10 +706,6 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   if (!identical(dim(values), unname(shape))) dim(values) <- unname(shape)
   values
 }
-
-# TRUE for a URL such as an OPeNDAP or NCZarr address, which ncdf4 opens
-# without a local file.
-.is_url <- function(path) grepl("^[A-Za-z][A-Za-z0-9+.-]*://", path)
 
 # The voxel builder (SPEC.md, "SpatVoxel / SpatEnvelope", Builder): one time
 # step of a SpatProxy read into memory as a SpatVoxel, for as_voxel(). The
@@ -829,6 +834,145 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     ), class = "ocean3d_error_irregular_grid", call = NULL)
   }
   list(min = lower, max = upper)
+}
+
+#' @rdname SpatProxy-class
+#' @param x A `SpatProxy`.
+#' @param y For `crop()`: the area to keep, as a [terra::SpatExtent] or
+#'   anything with an extent ([terra::SpatRaster], [terra::SpatVector], or an
+#'   sf object). The result keeps the cells whose longitude and latitude
+#'   ranges overlap the area's extent, still without reading values, so
+#'   [as_voxel()] then reads only those cells from the file. A polygon is cut
+#'   to its extent; to keep only the cells inside it, mask the voxel with it
+#'   afterwards. An area in another CRS is projected first, and on a
+#'   longitude-latitude grid an extent in the other longitude convention (0 to
+#'   360 or -180 to 180) finds its cells too. An area that crosses the edge of
+#'   the grid's longitudes (the
+#'   antimeridian on a -180 to 180 grid) can't be read as one window and
+#'   stops; crop each side separately.
+#' @param ... Not used.
+#' @export
+setMethod("crop", "SpatProxy", function(x, y, ...) {
+  if (inherits(y, c("sf", "sfc"))) y <- terra::vect(y)
+  # The area's extent in the proxy's CRS, for every source.
+  if (!inherits(y, "SpatExtent")) {
+    crs <- terra::crs(y)
+    if (nzchar(crs) && nzchar(x@crs) && !terra::same.crs(crs, x@crs)) {
+      # Points along the box's edges, so the projected extent also reaches
+      # where a curved projection (a polar one, say) bends an edge beyond
+      # its corners.
+      e <- as.vector(terra::ext(y))
+      box <- terra::densify(
+        terra::as.polygons(terra::ext(y), crs = crs),
+        interval = max(e[["xmax"]] - e[["xmin"]], e[["ymax"]] - e[["ymin"]]) /
+          100,
+        flat = TRUE
+      )
+      projected <- terra::project(box, x@crs)
+      y <- terra::ext(projected)
+      # A box across the antimeridian: going round its edge, the projected
+      # longitude jumps between 180 and -180 (consecutive points more than
+      # 180 degrees apart), so their range spans nearly the globe. Written
+      # from 0 to 360 they are continuous, so take that range; crop() then
+      # finds the cells, or says the area crosses the grid's edge. A box
+      # that covers every longitude has no such jump and keeps its range.
+      if (terra::is.lonlat(x@crs)) {
+        lon <- terra::crds(projected)[, 1L]
+        if (any(abs(diff(c(lon, lon[1L]))) > 180)) {
+          east <- ifelse(lon < 0, lon + 360, lon)
+          y <- terra::ext(min(east), max(east), terra::ymin(y),
+                          terra::ymax(y))
+        }
+      }
+      # A box around a pole: no point on its edges reaches the pole, so the
+      # projected extent stops short of it. If a pole lies inside the box,
+      # the area reaches that pole at every longitude. A projection that
+      # can't place a pole (Mercator, say) can't contain one either.
+      if (terra::is.lonlat(x@crs) && !terra::is.lonlat(crs)) {
+        for (lat in c(90, -90)) {
+          pole <- tryCatch(
+            terra::crds(terra::project(terra::vect(cbind(0, lat),
+                                                   crs = x@crs), crs)),
+            error = function(err) NULL
+          )
+          inside <- !is.null(pole) && all(is.finite(pole)) &&
+            pole[1L] >= e[["xmin"]] && pole[1L] <= e[["xmax"]] &&
+            pole[2L] >= e[["ymin"]] && pole[2L] <= e[["ymax"]]
+          if (inside) {
+            box_lat <- as.vector(y)[c("ymin", "ymax")]
+            y <- terra::ext(-180, 180, min(box_lat, lat), max(box_lat, lat))
+          }
+        }
+      }
+    }
+    if (!inherits(y, "SpatExtent")) y <- terra::ext(y)
+  }
+  e <- as.vector(y)
+  # Longitudes wrap only on a longitude-latitude grid, not in map units.
+  lonlat <- nzchar(x@crs) && terra::is.lonlat(x@crs)
+  spans <- list(
+    lon = .crop_span(x@axes$lon, e[["xmin"]], e[["xmax"]], "longitude",
+                     wrap = lonlat),
+    lat = .crop_span(x@axes$lat, e[["ymin"]], e[["ymax"]], "latitude")
+  )
+  # A voxel in memory is cropped as the raster it is, to the edges of the
+  # same cells a file would give.
+  if (identical(x@source$type, "voxel")) {
+    edges <- lapply(names(spans), function(axis) {
+      keep <- seq(spans[[axis]][1L], spans[[axis]][2L])
+      range(x@axes[[axis]]$lower[keep], x@axes[[axis]]$upper[keep])
+    })
+    box <- terra::ext(c(edges[[1L]], edges[[2L]]))
+    return(.voxel_to_proxy(terra::crop(x@source$voxel, box)))
+  }
+  # The cropped axes and lengths describe the smaller grid; the offset and
+  # the file's own lengths let the reader find it in the file.
+  out <- x
+  offset <- if (is.null(x@source$offset)) c(lon = 0L, lat = 0L) else
+    x@source$offset
+  if (is.null(out@source$file_lengths)) {
+    out@source$file_lengths <- x@variable$dim_lengths
+  }
+  for (axis in names(spans)) {
+    keep <- seq(spans[[axis]][1L], spans[[axis]][2L])
+    out@axes[[axis]][c("centres", "lower", "upper")] <-
+      lapply(x@axes[[axis]][c("centres", "lower", "upper")], `[`, keep)
+    out@variable$dim_lengths[[x@variable$axis_dims[[axis]]]] <- length(keep)
+    offset[[axis]] <- offset[[axis]] + spans[[axis]][1L] - 1L
+  }
+  out@source$offset <- offset
+  methods::validObject(out)
+  out
+})
+
+# Internal: the first and last index, in storage order, of the cells of a
+# longitude or latitude `axis` whose range overlaps `low` to `high`. With
+# `wrap`, the range is also tried 360 degrees either way, so an area in the
+# other longitude convention finds its cells. An area whose edge only touches
+# a cell, within rounding (as after projecting it), doesn't take that cell.
+# The cells must be next to each other in the file, or one read window can't
+# hold them. Raised from here only, for both axes of crop().
+.crop_span <- function(axis, low, high, label, wrap = FALSE) {
+  lo <- pmin(axis$lower, axis$upper)
+  hi <- pmax(axis$lower, axis$upper)
+  tol <- .interval_tolerance(lo, hi)
+  shifts <- if (wrap) c(0, 360, -360) else 0
+  hit <- sort(unique(unlist(lapply(shifts, function(s) {
+    which(hi - tol > low + s & lo + tol < high + s)
+  }))))
+  problem <- if (!length(hit)) {
+    glue::glue("doesn't overlap the grid's {label}s")
+  } else if (any(diff(hit) != 1L)) {
+    glue::glue(
+      "crosses the edge of the grid's {label}s, so it can't be read as one ",
+      "window; crop each side separately"
+    )
+  }
+  if (!is.null(problem)) {
+    rlang::abort(glue::glue("The area {problem}."),
+                 class = "ocean3d_error_proxy_crop", call = NULL)
+  }
+  range(hit)
 }
 
 #' @rdname SpatProxy-class

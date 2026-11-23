@@ -7,6 +7,10 @@
   inherits(x, "ncdf4")
 }
 
+# TRUE for a URL such as an OPeNDAP or NCZarr address, which ncdf4 opens
+# without a local file.
+.is_url <- function(path) grepl("^[A-Za-z][A-Za-z0-9+.-]*://", path)
+
 .as_netcdf_sources <- function(nc, file_col = "file") {
   # This helper standardises all accepted input formats into the same
   # internal representation. Each source keeps the original object plus a type
@@ -48,11 +52,13 @@
 
 .open_source <- function(source) {
   if (identical(source$type, "path")) {
-    if (!file.exists(source$source)) {
-      stop("netCDF file does not exist: ", source$source, call. = FALSE)
+    path <- source$source
+    if (!.is_url(path) && !file.exists(path)) {
+      rlang::abort(glue::glue("netCDF file does not exist: {path}"),
+                   class = "ocean3d_error_netcdf_missing", call = NULL)
     }
 
-    return(list(nc = ncdf4::nc_open(source$source), close = TRUE))
+    return(list(nc = ncdf4::nc_open(path), close = TRUE))
   }
 
   if (identical(source$type, "connection")) {

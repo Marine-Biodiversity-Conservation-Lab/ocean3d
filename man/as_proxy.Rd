@@ -14,9 +14,9 @@ as_proxy(
 )
 }
 \arguments{
-\item{x}{A netCDF file path, several paths for a series of files, a
-connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} (left open), or a
-\link[=SpatVoxel-class]{SpatVoxel}. \code{var} and the dimension arguments apply to files.}
+\item{x}{A netCDF file path or URL (e.g. OPeNDAP or NCZarr), several
+paths for a series of files, a connection opened with
+\code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} (left open), or a \link[=SpatVoxel-class]{SpatVoxel}. \code{var} and the dimension arguments apply to files.}
 
 \item{var}{Name of the variable. \code{NULL} (the default) detects it when the
 file holds exactly one data variable.}

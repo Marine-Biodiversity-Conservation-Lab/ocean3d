@@ -194,7 +194,8 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   each has them set; otherwise pass `depths`), or an existing
 #'   [SpatVoxel-class]. This is how gridded data
 #'   enter the `SpatVoxel` model: describe a netCDF file with [as_proxy()] and
-#'   pass the proxy here, which reads one time step. netCDF paths aren't
+#'   pass the proxy here, which reads one time step. Crop the proxy first with
+#'   `terra::crop()` to read only part of the grid. netCDF paths aren't
 #'   accepted directly.
 #' @param depths Optional numeric vector, one depth per layer, in metres. When
 #'   supplied, it sets the depths, and the layers are named

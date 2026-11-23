@@ -79,8 +79,9 @@ woa_cache_clear <- function(confirm = TRUE) {
 
 # Internal: accepted variable names and the URL/filename components each maps
 # to. `code` is the one-letter code used both in WOA filenames and in the
-# `{code}_{field}_depth={value}` layer names inside the NetCDFs. Note that
-# codes are case-sensitive: "o"/"O" and "i"/"I" are different variables.
+# `{code}_{field}` variable names inside the netCDF files (such as `t_an`).
+# Note that codes are case-sensitive: "o"/"O" and "i"/"I" are different
+# variables.
 .woa_variables <- function() {
   data.frame(
     name = c("temperature", "salinity", "dissolved_oxygen",
@@ -95,28 +96,6 @@ woa_cache_clear <- function(confirm = TRUE) {
     decade = c("decav", "decav", "all",
                "all", "all", "all", "all",
                "all", "decav"),
-    stringsAsFactors = FALSE
-  )
-}
-
-# Internal: accepted statistical fields. `code` is the code used in WOA
-# filenames and in the `{variable}_{code}_depth={value}` layer names inside
-# the NetCDFs. See the WOA 2023 Product Documentation:
-# https://repository.library.noaa.gov/view/noaa/70581
-.woa_fields <- function() {
-  data.frame(
-    code = c("an", "mn", "dd",
-             "sd", "se", "oa",
-             "gp", "sdo", "sea"),
-    description = c("objectively analyzed climatology",
-                    "statistical mean",
-                    "number of observations",
-                    "standard deviation",
-                    "standard error",
-                    "mean minus climatology",
-                    "number of mean values within radius of influence",
-                    "objectively analyzed standard deviation",
-                    "standard error of the analysis"),
     stringsAsFactors = FALSE
   )
 }
@@ -247,6 +226,36 @@ woa_cache_clear <- function(confirm = TRUE) {
 #' gigabytes — supply `output_dir` to direct the cache elsewhere (HPC scratch,
 #' external drive, etc.).
 #'
+#' @section Reading the files:
+#' Describe a downloaded file with [as_proxy()], naming the field's variable,
+#' then read it with [as_voxel()]. Crop the proxy to your area first with
+#' `terra::crop()`, so that only those cells are read from the file. Each
+#' file holds one variable per statistical field, named `{code}_{field}`, such
+#' as `t_an` for the objectively analyzed temperature. Leave out `var` and
+#' [as_proxy()] lists the file's variables.
+#'
+#' The variable codes are `t` (temperature), `s` (salinity), `o` (dissolved
+#' oxygen), `O` (oxygen saturation), `A` (AOU), `n` (nitrate), `p`
+#' (phosphate), `i` (silicate) and `I` (density). The field codes are `an`
+#' (objectively analyzed climatology), `mn` (statistical mean), `dd` (number
+#' of observations), `sd` (standard deviation), `se` (standard error), `oa`
+#' (statistical mean minus the objectively analyzed mean), `ma` (the period's
+#' objectively analyzed mean minus the annual one), `gp` (number of grid
+#' squares with a statistical mean within the radius of influence), `sdo`
+#' (objectively analyzed standard deviation) and `sea` (standard error of the
+#' analysis). The article "Working with World Ocean Atlas data", on the
+#' package website, shows each step. See the WOA 2023 Product Documentation:
+#' <https://repository.library.noaa.gov/view/noaa/70581>.
+#'
+#' The voxel carries WOA's own depth bounds ([depth_bounds()]), its CRS
+#' (EPSG:4326) and no date, since a WOA file is a climatology for one period.
+#' For the same reason, the 12 monthly (or 4 seasonal) files can't be joined
+#' as one series with [as_proxy()]: open each file on its own.
+#' Because the voxel has depth bounds, the `bounds` argument of [volume()],
+#' [mask()] and the other 3D functions doesn't apply to it. WOA's bounds are
+#' halfway between its standard levels, which is what their default,
+#' `bounds = "midpoint"`, gives.
+#'
 #' @param variable Character. One of `"temperature"`, `"salinity"`,
 #'   `"dissolved_oxygen"`, `"oxygen_saturation"`, `"AOU"`, `"nitrate"`,
 #'   `"phosphate"`, `"silicate"`, `"density"`.
@@ -271,7 +280,12 @@ woa_cache_clear <- function(confirm = TRUE) {
 #' tmp <- file.path(tempdir(), "woa")
 #' f <- woa_download("temperature", period = "annual", resolution = "1",
 #'                   output_dir = tmp)
-#' woa_load_nc(f)
+#'
+#' # Describe the objectively analyzed mean without reading it, crop it to a
+#' # study area, and read only that area as a SpatVoxel
+#' temp <- as_proxy(f, var = "t_an")
+#' v <- as_voxel(terra::crop(temp, terra::ext(-20, -10, 30, 40)))
+#' depth_bounds(v)
 #'
 #' # All 12 monthly files, downloaded in parallel, into the default cache
 #' monthly <- woa_download("temperature", period = "monthly",
@@ -401,121 +415,4 @@ woa_download <- function(variable,
     )
   }
   invisible(dests)
-}
-
-#' Load a WOA NetCDF file
-#'
-#' Load a WOA .nc file and select layers for a given statistical field.
-#' Returns a SpatRaster with layer names already following the
-#' `{variable}_depth={value}` convention used throughout this package
-#' (native to WOA NetCDFs).
-#'
-#' @param file_path Character. Path to a WOA .nc file.
-#' @param field Character. Statistical field to select. One of:
-#'   `"an"` (objectively analyzed climatology), `"mn"` (statistical mean),
-#'   `"dd"` (number of observations), `"sd"` (standard deviation),
-#'   `"se"` (standard error), `"oa"` (mean minus climatology),
-#'   `"gp"` (number of mean values within radius of influence),
-#'   `"sdo"` (objectively analyzed standard deviation),
-#'   `"sea"` (standard error of the analysis). See the WOA 2023 Product
-#'   Documentation:
-#'   <https://repository.library.noaa.gov/view/noaa/70581>
-#'
-#' @returns SpatRaster with standardized depth layer names. Wrap it with
-#'   [as_voxel()] to use it with the `SpatVoxel` functions ([volume()],
-#'   [mask()], [extract_to_area()], ...). The point, buffer and track
-#'   extraction functions take the netCDF file itself, not this raster.
-#' @examples
-#' # Build a small WOA-style NetCDF to demonstrate field selection.
-#' # Real files come from woa_download().
-#' nc <- file.path(tempdir(), "woa_demo.nc")
-#' demo <- terra::rast(nrows = 2, ncols = 2, nlyrs = 4,
-#'                     xmin = 0, xmax = 2, ymin = 0, ymax = 2,
-#'                     crs = "EPSG:4326")
-#' names(demo) <- c("t_an_depth=0", "t_an_depth=100",
-#'                  "t_sd_depth=0", "t_sd_depth=100")
-#' terra::values(demo) <- matrix(1:16, nrow = 4)
-#' terra::writeCDF(demo, nc, overwrite = TRUE, split = TRUE)
-#'
-#' # Objectively analyzed climatology (the default field)
-#' temp <- woa_load_nc(nc)
-#' names(temp)
-#'
-#' # Standard deviation layers from the same file
-#' names(woa_load_nc(nc, field = "sd"))
-#'
-#' unlink(nc)
-#'
-#' \dontrun{
-#' # Typical use on a downloaded file
-#' f <- woa_download("temperature", period = "annual", resolution = "1")
-#' temp <- woa_load_nc(f, field = "an")
-#' terra::plot(temp[["t_an_depth=0"]])
-#' }
-#'
-#' @export
-woa_load_nc <- function(file_path, field = "an") {
-  if (!file.exists(file_path)) {
-    stop("File not found: ", file_path)
-  }
-  r <- terra::rast(file_path)
-  
-  available_fields <- .woa_fields()$code
-  if (!field %in% available_fields) {
-    stop(
-      "field must be one of: ",
-      toString(available_fields),
-      ". See https://repository.library.noaa.gov/view/noaa/70581"
-    )
-  }
-
-  # WOA layers take the form of v_field_depth=123
-  # v is the abbreviated variable, which has to be one character
-  var_abr <- r[[1]] %>%
-    names() %>%
-    stringr::str_split_i(pattern = stringr::fixed("_"), 1)
-
-  # check that layer names follow convention
-  layer_name_split <- r[[1]] %>%
-    names() %>%
-    stringr::str_split(pattern = stringr::fixed("_"))
-  available_vars <- .woa_variables()$code
-  if (!layer_name_split[[1]][1] %in% available_vars) {
-    stop(
-      "check raster layer names. For WOA data, oceanographic variable ",
-      "one-letter code must be one of: ",
-      toString(available_vars),
-      ". See https://repository.library.noaa.gov/view/noaa/70581"
-    )
-  }
-  if (!layer_name_split[[1]][2] %in% available_fields) {
-    stop(
-      "check raster layer names. For WOA data, field code must be one of: ",
-      toString(available_fields),
-      ". See https://repository.library.noaa.gov/view/noaa/70581"
-    )
-  }
-
-  field_pattern <- paste0(var_abr, "_", field, "_depth=")
-  selected_names <- r %>%
-    names() %>%
-    stringr::str_subset(field_pattern)
-
-  # `field` is a valid WOA code, but this particular file may not carry it:
-  # NCEI ships some fields (e.g. "sea", "sdo") only for certain variables and
-  # periods. Report what the file does contain instead of letting the empty
-  # subset fail inside terra with "is.numeric(i) is not TRUE".
-  if (length(selected_names) == 0) {
-    present <- names(r) %>%
-      stringr::str_split_i(pattern = stringr::fixed("_"), 2) %>%
-      unique() %>%
-      sort()
-    stop(
-      "No layers for field '", field, "' in ", basename(file_path),
-      ". Fields present in this file: ", toString(present),
-      "."
-    )
-  }
-
-  r[[selected_names]]
 }

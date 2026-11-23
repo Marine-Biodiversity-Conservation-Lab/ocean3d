@@ -21,7 +21,6 @@ Imports:
     methods,
     rlang,
     sf (>= 1.1.0),
-    stringr,
     terra,
     rredlist,
     ncdf4,

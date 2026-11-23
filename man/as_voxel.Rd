@@ -12,7 +12,8 @@ depth, combined with \code{\link[terra:rast]{terra::rast()}}, which keeps their 
 each has them set; otherwise pass \code{depths}), or an existing
 \link[=SpatVoxel-class]{SpatVoxel}. This is how gridded data
 enter the \code{SpatVoxel} model: describe a netCDF file with \code{\link[=as_proxy]{as_proxy()}} and
-pass the proxy here, which reads one time step. netCDF paths aren't
+pass the proxy here, which reads one time step. Crop the proxy first with
+\code{terra::crop()} to read only part of the grid. netCDF paths aren't
 accepted directly.}
 
 \item{depths}{Optional numeric vector, one depth per layer, in metres. When
