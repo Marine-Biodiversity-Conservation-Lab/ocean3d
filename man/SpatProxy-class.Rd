@@ -27,7 +27,9 @@ longitude-latitude grid an extent in the other longitude convention (0 to
 the grid's longitudes (the
 antimeridian on a -180 to 180 grid) can't be read as one window and
 stops; crop each side separately. A \code{SpatVector3D} that crosses the
-180th meridian has an extent from -180 to 180, so it needs the same.}
+antimeridian has an extent from -180 to 180, so cropping with it keeps
+every longitude without stopping: crop each side separately too. A
+\code{SpatVector3D} with no features has no extent, so \code{crop()} stops.}
 
 \item{...}{Not used.}
 

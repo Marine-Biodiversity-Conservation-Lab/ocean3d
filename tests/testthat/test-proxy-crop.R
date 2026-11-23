@@ -182,8 +182,16 @@ test_that("crop() takes a SpatVector3D, so a buffer reads only its cells", {
   expect_equal(terra::values(as_voxel(cropped, time = 1)),
                terra::values(terra::crop(as_voxel(p, time = 1),
                                          terra::ext(buffer), snap = "out")))
-  # A point is an area of no width: the cell it falls in.
+  # A point is an area of no width: the cell it falls in, or both cells when
+  # it sits on their shared edge (grid cells run 4 to 5 and 5 to 6 here).
   expect_equal(terra::crop(p, detection)@axes$lon$centres, 4.5)
+  on_edge <- as_vector3d(data.frame(lon = 5, lat = 12.5, depth = 10))
+  expect_equal(terra::crop(p, on_edge)@axes$lon$centres, c(4.5, 5.5))
+  expect_equal(terra::crop(p, on_edge)@axes$lat$centres, 12.5)
+  # Off the grid, a point takes no cell.
+  expect_error(terra::crop(p, as_vector3d(data.frame(lon = 20, lat = 12.5,
+                                                     depth = 10))),
+               "doesn't overlap", class = "ocean3d_error_proxy_crop")
 })
 
 test_that("a WOA-style file reads through as_proxy(), crop(), as_voxel()", {

@@ -849,7 +849,9 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 #'   the grid's longitudes (the
 #'   antimeridian on a -180 to 180 grid) can't be read as one window and
 #'   stops; crop each side separately. A `SpatVector3D` that crosses the
-#'   180th meridian has an extent from -180 to 180, so it needs the same.
+#'   antimeridian has an extent from -180 to 180, so cropping with it keeps
+#'   every longitude without stopping: crop each side separately too. A
+#'   `SpatVector3D` with no features has no extent, so `crop()` stops.
 #' @param ... Not used.
 #' @export
 setMethod("crop", "SpatProxy", function(x, y, ...) {
@@ -950,15 +952,21 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
 # `wrap`, the range is also tried 360 degrees either way, so an area in the
 # other longitude convention finds its cells. An area whose edge only touches
 # a cell, within rounding (as after projecting it), doesn't take that cell.
-# The cells must be next to each other in the file, or one read window can't
-# hold them. Raised from here only, for both axes of crop().
+# An area with no width (a single point) takes the cell that contains it, or
+# both cells when it sits on their shared edge. The cells must be next to
+# each other in the file, or one read window can't hold them. Raised from
+# here only, for both axes of crop().
 .crop_span <- function(axis, low, high, label, wrap = FALSE) {
   lo <- pmin(axis$lower, axis$upper)
   hi <- pmax(axis$lower, axis$upper)
   tol <- .interval_tolerance(lo, hi)
   shifts <- if (wrap) c(0, 360, -360) else 0
   hit <- sort(unique(unlist(lapply(shifts, function(s) {
-    which(hi - tol > low + s & lo + tol < high + s)
+    if (high - low <= tol) {
+      which(lo - tol <= low + s & hi + tol >= high + s)
+    } else {
+      which(hi - tol > low + s & lo + tol < high + s)
+    }
   }))))
   problem <- if (!length(hit)) {
     glue::glue("doesn't overlap the grid's {label}s")
