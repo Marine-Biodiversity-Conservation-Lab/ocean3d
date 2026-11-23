@@ -105,7 +105,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    intersect_3d(.promote_to_voxel(x, y, bounds), y, ...)
+    promoted <- .promote_to_voxel(x, depths(y), bounds, depth_bounds(y))
+    intersect_3d(promoted, y, ...)
   }
 )
 
@@ -117,7 +118,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    intersect_3d(x, .promote_to_voxel(y, x, bounds), ...)
+    promoted <- .promote_to_voxel(y, depths(x), bounds, depth_bounds(x))
+    intersect_3d(x, promoted, ...)
   }
 )
 
@@ -187,7 +189,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    intersects_3d(.promote_to_voxel(x, y, bounds), y, ...)
+    promoted <- .promote_to_voxel(x, depths(y), bounds, depth_bounds(y))
+    intersects_3d(promoted, y, ...)
   }
 )
 
@@ -199,7 +202,8 @@ setMethod(
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
     .check_3d(y, "y")
-    intersects_3d(x, .promote_to_voxel(y, x, bounds), ...)
+    promoted <- .promote_to_voxel(y, depths(x), bounds, depth_bounds(x))
+    intersects_3d(x, promoted, ...)
   }
 )
 
@@ -341,7 +345,7 @@ setMethod(
     .check_3d(x, "x")
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
-    keep <- .promote_to_voxel(mask, x, bounds)
+    keep <- .promote_to_voxel(mask, depths(x), bounds, depth_bounds(x))
     as_voxel(.mask_plain(x, keep, ...), depth_bounds = depth_bounds(x))
   }
 )

@@ -667,6 +667,18 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
          call. = FALSE)
   }
 
+  .promote_to_voxel(x, depths, bounds, depth_bounds, values, profile, varname)
+}
+
+# Internal: the work of envelope_to_voxel() on inputs already checked. The
+# query verbs call it directly to put an envelope on a voxel's depth levels
+# (`depths(v)` and `depth_bounds(v)`), since they have checked the envelope
+# themselves and a second validity pass reads a large grid again. This
+# direction, not the reverse: envelope_to_voxel() quantizes, but
+# voxel_to_envelope() fills interior gaps, which would overstate an overlap.
+.promote_to_voxel <- function(x, depths, bounds, depth_bounds = NULL,
+                              values = NULL, profile = NULL,
+                              varname = "presence") {
   # A voxel's layer axis is one layer per depth, shallow to deep, so the
   # requested levels are put in that form up front. Given edges come along.
   if (!is.null(depth_bounds)) {

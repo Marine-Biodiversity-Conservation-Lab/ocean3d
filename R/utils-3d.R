@@ -101,15 +101,6 @@
   list(depths = dx, depth_bounds = if (is.null(bx)) by else bx)
 }
 
-# Internal: bring an envelope up to a voxel's depth levels. This direction, not
-# the reverse: envelope_to_voxel() quantizes, but voxel_to_envelope() fills
-# interior gaps, which would overstate an overlap.
-.promote_to_voxel <- function(e, v, bounds) {
-  # The envelope takes the voxel's edges when it carries them.
-  envelope_to_voxel(e, depths = depths(v), bounds = bounds,
-                    depth_bounds = depth_bounds(v))
-}
-
 # Internal: a 3D input must be one of the classes `class` allows, and satisfy
 # that class's validity rules, before it is read. The class boundary is the
 # contract: a raster that merely carries the right layer names isn't one of
