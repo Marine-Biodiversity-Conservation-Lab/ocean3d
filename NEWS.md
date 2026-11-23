@@ -266,9 +266,11 @@ Pass each depth once, for example with `unique(depths)`.
 * A `SpatVector3D` can be subset by feature with `x[i]`, by position,
   logical vector or feature ID, keeping the IDs and other columns, so a
   loop can take one shape at a time. `terra::ext()` gives its horizontal
-  extent and `terra::crs()` its CRS (always WGS84), so `terra::crop()` of a
-  `SpatProxy` takes a `SpatVector3D`, such as a buffer from `buffer_3d()`,
-  as the area to read (#115).
+  extent and `terra::crs()` its CRS (WGS84 for every `SpatVector3D`), so
+  `terra::crop()` of a `SpatProxy` takes a `SpatVector3D`, such as a
+  buffer from `buffer_3d()`, as the area to read. A shape that crosses
+  the antimeridian has an extent from -180 to 180, so cropping with it
+  keeps every longitude: crop each side separately (#115).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`, and read them with the new
