@@ -855,10 +855,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 #' @export
 setMethod("crop", "SpatProxy", function(x, y, ...) {
   if (inherits(y, c("sf", "sfc"))) y <- terra::vect(y)
-  # A voxel in memory is cropped as the raster it is.
-  if (identical(x@source$type, "voxel")) {
-    return(.voxel_to_proxy(terra::crop(x@source$voxel, y, snap = "out")))
-  }
+  # The area's extent in the proxy's CRS, for every source.
   if (!inherits(y, "SpatExtent")) {
     crs <- terra::crs(y)
     if (nzchar(crs) && nzchar(x@crs) && !terra::same.crs(crs, x@crs)) {
@@ -873,6 +870,16 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
                      wrap = TRUE),
     lat = .crop_span(x@axes$lat, e[["ymin"]], e[["ymax"]], "latitude")
   )
+  # A voxel in memory is cropped as the raster it is, to the edges of the
+  # same cells a file would give.
+  if (identical(x@source$type, "voxel")) {
+    edges <- lapply(names(spans), function(axis) {
+      keep <- seq(spans[[axis]][1L], spans[[axis]][2L])
+      range(x@axes[[axis]]$lower[keep], x@axes[[axis]]$upper[keep])
+    })
+    box <- terra::ext(c(edges[[1L]], edges[[2L]]))
+    return(.voxel_to_proxy(terra::crop(x@source$voxel, box)))
+  }
   # The cropped axes and lengths describe the smaller grid; the offset and
   # the file's own lengths let the reader find it in the file.
   out <- x

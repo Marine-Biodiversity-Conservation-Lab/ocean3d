@@ -102,6 +102,12 @@ test_that("series and voxel sources crop too", {
   expect_identical(cropped@source$type, "voxel")
   expect_equal(terra::values(as_voxel(cropped)),
                terra::values(terra::crop(v, area, snap = "out")))
+  # An area in another CRS is projected first, as for a file.
+  square <- terra::vect("POLYGON ((2 11, 5 11, 5 13, 2 13, 2 11))",
+                        crs = "EPSG:4326")
+  projected <- terra::crop(as_proxy(v), terra::project(square, "EPSG:3857"))
+  expect_equal(projected@axes$lon$centres, cropped@axes$lon$centres)
+  expect_equal(projected@axes$lat$centres, cropped@axes$lat$centres)
 })
 
 test_that("a WOA-style file reads through as_proxy(), crop(), as_voxel()", {
