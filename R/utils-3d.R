@@ -197,7 +197,9 @@
         "raster, wrap it with as_voxel() so its depth axis is used."
       ), class = "ocean3d_error_footprint_layers", call = NULL)
     }
-    .check_same_grid(template, x)
+    # The 3D side is `x` unless the inputs were swapped to put it first.
+    grid <- if (arg == "x") "`y`" else "`x`"
+    .check_same_grid(x, template, glue::glue("`{arg}`"), grid)
     !is.na(x)
   } else {
     got <- paste(class(x), collapse = "/")

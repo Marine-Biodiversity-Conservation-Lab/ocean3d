@@ -480,6 +480,9 @@ test_that("the 3D verbs reject input they cannot compare", {
          pattern = "`y` does not align with `x`", class = mismatch),
     list(call = function() intersect_3d(a, other_crs),
          pattern = "`y` has a different CRS than `x`", class = mismatch),
+    # a 2D object given first is named as the caller passed it
+    list(call = function() intersect_3d(small, a),
+         pattern = "`x` does not align with `y`", class = mismatch),
     # mask() names the offending argument
     list(call = function() mask(field, a_2x2),
          pattern = "`mask` does not align with `x`", class = mismatch),
