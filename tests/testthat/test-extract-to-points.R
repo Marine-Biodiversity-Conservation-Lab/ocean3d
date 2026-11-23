@@ -723,7 +723,8 @@ test_that("source handling rejects unsupported inputs and missing paths", {
   expect_error(.as_netcdf_sources(list(42)), "Unsupported")
   expect_error(
     .open_source(list(type = "path", source = tempfile())),
-    "netCDF file does not exist"
+    "netCDF file does not exist",
+    class = "ocean3d_error_netcdf_missing"
   )
 })
 
