@@ -60,7 +60,6 @@ reference:
   contents:
   - load_gebco_bathymetry
   - woa_download
-  - woa_load_nc
   - woa_cache_dir
   - woa_cache_clear
   - gfw_effort_to_raster
@@ -88,5 +87,6 @@ articles:
   - articles/bangladesh-fisheries-3d-overlap
   - depth-levels
   - articles/gfw-fishing-effort-3d
+  - articles/working-with-woa
   - articles/woa-environmental-extraction-single-species
 
