@@ -838,39 +838,18 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
 #' terra::values(voxel_to_envelope(edged))
 #' @export
 voxel_to_envelope <- function(v, fun = function(x) !is.na(x)) {
-  if (!is.function(fun)) {
-    stop("`fun` must be a function returning TRUE/FALSE for a cell value. ",
-         "The former \"extent\" behaviour is the default, ",
-         "function(x) !is.na(x).",
-         call. = FALSE)
-  }
   if (!is(v, "SpatVoxel")) {
     stop("`v` must be a SpatVoxel object.")
   }
   .check_3d(v, "v")
   depths <- depths(v)
   n_cells <- terra::ncell(v)
-  n_depths <- length(depths)
 
   # Hit matrix (cells x depths): does `fun` hold for this cell at this depth?
-  # The stack is read once and `fun` is still applied one depth layer at a
-  # time, so a predicate that reduces over a layer (e.g. `\(x) x > mean(x)`)
-  # keeps its per-depth meaning. `fun` is evaluated on the values rather than
-  # on the SpatRaster so that any ordinary R predicate works, not only
-  # terra-aware ones.
-  vals <- terra::values(v)
-  hit <- matrix(FALSE, nrow = n_cells, ncol = n_depths)
-  for (i in seq_len(n_depths)) {
-    h <- as.logical(fun(vals[, i]))
-    if (length(h) != n_cells) {
-      stop("`fun` must return one TRUE/FALSE per cell value; got ",
-           length(h), " values for ", n_cells, " cells.",
-           call. = FALSE)
-    }
-    h[is.na(h)] <- FALSE
-    hit[, i] <- h
-  }
-  rm(vals)
+  # .voxel_occupancy() applies `fun` one depth layer at a time, so a predicate
+  # that reduces over a layer (e.g. `\(x) x > mean(x)`) keeps its per-depth
+  # meaning, and NA counts as FALSE.
+  hit <- terra::values(.voxel_occupancy(v, fun), mat = TRUE) == 1
 
   # `SpatVoxel` validity guarantees depths are non-NA and sorted shallow to
   # deep, so each row's first and last TRUE column are exactly the envelope

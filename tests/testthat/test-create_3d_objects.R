@@ -332,7 +332,7 @@ test_that("voxel_to_envelope() rejects a non-SpatVoxel or a non-function fun", {
   expect_s4_class(as_voxel(not_voxel), "SpatVoxel")
 
   v <- as_voxel(make_multidepth_rast())
-  expect_error(voxel_to_envelope(v, "extent"), "must be a function")
+  expect_error(voxel_to_envelope(v, "extent"), "`fun` must take a vector")
 })
 
 test_that("voxel_to_envelope() bounds the depths where `fun` holds", {
