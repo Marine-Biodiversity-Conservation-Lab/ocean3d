@@ -454,6 +454,9 @@ test_that("the 3D verbs reject input they cannot compare", {
   a_2x2 <- make_range_rast(rep(0, 4), rep(100, 4), ncol = 2, nrow = 2)
   fp <- make_grid(vals = rep(1, 9))
   small <- make_grid(vals = rep(1, 4), ncol = 2, nrow = 2)
+  other_crs <- make_grid(vals = rep(1, 9))
+  terra::crs(other_crs) <- "EPSG:3857"
+  mismatch <- "ocean3d_error_grid_mismatch"
   t2 <- make_voxel(cbind(c(5, 5, 5), c(5, 5, 5)), c(0, 100),
                    ncol = 3, nrow = 1, varname = "t")
   p3 <- make_voxel(cbind(c(1, 1, 1), c(1, 1, 1), c(1, 1, 1)), c(0, 100, 200),
@@ -469,12 +472,17 @@ test_that("the 3D verbs reject input they cannot compare", {
     # voxels on different depth levels
     list(call = function() intersect_3d(t2, p3), pattern = "same depth levels"),
     # inputs on different grids
-    list(call = function() intersect_3d(a, a_2x2), pattern = "same grid"),
-    list(call = function() intersects_3d(a, a_2x2), pattern = "same grid"),
-    list(call = function() intersect_3d(a, small), pattern = "same grid"),
+    list(call = function() intersect_3d(a, a_2x2),
+         pattern = "`y` does not align with `x`", class = mismatch),
+    list(call = function() intersects_3d(a, a_2x2),
+         pattern = "`y` does not align with `x`", class = mismatch),
+    list(call = function() intersect_3d(a, small),
+         pattern = "`y` does not align with `x`", class = mismatch),
+    list(call = function() intersect_3d(a, other_crs),
+         pattern = "`y` has a different CRS than `x`", class = mismatch),
     # mask() names the offending argument
     list(call = function() mask(field, a_2x2),
-         pattern = "`x` and `mask` must be on the same grid"),
+         pattern = "`mask` does not align with `x`", class = mismatch),
     # input that cannot be read as a footprint
     list(call = function() intersect_3d(fp, fp),
          pattern = "neither `x` nor `y`"),
@@ -486,7 +494,7 @@ test_that("the 3D verbs reject input they cannot compare", {
          pattern = "single-layer footprint")
   )
   for (case in cases) {
-    expect_error(case$call(), case$pattern,
+    expect_error(case$call(), case$pattern, class = case$class,
                  label = paste(deparse(body(case$call)), collapse = " "))
   }
 })

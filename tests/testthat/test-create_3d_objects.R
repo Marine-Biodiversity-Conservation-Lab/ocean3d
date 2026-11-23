@@ -113,17 +113,19 @@ test_that("as_envelope() says how a per-cell limit is off the grid", {
   terra::crs(other_crs) <- "EPSG:3857"
   cases <- list(
     list(limit = c(terra::rast(fp, vals = 100), terra::rast(fp, vals = 200)),
-         pattern = "`depth_max` must be a single-layer SpatRaster; got 2"),
+         pattern = "`depth_max` must be a single-layer SpatRaster; got 2",
+         class = "ocean3d_error_grid_value"),
     list(limit = other_crs,
-         pattern = "`depth_max` has a different CRS than `x`"),
+         pattern = "`depth_max` has a different CRS than `x`",
+         class = "ocean3d_error_grid_mismatch"),
     list(limit = terra::rast(nrows = 3, ncols = 3, xmin = 0, xmax = 2,
                              ymin = 0, ymax = 2, vals = 100),
-         pattern = "`depth_max` does not align with `x`")
+         pattern = "`depth_max` does not align with `x`",
+         class = "ocean3d_error_grid_mismatch")
   )
   for (case in cases) {
-    err <- expect_error(as_envelope(fp, 0, case$limit),
-                        class = "ocean3d_error_grid_value")
-    expect_match(conditionMessage(err), case$pattern, fixed = TRUE)
+    expect_error(as_envelope(fp, 0, case$limit), case$pattern, fixed = TRUE,
+                 class = case$class)
   }
 })
 
@@ -440,7 +442,7 @@ test_that("envelope_to_voxel() rejects invalid input", {
          args = list(x = good_envel, depths = c(0, 100),
                      values = terra::rast(nrows = 3, ncols = 3)),
          pattern = "`values` does not align with `x`",
-         class = "ocean3d_error_grid_value"),
+         class = "ocean3d_error_grid_mismatch"),
     list(label = "multi-layer values",
          args = list(x = good_envel, depths = c(0, 100),
                      values = c(terra::rast(fp), terra::rast(fp))),
@@ -832,6 +834,7 @@ test_that("envelope_to_voxel() round-trips a voxel built on the same depths", {
 test_that("vect_to_envelope() rejects unusable input", {
   input <- "ocean3d_error_envelope_input"
   grid <- "ocean3d_error_grid_value"
+  mismatch <- "ocean3d_error_grid_mismatch"
   # a raster that doesn't overlap make_polygon()
   elsewhere <- terra::rast(nrows = 5, ncols = 5, xmin = 5, xmax = 10,
                            ymin = 5, ymax = 10, crs = "EPSG:4326")
@@ -860,11 +863,11 @@ test_that("vect_to_envelope() rejects unusable input", {
          pattern = "The polygons don't overlap any cell of `template`"),
     list(args = list(poly, mercator, 0, 10), class = input,
          pattern = "`polygon` and `template` have different CRS."),
-    list(args = list(poly, tmpl, 0, list(10, bad_res)), class = grid,
+    list(args = list(poly, tmpl, 0, list(10, bad_res)), class = mismatch,
          pattern = "does not align with `template`"),
-    list(args = list(poly, tmpl, 0, list(10, bad_ext)), class = grid,
+    list(args = list(poly, tmpl, 0, list(10, bad_ext)), class = mismatch,
          pattern = "does not align with `template`"),
-    list(args = list(poly, tmpl, 0, list(10, bad_crs)), class = grid,
+    list(args = list(poly, tmpl, 0, list(10, bad_crs)), class = mismatch,
          pattern = "different CRS than `template`"),
     list(args = list(poly, tmpl, list(), 10), class = input,
          pattern = "`depth_min` is empty"),

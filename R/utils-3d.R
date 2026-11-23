@@ -17,14 +17,25 @@
   terra::cellSize(x[[1]], unit = "km")
 }
 
-# Internal: two domains can only be combined cell by cell if they are on the
-# same grid. Nothing upstream guarantees this -- the old code took cell areas
-# from the first argument and silently reused them for the second.
-.check_same_grid <- function(x, y, names = c("x", "y")) {
-  if (!terra::compareGeom(x, y, stopOnError = FALSE)) {
-    stop("`", names[1], "` and `", names[2], "` must be on the same grid ",
-         "(CRS, extent, resolution). Project or resample one onto the other ",
-         "first.", call. = FALSE)
+# Internal: two rasters can only be combined cell by cell if they are on the
+# same grid. Checks `x` against the grid of `template`, naming them with the
+# labels `arg` and `grid` (with backticks, e.g. "`mask`"). A CRS mismatch is
+# told apart from an extent or resolution mismatch, since the fix differs
+# (project, or resample). The one producer of `ocean3d_error_grid_mismatch`,
+# for the query verbs, the constructors (through .grid_value()) and the 2D
+# side of a query (.footprint()).
+.check_same_grid <- function(x, template, arg = "`y`", grid = "`x`") {
+  problem <- if (!terra::same.crs(x, template)) {
+    "has a different CRS than {grid}. Project it onto that grid first."
+  } else if (!isTRUE(terra::compareGeom(x, template, crs = FALSE,
+                                        stopOnError = FALSE,
+                                        messages = FALSE))) {
+    paste("does not align with {grid}; its extent or resolution differs.",
+          "Resample it onto that grid first.")
+  }
+  if (!is.null(problem)) {
+    rlang::abort(glue::glue("{arg} ", problem),
+                 class = "ocean3d_error_grid_mismatch", call = NULL)
   }
   invisible(TRUE)
 }

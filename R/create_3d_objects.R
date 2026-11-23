@@ -105,26 +105,18 @@ as_envelope <- function(x, depth_min, depth_max) {
 # each value or layer is one more constraint) a raster may have any number of
 # layers and a number may be a vector. Returns the number, or with
 # `fill = TRUE` a layer on `template`'s grid holding it; a raster is returned
-# as it is. A CRS mismatch is told apart from an extent or resolution
-# mismatch, since the fix differs (project, or resample).
+# as it is, once .check_same_grid() has checked its grid.
 .grid_value <- function(value, template, arg, layers = 1, grid = "`x`",
                         fill = FALSE, several = FALSE) {
   layers <- unique(layers)
-  problem <- if (methods::is(value, "SpatRaster")) {
+  is_raster <- methods::is(value, "SpatRaster")
+  problem <- if (is_raster) {
     n <- terra::nlyr(value)
     if (!several && !n %in% layers) {
       counts <- glue::glue_collapse(layers, sep = ", ", last = " or ")
       want <- if (identical(layers, 1)) "a single-layer SpatRaster" else
         glue::glue("a SpatRaster with {counts} layers")
       glue::glue("must be {want}; got {n} layers")
-    } else if (!terra::same.crs(value, template)) {
-      glue::glue("has a different CRS than {grid}. Project it onto that grid ",
-                 "first")
-    } else if (!isTRUE(terra::compareGeom(value, template, crs = FALSE,
-                                          stopOnError = FALSE,
-                                          messages = FALSE))) {
-      glue::glue("does not align with {grid}; its extent or resolution ",
-                 "differs. Resample it onto that grid first")
     }
   } else if (!is.numeric(value) || anyNA(value) || length(value) == 0 ||
                (!several && length(value) != 1)) {
@@ -140,6 +132,7 @@ as_envelope <- function(x, depth_min, depth_max) {
     rlang::abort(glue::glue("{arg} {problem}."),
                  class = "ocean3d_error_grid_value", call = NULL)
   }
+  if (is_raster) .check_same_grid(value, template, arg, grid)
   if (fill && is.numeric(value)) {
     # remove the 3D class
     grid_of <- terra::rast(methods::as(template, "SpatRaster"), nlyrs = 1)
