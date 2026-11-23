@@ -189,12 +189,13 @@ Pass each depth once, for example with `unique(depths)`.
 ## New features
 
 * New `summarise_3d()` summarises a `SpatVoxel`'s values across all its
-  cells and depth levels at once (#116): mean, sd, min, max and median, each
-  value weighted by the volume of its cell and depth level (`weighting =
-  "volume"`, the default) or counted once (`"equal"`). It takes one voxel,
-  typically `mask(v, shape)` for the values inside a shape, or a list of
-  voxels, one per time step, and returns one row per voxel, or one per depth
-  level and voxel with `by = "depth"`, with `n`, the number of values.
+  cells and depth levels at once (#116): mean, sd, min, max and median. By
+  default each value is weighted by the volume of its cell and depth level
+  (`weighting = "volume"`); `weighting = "equal"` counts each value once.
+  `x` is one voxel, typically `mask(v, shape)` for the values inside a
+  shape, or a list of voxels, one per time step. The result has one row per
+  voxel, or one per depth level and voxel with `by = "depth"`, and a column
+  `n` with the number of values in each row.
 * `volume()` gains `per_level` (#116): `volume(v, per_cell = TRUE, per_level
   = TRUE)` returns a `SpatVoxel` with the volume of each cell at each depth
   level, in km³, `NA` where the level is unoccupied. Its layers sum to
