@@ -156,9 +156,9 @@ setValidity("SpatProxy", function(object) {
 #'
 #' @inheritSection SpatProxy-class Experimental
 #'
-#' @param x A netCDF file path, several paths for a series of files, a
-#'   connection opened with [ncdf4::nc_open()] (left open), or a
-#'   [SpatVoxel-class]. `var` and the dimension arguments apply to files.
+#' @param x A netCDF file path or URL (e.g. OPeNDAP or NCZarr), several
+#'   paths for a series of files, a connection opened with
+#'   [ncdf4::nc_open()] (left open), or a [SpatVoxel-class]. `var` and the dimension arguments apply to files.
 #' @param var Name of the variable. `NULL` (the default) detects it when the
 #'   file holds exactly one data variable.
 #' @param lon_dim,lat_dim,depth_dim,time_dim Names of the dimensions for each
