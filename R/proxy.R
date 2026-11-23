@@ -846,9 +846,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 #'   ranges overlap the area's extent, still without reading values, so
 #'   [as_voxel()] then reads only those cells from the file. A polygon is cut
 #'   to its extent; to keep only the cells inside it, mask the voxel with it
-#'   afterwards. An area in another CRS is projected first, and an extent in
-#'   the other longitude convention (0 to 360 or -180 to 180) finds its cells
-#'   too. An area that crosses the edge of the grid's longitudes (the
+#'   afterwards. An area in another CRS is projected first, and on a
+#'   longitude-latitude grid an extent in the other longitude convention (0 to
+#'   360 or -180 to 180) finds its cells too. An area that crosses the edge of
+#'   the grid's longitudes (the
 #'   antimeridian on a -180 to 180 grid) can't be read as one window and
 #'   stops; crop each side separately.
 #' @param ... Not used.
@@ -859,15 +860,26 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
   if (!inherits(y, "SpatExtent")) {
     crs <- terra::crs(y)
     if (nzchar(crs) && nzchar(x@crs) && !terra::same.crs(crs, x@crs)) {
-      y <- terra::project(terra::as.polygons(terra::ext(y), crs = crs),
-                          x@crs)
+      # Points along the box's edges, so the projected extent also reaches
+      # where a curved projection (a polar one, say) bends an edge beyond
+      # its corners.
+      e <- as.vector(terra::ext(y))
+      box <- terra::densify(
+        terra::as.polygons(terra::ext(y), crs = crs),
+        interval = max(e[["xmax"]] - e[["xmin"]], e[["ymax"]] - e[["ymin"]]) /
+          100,
+        flat = TRUE
+      )
+      y <- terra::project(box, x@crs)
     }
     y <- terra::ext(y)
   }
   e <- as.vector(y)
+  # Longitudes wrap only on a longitude-latitude grid, not in map units.
+  lonlat <- nzchar(x@crs) && terra::is.lonlat(x@crs)
   spans <- list(
     lon = .crop_span(x@axes$lon, e[["xmin"]], e[["xmax"]], "longitude",
-                     wrap = TRUE),
+                     wrap = lonlat),
     lat = .crop_span(x@axes$lat, e[["ymin"]], e[["ymax"]], "latitude")
   )
   # A voxel in memory is cropped as the raster it is, to the edges of the

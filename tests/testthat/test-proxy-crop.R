@@ -54,6 +54,26 @@ test_that("crop() takes rasters, vectors and sf, in any CRS", {
     expect_equal(got$lon$centres, want$lon$centres, label = kind)
     expect_equal(got$lat$centres, want$lat$centres, label = kind)
   }
+
+  # In a polar projection, the top edge of a box bends north between its
+  # corners: the corners alone reach 77 N, the edge 80.8 N.
+  arctic <- make_grid_file(lon = seq(-89.5, -0.5, by = 1),
+                           lat = seq(65.5, 84.5, by = 1), depth = 5, time = 0)
+  on.exit(unlink(arctic), add = TRUE)
+  polar <- terra::as.polygons(terra::ext(-1e6, 1e6, -2e6, -1e6),
+                              crs = "EPSG:3413")
+  rows <- terra::crop(as_proxy(arctic, var = "temp"), polar)@axes$lat$centres
+  expect_equal(max(rows), 80.5)
+})
+
+test_that("crop() of a voxel in map units doesn't wrap longitudes", {
+  # 100 m cells from 0 to 1000 m: x = 100 to 200 is one column, not also the
+  # columns 360 m away.
+  r <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 1000, ymin = 0,
+                   ymax = 1000, crs = "EPSG:3857", vals = 1)
+  v <- as_voxel(r, depths = 0)
+  got <- terra::crop(as_proxy(v), terra::ext(100, 200, 0, 1000))
+  expect_equal(got@axes$lon$centres, 150)
 })
 
 test_that("crop() matches longitudes across conventions and stops cleanly", {

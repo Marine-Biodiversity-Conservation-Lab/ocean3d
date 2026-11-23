@@ -20,9 +20,10 @@ sf object). The result keeps the cells whose longitude and latitude
 ranges overlap the area's extent, still without reading values, so
 \code{\link[=as_voxel]{as_voxel()}} then reads only those cells from the file. A polygon is cut
 to its extent; to keep only the cells inside it, mask the voxel with it
-afterwards. An area in another CRS is projected first, and an extent in
-the other longitude convention (0 to 360 or -180 to 180) finds its cells
-too. An area that crosses the edge of the grid's longitudes (the
+afterwards. An area in another CRS is projected first, and on a
+longitude-latitude grid an extent in the other longitude convention (0 to
+360 or -180 to 180) finds its cells too. An area that crosses the edge of
+the grid's longitudes (the
 antimeridian on a -180 to 180 grid) can't be read as one window and
 stops; crop each side separately.}
 
