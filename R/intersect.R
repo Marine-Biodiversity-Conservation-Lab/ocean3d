@@ -130,7 +130,7 @@ setMethod(
   function(x, y, ...) {
     .no_extra_args(...)
     .check_3d(x, "x")
-    fp <- .footprint_of(y, x)
+    fp <- terra::ifel(.footprint(y, x), 1, NA)
     # remove the 3D class
     as_envelope(terra::mask(methods::as(x, "SpatRaster"), fp))
   }
@@ -142,7 +142,7 @@ setMethod(
   "intersect_3d", c("SpatVoxel", "ANY"),
   function(x, y) {
     .check_3d(x, "x")
-    fp <- .footprint_of(y, x)
+    fp <- terra::ifel(.footprint(y, x), 1, NA)
     occ <- terra::mask(.voxel_occupancy(x), fp, updatevalue = 0)
     .presence_voxel(occ, depths(x), depth_bounds(x))
   }
@@ -199,7 +199,7 @@ setMethod(
     overlap_max <- terra::ifel(x_max < y_max, x_max, y_max)
     # Strict `>`: intervals that only touch do not intersect.
     .intersects_answer(overlap_max > overlap_min,
-                       .envelope_present(x), .envelope_present(y))
+                       .footprint(x), .footprint(y))
   }
 )
 
@@ -251,8 +251,8 @@ setMethod(
   function(x, y, ...) {
     .no_extra_args(...)
     .check_3d(x, "x")
-    present_x <- .envelope_present(x)
-    present_y <- !is.na(.footprint_of(y, x))
+    present_x <- .footprint(x)
+    present_y <- .footprint(y, x)
     .intersects_answer(present_x & present_y, present_x, present_y)
   }
 )
@@ -263,8 +263,8 @@ setMethod(
   "intersects_3d", c("SpatVoxel", "ANY"),
   function(x, y) {
     .check_3d(x, "x")
-    present_x <- sum(.voxel_occupancy(x)) > 0
-    present_y <- !is.na(.footprint_of(y, x))
+    present_x <- .footprint(x)
+    present_y <- .footprint(y, x)
     .intersects_answer(present_x & present_y, present_x, present_y)
   }
 )
@@ -439,7 +439,7 @@ setMethod(
   function(x, mask, ...) {
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
-    terra::mask(x, .footprint(mask), ...)
+    terra::mask(x, terra::ifel(.footprint(mask), 1, NA), ...)
   }
 )
 
@@ -450,7 +450,7 @@ setMethod(
   function(x, mask, ...) {
     .check_3d(mask, "mask")
     .check_same_grid(x, mask, c("x", "mask"))
-    terra::mask(x, .footprint(mask), ...)
+    terra::mask(x, terra::ifel(.footprint(mask), 1, NA), ...)
   }
 )
 
