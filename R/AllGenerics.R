@@ -156,15 +156,25 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'     `sfc` object. The polygons are rasterised onto the 3D object's grid. A
 #'     cell is inside when a polygon touches it. Polygons in another CRS are
 #'     projected first.}
-#'   \item{An envelope or voxel and [SpatVector3D-class] polygons}{The
-#'     polygons are first put on the envelope's or voxel's grid with
-#'     [vector3d_to_envelope()], then compared as an envelope. Each cell a
-#'     polygon touches gets its depth range; where polygons overlap, a cell
-#'     gets the shallowest top and the deepest bottom, so a depth gap between
-#'     two polygons over one cell is filled. The polygons' time intervals are
-#'     dropped, with a message. Polygons that miss the grid, or a set with no
-#'     polygons, give an empty result. Points and lines aren't supported yet;
-#'     [buffer_3d()] turns them into polygons.}
+#'   \item{An envelope and [SpatVector3D-class] polygons}{The polygons are
+#'     first put on the envelope's grid with [vector3d_to_envelope()], then
+#'     compared as an envelope. Each cell a polygon touches gets its depth
+#'     range; where polygons overlap, a cell gets the shallowest top and the
+#'     deepest bottom, so a depth gap between two polygons over one cell is
+#'     filled.}
+#'   \item{A voxel and [SpatVector3D-class] polygons}{The polygons are first
+#'     put on the voxel's grid and depth levels with [vector3d_to_voxel()],
+#'     one level at a time, then compared as a voxel. A depth gap between two
+#'     polygons over one cell stays empty. `bounds` places the slabs when the
+#'     voxel has no depth edges.}
+#' }
+#'
+#' With polygons, the time intervals are dropped, with a message. Polygons
+#' that miss the grid, or a set with no polygons, give an empty result.
+#' Points and lines aren't supported yet; [buffer_3d()] turns them into
+#' polygons.
+#'
+#' \describe{
 #'   \item{Two sets of [SpatVector3D-class] polygons}{Each pair of polygons,
 #'     one from `x` and one from `y`, whose outlines, depth ranges and times
 #'     overlap gives one polygon: the shared outline (as
@@ -197,11 +207,12 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'   accepted; load them with terra and wrap them with [as_voxel()] first.
 #' @param ... Arguments for the voxel methods. They are an error when both
 #'   inputs are envelopes.
-#' @param bounds Only when one input is an envelope and the other a voxel. How
-#'   the envelope is placed on the voxel's depth levels: `"midpoint"`
-#'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
-#'   carries its own depth edges (see [SpatVoxel-class]). To measure the
-#'   result, pass the same `bounds` to [volume()].
+#' @param bounds Only when one input is a voxel and the other an envelope or
+#'   [SpatVector3D-class] polygons. How the envelope or polygons are placed
+#'   on the voxel's depth levels: `"midpoint"` (default) or `"top"`. See
+#'   [envelope_to_voxel()]. Not used when the voxel carries its own depth
+#'   edges (see [SpatVoxel-class]). To measure the result, pass the same
+#'   `bounds` to [volume()].
 #'
 #' @returns [SpatVector3D-class] polygons when both inputs are polygons. A
 #'   [SpatEnvelope-class] when both inputs are envelopes, or when one
@@ -290,7 +301,8 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' do not overlap. When `y` is a 2D footprint or polygons there is no depth
 #' axis to compare, so the test is only whether both are present.
 #' [SpatVector3D-class] polygons have depths, so they are compared as an
-#' envelope, after being put on the 3D object's grid as in [intersect_3d()].
+#' envelope or a voxel, after being put on the 3D object's grid as in
+#' [intersect_3d()].
 #'
 #' Two sets of [SpatVector3D-class] polygons have no grid to answer on, so
 #' the answer is a list instead, as [sf::st_intersects()] gives in 2D: for
