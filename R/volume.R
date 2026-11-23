@@ -27,10 +27,24 @@
   methods::as(vol_rast, "SpatRaster")  # remove the 3D class
 }
 
+# Internal: the one producer of `ocean3d_error_volume_per_level` for shapes
+# without depth levels, from the envelope and polygon methods.
+.no_levels <- function(per_level, what) {
+  if (per_level) {
+    rlang::abort(glue::glue(
+      "{what} have no depth levels, so `per_level = TRUE` doesn't apply. ",
+      "Put them on a voxel's levels with envelope_to_voxel() first."
+    ), class = "ocean3d_error_volume_per_level", call = NULL)
+  }
+  invisible(TRUE)
+}
+
 #' @rdname volume
 #' @export
-setMethod("volume", "SpatEnvelope", function(x, per_cell = FALSE, ...) {
+setMethod("volume", "SpatEnvelope", function(x, per_cell = FALSE,
+                                             per_level = FALSE, ...) {
   .no_extra_args(...)
+  .no_levels(per_level, "Envelopes")
   .check_3d(x, "x")
 
   depth_extent <- .envelope_layer(x, "depth_max") -
@@ -45,22 +59,30 @@ setMethod("volume", "SpatEnvelope", function(x, per_cell = FALSE, ...) {
 #' @export
 setMethod(
   "volume", "SpatVoxel",
-  function(x, per_cell = FALSE, bounds = c("midpoint", "top")) {
+  function(x, per_cell = FALSE, per_level = FALSE,
+           bounds = c("midpoint", "top")) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
 
     occ <- .voxel_occupancy(x)
     slab <- .depth_slabs(depths(x), bounds, depth_bounds(x))
-    # Summing thickness over occupied levels only is what makes an interior
-    # gap cost volume, unlike voxel_to_envelope() plus the envelope formula.
+    # Each occupied level's volume is its slab thickness times the cell area.
+    # Summing over occupied levels only is what makes an interior gap cost
+    # volume, unlike voxel_to_envelope() plus the envelope formula.
     thickness_m <- slab$upper - slab$lower
     # The raster stays on the left of the operator: terra mishandles
     # `numeric <op> SpatRaster`. The vector is recycled layer-wise.
-    occupied_m <- sum(occ * thickness_m)
-    # Occupancy is 0 at unoccupied levels, so a cell with none would read 0;
-    # masking makes it NA, as outside an envelope.
-    vol_rast <- terra::ifel(.footprint(x),
-                            .cell_area_km2(x) * (occupied_m / 1000), NA)
+    per_level_km3 <- .cell_area_km2(x) * (occ * thickness_m) / 1000
+    if (per_level) {
+      # Occupancy is 0 at unoccupied levels; NA there, as everywhere a shape
+      # is absent (SPEC.md, "Absent is NA").
+      per_level_km3 <- terra::mask(per_level_km3, occ, maskvalues = 0)
+      return(as_voxel(per_level_km3, depths = depths(x), varname = "volume",
+                      depth_bounds = depth_bounds(x)))
+    }
+    # A cell with no occupied level would read 0; masking makes it NA, as
+    # outside an envelope.
+    vol_rast <- terra::ifel(.footprint(x), sum(per_level_km3), NA)
 
     .volume_result(vol_rast, per_cell)
   }
@@ -74,8 +96,10 @@ setMethod(
 # Points and lines have no volume.
 #' @rdname volume
 #' @export
-setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {
+setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE,
+                                             per_level = FALSE, ...) {
   .no_extra_args(...)
+  .no_levels(per_level, "Polygons")
   if (x@type != "polygons") {
     rlang::abort(glue::glue(
       "These are {x@type}, which have no volume. Volume is defined for ",
@@ -100,4 +124,6 @@ setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {
 #' @rdname volume
 #' @export
 setMethod("volume", "SpatRaster",
-          function(x, per_cell = FALSE, ...) .check_3d(x, "x"))
+          function(x, per_cell = FALSE, per_level = FALSE, ...) {
+            .check_3d(x, "x")
+          })
