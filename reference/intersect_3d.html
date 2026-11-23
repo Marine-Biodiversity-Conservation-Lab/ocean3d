@@ -86,6 +86,21 @@ values where the other is present, use <code><a href="https://rspatial.github.io
 <span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'ANY,ANY'</span></span>
+<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S4 method for class 'SpatVector3D,SpatEnvelope'</span></span>
+<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S4 method for class 'SpatVector3D,SpatVoxel'</span></span>
+<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S4 method for class 'SpatEnvelope,SpatVector3D'</span></span>
+<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S4 method for class 'SpatVoxel,SpatVector3D'</span></span>
+<span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S4 method for class 'SpatVector3D,SpatVector3D'</span></span>
 <span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -94,9 +109,10 @@ values where the other is present, use <code><a href="https://rspatial.github.io
 
 
 <dl><dt id="arg-x-y">x, y<a class="anchor" aria-label="anchor" href="#arg-x-y"></a></dt>
-<dd><p>The two objects. At least one must be a <a href="SpatEnvelope-class.html">SpatEnvelope</a> or
-a <a href="SpatVoxel-class.html">SpatVoxel</a>. The other can be either of those, a single-layer
-<code>SpatRaster</code> footprint, or polygons (<code>SpatVector</code>, <code>sf</code>, <code>sfc</code>). Rasters
+<dd><p>The two objects: two of <a href="SpatEnvelope-class.html">SpatEnvelope</a>,
+<a href="SpatVoxel-class.html">SpatVoxel</a> and <a href="SpatVector3D-class.html">SpatVector3D</a> polygons, in any pairing, or
+an envelope or voxel with a 2D object (a single-layer <code>SpatRaster</code>
+footprint or 2D polygons: <code>SpatVector</code>, <code>sf</code>, <code>sfc</code>). Rasters
 must share one grid (CRS, extent, resolution). netCDF files aren't
 accepted; load them with terra and wrap them with <code><a href="as_voxel.html">as_voxel()</a></code> first.</p></dd>
 
@@ -116,15 +132,18 @@ result, pass the same <code>bounds</code> to <code><a href="volume.html">volume(
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A <a href="SpatEnvelope-class.html">SpatEnvelope</a> when both inputs are envelopes, or when one
-is an envelope and the other is 2D. Otherwise a <a href="SpatVoxel-class.html">SpatVoxel</a> of
+    <p><a href="SpatVector3D-class.html">SpatVector3D</a> polygons when both inputs are polygons. A
+<a href="SpatEnvelope-class.html">SpatEnvelope</a> when both inputs are envelopes, or when one
+is an envelope and the other is 2D or <a href="SpatVector3D-class.html">SpatVector3D</a> polygons.
+Otherwise a <a href="SpatVoxel-class.html">SpatVoxel</a> of
 presence. Either is on the grid of the 3D input.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>At least one of <code>x</code> and <code>y</code> must be a 3D object: a <a href="SpatEnvelope-class.html">SpatEnvelope</a> or
-a <a href="SpatVoxel-class.html">SpatVoxel</a>. The other can be a 3D object too, or a 2D object. A 2D
-object restricts the result horizontally and leaves its depths alone.</p>
+    <p>At least one of <code>x</code> and <code>y</code> must be a 3D object: a <a href="SpatEnvelope-class.html">SpatEnvelope</a>, a
+<a href="SpatVoxel-class.html">SpatVoxel</a> or <a href="SpatVector3D-class.html">SpatVector3D</a> polygons. The other can be a 3D
+object too, or, with an envelope or voxel, a 2D object. A 2D object
+restricts the result horizontally and leaves its depths alone.</p>
 <dl><dt>Two envelopes</dt>
 <dd><p>Cell by cell, the result runs from the deeper
 <code>depth_min</code> to the shallower <code>depth_max</code>. Intervals that only touch
@@ -138,15 +157,44 @@ is in the result where both voxels occupy it.</p></dd>
 <dd><p>The envelope is first placed on the
 voxel's depth levels with <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. The result is a voxel.</p></dd>
 
-<dt>A 3D object and a <code>SpatRaster</code></dt>
-<dd><p>The raster is a footprint. Its
-non-<code>NA</code> cells are inside; its values are not read. It must have one
-layer and be on the same grid.</p></dd>
+<dt>An envelope or voxel and a <code>SpatRaster</code></dt>
+<dd><p>The raster is a
+footprint. Its non-<code>NA</code> cells are inside; its values are not read. It
+must have one layer and be on the same grid.</p></dd>
 
-<dt>A 3D object and polygons</dt>
-<dd><p>A <code>SpatVector</code>, <code>sf</code> or <code>sfc</code> object. The
-polygons are rasterised onto the 3D object's grid. A cell is inside when
-its centre is. Polygons in another CRS are projected first.</p></dd>
+<dt>An envelope or voxel and 2D polygons</dt>
+<dd><p>A <code>SpatVector</code>, <code>sf</code> or
+<code>sfc</code> object. The polygons are rasterised onto the 3D object's grid. A
+cell is inside when a polygon touches it. Polygons in another CRS are
+projected first.</p></dd>
+
+<dt>An envelope or voxel and <a href="SpatVector3D-class.html">SpatVector3D</a> polygons</dt>
+<dd><p>The
+polygons are first put on the envelope's or voxel's grid with
+<code><a href="vector3d_to_envelope.html">vector3d_to_envelope()</a></code>, then compared as an envelope. Each cell a
+polygon touches gets its depth range; where polygons overlap, a cell
+gets the shallowest top and the deepest bottom, so a depth gap between
+two polygons over one cell is filled. The polygons' time intervals are
+dropped, with a message. Polygons that miss the grid, or a set with no
+polygons, give an empty result. Points and lines aren't supported yet;
+<code><a href="buffer_3d.html">buffer_3d()</a></code> turns them into polygons.</p></dd>
+
+<dt>Two sets of <a href="SpatVector3D-class.html">SpatVector3D</a> polygons</dt>
+<dd><p>Each pair of polygons,
+one from <code>x</code> and one from <code>y</code>, whose outlines, depth ranges and times
+overlap gives one polygon: the shared outline (as
+<code><a href="https://r-spatial.github.io/sf/reference/geos_binary_ops.html" class="external-link">sf::st_intersection()</a></code>), the shared depth range, and the shared time
+interval. Depth ranges that only touch share no water. Time intervals
+include both ends, so with dates, two that share a day overlap on it,
+and with hours, two that meet at one instant overlap at that instant
+(so a polygon at a single time can meet another).
+A polygon without a time overlaps any time and passes on the other's
+interval. One set can't have dates while the other has hours. The
+result's feature IDs are numbers; columns <code>feature_id_x</code> and
+<code>feature_id_y</code> say which polygons each came from, and the inputs'
+other columns are dropped. Pairs that share nothing give no polygon,
+so the result can have none. To measure the overlap, use
+<code>volume(intersect_3d(x, y))</code>.</p></dd>
 
 
 </dl><p>The order of <code>x</code> and <code>y</code> does not matter.</p>
@@ -208,6 +256,42 @@ rather than with the envelope's own volume.</p></div>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1,]         0       100</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [2,]         0       100</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [3,]        NA        NA</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># With SpatVector3D polygons, the depth ranges are compared too: a polygon</span></span></span>
+<span class="r-in"><span><span class="co"># from 80 to 300 m over the first two cells shares 80-100 m with `a`.</span></span></span>
+<span class="r-in"><span><span class="va">deep</span> <span class="op">&lt;-</span> <span class="fu"><a href="as_vector3d.html">as_vector3d</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/sf.html" class="external-link">st_sf</a></span><span class="op">(</span>geometry <span class="op">=</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_as_sfc.html" class="external-link">st_as_sfc</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>    <span class="st">"POLYGON ((0 0, 2000 0, 2000 1000, 0 1000, 0 0))"</span>,</span></span>
+<span class="r-in"><span>    crs <span class="op">=</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/crs.html" class="external-link">crs</a></span><span class="op">(</span><span class="va">fp</span><span class="op">)</span></span></span>
+<span class="r-in"><span>  <span class="op">)</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  depth_min <span class="op">=</span> <span class="fl">80</span>, depth_max <span class="op">=</span> <span class="fl">300</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/values.html" class="external-link">values</a></span><span class="op">(</span><span class="fu">intersect_3d</span><span class="op">(</span><span class="va">a</span>, <span class="va">deep</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>      depth_min depth_max</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1,]        80       100</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [2,]        80       100</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [3,]        NA        NA</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Two sets of SpatVector3D polygons give the polygons they share.</span></span></span>
+<span class="r-in"><span><span class="va">square</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">x0</span><span class="op">)</span> <span class="op">{</span></span></span>
+<span class="r-in"><span>  <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st.html" class="external-link">st_polygon</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">x0</span>, <span class="fl">0</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">x0</span> <span class="op">+</span> <span class="fl">2</span>, <span class="fl">0</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">x0</span> <span class="op">+</span> <span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                            <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">x0</span>, <span class="fl">2</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">x0</span>, <span class="fl">0</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span></span></span>
+<span class="r-in"><span><span class="va">mpa</span> <span class="op">&lt;-</span> <span class="fu"><a href="as_vector3d.html">as_vector3d</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/sf.html" class="external-link">st_sf</a></span><span class="op">(</span>geometry <span class="op">=</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/sfc.html" class="external-link">st_sfc</a></span><span class="op">(</span><span class="fu">square</span><span class="op">(</span><span class="fl">150</span><span class="op">)</span>, crs <span class="op">=</span> <span class="fl">4326</span><span class="op">)</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  depth_min <span class="op">=</span> <span class="fl">0</span>, depth_max <span class="op">=</span> <span class="fl">200</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">habitat</span> <span class="op">&lt;-</span> <span class="fu"><a href="as_vector3d.html">as_vector3d</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>  <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/sf.html" class="external-link">st_sf</a></span><span class="op">(</span>geometry <span class="op">=</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/sfc.html" class="external-link">st_sfc</a></span><span class="op">(</span><span class="fu">square</span><span class="op">(</span><span class="fl">151</span><span class="op">)</span>, crs <span class="op">=</span> <span class="fl">4326</span><span class="op">)</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>  depth_min <span class="op">=</span> <span class="fl">100</span>, depth_max <span class="op">=</span> <span class="fl">500</span></span></span>
+<span class="r-in"><span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">shared</span> <span class="op">&lt;-</span> <span class="fu">intersect_3d</span><span class="op">(</span><span class="va">mpa</span>, <span class="va">habitat</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">shared</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"feature_id_x"</span>, <span class="st">"feature_id_y"</span>, <span class="st">"depth_min"</span>,</span></span>
+<span class="r-in"><span>                        <span class="st">"depth_max"</span><span class="op">)</span><span class="op">]</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   feature_id_x feature_id_y depth_min depth_max</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1            1            1       100       200</span>
+<span class="r-in"><span><span class="fu"><a href="volume.html">volume</a></span><span class="op">(</span><span class="va">shared</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 2461.484</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

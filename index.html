@@ -225,12 +225,13 @@
 <div class="section level3">
 <h3 id="intersect-3d-spatial-query">Intersect: 3D spatial query<a class="anchor" aria-label="anchor" href="#intersect-3d-spatial-query"></a>
 </h3>
-<p>Input: <code>SpatVoxel</code> or <code>SpatEnvelope</code>, compared with another 3D object or a 2D one: a <code>SpatRaster</code> footprint or polygons (<code>SpatVector</code>, <code>sf</code>). A 2D object restricts the domain horizontally without restricting the depths.</p>
+<p>Input: <code>SpatVoxel</code> or <code>SpatEnvelope</code>, compared with another 3D object, <code>SpatVector3D</code> polygons, or a 2D object: a <code>SpatRaster</code> footprint or polygons (<code>SpatVector</code>, <code>sf</code>). A 2D object restricts the domain horizontally without restricting the depths. Polygons compared with an envelope or voxel are first put on its grid, as <code><a href="reference/vector3d_to_envelope.html">vector3d_to_envelope()</a></code> does.</p>
+<p>Two sets of <code>SpatVector3D</code> polygons can also be compared: <code><a href="reference/intersect_3d.html">intersect_3d()</a></code> returns the polygons they share in outline, depth and time, and <code><a href="reference/intersects_3d.html">intersects_3d()</a></code> lists, for each polygon of the first set, the polygons of the second it shares space with.</p>
 <ul>
 <li>
-<code>intersect_3d(x, y)</code> — the shared 3D space between the two inputs. Returns an envelope with the shared depth interval or a presence voxel, depending on inputs.</li>
+<code>intersect_3d(x, y)</code> — the shared 3D space between the two inputs. Returns an envelope with the shared depth interval, a presence voxel, or (for two polygon sets) <code>SpatVector3D</code> polygons, depending on inputs.</li>
 <li>
-<code>intersects_3d(x, y)</code> — whether inputs share any 3D space, cell by cell: <code>TRUE</code>, <code>FALSE</code> (both present but disjoint, or only one present), or <code>NA</code> (neither present).</li>
+<code>intersects_3d(x, y)</code> — whether inputs share any 3D space. For rasters, cell by cell: <code>TRUE</code>, <code>FALSE</code> (both present but disjoint, or only one present), or <code>NA</code> (neither present). For two polygon sets, a list of the polygons of <code>y</code> each polygon of <code>x</code> meets.</li>
 <li>
 <code>mask(x, mask)</code> — <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code> made depth-aware. Keeps the values of <code>x</code> where the mask domain reaches that cell <em>at that depth</em>.</li>
 </ul>
@@ -238,10 +239,10 @@
 <div class="section level3">
 <h3 id="summarise-3d-volume">Summarise: 3D volume<a class="anchor" aria-label="anchor" href="#summarise-3d-volume"></a>
 </h3>
-<p>Input: <code>SpatEnvelope</code> or <code>SpatVoxel</code>. A voxel’s volume sums the slab each occupied depth level stands for, so interior gaps cost volume instead of being filled in.</p>
+<p>Input: <code>SpatEnvelope</code>, <code>SpatVoxel</code> or <code>SpatVector3D</code> polygons. A voxel’s volume sums the slab each occupied depth level stands for, so interior gaps cost volume instead of being filled in. A polygon’s volume is its area times its depth range, measured from the outline rather than a grid.</p>
 <ul>
 <li>
-<code><a href="reference/volume.html">volume()</a></code> — 3D volume (km³) of a rasterized domain, as a total or per cell (<code>per_cell = TRUE</code>). Measure an overlap with <code>volume(intersect_3d(a, b))</code>.</li>
+<code><a href="reference/volume.html">volume()</a></code> — 3D volume (km³) of a domain, as a total or per cell (<code>per_cell = TRUE</code>, envelopes and voxels only). Measure an overlap with <code>volume(intersect_3d(a, b))</code>.</li>
 </ul>
 </div>
 <div class="section level3">

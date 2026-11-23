@@ -1,19 +1,18 @@
-# 3D volume of a rasterized domain
+# 3D volume of a domain
 
 Measures the occupied volume of a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
-or a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
-as a total over the whole grid or cell by cell. Both representations
-describe a 3D domain over a 2D grid, but they store depth in dual roles,
-so each computes the vertical extent differently:
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
+a
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+or
+[SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+polygons, as a total, or cell by cell for envelopes and voxels.
+Envelopes and voxels describe a 3D domain over a 2D grid, but they store
+depth in dual roles, so each computes the vertical extent differently:
 
 ## Usage
 
 ``` r
-volume(x, per_cell = FALSE, ...)
-
-# S4 method for class 'SpatVector3D'
 volume(x, per_cell = FALSE, ...)
 
 # S4 method for class 'SpatEnvelope'
@@ -21,6 +20,9 @@ volume(x, per_cell = FALSE, ...)
 
 # S4 method for class 'SpatVoxel'
 volume(x, per_cell = FALSE, bounds = c("midpoint", "top"))
+
+# S4 method for class 'SpatVector3D'
+volume(x, per_cell = FALSE, ...)
 
 # S4 method for class 'SpatRaster'
 volume(x, per_cell = FALSE, ...)
@@ -31,10 +33,12 @@ volume(x, per_cell = FALSE, ...)
 - x:
 
   A
-  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
+  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
+  a
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
   or
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
-  A bare SpatRaster is rejected; build one with
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons. A bare SpatRaster is rejected; build one with
   [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md),
   [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
   or
@@ -47,13 +51,15 @@ volume(x, per_cell = FALSE, ...)
 - per_cell:
 
   `FALSE` (default) for the total volume, `TRUE` for the volume of each
-  cell.
+  cell. Not for
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons.
 
 - ...:
 
   Arguments for the
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
-  method, which are an error for an envelope.
+  method, which are an error for an envelope or polygons.
 
 - bounds:
 
@@ -88,6 +94,23 @@ grid of `x`: the volume of each cell in km³, `NA` where `x` is absent
   Depth is the layer index. Each occupied voxel contributes its cell
   area times the thickness of the slab its depth level stands for, so
   interior gaps are excluded rather than filled.
+
+- [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons:
+
+  Measured from the outlines, not a grid: each polygon's area on the
+  WGS84 ellipsoid times `depth_max - depth_min`. Polygon edges are
+  geodesics, so a polygon drawn along a grid's cell edges measures
+  slightly differently from its envelope on that grid, whose cells are
+  bounded by parallels. The time interval doesn't change the volume. The
+  total adds up the polygons, so where they overlap the shared space is
+  counted once for each; the overlap between two sets is
+  `volume(intersect_3d(x, y))`. `per_cell = TRUE` is an error, since
+  polygons have no cells; put them on a grid with
+  [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
+  first. Points and lines have no volume, so they are an error;
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
+  turns them into polygons.
 
 A voxel volume is quantized to the levels the voxel was sampled at, and
 a voxel built by
@@ -171,4 +194,10 @@ terra::values(volume(ov, per_cell = TRUE))
 #> [2,]    0.1
 #> [3,]    0.1
 #> [4,]     NA
+
+# Polygons: a 10 km circle from 10 to 60 m deep, about
+# pi * 10^2 * 0.05 = 15.7 km³.
+detection <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 35))
+volume(buffer_3d(detection, radius_km = 10, depth_window = 25))
+#> [1] 15.70776
 ```

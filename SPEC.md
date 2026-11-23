@@ -71,8 +71,8 @@ on its own.
 | Step | Question | Exists now | Planned additions |
 |----|----|----|----|
 | Build | What is the 3D shape or grid? | [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md), [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md), [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md), [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md), [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md), [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md), [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md), [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md), data loaders ([`woa_load_nc()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_load_nc.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)) | track sampling |
-| Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D`; a coverage function that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
-| Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md) (total or per cell) | `summarise_3d()` for statistics on intersect results |
+| Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D` (polygons with envelopes, voxels and other polygons done; points and lines to come); a coverage function that returns the data cells inside each shape with weights (working name `coverage_3d()`) |
+| Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md) (total or per cell; total only for `SpatVector3D` polygons) | `summarise_3d()` for statistics on intersect results |
 
 The planned functions are added alongside the existing ones: every
 function in “Exists now” stays, and the existing intersect functions
@@ -906,8 +906,20 @@ of 20 November 2026.
     / `mask()` /
     [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
     methods for `SpatVector3D` (#115), with block reads for many
-    features. *Not started.* Needs steps 5 and 6. This is where the slow
-    buffer reads measured in the trial are replaced.
+    features. *In progress:* the first PR (#158, in review) adds
+    [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+    for polygons,
+    [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+    [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+    and `mask()` between polygons and an envelope or voxel, and
+    [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+    and
+    [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+    between two sets of polygons. Next: points and lines (with polygons
+    and with a grid), `vector3d_to_voxel()` (puts polygons on a voxel’s
+    levels without filling depth gaps), then the coverage function,
+    which needs step 5. This is where the slow buffer reads measured in
+    the trial are replaced.
 8.  **Add `summarise_3d()` and workflow vignettes** for points, buffers,
     tracks and areas. Then, one function per PR, either reimplement each
     extraction function as a build → intersect → summarise wrapper or
@@ -974,36 +986,48 @@ design](#package-design-build-intersect-summarise)).
 ### Intersect: spatial query
 
 Three functions handle pairs of 3D objects (`SpatEnvelope`, `SpatVoxel`,
-and *(planned)* `SpatVector3D`), or a 3D object with a 2D one (a
-`SpatRaster` footprint, or polygons). A 2D object restricts the shape
+and `SpatVector3D`, so far polygons only), or a 3D object with a 2D one
+(a `SpatRaster` footprint, or polygons). A 2D object restricts the shape
 horizontally and leaves its depths alone. - **`intersect_3d(x, y)`**:
 the 3D space the two share. Two envelopes intersect their depth
 intervals; two voxels keep the levels both occupy; an envelope is placed
 on a voxel’s levels before the two are compared. The result is a shape,
 not data values. - **`intersects_3d(x, y)`**: whether they share any 3D
-space, cell by cell, with terra’s three answers: `TRUE`, `FALSE` (both
-present but disjoint, or only one present), `NA` (neither present). -
-**`mask(x, mask)`**:
+space, cell by cell for rasters, with terra’s three answers: `TRUE`,
+`FALSE` (both present but disjoint, or only one present), `NA` (neither
+present). - **`mask(x, mask)`**:
 [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html)
 made depth-aware. Keeps `x`’s values where the mask reaches that cell at
 that depth. A voxel masked by an envelope puts the envelope on the
 voxel’s own levels, so the caller cannot misalign them.
 
-`SpatVector3D` methods *(planned)*: - **Vector with vector**:
+`SpatVector3D` methods (polygons with an envelope, a voxel or other
+polygons exist; points and lines are *(planned)*): - **Vector with
+vector**:
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
-intersects the geometries, the depths and the time intervals. Two
-polygons give a polygon (footprints intersected, depth intervals
-intersected at each position); a point or line with a polygon gives the
-points or parts of lines inside it. Features whose times don’t overlap
-don’t intersect. - **Vector with envelope or voxel**: polygons are
-evaluated on the raster’s grid (as in
+intersects the geometries, the depths and the time intervals. Time
+intervals include both ends, a feature without a time overlaps any time,
+and features whose times don’t overlap don’t intersect. - Two polygon
+sets give one polygon per overlapping pair (footprints and depth
+intervals intersected), numbered, with `feature_id_x` and `feature_id_y`
+naming the pair. -
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+of two polygon sets returns, for each feature of `x`, the IDs of the
+features of `y` it shares space with, as
+[`sf::st_intersects()`](https://r-spatial.github.io/sf/reference/geos_binary_pred.html)
+does. - *(planned)* A point or line with a polygon gives the points or
+parts of lines inside it. - **Vector with envelope or voxel**: polygons
+are evaluated on the raster’s grid (as in
 [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md))
-and compared cell by cell as two envelopes are now; points and lines are
-compared in the cells and levels they pass through. `mask(voxel, x)`
-keeps the voxel values in the cells and levels `x` reaches. - **Vector
-with a data source**: the coverage function, not these three, returns
-data values, with each cell’s partial coverage as a weight (see
-[Summarise: extraction](#summarise-extraction)).
+and compared cell by cell as two envelopes are. Where polygons overlap
+over a cell, the depth gap between them is filled. `mask(voxel, x)`
+keeps the voxel values in the cells and levels `x` reaches. *(planned)*
+`vector3d_to_voxel()` will put polygons on a voxel’s levels one level at
+a time and keep the gap; points and lines will be compared in the cells
+and levels they pass through. - **Vector with a data source**: the
+coverage function, not these three, returns data values, with each
+cell’s partial coverage as a weight (see [Summarise:
+extraction](#summarise-extraction)).
 
 These functions are the intersect step of the [package
 design](#package-design-build-intersect-summarise).
@@ -1074,20 +1098,22 @@ marked *(planned)* aren’t implemented yet.
   the top and bottom levels (`bounds = "midpoint"`, the default since
   \#148). With levels at 0, 100 and 200 m, the 100 m layer is 100 m tall
   (50 to 150 m) and the 0 and 200 m layers 50 m each.
-- **Calculate the volume of `SpatVector3D` polygons** *(planned)*.
-  Measured from the geometry, not a grid: polygon area × (`bottom` -
-  `top`) for constant surfaces, exact formulas for named shapes (sphere,
-  ellipsoid), and sampling across the polygon for raster or function
-  surfaces. The time interval doesn’t change the volume. Points and
-  lines have no volume, so
+- **Calculate the volume of `SpatVector3D` polygons**. Measured from the
+  geometry, not a grid: polygon area on the WGS84 ellipsoid ×
+  (`bottom` - `top`) for constant surfaces. The time interval doesn’t
+  change the volume. The total is the sum over polygons, so space where
+  polygons overlap is counted once for each polygon. `per_cell = TRUE`
+  is an error for polygons, which have no cells: put them on a grid with
+  [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
+  first. Points and lines have no volume, so
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
   on them is an error suggesting
   [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md).
-  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  gains a `SpatVector3D` method with the same `per_cell` argument, and
-  overlap is measured on
+  Overlap is measured on
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)’s
-  result as for envelopes.
+  result, as for envelopes. *(planned)* Exact formulas for named shapes
+  (sphere, ellipsoid) and sampling across the polygon for raster or
+  function surfaces.
 
 ### Utilities
 

@@ -30,6 +30,9 @@ mask(x, mask, ...)
 
 # S4 method for class 'SpatRaster,SpatVoxel'
 mask(x, mask, ...)
+
+# S4 method for class 'SpatRaster,SpatVector3D'
+mask(x, mask, ...)
 ```
 
 ## Arguments
@@ -52,7 +55,9 @@ mask(x, mask, ...)
   [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
   or a
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
-  on the same grid as `x`.
+  on the same grid as `x`, or
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons, which are put on that grid.
 
 - bounds:
 
@@ -106,6 +111,18 @@ What each pairing does:
 
   A cell is kept where the mask domain is present at any depth. Without
   this method terra would read the mask's first layer only.
+
+- anything masked by
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons:
+
+  The polygons are put on the grid of `x` with
+  [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md),
+  then used as an envelope mask as above. A voxel keeps its values in
+  the cells and levels the polygons reach. Where polygons overlap, a
+  cell gets the shallowest top and the deepest bottom, so a depth gap
+  between them is kept too. The time intervals are dropped, with a
+  message.
 
 A voxel or envelope masked by a plain `SpatRaster` or by polygons is
 terra's own `mask()`. Every layer is masked by the same 2D pattern and

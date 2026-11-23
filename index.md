@@ -219,17 +219,29 @@ Input: `SpatRaster` layers, tables of points or lines, and polygons
 
 ### Intersect: 3D spatial query
 
-Input: `SpatVoxel` or `SpatEnvelope`, compared with another 3D object or
-a 2D one: a `SpatRaster` footprint or polygons (`SpatVector`, `sf`). A
-2D object restricts the domain horizontally without restricting the
-depths.
+Input: `SpatVoxel` or `SpatEnvelope`, compared with another 3D object,
+`SpatVector3D` polygons, or a 2D object: a `SpatRaster` footprint or
+polygons (`SpatVector`, `sf`). A 2D object restricts the domain
+horizontally without restricting the depths. Polygons compared with an
+envelope or voxel are first put on its grid, as
+[`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
+does.
+
+Two sets of `SpatVector3D` polygons can also be compared:
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+returns the polygons they share in outline, depth and time, and
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+lists, for each polygon of the first set, the polygons of the second it
+shares space with.
 
 - `intersect_3d(x, y)` — the shared 3D space between the two inputs.
-  Returns an envelope with the shared depth interval or a presence
-  voxel, depending on inputs.
-- `intersects_3d(x, y)` — whether inputs share any 3D space, cell by
-  cell: `TRUE`, `FALSE` (both present but disjoint, or only one
-  present), or `NA` (neither present).
+  Returns an envelope with the shared depth interval, a presence voxel,
+  or (for two polygon sets) `SpatVector3D` polygons, depending on
+  inputs.
+- `intersects_3d(x, y)` — whether inputs share any 3D space. For
+  rasters, cell by cell: `TRUE`, `FALSE` (both present but disjoint, or
+  only one present), or `NA` (neither present). For two polygon sets, a
+  list of the polygons of `y` each polygon of `x` meets.
 - `mask(x, mask)` —
   [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html)
   made depth-aware. Keeps the values of `x` where the mask domain
@@ -237,14 +249,16 @@ depths.
 
 ### Summarise: 3D volume
 
-Input: `SpatEnvelope` or `SpatVoxel`. A voxel’s volume sums the slab
-each occupied depth level stands for, so interior gaps cost volume
-instead of being filled in.
+Input: `SpatEnvelope`, `SpatVoxel` or `SpatVector3D` polygons. A voxel’s
+volume sums the slab each occupied depth level stands for, so interior
+gaps cost volume instead of being filled in. A polygon’s volume is its
+area times its depth range, measured from the outline rather than a
+grid.
 
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  — 3D volume (km³) of a rasterized domain, as a total or per cell
-  (`per_cell = TRUE`). Measure an overlap with
-  `volume(intersect_3d(a, b))`.
+  — 3D volume (km³) of a domain, as a total or per cell
+  (`per_cell = TRUE`, envelopes and voxels only). Measure an overlap
+  with `volume(intersect_3d(a, b))`.
 
 ### Summarise: environmental extraction from a `SpatVoxel`
 

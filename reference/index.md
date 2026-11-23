@@ -67,6 +67,7 @@ Find where 3D objects meet.
   [`mask(`*`<SpatEnvelope>`*`,`*`<SpatVoxel>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
   [`mask(`*`<SpatRaster>`*`,`*`<SpatEnvelope>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
   [`mask(`*`<SpatRaster>`*`,`*`<SpatVoxel>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
+  [`mask(`*`<SpatRaster>`*`,`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
   : Keep a raster's values inside a 3D domain
 
 ## Summarise
@@ -74,7 +75,7 @@ Find where 3D objects meet.
 Measure 3D objects and their overlap.
 
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
-  : 3D volume of a rasterized domain
+  : 3D volume of a domain
 
 ## Extraction
 

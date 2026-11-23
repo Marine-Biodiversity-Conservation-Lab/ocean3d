@@ -301,6 +301,38 @@ how many cells have the limits swapped (or a seafloor above
   message
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
 
+- [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+  measures `SpatVector3D` polygons: the sum of each polygon’s area times
+  its depth range, in km³. Space where polygons overlap is counted once
+  for each polygon, so the total isn’t the volume of their union
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
+
+- [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+  and
+  [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+  accept `SpatVector3D` polygons with a `SpatEnvelope` or `SpatVoxel`,
+  in either order, and
+  [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+  accepts them as the mask. The polygons are first put on the raster’s
+  grid, so a depth gap between overlapping polygons over one cell is
+  filled in. `mask(voxel, polygons)` keeps the voxel’s values in the
+  cells and depth levels the polygons reach. Polygons that miss the grid
+  give an empty result, not an error
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
+
+- [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+  of two sets of `SpatVector3D` polygons gives a polygon for each pair
+  whose outlines, depth ranges and time intervals overlap, with columns
+  `feature_id_x` and `feature_id_y` naming the pair. Measure the overlap
+  with `volume(intersect_3d(x, y))`
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
+
+- [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+  of two sets of `SpatVector3D` polygons gives, for each polygon of `x`,
+  the feature IDs of the polygons of `y` it shares 3D space with, as a
+  list named by the IDs of `x`
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
+
 - A `SpatVoxel` can carry the top and bottom of the slab of water each
   layer stands for, such as a netCDF file’s depth bounds: pass
   `depth_bounds` to

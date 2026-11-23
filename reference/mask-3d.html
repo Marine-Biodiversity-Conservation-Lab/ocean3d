@@ -78,6 +78,9 @@ where the mask domain reaches that cell at that depth.</p>
 <span><span class="fu">mask</span><span class="op">(</span><span class="va">x</span>, <span class="va">mask</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatRaster,SpatVoxel'</span></span>
+<span><span class="fu">mask</span><span class="op">(</span><span class="va">x</span>, <span class="va">mask</span>, <span class="va">...</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># S4 method for class 'SpatRaster,SpatVector3D'</span></span>
 <span><span class="fu">mask</span><span class="op">(</span><span class="va">x</span>, <span class="va">mask</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -94,7 +97,8 @@ accepted: describe it with <code><a href="as_proxy.html">as_proxy()</a></code> a
 
 <dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
 <dd><p>The 3D domain to keep <code>x</code> inside: a <a href="SpatEnvelope-class.html">SpatEnvelope</a> or a
-<a href="SpatVoxel-class.html">SpatVoxel</a> on the same grid as <code>x</code>.</p></dd>
+<a href="SpatVoxel-class.html">SpatVoxel</a> on the same grid as <code>x</code>, or <a href="SpatVector3D-class.html">SpatVector3D</a>
+polygons, which are put on that grid.</p></dd>
 
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
@@ -138,6 +142,14 @@ interval is kept whole. To narrow the interval instead, use
 <dd><p>A cell is kept
 where the mask domain is present at any depth. Without this method
 terra would read the mask's first layer only.</p></dd>
+
+<dt>anything masked by <a href="SpatVector3D-class.html">SpatVector3D</a> polygons</dt>
+<dd><p>The polygons
+are put on the grid of <code>x</code> with <code><a href="vector3d_to_envelope.html">vector3d_to_envelope()</a></code>, then used as
+an envelope mask as above. A voxel keeps its values in the cells and
+levels the polygons reach. Where polygons overlap, a cell gets the
+shallowest top and the deepest bottom, so a depth gap between them is
+kept too. The time intervals are dropped, with a message.</p></dd>
 
 
 </dl><p>A voxel or envelope masked by a plain <code>SpatRaster</code> or by polygons is

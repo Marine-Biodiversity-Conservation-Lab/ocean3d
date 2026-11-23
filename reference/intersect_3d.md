@@ -38,20 +38,36 @@ intersect_3d(x, y, ...)
 
 # S4 method for class 'ANY,ANY'
 intersect_3d(x, y, ...)
+
+# S4 method for class 'SpatVector3D,SpatEnvelope'
+intersect_3d(x, y, ...)
+
+# S4 method for class 'SpatVector3D,SpatVoxel'
+intersect_3d(x, y, ...)
+
+# S4 method for class 'SpatEnvelope,SpatVector3D'
+intersect_3d(x, y, ...)
+
+# S4 method for class 'SpatVoxel,SpatVector3D'
+intersect_3d(x, y, ...)
+
+# S4 method for class 'SpatVector3D,SpatVector3D'
+intersect_3d(x, y, ...)
 ```
 
 ## Arguments
 
 - x, y:
 
-  The two objects. At least one must be a
-  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
-  or a
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
-  The other can be either of those, a single-layer `SpatRaster`
-  footprint, or polygons (`SpatVector`, `sf`, `sfc`). Rasters must share
-  one grid (CRS, extent, resolution). netCDF files aren't accepted; load
-  them with terra and wrap them with
+  The two objects: two of
+  [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
+  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+  and
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons, in any pairing, or an envelope or voxel with a 2D object (a
+  single-layer `SpatRaster` footprint or 2D polygons: `SpatVector`,
+  `sf`, `sfc`). Rasters must share one grid (CRS, extent, resolution).
+  netCDF files aren't accepted; load them with terra and wrap them with
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   first.
 
@@ -73,21 +89,27 @@ intersect_3d(x, y, ...)
 
 ## Value
 
-A
+[SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+polygons when both inputs are polygons. A
 [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
 when both inputs are envelopes, or when one is an envelope and the other
-is 2D. Otherwise a
+is 2D or
+[SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+polygons. Otherwise a
 [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 of presence. Either is on the grid of the 3D input.
 
 ## Details
 
 At least one of `x` and `y` must be a 3D object: a
-[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md)
-or a
-[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md).
-The other can be a 3D object too, or a 2D object. A 2D object restricts
-the result horizontally and leaves its depths alone.
+[SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
+a
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+or
+[SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+polygons. The other can be a 3D object too, or, with an envelope or
+voxel, a 2D object. A 2D object restricts the result horizontally and
+leaves its depths alone.
 
 - Two envelopes:
 
@@ -106,16 +128,51 @@ the result horizontally and leaves its depths alone.
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
   The result is a voxel.
 
-- A 3D object and a `SpatRaster`:
+- An envelope or voxel and a `SpatRaster`:
 
   The raster is a footprint. Its non-`NA` cells are inside; its values
   are not read. It must have one layer and be on the same grid.
 
-- A 3D object and polygons:
+- An envelope or voxel and 2D polygons:
 
   A `SpatVector`, `sf` or `sfc` object. The polygons are rasterised onto
-  the 3D object's grid. A cell is inside when its centre is. Polygons in
-  another CRS are projected first.
+  the 3D object's grid. A cell is inside when a polygon touches it.
+  Polygons in another CRS are projected first.
+
+- An envelope or voxel and
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons:
+
+  The polygons are first put on the envelope's or voxel's grid with
+  [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md),
+  then compared as an envelope. Each cell a polygon touches gets its
+  depth range; where polygons overlap, a cell gets the shallowest top
+  and the deepest bottom, so a depth gap between two polygons over one
+  cell is filled. The polygons' time intervals are dropped, with a
+  message. Polygons that miss the grid, or a set with no polygons, give
+  an empty result. Points and lines aren't supported yet;
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
+  turns them into polygons.
+
+- Two sets of
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons:
+
+  Each pair of polygons, one from `x` and one from `y`, whose outlines,
+  depth ranges and times overlap gives one polygon: the shared outline
+  (as
+  [`sf::st_intersection()`](https://r-spatial.github.io/sf/reference/geos_binary_ops.html)),
+  the shared depth range, and the shared time interval. Depth ranges
+  that only touch share no water. Time intervals include both ends, so
+  with dates, two that share a day overlap on it, and with hours, two
+  that meet at one instant overlap at that instant (so a polygon at a
+  single time can meet another). A polygon without a time overlaps any
+  time and passes on the other's interval. One set can't have dates
+  while the other has hours. The result's feature IDs are numbers;
+  columns `feature_id_x` and `feature_id_y` say which polygons each came
+  from, and the inputs' other columns are dropped. Pairs that share
+  nothing give no polygon, so the result can have none. To measure the
+  overlap, use `volume(intersect_3d(x, y))`.
 
 The order of `x` and `y` does not matter.
 
@@ -186,4 +243,40 @@ terra::values(intersect_3d(a, poly))
 #> [1,]         0       100
 #> [2,]         0       100
 #> [3,]        NA        NA
+
+# With SpatVector3D polygons, the depth ranges are compared too: a polygon
+# from 80 to 300 m over the first two cells shares 80-100 m with `a`.
+deep <- as_vector3d(
+  sf::st_sf(geometry = sf::st_as_sfc(
+    "POLYGON ((0 0, 2000 0, 2000 1000, 0 1000, 0 0))",
+    crs = terra::crs(fp)
+  )),
+  depth_min = 80, depth_max = 300
+)
+terra::values(intersect_3d(a, deep))
+#>      depth_min depth_max
+#> [1,]        80       100
+#> [2,]        80       100
+#> [3,]        NA        NA
+
+# Two sets of SpatVector3D polygons give the polygons they share.
+square <- function(x0) {
+  sf::st_polygon(list(rbind(c(x0, 0), c(x0 + 2, 0), c(x0 + 2, 2),
+                            c(x0, 2), c(x0, 0))))
+}
+mpa <- as_vector3d(
+  sf::st_sf(geometry = sf::st_sfc(square(150), crs = 4326)),
+  depth_min = 0, depth_max = 200
+)
+habitat <- as_vector3d(
+  sf::st_sf(geometry = sf::st_sfc(square(151), crs = 4326)),
+  depth_min = 100, depth_max = 500
+)
+shared <- intersect_3d(mpa, habitat)
+as.data.frame(shared)[c("feature_id_x", "feature_id_y", "depth_min",
+                        "depth_max")]
+#>   feature_id_x feature_id_y depth_min depth_max
+#> 1            1            1       100       200
+volume(shared)
+#> [1] 2461.484
 ```
