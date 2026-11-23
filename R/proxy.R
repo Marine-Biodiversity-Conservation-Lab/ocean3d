@@ -664,8 +664,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   sc <- .build_start_count(variable$dims, index_list, variable$singleton_dims)
 
   file <- basename(path)
-  nc <- if (.is_url(path) || file.exists(path)) ncdf4::nc_open(path)
-  if (!is.null(nc)) on.exit(ncdf4::nc_close(nc), add = TRUE)
+  opened <- tryCatch(.open_source(list(source = path, type = "path")),
+                     ocean3d_error_netcdf_missing = function(e) NULL)
+  on.exit(.close_source(opened), add = TRUE)
+  nc <- opened$nc
   info <- if (!is.null(nc)) nc$var[[variable$name]]
   changed <- if (is.null(nc)) {
     glue::glue("Can't find {path}")
