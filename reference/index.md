@@ -40,6 +40,8 @@ Turn inputs into 3D objects, and convert between them.
   : Buffer 3D points or lines into polygons
 - [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
   : Convert 3D polygons to an envelope on a grid
+- [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md)
+  : Convert 3D polygons to a voxel on a template's grid and depth levels
 - [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
   : Convert SpatVector or sf to SpatEnvelope
 - [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md)

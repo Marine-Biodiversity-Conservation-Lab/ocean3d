@@ -4,6 +4,33 @@
 
 ### Breaking changes
 
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+between `SpatVector3D` polygons and a `SpatVoxel` now put the polygons
+on the voxel’s levels with
+[`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md),
+one level at a time, instead of as an envelope that was then placed on
+the levels
+([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
+Results differ only where two polygons cover one cell with a gap between
+their depth ranges: the levels in the gap used to count as covered and
+now don’t, so an overlap or a mask no longer includes the water between
+two depth bands. This holds whether or not the voxel has depth edges.
+Between polygons and a `SpatEnvelope`, nothing changes: the polygons
+still become an envelope, which fills that gap, because an envelope
+holds one depth range per cell. To get the old result with a voxel,
+convert the polygons first, for example
+`intersect_3d(vector3d_to_envelope(polygons, voxel), voxel, bounds = bounds)`,
+and the same for
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+and [`mask()`](https://rspatial.github.io/terra/reference/mask.html).
+`mask(voxel, polygons)` gains a `bounds` argument, as
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+and
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+have, for a voxel without depth edges.
+
 `calc_volume_overlap()` is removed
 ([\#150](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/150)).
 It returned a nine-layer `SpatRaster` that the other 3D functions could
@@ -398,6 +425,17 @@ with `unique(depths)`.
   where top equals bottom are dropped, and so are polygon times, with a
   message
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
+
+- New
+  [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md)
+  puts `SpatVector3D` polygons onto a voxel’s grid and depth levels as a
+  presence `SpatVoxel`, one level at a time, so a depth gap between two
+  polygons over one cell stays empty: polygons from 0 to 50 m and from
+  200 to 300 m cover the levels in those ranges and not the ones
+  between. The slabs come from the voxel’s depth edges, or from `bounds`
+  when it has none. Polygons with no thickness cover nothing, and
+  polygon times are dropped with a message
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
 
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
   measures `SpatVector3D` polygons: the sum of each polygon’s area times

@@ -120,11 +120,12 @@ or a voxel.</p></dd>
 
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
-<dd><p>Only when one input is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: <code>"midpoint"</code>
-(default) or <code>"top"</code>. See <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. Not used when the voxel
-carries its own depth edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>). To measure the
-result, pass the same <code>bounds</code> to <code><a href="volume.html">volume()</a></code>.</p></dd>
+<dd><p>Only when one input is a voxel and the other an envelope or
+<a href="SpatVector3D-class.html">SpatVector3D</a> polygons. How the envelope or polygons are placed
+on the voxel's depth levels: <code>"midpoint"</code> (default) or <code>"top"</code>. See
+<code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. Not used when the voxel carries its own depth
+edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>). To measure the result, pass the same
+<code>bounds</code> to <code><a href="volume.html">volume()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -166,15 +167,26 @@ must have one layer and be on the same grid.</p></dd>
 cell is inside when a polygon touches it. Polygons in another CRS are
 projected first.</p></dd>
 
-<dt>An envelope or voxel and <a href="SpatVector3D-class.html">SpatVector3D</a> polygons</dt>
-<dd><p>The
-polygons are first put on the envelope's or voxel's grid with
-<code><a href="vector3d_to_envelope.html">vector3d_to_envelope()</a></code>, then compared as an envelope. Each cell a
-polygon touches gets its depth range; where polygons overlap, a cell
-gets the shallowest top and the deepest bottom, so a depth gap between
-two polygons over one cell is filled. The polygons' time intervals are
-dropped, with a message. Polygons that miss the grid, or a set with no
-polygons, give an empty result.</p></dd>
+<dt>An envelope and <a href="SpatVector3D-class.html">SpatVector3D</a> polygons</dt>
+<dd><p>The polygons are
+first put on the envelope's grid with <code><a href="vector3d_to_envelope.html">vector3d_to_envelope()</a></code>, then
+compared as an envelope. Each cell a polygon touches gets its depth
+range; where polygons overlap, a cell gets the shallowest top and the
+deepest bottom, so a depth gap between two polygons over one cell is
+filled.</p></dd>
+
+<dt>A voxel and <a href="SpatVector3D-class.html">SpatVector3D</a> polygons</dt>
+<dd><p>The polygons are first
+put on the voxel's grid and depth levels with <code><a href="vector3d_to_voxel.html">vector3d_to_voxel()</a></code>,
+one level at a time, then compared as a voxel. A depth gap between two
+polygons over one cell stays empty. When the voxel has no depth edges,
+you set each level's slab with <code>bounds</code>, as in <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>.</p></dd>
+
+<dt>An envelope or voxel and <a href="SpatVector3D-class.html">SpatVector3D</a> polygons, either
+way</dt>
+<dd><p>The polygons' time intervals are dropped, with a message.
+Polygons that miss the grid, or a set with no polygons, give an empty
+result.</p></dd>
 
 <dt>A voxel and <a href="SpatVector3D-class.html">SpatVector3D</a> points</dt>
 <dd><p>A point covers one cell

@@ -50,9 +50,10 @@ intersects_3d(x, y, ...)
 
 - bounds:
 
-  Only when one input is an envelope and the other a voxel. How the
-  envelope is placed on the voxel's depth levels: `"midpoint"` (default)
-  or `"top"`. See
+  Only when one input is a voxel and the other an envelope or
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons. How the envelope or polygons are placed on the voxel's depth
+  levels: `"midpoint"` (default) or `"top"`. See
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
   Not used when the voxel carries its own depth edges (see
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)).

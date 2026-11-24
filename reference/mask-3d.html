@@ -82,7 +82,7 @@ where the mask domain reaches that cell at that depth.</p>
 <span><span class="fu">mask</span><span class="op">(</span><span class="va">x</span>, <span class="va">mask</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatRaster,SpatVector3D'</span></span>
-<span><span class="fu">mask</span><span class="op">(</span><span class="va">x</span>, <span class="va">mask</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">mask</span><span class="op">(</span><span class="va">x</span>, <span class="va">mask</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -103,10 +103,11 @@ polygons or points, which are put on that grid.</p></dd>
 
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
-<dd><p>Only when one side is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: <code>"midpoint"</code>
-(default) or <code>"top"</code>. See <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. Not used when the voxel
-carries its own depth edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>).</p></dd>
+<dd><p>Only when <code>x</code> is a voxel and <code>mask</code> an envelope or
+<a href="SpatVector3D-class.html">SpatVector3D</a> polygons. How the envelope or polygons are placed
+on the voxel's depth levels: <code>"midpoint"</code> (default) or <code>"top"</code>. See
+<code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. Not used when the voxel carries its own depth
+edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>).</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
@@ -144,13 +145,22 @@ interval is kept whole. To narrow the interval instead, use
 where the mask domain is present at any depth. Without this method
 terra would read the mask's first layer only.</p></dd>
 
-<dt>anything masked by <a href="SpatVector3D-class.html">SpatVector3D</a> polygons</dt>
-<dd><p>The polygons
-are put on the grid of <code>x</code> with <code><a href="vector3d_to_envelope.html">vector3d_to_envelope()</a></code>, then used as
-an envelope mask as above. A voxel keeps its values in the cells and
-levels the polygons reach. Where polygons overlap, a cell gets the
-shallowest top and the deepest bottom, so a depth gap between them is
-kept too. The time intervals are dropped, with a message.</p></dd>
+<dt>voxel masked by <a href="SpatVector3D-class.html">SpatVector3D</a> polygons</dt>
+<dd><p>The polygons are
+put on the voxel's grid and levels with <code><a href="vector3d_to_voxel.html">vector3d_to_voxel()</a></code>, then
+used as a voxel mask as above: the voxel keeps its values in the cells
+and levels the polygons reach, and a depth gap between polygons over
+one cell stays empty. When the voxel has no depth edges, you set each
+level's slab with <code>bounds</code>, as in <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. The time
+intervals are dropped, with a message.</p></dd>
+
+<dt>envelope or plain <code>SpatRaster</code> masked by <a href="SpatVector3D-class.html">SpatVector3D</a>
+polygons</dt>
+<dd><p>The polygons are put on the grid of <code>x</code> with
+<code><a href="vector3d_to_envelope.html">vector3d_to_envelope()</a></code>, then used as an envelope mask as above. Where
+polygons overlap, a cell gets the shallowest top and the deepest
+bottom, so a depth gap between them is filled. The time intervals are
+dropped, with a message.</p></dd>
 
 <dt>anything masked by <a href="SpatVector3D-class.html">SpatVector3D</a> points</dt>
 <dd><p>A point covers

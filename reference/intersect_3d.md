@@ -74,9 +74,10 @@ intersect_3d(x, y, ...)
 
 - bounds:
 
-  Only when one input is an envelope and the other a voxel. How the
-  envelope is placed on the voxel's depth levels: `"midpoint"` (default)
-  or `"top"`. See
+  Only when one input is a voxel and the other an envelope or
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons. How the envelope or polygons are placed on the voxel's depth
+  levels: `"midpoint"` (default) or `"top"`. See
   [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
   Not used when the voxel carries its own depth edges (see
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)).
@@ -137,18 +138,34 @@ horizontally and leaves its depths alone.
   the 3D object's grid. A cell is inside when a polygon touches it.
   Polygons in another CRS are projected first.
 
-- An envelope or voxel and
+- An envelope and
   [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
   polygons:
 
-  The polygons are first put on the envelope's or voxel's grid with
+  The polygons are first put on the envelope's grid with
   [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md),
   then compared as an envelope. Each cell a polygon touches gets its
   depth range; where polygons overlap, a cell gets the shallowest top
   and the deepest bottom, so a depth gap between two polygons over one
-  cell is filled. The polygons' time intervals are dropped, with a
-  message. Polygons that miss the grid, or a set with no polygons, give
-  an empty result.
+  cell is filled.
+
+- A voxel and
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons:
+
+  The polygons are first put on the voxel's grid and depth levels with
+  [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md),
+  one level at a time, then compared as a voxel. A depth gap between two
+  polygons over one cell stays empty. When the voxel has no depth edges,
+  you set each level's slab with `bounds`, as in
+  [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md).
+
+- An envelope or voxel and
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  polygons, either way:
+
+  The polygons' time intervals are dropped, with a message. Polygons
+  that miss the grid, or a set with no polygons, give an empty result.
 
 - A voxel and
   [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)

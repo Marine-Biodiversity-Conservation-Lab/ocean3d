@@ -226,7 +226,7 @@
 <div class="section level3">
 <h3 id="intersect-3d-spatial-query">Intersect: 3D spatial query<a class="anchor" aria-label="anchor" href="#intersect-3d-spatial-query"></a>
 </h3>
-<p>Input: <code>SpatVoxel</code> or <code>SpatEnvelope</code>, compared with another 3D object, <code>SpatVector3D</code> polygons, or a 2D object: a <code>SpatRaster</code> footprint or polygons (<code>SpatVector</code>, <code>sf</code>). A 2D object restricts the domain horizontally without restricting the depths. Polygons compared with an envelope or voxel are first put on its grid, as <code><a href="reference/vector3d_to_envelope.html">vector3d_to_envelope()</a></code> does.</p>
+<p>Input: <code>SpatVoxel</code> or <code>SpatEnvelope</code>, compared with another 3D object, <code>SpatVector3D</code> polygons, or a 2D object: a <code>SpatRaster</code> footprint or polygons (<code>SpatVector</code>, <code>sf</code>). A 2D object restricts the domain horizontally without restricting the depths. <code>SpatVector3D</code> polygons compared with an envelope are first put on its grid, as <code><a href="reference/vector3d_to_envelope.html">vector3d_to_envelope()</a></code> does. With a voxel, they are put on its depth levels one level at a time, as <code><a href="reference/vector3d_to_voxel.html">vector3d_to_voxel()</a></code> does, so a depth gap between two polygons over one cell stays empty.</p>
 <p>Two sets of <code>SpatVector3D</code> polygons can also be compared: <code><a href="reference/intersect_3d.html">intersect_3d()</a></code> returns the polygons they share in outline, depth and time, and <code><a href="reference/intersects_3d.html">intersects_3d()</a></code> lists, for each polygon of the first set, the polygons of the second it shares space with.</p>
 <ul>
 <li>

@@ -116,7 +116,10 @@ The same `bounds` argument is accepted by
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 and
 [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
-wherever they place an envelope on a voxel’s depth levels, and by
+wherever they place an envelope or `SpatVector3D` polygons on a voxel’s
+depth levels, by
+[`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md),
+and by
 [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
 to measure a voxel. Use the same value in
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)

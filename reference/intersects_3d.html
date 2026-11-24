@@ -96,11 +96,12 @@ or a voxel.</p></dd>
 
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
-<dd><p>Only when one input is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: <code>"midpoint"</code>
-(default) or <code>"top"</code>. See <code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. Not used when the voxel
-carries its own depth edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>). To measure the
-result, pass the same <code>bounds</code> to <code><a href="volume.html">volume()</a></code>.</p></dd>
+<dd><p>Only when one input is a voxel and the other an envelope or
+<a href="SpatVector3D-class.html">SpatVector3D</a> polygons. How the envelope or polygons are placed
+on the voxel's depth levels: <code>"midpoint"</code> (default) or <code>"top"</code>. See
+<code><a href="envelope_to_voxel.html">envelope_to_voxel()</a></code>. Not used when the voxel carries its own depth
+edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>). To measure the result, pass the same
+<code>bounds</code> to <code><a href="volume.html">volume()</a></code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
