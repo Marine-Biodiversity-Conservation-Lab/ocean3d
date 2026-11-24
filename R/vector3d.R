@@ -361,8 +361,9 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 }
 
 # The one producer of `ocean3d_error_vector3d`: input that can't become a
-# SpatVector3D. Every check in as_vector3d() and buffer_3d() and the class's
-# validity rules report through it.
+# SpatVector3D, or a SpatVector3D that can't answer what is asked of it.
+# Every check in as_vector3d() and buffer_3d(), the class's validity rules, a
+# bad subscript in `[` and ext() of an empty object report through it.
 .abort_vector3d <- function(message) {
   rlang::abort(message, class = "ocean3d_error_vector3d", call = NULL)
 }
@@ -409,6 +410,172 @@ setMethod("show", "SpatVector3D", function(object) {
   }
   invisible(object)
 })
+
+#' @rdname SpatVector3D-class
+#' @param i For `[`: the features to keep, by position (negative numbers
+#'   drop), by a logical vector, or by feature ID (character). The result
+#'   keeps the features in the order of `i`, with their IDs and other
+#'   columns. For points and lines, every vertex of each chosen feature is
+#'   kept.
+#' @param j,drop Not used; `j` must be left out.
+#' @return `[`: a `SpatVector3D` of the same type with the chosen features,
+#'   which can be none.
+#' @export
+setMethod("[", "SpatVector3D", function(x, i, j, ..., drop = TRUE) {
+  if (!missing(j)) {
+    .abort_vector3d(
+      "A SpatVector3D is subset by feature only: use `x[i]`, not `x[i, j]`."
+    )
+  }
+  # The polygon table or the vertex table; polygon IDs are unique already.
+  ids <- unique(as.data.frame(x)$feature_id)
+  n <- length(ids)
+  if (missing(i)) i <- seq_len(n)
+  if (n == 0L && length(i)) {
+    .abort_vector3d("`x` has no features to pick from.")
+  }
+  if (is.factor(i)) i <- as.character(i)
+  # Positions, logicals and IDs all become positions, in the order asked.
+  chosen <- if (is.character(i)) {
+    unknown <- setdiff(i, ids)
+    if (length(unknown)) {
+      .abort_vector3d(glue::glue(
+        "No feature has ID {toString(unknown)}. The IDs are {toString(ids)}."
+      ))
+    }
+    match(i, ids)
+  } else if (is.logical(i)) {
+    if (length(i) != n || anyNA(i)) {
+      .abort_vector3d(glue::glue(
+        "A logical `i` must have one TRUE or FALSE per feature: got ",
+        "{length(i)} values, {sum(is.na(i))} of them NA, for {n} features."
+      ))
+    }
+    which(i)
+  } else if (is.numeric(i)) {
+    if (anyNA(i) || any(i != round(i)) || any(abs(i) > n) ||
+          (any(i < 0) && any(i > 0))) {
+      .abort_vector3d(glue::glue(
+        "`i` must be whole numbers from 1 to {n} (the features), all ",
+        "positive or all negative."
+      ))
+    }
+    seq_len(n)[i]
+  } else {
+    .abort_vector3d(glue::glue(
+      "`i` must be feature positions, a logical vector or feature IDs; got ",
+      "{class(i)[1L]}."
+    ))
+  }
+  # Feature IDs stay unique, so a feature can be picked once.
+  if (anyDuplicated(chosen)) {
+    repeated <- unique(ids[chosen[duplicated(chosen)]])
+    .abort_vector3d(glue::glue(
+      "Each feature can be picked once, but `i` repeats feature ",
+      "{toString(repeated)}."
+    ))
+  }
+  if (x@type == "polygons") {
+    return(.new_vector3d(x@type, x@time_resolution,
+                         features = x@features[chosen, , drop = FALSE]))
+  }
+  # Features in the order asked, vertices in order along each line.
+  v <- x@vertices[x@vertices$feature_id %in% ids[chosen], , drop = FALSE]
+  v <- v[order(match(v$feature_id, ids[chosen]), v$vertex), , drop = FALSE]
+  .new_vector3d(x@type, x@time_resolution, vertices = v)
+})
+
+#' @rdname SpatVector3D-class
+#' @return `ext()`: the features' horizontal extent as a [terra::SpatExtent]
+#'   in longitude and latitude: the shortest range of longitudes that covers
+#'   every feature, going either way round the globe. A shape that crosses
+#'   the antimeridian keeps its extent across it, with `xmax` past 180 (for
+#'   example 179 to 181), so a [terra::crop()] with it reads only the cells
+#'   near the antimeridian. A polygon around a pole covers every longitude,
+#'   from -180 to 180, and reaches the pole. Lines go the short way between
+#'   vertices, as in [buffer_3d()]. A `SpatVector3D` with no features has no
+#'   extent, and `ext()` stops.
+#' @export
+setMethod("ext", "SpatVector3D", function(x, ...) {
+  if (length(x) == 0L) {
+    .abort_vector3d("`x` has no features, so it has no extent.")
+  }
+  if (x@type == "polygons") {
+    # One geometry type, so the last coordinate column is the polygon.
+    g <- sf::st_cast(x@features$geometry, "MULTIPOLYGON")
+    coords <- sf::st_coordinates(g)
+    feature <- coords[, ncol(coords)]
+    lat <- range(coords[, "Y"])
+    # A polygon around a pole covers every longitude up to that pole.
+    poles <- sf::st_sfc(sf::st_point(c(0, 90)), sf::st_point(c(0, -90)),
+                        crs = 4326)
+    around <- sf::st_intersects(g, poles, sparse = FALSE)
+    if (any(around)) lat <- range(lat, c(90, -90)[colSums(around) > 0])
+    lon <- vapply(seq_along(g), function(i) {
+      if (any(around[i, ])) return(c(-180, 180))
+      on <- coords[feature == i, "X"]
+      .longitude_cover(on, on)
+    }, numeric(2))
+  } else {
+    v <- x@vertices
+    lat <- range(v$lat)
+    lon <- vapply(split(v$lon, factor(v$feature_id, unique(v$feature_id))),
+                  function(on) range(.unwrap_longitude(on)), numeric(2))
+  }
+  terra::ext(c(.longitude_cover(lon[1L, ], lon[2L, ]), lat))
+})
+
+# Internal: the shortest range of longitudes, west to east, that covers every
+# interval from `west` to `east` (each at most 360 degrees wide) on the
+# circle: the complement of the widest gap between them. The west end is in
+# [-180, 180) and the east end may pass 180; intervals that leave no gap
+# give -180 to 180. Used by ext() for each polygon's vertices and to combine
+# the features of any type.
+.longitude_cover <- function(west, east) {
+  start <- .normalise_longitude(west)
+  end <- start + (east - west)
+  o <- order(start)
+  start <- start[o]
+  end <- end[o]
+  # Join intervals that overlap, west to east.
+  s <- start[1L]
+  e <- end[1L]
+  for (k in seq_along(start)[-1L]) {
+    if (start[k] <= e[length(e)]) {
+      e[length(e)] <- max(e[length(e)], end[k])
+    } else {
+      s <- c(s, start[k])
+      e <- c(e, end[k])
+    }
+  }
+  # The last can reach round past 180 into the first ones.
+  while (length(s) > 1L && s[1L] + 360 <= e[length(e)]) {
+    e[length(e)] <- max(e[length(e)], e[1L] + 360)
+    s <- s[-1L]
+    e <- e[-1L]
+  }
+  n <- length(s)
+  gaps <- c(s[-1L], s[1L] + 360) - e
+  if (max(gaps) <= 0) return(c(-180, 180))
+  j <- which.max(gaps)
+  # The cover runs from the start after the widest gap to the end before it.
+  first <- if (j == n) 1L else j + 1L
+  west <- s[first]
+  width <- (if (j == n) e[n] else e[j] + 360) - west
+  west <- .normalise_longitude(west)
+  c(west, west + width)
+}
+
+#' @rdname SpatVector3D-class
+#' @param proj,describe,parse For `crs()`: as in [terra::crs()].
+#' @return `crs()`: WGS84 (EPSG:4326), the CRS of every `SpatVector3D`, in
+#'   the form chosen with `proj`, `describe` or `parse`.
+#' @export
+setMethod("crs", "SpatVector3D",
+          function(x, proj = FALSE, describe = FALSE, parse = FALSE) {
+            terra::crs("EPSG:4326", proj = proj, describe = describe,
+                       parse = parse)
+          })
 
 #' @rdname SpatVector3D-class
 #' @param row.names,optional Not used.

@@ -353,6 +353,116 @@ test_that("invalid polygon input is rejected with a clear error", {
   }
 })
 
+# Subsetting, extent and CRS -----------------------------------------------
+
+test_that("`[` picks features by position, logical or ID, in that order", {
+  obs <- data.frame(lon = c(150, 151, 152), lat = c(-20, -21, -22),
+                    depth = c(10, 35, 50), species = c("a", "b", "c"))
+  pts <- as_vector3d(obs)
+  lines <- as_vector3d(dive(), type = "lines", id = "tag")
+  polygons <- as_vector3d(areas(), id = "name", depth_min = "top",
+                          depth_max = "bottom", time = c("from", "to"))
+
+  # The same features whichever way they are picked, in the order asked,
+  # with their IDs and other columns.
+  picks <- list(c(3, 1), c(TRUE, FALSE, TRUE), c("3", "1"), -2)
+  for (i in picks) {
+    sub <- pts[i]
+    expect_s4_class(sub, "SpatVector3D")
+    expect_identical(geomtype(sub), "points")
+    want <- if (is.logical(i) || is.numeric(i) && any(i < 0)) {
+      c("1", "3")
+    } else {
+      c("3", "1")
+    }
+    expect_identical(as.data.frame(sub)$feature_id, want)
+    expect_identical(as.data.frame(sub)$species, letters[as.integer(want)])
+  }
+
+  # Lines keep every vertex of each chosen line, in line then vertex order.
+  b_then_a <- as.data.frame(lines[c("B", "A")])
+  expect_identical(b_then_a$feature_id, rep(c("B", "A"), each = 3))
+  expect_identical(b_then_a$vertex, rep(1:3, 2))
+  expect_identical(b_then_a$speed, c(4:6, 1:3))
+  expect_identical(length(lines[1]), 1L)
+
+  # Polygons keep their outline, depth range, time and columns.
+  bank <- polygons["bank"]
+  expect_identical(as.data.frame(bank)$feature_id, "bank")
+  expect_identical(as.data.frame(bank)$status, "partial")
+  expect_identical(bank@time_resolution, "daily")
+  expect_equal(volume(bank), volume(polygons) - volume(polygons[1]))
+
+  # No feature is a valid, empty result.
+  none <- pts[0]
+  expect_identical(length(none), 0L)
+  expect_s4_class(none, "SpatVector3D")
+  expect_identical(length(polygons[c(FALSE, FALSE)]), 0L)
+
+  # A feature can be picked once, whatever the geometry type.
+  bad <- list(
+    list(call = quote(pts[1, 2]), pattern = "by feature only"),
+    list(call = quote(pts["z"]), pattern = "No feature has ID z"),
+    list(call = quote(pts[4]), pattern = "whole numbers from 1 to 3"),
+    list(call = quote(pts[c(-1, 2)]), pattern = "all positive or all negative"),
+    list(call = quote(pts[c(TRUE, FALSE)]), pattern = "one TRUE or FALSE"),
+    list(call = quote(pts[c(TRUE, NA, FALSE)]), pattern = "1 of them NA"),
+    list(call = quote(pts[c(1, 1, 2)]), pattern = "repeats feature 1"),
+    list(call = quote(lines[c("A", "A")]), pattern = "repeats feature A"),
+    list(call = quote(polygons[c(2, 2)]), pattern = "repeats feature bank"),
+    list(call = quote(pts[list(1)]), pattern = "got list"),
+    list(call = quote(none[1]), pattern = "no features to pick from")
+  )
+  for (case in bad) {
+    expect_error(eval(case$call), case$pattern,
+                 class = "ocean3d_error_vector3d")
+  }
+})
+
+test_that("ext() and crs() give the horizontal extent in WGS84", {
+  pts <- as_vector3d(data.frame(lon = c(150, 152), lat = c(-22, -20),
+                                depth = c(10, 35)))
+  expect_equal(as.vector(terra::ext(pts)),
+               c(xmin = 150, xmax = 152, ymin = -22, ymax = -20))
+  lines <- as_vector3d(dive(), type = "lines", id = "tag")
+  expect_equal(as.vector(terra::ext(lines)),
+               c(xmin = 150, xmax = 160.2, ymin = -20, ymax = -20))
+  polygons <- as_vector3d(areas(), depth_min = "top", depth_max = "bottom")
+  expect_equal(as.vector(terra::ext(polygons)),
+               c(xmin = 150, xmax = 153, ymin = -21, ymax = -20))
+  expect_true(terra::same.crs(terra::crs(pts), "EPSG:4326"))
+  expect_identical(terra::crs(pts, describe = TRUE)$code, "4326")
+  expect_error(terra::ext(pts[0]), "no features, so it has no extent",
+               class = "ocean3d_error_vector3d")
+})
+
+test_that("ext() stays continuous across the antimeridian and round a pole", {
+  lon_range <- function(x) as.vector(terra::ext(x))[c("xmin", "xmax")]
+  # A line from 179 to -179 goes the short way, through 180.
+  seam <- as_vector3d(data.frame(id = "A", lon = c(179, -179), lat = 0,
+                                 depth = 10), type = "lines", id = "id")
+  expect_equal(lon_range(seam), c(xmin = 179, xmax = 181))
+  # A buffer split at the antimeridian, and points on either side of it.
+  buffer <- buffer_3d(seam, radius_km = 20, depth_window = 5)
+  got <- lon_range(buffer)
+  expect_true(got[["xmin"]] > 178.7 && got[["xmin"]] < 179 &&
+                got[["xmax"]] > 181 && got[["xmax"]] < 181.3)
+  points <- as_vector3d(data.frame(lon = c(170, -170, 175), lat = 0,
+                                   depth = 10))
+  expect_equal(lon_range(points), c(xmin = 170, xmax = 190))
+  # Features that leave no gap round the globe cover every longitude.
+  spread <- as_vector3d(data.frame(id = "A", lon = c(-170, -50, 70, 190),
+                                   lat = 0, depth = 10),
+                        type = "lines", id = "id")
+  expect_equal(lon_range(spread), c(xmin = -180, xmax = 180))
+  # A buffer around the North Pole covers every longitude up to the pole.
+  pole <- buffer_3d(as_vector3d(data.frame(lon = 0, lat = 89.9, depth = 10)),
+                    radius_km = 50, depth_window = 5)
+  e <- as.vector(terra::ext(pole))
+  expect_equal(e[c("xmin", "xmax", "ymax")],
+               c(xmin = -180, xmax = 180, ymax = 90))
+})
+
 # Buffers -------------------------------------------------------------------
 
 area_km2 <- function(polygons) {
