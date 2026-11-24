@@ -305,6 +305,13 @@ an exact match and stop otherwise. For the old behaviour, pass
   with a depth range and an optional time interval, such as a circle of
   10 km radius from 10 to 60 m deep around a detection at 35 m. `volume()`
   on points or lines now suggests it (#114).
+* New `sample_3d()` samples `SpatVector3D` lines, such as a dive track or a
+  vessel route, into points: the vertices, and with `spacing_km`,
+  `depth_step_m` or `time_step`, points in between along the WGS84
+  geodesic, with depth and time interpolated along each segment. It uses
+  the sampling of `extract_to_track()`, with the same argument names. The
+  points can be buffered with `buffer_3d()` or compared with a grid with
+  `intersect_3d()` and `mask()` (#105).
 * New `vector3d_to_envelope()` puts `SpatVector3D` polygons onto a grid as
   a `SpatEnvelope`, as `vect_to_envelope()` does for 2D polygons. Where
   polygons overlap, a cell gets the shallowest top and deepest bottom of
@@ -359,6 +366,10 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## Bug fixes
 
+* With a `time_step` in months or years, `extract_to_track()` placed each
+  sample one step after the previous one, so a route starting on 31 January
+  got 29 February, then 29 March, and kept the 29th. Each sample is now k
+  steps after the start: 29 February, 31 March, 30 April (#146, #105).
 * `as_proxy()`, `extract_to_point()`, `extract_to_buffer()` and
   `extract_to_track()` now open remote sources given as a URL, such as
   OPeNDAP or NCZarr addresses. They used to stop with "netCDF file does

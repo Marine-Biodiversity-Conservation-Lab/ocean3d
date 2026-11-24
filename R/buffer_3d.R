@@ -172,7 +172,16 @@ buffer_3d <- function(x, radius_km, depth_window, time_window = NULL) {
     stringsAsFactors = FALSE
   )
   features$geometry <- sf::st_geometry(sf::st_as_sf(outlines))
-  # Other columns: kept if they have one value per feature.
+  .new_vector3d("polygons", x@time_resolution,
+                features = .add_attributes(features, .feature_attributes(v)))
+}
+
+# Internal: the other columns of a vertex table that have one value along
+# each feature, one row per feature in order of first appearance, for
+# buffer_3d() and sample_3d(). Columns that change from vertex to vertex
+# (such as speed) are dropped.
+.feature_attributes <- function(v) {
+  feature <- factor(v$feature_id, levels = unique(v$feature_id))
   extra <- v[setdiff(names(v), c("feature_id", "vertex", "lon", "lat",
                                  "depth", "time"))]
   constant <- vapply(extra, function(column) {
@@ -180,7 +189,5 @@ buffer_3d <- function(x, radius_km, depth_window, time_window = NULL) {
       length(unique(values)) == 1L
     }))
   }, logical(1))
-  extra <- extra[!duplicated(feature), constant, drop = FALSE]
-  .new_vector3d("polygons", x@time_resolution,
-                features = .add_attributes(features, extra))
+  extra[!duplicated(feature), constant, drop = FALSE]
 }
