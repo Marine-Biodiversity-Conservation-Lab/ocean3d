@@ -26,18 +26,20 @@
   vector <- methods::is(x, "SpatVector3D") || methods::is(y, "SpatVector3D")
   both <- methods::is(x, "SpatVector3D") && methods::is(y, "SpatVector3D")
   message <- if (both && x@type == "points" && y@type == "points") {
-    paste0("Two sets of points share no space; compare points with ",
-           "polygons, an envelope or a voxel, or buffer one set with ",
-           "buffer_3d().")
+    glue::glue(
+      "Two sets of points share no space; compare points with polygons, an ",
+      "envelope or a voxel, or buffer one set with buffer_3d()."
+    )
   } else if (vector) {
     other <- if (methods::is(x, "SpatVector3D")) y else x
     glue::glue(
       "SpatVector3D polygons or points can be compared with a SpatEnvelope, ",
-      "a SpatVoxel or SpatVector3D polygons, not with ",
-      "{class(other)[1L]}. Build 3D polygons from 2D ones with as_vector3d()."
+      "a SpatVoxel or a SpatVector3D (polygons, or points with polygons), ",
+      "not with {class(other)[1L]}. Build 3D polygons from 2D ones with ",
+      "as_vector3d()."
     )
   } else {
-    paste0(
+    glue::glue(
       "neither `x` nor `y` is a SpatEnvelope, a SpatVoxel or SpatVector3D ",
       "polygons or points. A 3D query needs at least one 3D object; build ",
       "one with as_envelope(), vect_to_envelope(), as_voxel() or ",
@@ -229,14 +231,13 @@ setMethod(
     # take the general path below: intersect_3d() gives the part of the
     # envelope they reach. Assigned first: an error raised while S4
     # evaluates an argument for dispatch loses its class.
-    on_grid <- function(v, grid) {
-      v@type == "polygons" || methods::is(grid, "SpatVoxel")
-    }
-    if (methods::is(x, "SpatVector3D") && .is_grid_3d(y) && on_grid(x, y)) {
+    if (methods::is(x, "SpatVector3D") && .is_grid_3d(y) &&
+          .placed_on_grid(x, y)) {
       shape <- .vector3d_on_grid(x, y)
       return(intersects_3d(shape, y, ...))
     }
-    if (methods::is(y, "SpatVector3D") && .is_grid_3d(x) && on_grid(y, x)) {
+    if (methods::is(y, "SpatVector3D") && .is_grid_3d(x) &&
+          .placed_on_grid(y, x)) {
       shape <- .vector3d_on_grid(y, x)
       return(intersects_3d(x, shape, ...))
     }
@@ -291,7 +292,8 @@ setMethod(
 #'   \item{anything masked by [SpatVector3D-class] points}{A point covers
 #'     one cell and one depth level, as in [intersect_3d()]. A voxel keeps
 #'     its value in each point's cell at the level nearest the point's depth
-#'     (chosen by depth, not by where the voxel has values). An envelope
+#'     (chosen by depth, not by where the voxel has values), so `bounds` is
+#'     an error with points. An envelope
 #'     keeps its interval whole in the cells where a point lies within it. A
 #'     plain `SpatRaster` keeps the cells that hold a point. Lines aren't
 #'     supported; [buffer_3d()] turns them into polygons.}
@@ -457,20 +459,23 @@ setMethod(
   .check_geomtype(x, c("polygons", "points"))
   # remove the 3D class
   grid <- methods::as(template[[1]], "SpatRaster")
-  empty_envelope <- function(...) {
-    out <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
-    names(out) <- c("depth_min", "depth_max")
-    as_envelope(out)
-  }
+  # An envelope with no cells, filled below where points reach it.
+  out <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
+  names(out) <- c("depth_min", "depth_max")
   if (x@type == "polygons") {
-    if (length(x) == 0L) return(empty_envelope())
+    if (length(x) == 0L) return(as_envelope(out))
     return(tryCatch(vector3d_to_envelope(x, template),
-                    ocean3d_error_envelope_empty = empty_envelope))
+                    ocean3d_error_envelope_empty = function(e) {
+                      as_envelope(out)
+                    }))
   }
   v <- x@vertices
   cells <- .point_cells(x, grid)
   on <- !is.na(cells)
   if (methods::is(template, "SpatVoxel")) {
+    # The level nearest the point's depth, as extract_to_point() picks it.
+    # With uneven slabs (stored depth edges), the slab that contains the
+    # point can belong to another level; the nearest level is still used.
     d <- depths(template)
     level <- vapply(v$depth, function(z) which.min(abs(d - z)), integer(1))
     occ <- matrix(0, terra::ncell(grid), length(d))
@@ -482,17 +487,24 @@ setMethod(
   depth <- v$depth[on]
   inside <- !is.na(limits[, "depth_min"]) & limits[, "depth_min"] <= depth &
     depth <= limits[, "depth_max"]
-  if (!any(inside)) return(empty_envelope())
+  if (!any(inside)) return(as_envelope(out))
   cell <- factor(cells[on][inside])
   reached <- data.frame(
     cell = as.integer(levels(cell)),
     depth_min = tapply(depth[inside], cell, min),
     depth_max = tapply(depth[inside], cell, max)
   )
-  out <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
-  names(out) <- c("depth_min", "depth_max")
   out[reached$cell] <- as.matrix(reached[c("depth_min", "depth_max")])
   as_envelope(out)
+}
+
+# Internal: whether a SpatVector3D goes on a grid object's grid before the
+# two are compared, as .vector3d_on_grid() puts it. Polygons always do, and
+# points on a voxel; points with an envelope are compared directly, since
+# intersect_3d() gives the part of the envelope they reach. Shared by
+# intersects_3d() and mask().
+.placed_on_grid <- function(x, grid) {
+  x@type == "polygons" || methods::is(grid, "SpatVoxel")
 }
 
 # Polygons go on the grid, then take the envelope methods. Points on a voxel
@@ -516,6 +528,9 @@ setMethod("intersect_3d", c("SpatVector3D", "SpatEnvelope"),
 #' @export
 setMethod("intersect_3d", c("SpatVector3D", "SpatVoxel"),
           function(x, y, ...) {
+            # Points take the level nearest their depth, so `bounds` has
+            # nothing to place.
+            if (x@type == "points") .no_extra_args(...)
             on_grid <- .vector3d_on_grid(x, y)
             intersect_3d(on_grid, y, ...)
           })
@@ -626,28 +641,25 @@ setMethod(
   polygons <- if (points_first) y else x
   v <- points@vertices
   f <- polygons@features
-  positions <- sf::st_sfc(lapply(seq_len(nrow(v)), function(i) {
-    sf::st_point(c(v$lon[i], v$lat[i]))
-  }), crs = 4326)
-  # Outlines and positions are both WGS84, so sf tests them on the sphere.
+  # Outlines and positions are both WGS84, so sf tests them with its own
+  # model for geographic coordinates (the sphere, by default).
+  positions <- sf::st_geometry(
+    sf::st_as_sf(v[c("lon", "lat")], coords = c("lon", "lat"), crs = 4326)
+  )
   hits <- sf::st_intersects(positions, f$geometry)
   i <- rep(seq_len(nrow(v)), lengths(hits))
   j <- unlist(hits)
   # Depths within the range, both ends included: a point at a polygon's
   # bottom is inside it.
   inside <- v$depth[i] >= f$depth_min[j] & v$depth[i] <= f$depth_max[j]
-  # Times within the interval, both ends included; a daily interval covers
-  # all of its end day. A missing time on either side matches any time.
-  end <- f$time_end[j]
-  if (identical(polygons@time_resolution, "daily")) end <- end + 86400
+  # Times within the interval, both ends included, the rule the polygon pairs
+  # use. With dates, every time is stored at midnight UTC and the two sides
+  # share one resolution (checked by the caller), so `time <= time_end` also
+  # takes a point on the interval's end day. A missing time on either side
+  # matches any time.
   time <- v$time[i]
-  after_end <- if (identical(polygons@time_resolution, "daily")) {
-    time >= end
-  } else {
-    time > end
-  }
   in_time <- is.na(time) | is.na(f$time_start[j]) |
-    (time >= f$time_start[j] & !after_end)
+    (time >= f$time_start[j] & time <= f$time_end[j])
   keep <- inside & in_time
   i <- i[keep]
   j <- j[keep]
@@ -695,7 +707,16 @@ setMethod(
 #' @export
 setMethod("mask", c("SpatRaster", "SpatVector3D"),
           function(x, mask, ...) {
-            if (mask@type != "points" || methods::is(x, "SpatVoxel")) {
+            # Checked first: below, an error raised while S4 evaluates
+            # ifel()'s argument would lose its class.
+            .check_geomtype(mask, c("polygons", "points"))
+            if (.placed_on_grid(mask, x)) {
+              # Points take the level nearest their depth, so `bounds` has
+              # nothing to place; the rest of `...` is terra's.
+              extra <- list(...)
+              if (mask@type == "points" && "bounds" %in% names(extra)) {
+                .no_extra_args(bounds = extra$bounds)
+              }
               shape <- .vector3d_on_grid(mask, x)
               return(mask(x, shape, ...))
             }

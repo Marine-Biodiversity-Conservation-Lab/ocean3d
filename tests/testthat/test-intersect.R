@@ -793,6 +793,18 @@ test_that("mask(voxel, points) keeps the value at each point's level only", {
   gappy <- as_voxel(gappy)
   expect_true(all(is.na(terra::values(mask(gappy, points_at(2.5, 2.5, 40))))))
 
+  # Points take the nearest level, so `bounds` is an error, not ignored.
+  for (call in list(function() intersect_3d(points, voxel, bounds = "top"),
+                    function() mask(voxel, points, bounds = "top"))) {
+    expect_error(call(), "a point takes the level nearest its depth",
+                 class = "ocean3d_error_unused_argument")
+  }
+  # A grid without a CRS can't place them.
+  bare <- voxel
+  terra::crs(bare) <- ""
+  expect_error(mask(bare, points), "has no CRS",
+               class = "ocean3d_error_envelope_input")
+
   # Points off the grid share nothing, and so do no points at all.
   far <- points_at(20, 20, 40)
   expect_true(all(is.na(terra::values(intersect_3d(far, voxel)))))

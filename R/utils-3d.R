@@ -50,9 +50,10 @@
   nms <- if (is.null(nms)) rep("", length(extra)) else nms
   nms[nms == ""] <- "<unnamed>"
   rlang::abort(glue::glue(
-    "unused argument(s): {toString(nms)}. `bounds` applies only when one ",
-    "input is a SpatVoxel; envelopes and polygons carry their own depth ",
-    "intervals."
+    "unused argument(s): {toString(nms)}. `bounds` applies only when an ",
+    "envelope or polygons meet a SpatVoxel; envelopes and polygons carry ",
+    "their own depth intervals, and a point takes the level nearest its ",
+    "depth."
   ), class = "ocean3d_error_unused_argument", call = NULL)
 }
 
@@ -231,6 +232,12 @@
 # does for polygons. Used by .footprint() and the point queries in
 # R/intersect.R.
 .point_cells <- function(x, grid) {
+  if (terra::crs(grid) == "") {
+    .abort_envelope_input(paste0(
+      "The grid has no CRS, so the points can't be placed on it. Set one ",
+      "with terra::crs()."
+    ))
+  }
   v <- x@vertices
   if (nrow(v) == 0L) return(integer(0))
   points <- terra::vect(cbind(v$lon, v$lat), crs = "EPSG:4326")
