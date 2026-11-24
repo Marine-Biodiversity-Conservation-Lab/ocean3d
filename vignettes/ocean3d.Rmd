@@ -1214,6 +1214,11 @@ Alternatively, `extract_to_area()` allows
 you to extract environmental data within
 a geographical area and selected depth range.
 
+The article
+`vignette("workflow-values-in-shapes")`
+shows the same work one step at a time,
+for points, buffers and areas.
+
 **3. Investigate three-dimensional spatial overlap**
 
 Another important application of `ocean3d`
