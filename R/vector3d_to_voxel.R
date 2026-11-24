@@ -22,9 +22,11 @@
 #' polygons with a [SpatVoxel-class] of data; [intersect_3d()],
 #' [intersects_3d()] and [mask()] use it for polygons and a voxel.
 #'
-#' With a raster surface at either end (see [as_vector3d()]), the polygons
-#' over a cell share that end, so they cover one unbroken range there; it is
-#' read from the surface in each cell, as in [vector3d_to_envelope()].
+#' With a raster surface at either end (see [as_vector3d()]), that end's
+#' depth in each cell is read from the surface, as in
+#' [vector3d_to_envelope()]. All polygons share the surface, so over each
+#' cell they cover one unbroken depth range and no levels between them stay
+#' empty.
 #'
 #' Polygons with `depth_min` equal to `depth_max` have no thickness and cover
 #' nothing. A voxel has no time, so the polygons' time intervals are dropped,
@@ -77,36 +79,43 @@ vector3d_to_voxel <- function(x, template, bounds = c("midpoint", "top")) {
   }
   depths <- depths(template)
   edges <- depth_bounds(template)
-  # With a raster surface every polygon shares that end, so the polygons over
-  # a cell cover one unbroken depth range there and the envelope route is
-  # exact: no gap between them can be lost.
   if (length(x@surfaces)) {
-    return(.promote_to_voxel(vector3d_to_envelope(x, template), depths,
-                             bounds, edges))
+    # With a raster surface every polygon shares that end, so the polygons
+    # over a cell cover one unbroken depth range there and the envelope route
+    # is exact: no gap between them can be lost. Cells outside the levels
+    # are left out quietly, as on the route without a surface.
+    occ <- withCallingHandlers(
+      .voxel_occupancy(.promote_to_voxel(vector3d_to_envelope(x, template),
+                                         depths, bounds, edges)),
+      ocean3d_warning_envelope_outside_slabs = function(w) {
+        invokeRestart("muffleWarning")
+      }
+    )
+  } else {
+    .inform_time_dropped(x)
+    slab <- .depth_slabs(depths, bounds, edges)
+    # Only the grid is used; the class tag would reach the depth-aware
+    # methods.
+    grid <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
+    polygons <- .outlines_on_grid(f, grid)
+    # The polygons covering each level, by the rule envelope_to_voxel()
+    # uses, so one polygon lands on the same levels as its range as an
+    # envelope. A polygon with no thickness covers nothing, as in
+    # vector3d_to_envelope().
+    thick <- f$depth_max > f$depth_min
+    covers <- lapply(seq_along(depths), function(i) {
+      which(thick & .in_slab(f$depth_min, f$depth_max, slab, i,
+                             closed = is.null(edges)))
+    })
+    # Each set of polygons is rasterized once: a polygon set with one depth
+    # range covers a run of levels, often dozens on a World Ocean Atlas grid.
+    sets <- unique(covers)
+    footprints <- lapply(sets, function(rows) {
+      if (!length(rows)) return(terra::setValues(terra::rast(grid), 0))
+      .footprint(polygons[polygons$row %in% rows], grid)
+    })
+    occ <- terra::rast(footprints[match(covers, sets)])
   }
-  .inform_time_dropped(x)
-
-  slab <- .depth_slabs(depths, bounds, edges)
-  # Only the grid is used; the class tag would reach the depth-aware methods.
-  grid <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
-  polygons <- .outlines_on_grid(f, grid)
-
-  # The polygons covering each level, by the rule envelope_to_voxel() uses,
-  # so one polygon lands on the same levels as its range as an envelope. A
-  # polygon with no thickness covers nothing, as in vector3d_to_envelope().
-  thick <- f$depth_max > f$depth_min
-  covers <- lapply(seq_along(depths), function(i) {
-    which(thick & .in_slab(f$depth_min, f$depth_max, slab, i,
-                           closed = is.null(edges)))
-  })
-  # Each set of polygons is rasterized once: a polygon set with one depth
-  # range covers a run of levels, often dozens on a World Ocean Atlas grid.
-  sets <- unique(covers)
-  footprints <- lapply(sets, function(rows) {
-    if (!length(rows)) return(terra::setValues(terra::rast(grid), 0))
-    .footprint(polygons[polygons$row %in% rows], grid)
-  })
-  occ <- terra::rast(footprints[match(covers, sets)])
   if (!any(terra::global(occ, "max", na.rm = TRUE)[, 1] > 0)) {
     .abort_envelope_empty(paste0(
       "The polygons cover no cell and depth level of `template`: they miss ",

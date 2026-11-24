@@ -14,9 +14,11 @@
 #' over the same cell give 0 to 300 m there.
 #'
 #' Where an end is a raster surface (see [as_vector3d()]), each cell takes
-#' its depth from the surface, resampled onto `template` with bilinear
-#' interpolation when the grids differ, and cells where the surface has no
-#' value are `NA`.
+#' its depth from the surface. On a grid other than the surface's, a coarser
+#' cell takes the average depth of the surface under it and a finer one
+#' bilinear interpolation. Cells where the surface has no value, or where
+#' `depth_min` isn't above `depth_max`, are `NA`, as in
+#' [vect_to_envelope()].
 #'
 #' An envelope has no time, so the polygons' time intervals are dropped, with
 #' a message when any polygon has one. To make an envelope for one period,
@@ -93,20 +95,53 @@ vector3d_to_envelope <- function(x, template) {
                              touches = TRUE)
     terra::setValues(rank, levels[terra::values(rank)[, 1]])
   }
-  # An end given as a raster surface is read in each cell instead, from the
-  # surface itself on the same grid, else resampled onto it.
+  # An end given as a raster surface is read in each cell instead.
   surfaces <- lapply(x@surfaces, terra::unwrap)
   end <- function(field, fun) {
     surface <- surfaces[[field]]
-    if (is.null(surface)) return(extreme(field, fun))
-    same <- terra::compareGeom(surface, grid, stopOnError = FALSE,
-                               messages = FALSE)
-    if (isTRUE(same)) surface else
-      terra::project(surface, grid, method = "bilinear")
+    if (is.null(surface)) extreme(field, fun) else
+      .surface_on_grid(surface, grid)
   }
   top <- end("depth_min", "min")
   bottom <- end("depth_max", "max")
   # vect_to_envelope() keeps the cells the polygons touch, drops cells with
   # no thickness, and stops if none are left.
   vect_to_envelope(polygons, grid, depth_min = top, depth_max = bottom)
+}
+
+# Internal: a polygon's raster depth surface on `grid`, the one place a
+# surface is resampled. A SpatVector3D isn't tied to a grid, so its surface
+# is put on whichever grid it meets, where vect_to_envelope() asks for a
+# raster limit already on its template. A coarser grid takes each cell's
+# average depth, so a cell holds its typical depth rather than one point's;
+# a finer or equal grid is read with bilinear interpolation. On a
+# longitude-latitude grid the surface is also tried 360 degrees either way,
+# as the outlines are (.outlines_on_grid()), so a grid with longitudes past
+# 180, such as a crop() across the antimeridian, is covered too. Depths stay
+# 8-byte doubles: GDAL would resample in 4-byte floats.
+.surface_on_grid <- function(surface, grid) {
+  same <- terra::compareGeom(surface, grid, stopOnError = FALSE,
+                             messages = FALSE)
+  if (isTRUE(same)) return(surface)
+  method <- if (terra::same.crs(surface, grid) &&
+                  all(terra::res(grid) > terra::res(surface))) {
+    "average"
+  } else {
+    "bilinear"
+  }
+  wopt <- list(datatype = "FLT8S")
+  if (!terra::same.crs(surface, grid)) {
+    return(terra::project(surface, grid, method = method, wopt = wopt))
+  }
+  shifts <- if (terra::is.lonlat(grid)) c(0, 360, -360) else 0
+  parts <- lapply(shifts, function(dx) {
+    moved <- terra::shift(surface, dx = dx)
+    if (is.null(terra::intersect(terra::ext(moved), terra::ext(grid)))) {
+      return(NULL)
+    }
+    terra::resample(moved, grid, method = method, wopt = wopt)
+  })
+  parts <- Filter(Negate(is.null), parts)
+  if (!length(parts)) return(terra::rast(grid, vals = NA_real_))
+  Reduce(terra::cover, parts)
 }

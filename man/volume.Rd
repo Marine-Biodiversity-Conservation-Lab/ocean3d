@@ -92,11 +92,12 @@ solid by construction. Volume is
 \item{\link[=SpatVoxel-class]{SpatVoxel}}{Depth is the layer index. Each occupied voxel
 contributes its cell area times the thickness of the slab its depth
 level stands for, so interior gaps are excluded rather than filled.}
-\item{\link[=SpatVector3D-class]{SpatVector3D} polygons}{Measured from the outlines, not a
-grid: each polygon's area on the WGS84 ellipsoid times
-\code{depth_max - depth_min}. Polygon edges are geodesics, so a polygon
-drawn along a grid's cell edges measures slightly differently from
-its envelope on that grid, whose cells are bounded by parallels.
+\item{\link[=SpatVector3D-class]{SpatVector3D} polygons}{With numbers for \code{depth_min} and
+\code{depth_max}, measured from the outlines, not a grid: each polygon's
+area on the WGS84 ellipsoid times \code{depth_max - depth_min}. Polygon
+edges are geodesics, so a polygon drawn along a grid's cell edges
+measures slightly differently from its envelope on that grid, whose
+cells are bounded by parallels.
 The time interval doesn't change the volume. The total adds up the
 polygons, so where they overlap the shared space is counted once for
 each; the overlap between two sets is \code{volume(intersect_3d(x, y))}.
@@ -104,7 +105,9 @@ each; the overlap between two sets is \code{volume(intersect_3d(x, y))}.
 on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} first. Polygons with a raster
 depth surface (see \code{\link[=as_vector3d]{as_vector3d()}}) are measured cell by cell on the
 surface's grid instead: each cell's thickness times its area inside
-the polygon, an estimate at the surface's resolution. Points and
+the polygon, an estimate at the surface's resolution. Cells where the
+surface is \code{NA} (an unknown depth) or leaves no water add nothing, as
+in \code{\link[=vect_to_envelope]{vect_to_envelope()}}. Points and
 lines have no volume, so they are an error; \code{\link[=buffer_3d]{buffer_3d()}} turns them
 into polygons.}
 }

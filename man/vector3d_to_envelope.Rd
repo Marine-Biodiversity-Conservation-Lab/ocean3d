@@ -34,9 +34,11 @@ depth range per cell, so polygons from 0 to 50 m and from 200 to 300 m
 over the same cell give 0 to 300 m there.
 
 Where an end is a raster surface (see \code{\link[=as_vector3d]{as_vector3d()}}), each cell takes
-its depth from the surface, resampled onto \code{template} with bilinear
-interpolation when the grids differ, and cells where the surface has no
-value are \code{NA}.
+its depth from the surface. On a grid other than the surface's, a coarser
+cell takes the average depth of the surface under it and a finer one
+bilinear interpolation. Cells where the surface has no value, or where
+\code{depth_min} isn't above \code{depth_max}, are \code{NA}, as in
+\code{\link[=vect_to_envelope]{vect_to_envelope()}}.
 
 An envelope has no time, so the polygons' time intervals are dropped, with
 a message when any polygon has one. To make an envelope for one period,

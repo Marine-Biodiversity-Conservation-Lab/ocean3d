@@ -129,12 +129,23 @@ setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE,
   f <- x@features
   if (nrow(f) == 0L) return(0)
   # With a raster surface, thickness times the area inside each polygon,
-  # cell by cell on the surface's grid: an estimate at its resolution.
+  # cell by cell on the surface's grid: an estimate at its resolution. A cell
+  # with no surface value has an unknown depth, and one where the top isn't
+  # above the bottom holds no water, so neither adds anything, as when the
+  # polygons go on a grid with vect_to_envelope().
   if (length(x@surfaces)) {
-    cells <- .surface_cells(f, lapply(x@surfaces, terra::unwrap),
-                            exact = TRUE)
-    return(sum(cells$fraction * cells$area_km2 *
-                 (cells$bottom - cells$top), na.rm = TRUE) / 1000)
+    surfaces <- lapply(x@surfaces, terra::unwrap)
+    grid <- surfaces[[1L]]
+    outlines <- .outlines_on_grid(f, grid)
+    layers <- c(surfaces, list(area_km2 = .cell_area_km2(grid)))
+    stack <- terra::rast(unname(layers))
+    names(stack) <- names(layers)
+    cells <- terra::extract(stack, outlines, exact = TRUE, ID = TRUE)
+    row <- outlines$row[cells$ID]
+    end <- function(name) cells[[name]] %||% f[[name]][row]
+    thickness <- pmax(end("depth_max") - end("depth_min"), 0)
+    return(sum(cells$fraction * cells$area_km2 * thickness, na.rm = TRUE) /
+             1000)
   }
   area_km2 <- terra::expanse(terra::vect(f$geometry), unit = "km")
   sum(area_km2 * (f$depth_max - f$depth_min) / 1000)

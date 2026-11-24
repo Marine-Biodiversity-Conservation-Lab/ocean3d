@@ -180,10 +180,11 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #'   times, as for [extract_to_point()], or `NA` when there is no time.
 #' @slot surfaces Polygons: a list with an element `depth_min` or
 #'   `depth_max`, or both, for each end given as a raster surface, stored with
-#'   [terra::wrap()] so the object can be saved. Empty when both ends are
-#'   numbers. With a surface, that end's column in `features` holds its
-#'   shallowest (`depth_min`) or deepest (`depth_max`) value over the cells
-#'   the polygon touches.
+#'   [terra::wrap()] so the object can be saved, and cropped to the part
+#'   under the polygons. Empty when both ends are numbers. With a surface,
+#'   that end's column in `features` holds its shallowest (`depth_min`) or
+#'   deepest (`depth_max`) value over the cells of the polygon that hold
+#'   water.
 #'
 #' @seealso [as_vector3d()], [buffer_3d()], [vector3d_to_envelope()],
 #'   [geomtype()]

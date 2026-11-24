@@ -52,18 +52,27 @@ the name of a column of \code{x}, or a single-layer \code{SpatRaster} surface th
 gives the depth at each position, such as the seafloor
 (\code{depth_max = seafloor}) or a layer above it
 (\code{depth_min = seafloor - 20}). A surface applies to every polygon; when
-both ends are surfaces they must be on one grid. In each cell a polygon
-touches, \code{depth_min} must not be deeper than \code{depth_max}, and the
-surface must have a value in at least one of its cells.
+both ends are surfaces they must be on one grid. A surface follows the
+rules of a raster limit in \code{\link[=vect_to_envelope]{vect_to_envelope()}}: cells where
+\code{depth_min} isn't above \code{depth_max} (land, or a shelf shallower than
+\code{depth_min}) and cells where the surface is \code{NA} (an unknown depth) hold
+no water and are left out. A polygon with no water in any cell it
+touches is an error. Only the part of the surface under the polygons is
+kept.
 
 With a surface, \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} and \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}} read
-its depth in each cell of their grid (resampled with bilinear
-interpolation when the grids differ), so every query on a grid uses it.
-\code{\link[=volume]{volume()}} adds up thickness times area over the surface's cells inside
-each polygon, an estimate at the surface's resolution. Two sets of
-polygons, or points and polygons, can't be compared directly when one
-has a surface: put the polygons on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}
-first.}
+its depth in each cell of their grid, so \code{\link[=intersect_3d]{intersect_3d()}},
+\code{\link[=intersects_3d]{intersects_3d()}} and \code{\link[terra:mask]{mask()}} with an envelope or voxel follow it. On a
+grid other than the surface's, it is resampled: a coarser grid takes
+each cell's average depth, and a finer one bilinear interpolation, with
+longitudes past 180 handled as for the outlines. The \code{depth_min} column
+then holds each polygon's shallowest value of the surface over the cells
+with water, and \code{depth_max} its deepest. \code{\link[=volume]{volume()}} adds up thickness
+times area over the surface's cells inside each polygon, so it is an
+estimate at the surface's resolution. \code{\link[=intersect_3d]{intersect_3d()}} and
+\code{\link[=intersects_3d]{intersects_3d()}} stop with an error for two sets of polygons, or points
+and polygons, when the polygons have a surface: put them on a grid with
+\code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} or \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}} first.}
 }
 \value{
 A \link[=SpatVector3D-class]{SpatVector3D}. Columns other than the coordinates, depth,

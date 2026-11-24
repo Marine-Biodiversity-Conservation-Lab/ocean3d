@@ -212,11 +212,15 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 * `as_vector3d()` takes a raster surface for a polygon's `depth_min` or
   `depth_max` (#117), such as the seafloor (`depth_max = seafloor`) or a
-  layer above it (`depth_min = seafloor - 20`). `vector3d_to_envelope()`,
-  `vector3d_to_voxel()`, and the queries on a grid read the depth from the
-  surface in each cell. `volume()` adds up thickness times area over the
-  surface's cells, an estimate at its resolution. Two sets of polygons with
-  a surface can't be compared directly; put them on a grid first.
+  layer above it (`depth_min = seafloor - 20`). `vector3d_to_envelope()` and
+  `vector3d_to_voxel()` read the depth from the surface in each cell, so
+  `intersect_3d()`, `intersects_3d()` and `mask()` with an envelope or voxel
+  follow it. Cells with no water, such as land, are left out, as in
+  `vect_to_envelope()`. `volume()` adds up thickness times area over the
+  surface's cells, so it is an estimate at the surface's resolution.
+  `intersect_3d()` and `intersects_3d()` stop with an error when either set
+  of polygons has a surface, or for points and polygons with one; put the
+  polygons on a grid first.
 
 * `as_voxel()` on a `SpatProxy` reads several time steps at once (#115):
   `time` can be a window of two dates or date-times, giving a list of

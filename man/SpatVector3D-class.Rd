@@ -110,10 +110,11 @@ times, as for \code{\link[=extract_to_point]{extract_to_point()}}, or \code{NA} 
 
 \item{\code{surfaces}}{Polygons: a list with an element \code{depth_min} or
 \code{depth_max}, or both, for each end given as a raster surface, stored with
-\code{\link[terra:wrap]{terra::wrap()}} so the object can be saved. Empty when both ends are
-numbers. With a surface, that end's column in \code{features} holds its
-shallowest (\code{depth_min}) or deepest (\code{depth_max}) value over the cells
-the polygon touches.}
+\code{\link[terra:wrap]{terra::wrap()}} so the object can be saved, and cropped to the part
+under the polygons. Empty when both ends are numbers. With a surface,
+that end's column in \code{features} holds its shallowest (\code{depth_min}) or
+deepest (\code{depth_max}) value over the cells of the polygon that hold
+water.}
 }}
 
 \examples{

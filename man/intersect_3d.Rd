@@ -147,7 +147,10 @@ time; one side with dates and the other with hours is an error. Each
 matching pair gives one point, numbered, with columns \code{feature_id_x}
 and \code{feature_id_y} naming the pair and the inputs' other columns
 dropped. Two sets of points share no space, so they are an error.
-Lines aren't supported; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
+Lines aren't supported; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.
+Polygons with a raster depth surface are an error here too; put them
+on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} or \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}}
+first.}
 \item{Two sets of \link[=SpatVector3D-class]{SpatVector3D} polygons}{Each pair of polygons,
 one from \code{x} and one from \code{y}, whose outlines, depth ranges and times
 overlap gives one polygon: the shared outline (as
@@ -162,9 +165,9 @@ result's feature IDs are numbers; columns \code{feature_id_x} and
 \code{feature_id_y} say which polygons each came from, and the inputs'
 other columns are dropped. Pairs that share nothing give no polygon,
 so the result can have none. To measure the overlap, use
-\code{volume(intersect_3d(x, y))}.
-Polygons with a raster depth surface can't be compared this way, or
-with points; put them on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} first.}
+\code{volume(intersect_3d(x, y))}. Two sets of polygons can't be
+intersected when either has a raster depth surface; put them on a
+grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} or \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}} first.}
 }
 
 The order of \code{x} and \code{y} does not matter.

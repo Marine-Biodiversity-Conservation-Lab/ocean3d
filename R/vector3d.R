@@ -39,18 +39,27 @@
 #'   gives the depth at each position, such as the seafloor
 #'   (`depth_max = seafloor`) or a layer above it
 #'   (`depth_min = seafloor - 20`). A surface applies to every polygon; when
-#'   both ends are surfaces they must be on one grid. In each cell a polygon
-#'   touches, `depth_min` must not be deeper than `depth_max`, and the
-#'   surface must have a value in at least one of its cells.
+#'   both ends are surfaces they must be on one grid. A surface follows the
+#'   rules of a raster limit in [vect_to_envelope()]: cells where
+#'   `depth_min` isn't above `depth_max` (land, or a shelf shallower than
+#'   `depth_min`) and cells where the surface is `NA` (an unknown depth) hold
+#'   no water and are left out. A polygon with no water in any cell it
+#'   touches is an error. Only the part of the surface under the polygons is
+#'   kept.
 #'
 #'   With a surface, [vector3d_to_envelope()] and [vector3d_to_voxel()] read
-#'   its depth in each cell of their grid (resampled with bilinear
-#'   interpolation when the grids differ), so every query on a grid uses it.
-#'   [volume()] adds up thickness times area over the surface's cells inside
-#'   each polygon, an estimate at the surface's resolution. Two sets of
-#'   polygons, or points and polygons, can't be compared directly when one
-#'   has a surface: put the polygons on a grid with [vector3d_to_envelope()]
-#'   first.
+#'   its depth in each cell of their grid, so [intersect_3d()],
+#'   [intersects_3d()] and [mask()] with an envelope or voxel follow it. On a
+#'   grid other than the surface's, it is resampled: a coarser grid takes
+#'   each cell's average depth, and a finer one bilinear interpolation, with
+#'   longitudes past 180 handled as for the outlines. The `depth_min` column
+#'   then holds each polygon's shallowest value of the surface over the cells
+#'   with water, and `depth_max` its deepest. [volume()] adds up thickness
+#'   times area over the surface's cells inside each polygon, so it is an
+#'   estimate at the surface's resolution. [intersect_3d()] and
+#'   [intersects_3d()] stop with an error for two sets of polygons, or points
+#'   and polygons, when the polygons have a surface: put them on a grid with
+#'   [vector3d_to_envelope()] or [vector3d_to_voxel()] first.
 #'
 #' @return A [SpatVector3D-class]. Columns other than the coordinates, depth,
 #'   time and ID are kept with each vertex (points and lines) or polygon.
@@ -201,21 +210,29 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
       "and end of each polygon's interval)."
     ))
   }
-  is_surface <- function(value) methods::is(value, "SpatRaster")
+  # A raster end is checked as vect_to_envelope() checks a raster limit.
+  surfaces <- Filter(function(v) methods::is(v, "SpatRaster"),
+                     list(depth_min = depth_min, depth_max = depth_max))
   for (value in list(depth_min, depth_max)) {
-    ok <- if (is_surface(value)) {
-      terra::nlyr(value) == 1L
-    } else {
-      length(value) == 1L && (is.numeric(value) || is.character(value))
-    }
-    if (!ok) {
+    scalar <- length(value) == 1L && (is.numeric(value) ||
+                                        is.character(value))
+    if (!methods::is(value, "SpatRaster") && !scalar) {
       .abort_vector3d(paste0(
         "`depth_min` and `depth_max` must each be one number, the name of a ",
         "column of `x`, or a single-layer SpatRaster surface."
       ))
     }
   }
-  if (is_surface(depth_min) && is_surface(depth_max)) {
+  for (name in names(surfaces)) {
+    .grid_value(surfaces[[name]], surfaces[[name]], glue::glue("`{name}`"))
+    if (terra::crs(surfaces[[name]]) == "") {
+      .abort_vector3d(glue::glue(
+        "`{name}` has no CRS, so the polygons can't be placed on it. Set one ",
+        "with terra::crs()."
+      ))
+    }
+  }
+  if (length(surfaces) == 2L) {
     .check_same_grid(depth_max, depth_min, "`depth_max`", "`depth_min`")
   }
   x <- .check_sf_input(x)
@@ -248,15 +265,13 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     end <- prepared[[length(prepared)]]$values
   }
 
-  # Each end as one number per polygon; a surface's column is filled below.
-  per_polygon <- function(value) {
-    if (is.character(value)) table[[value]] else if (is.numeric(value))
-      rep(value, n) else rep(NA_real_, n)
-  }
+  # A surface's column is filled below; data.frame() recycles a number.
   features <- data.frame(
     feature_id = if (is.null(id)) seq_len(n) else table[[id]],
-    depth_min = per_polygon(depth_min),
-    depth_max = per_polygon(depth_max),
+    depth_min = if (is.character(depth_min)) table[[depth_min]] else
+      if (is.numeric(depth_min)) depth_min else NA_real_,
+    depth_max = if (is.character(depth_max)) table[[depth_max]] else
+      if (is.numeric(depth_max)) depth_max else NA_real_,
     time_start = start,
     time_end = end,
     stringsAsFactors = FALSE
@@ -264,62 +279,43 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   features$feature_id <- as.character(features$feature_id)
   features$geometry <- sf::st_geometry(x)
 
-  surfaces <- Filter(is_surface, list(depth_min = depth_min,
-                                      depth_max = depth_max))
   if (length(surfaces)) {
-    # The depths in the cells each polygon touches: each must have one, and
-    # its top must not be below its bottom anywhere inside.
-    cells <- .surface_cells(features, surfaces)
-    cells <- cells[is.finite(cells$top) & is.finite(cells$bottom), ,
-                   drop = FALSE]
-    outside <- setdiff(seq_len(n), cells$row)
-    if (length(outside)) {
-      .abort_vector3d(glue::glue(
-        "The depth surface has no values over polygon ",
-        "{toString(features$feature_id[outside])}. Give a surface that ",
-        "covers every polygon, in the same longitudes."
-      ))
-    }
-    inverted <- unique(cells$row[cells$top > cells$bottom])
-    if (length(inverted)) {
-      .abort_vector3d(glue::glue(
-        "`depth_min` is deeper than `depth_max` in some cells of polygon ",
-        "{toString(features$feature_id[inverted])}."
-      ))
-    }
-    rows <- factor(cells$row, levels = seq_len(n))
-    features$depth_min <- as.vector(tapply(cells$top, rows, min))
-    features$depth_max <- as.vector(tapply(cells$bottom, rows, max))
+    grid <- surfaces[[1L]]
+    outlines <- .outlines_on_grid(features, grid)
+    # Each polygon's water on the surface's grid, by vect_to_envelope()'s
+    # rules: cells where the top isn't above the bottom (land, or a shelf
+    # shallower than `depth_min`) or the surface has no value are dropped,
+    # and a polygon stops only when no water is left. The columns hold the
+    # shallowest top and deepest bottom of what is left.
+    ranges <- vapply(seq_len(n), function(i) {
+      limit <- function(name) surfaces[[name]] %||% features[[name]][i]
+      water <- tryCatch(
+        vect_to_envelope(outlines[outlines$row == i], grid,
+                         depth_min = limit("depth_min"),
+                         depth_max = limit("depth_max")),
+        ocean3d_error_envelope_empty = function(err) {
+          .abort_vector3d(glue::glue(
+            "Polygon {features$feature_id[i]} has no water between ",
+            "`depth_min` and `depth_max` on the depth surface. ",
+            "{conditionMessage(err)}"
+          ))
+        }
+      )
+      limits <- terra::minmax(water, compute = TRUE)
+      c(limits["min", "depth_min"], limits["max", "depth_max"])
+    }, numeric(2))
+    features$depth_min <- ranges[1L, ]
+    features$depth_max <- ranges[2L, ]
+    # Only the part of the surface under the polygons is kept, a cell wider,
+    # so a regional bathymetry tile isn't copied into every object.
+    under <- terra::ext(terra::crop(outlines, terra::ext(grid)))
+    under <- terra::extend(under, terra::res(grid))
+    surfaces <- lapply(surfaces, terra::crop, under, snap = "out")
   }
   extra <- table[setdiff(names(table), c(id, time, depth_columns))]
   .new_vector3d("polygons", resolution,
                 features = .add_attributes(features, extra),
                 surfaces = lapply(surfaces, terra::wrap))
-}
-
-# Internal: the depth interval in each cell of a surface that SpatVector3D
-# polygons cover, for as_vector3d() (the cells each polygon touches, to check
-# and summarise the surface) and volume() (`exact = TRUE`: the share of each
-# cell inside, with cell areas). `surfaces` holds the raster ends (unpacked);
-# the other end is the polygon's number in `features`. Returns one row per
-# polygon and cell: `row` (the polygon's row of `features`), `top`,
-# `bottom`, and with `exact`, `area_km2` and `fraction`.
-.surface_cells <- function(features, surfaces, exact = FALSE) {
-  grid <- surfaces[[1L]]
-  outlines <- .outlines_on_grid(features, grid)
-  layers <- c(surfaces, if (exact) list(area_km2 = .cell_area_km2(grid)))
-  stack <- terra::rast(unname(layers))
-  names(stack) <- names(layers)
-  cells <- terra::extract(stack, outlines, touches = !exact, exact = exact,
-                          ID = TRUE)
-  cells$row <- outlines$row[cells$ID]
-  end <- function(name) {
-    if (is.null(cells[[name]])) features[[name]][cells$row] else
-      cells[[name]]
-  }
-  cells$top <- end("depth_min")
-  cells$bottom <- end("depth_max")
-  cells
 }
 
 # sf lines and polygons: transform any CRS other than WGS84, geographic or
@@ -409,11 +405,12 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 
 # Internal: the outlines of SpatVector3D polygons (`features`, the polygon
 # table) as a SpatVector in the CRS of `grid`, ready to rasterize onto it,
-# for vector3d_to_envelope(), vector3d_to_voxel() and a depth surface
-# (.surface_cells()). Column `row` gives each outline's polygon (its row of
-# `features`) and `fields` names other feature columns to carry. Grids and
-# outlines can each use longitudes from -180 to 180 or from 0 to 360 (an sf
-# polygon from 178 to 182 is kept as given), so on a lon/lat grid copies
+# for vector3d_to_envelope(), vector3d_to_voxel() and a depth surface in
+# as_vector3d() and volume(). Column `row` gives each outline's polygon (its
+# row of `features`) and `fields` names other feature columns to carry.
+# Grids and outlines can each use longitudes from -180 to 180 or from 0 to
+# 360 (an sf polygon from 178 to 182 is kept as given), so on a lon/lat
+# grid copies
 # shifted by 360 degrees either way put every outline, and both halves of
 # one split at the antimeridian, wherever the grid is; copies off the grid
 # touch no cell. The outlines are projected here rather than left to

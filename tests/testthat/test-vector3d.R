@@ -942,7 +942,7 @@ test_that("vector3d_to_voxel() rejects inputs it can't convert", {
 
 # ---- Raster depth surfaces (#117) --------------------------------------------
 
-# A seafloor deepening across make_template()'s 5 x 5 grid.
+# A seafloor deepening across make_template()'s 5 x 5 grid, from 100 to 340 m.
 seafloor_5x5 <- function() {
   terra::setValues(make_template(), seq(100, 340, by = 10))
 }
@@ -954,9 +954,9 @@ test_that("a seafloor surface gives each cell its own depth on a grid", {
                terra::values(vect_to_envelope(make_polygon(), make_template(),
                                               depth_min = 0,
                                               depth_max = seafloor)))
-  # The column holds the deepest value over the cells the polygon touches.
-  touched <- terra::values(terra::mask(seafloor, terra::vect(make_polygon()),
-                                       touches = TRUE))[, 1]
+  # The column holds the deepest value over the polygon's cells.
+  touched <- terra::values(vect_to_envelope(make_polygon(), make_template(),
+                                            0, seafloor))[, 2]
   expect_equal(as.data.frame(p)$depth_max, max(touched, na.rm = TRUE))
   expect_length(p[1]@surfaces, 1L)
 })
@@ -999,27 +999,109 @@ test_that("a layer above the seafloor follows the bed", {
   expect_true(all(is.na(cover[, 1])))
 })
 
+test_that("cells without water are left out, as in vect_to_envelope()", {
+  # From 200 m to the bed: the shelf cells shallower than 200 m drop out.
+  seafloor <- seafloor_5x5()
+  shelf <- as_vector3d(make_polygon(), depth_min = 200, depth_max = seafloor)
+  expect_equal(terra::values(vector3d_to_envelope(shelf, make_template())),
+               terra::values(vect_to_envelope(make_polygon(), make_template(),
+                                              200, seafloor)))
+  expect_equal(as.data.frame(shelf)$depth_min, 200)
+  # Land (a negative depth) adds no volume.
+  land <- terra::setValues(make_template(), c(rep(-5, 12), rep(100, 13)))
+  coast <- as_vector3d(make_polygon(), depth_min = 0, depth_max = land)
+  ocean <- terra::setValues(make_template(), c(rep(NA, 12), rep(100, 13)))
+  expect_equal(volume(coast),
+               volume(as_vector3d(make_polygon(), depth_min = 0,
+                                  depth_max = ocean)))
+})
+
 test_that("a surface is rejected where it can't give a depth range", {
   seafloor <- seafloor_5x5()
   far <- terra::rast(nrows = 2, ncols = 2, xmin = 20, xmax = 22, ymin = 20,
                      ymax = 22, crs = "EPSG:4326", vals = 100)
+  bare <- terra::rast(matrix(100, 5, 5))
+  terra::crs(bare) <- ""
   cases <- list(
-    list(depth_min = seafloor, depth_max = 150,
-         pattern = "deeper than `depth_max` in some cells of polygon 1"),
+    list(depth_min = 400, depth_max = seafloor,
+         pattern = "Polygon 1 has no water between"),
     list(depth_min = 0, depth_max = far,
-         pattern = "no values over polygon 1"),
-    list(depth_min = 0, depth_max = c(seafloor, seafloor),
-         pattern = "single-layer SpatRaster")
+         pattern = "Polygon 1 has no water between"),
+    list(depth_min = 0, depth_max = bare,
+         pattern = "`depth_max` has no CRS")
   )
   for (case in cases) {
     expect_error(as_vector3d(make_polygon(), depth_min = case$depth_min,
                              depth_max = case$depth_max),
                  case$pattern, class = "ocean3d_error_vector3d")
   }
+  expect_error(as_vector3d(make_polygon(), depth_min = 0,
+                           depth_max = c(seafloor, seafloor)),
+               "single-layer SpatRaster", class = "ocean3d_error_grid_value")
   coarse <- terra::aggregate(seafloor, 5)
   expect_error(as_vector3d(make_polygon(), depth_min = coarse,
                            depth_max = seafloor),
-               class = "ocean3d_error_grid_mismatch")
+               "does not align with", class = "ocean3d_error_grid_mismatch")
+})
+
+test_that("only the surface under the polygons is kept", {
+  big <- terra::rast(nrows = 100, ncols = 100, xmin = 0, xmax = 50, ymin = 0,
+                     ymax = 50, crs = "EPSG:4326", vals = 300)
+  small <- as_vector3d(make_polygon(), depth_min = 0, depth_max = big)
+  kept <- terra::unwrap(small@surfaces$depth_max)
+  expect_lt(terra::ncell(kept), terra::ncell(big) / 10)
+  expect_equal(volume(small),
+               volume(as_vector3d(make_polygon(), depth_min = 0,
+                                  depth_max = 300)),
+               tolerance = 1e-3)
+})
+
+test_that("a surface on another grid keeps its decimals", {
+  fine <- terra::rast(nrows = 10, ncols = 10, xmin = 0, xmax = 5, ymin = 0,
+                      ymax = 5, crs = "EPSG:4326",
+                      vals = seq(100.1, 595.1, by = 5))
+  p <- as_vector3d(make_polygon(), depth_min = 0, depth_max = fine)
+  finer <- terra::disagg(fine, 2)
+  bottom <- stats::na.omit(terra::values(vector3d_to_envelope(p, finer))[, 2])
+  # Bilinear on a finer grid: every value is a multiple of 0.05 m.
+  expect_true(all(abs(bottom * 20 - round(bottom * 20)) < 1e-9))
+  # A coarser grid averages the cells under each of its cells.
+  coarse_bottom <- terra::values(vector3d_to_envelope(p, make_template()))[, 2]
+  averaged <- terra::values(terra::aggregate(fine, 2, "mean"))[, 1]
+  expect_equal(coarse_bottom[!is.na(coarse_bottom)],
+               averaged[!is.na(coarse_bottom)])
+})
+
+test_that("a surface reaches a voxel cropped across the antimeridian", {
+  # A one-degree band around the globe, cropped across 180 degrees: the
+  # voxel runs from 179 to 181, past the surface's longitudes.
+  band <- terra::rast(nrows = 4, ncols = 360, xmin = -180, xmax = 180,
+                      ymin = -2, ymax = 2, crs = "EPSG:4326", nlyrs = 2,
+                      vals = 1)
+  levels <- as_voxel(band, depths = c(0, 100))
+  seafloor <- terra::setValues(terra::rast(band[[1]]), 150)
+  buffer <- buffer_3d(as_vector3d(data.frame(lon = 180, lat = 0, depth = 10)),
+                      radius_km = 50, depth_window = 5)
+  outline <- sf::st_sf(geometry = as.data.frame(buffer)$geometry)
+  shape <- as_vector3d(outline, depth_min = 0, depth_max = seafloor)
+  cropped <- as_voxel(crop(as_proxy(levels), shape))
+  expect_equal(as.vector(terra::ext(cropped))[c("xmin", "xmax")],
+               c(xmin = 179, xmax = 181))
+  plain <- as_vector3d(outline, depth_min = 0, depth_max = 150)
+  expect_equal(terra::values(mask(cropped, shape)),
+               terra::values(mask(cropped, plain)))
+})
+
+test_that("a surface outside a voxel's levels covers nothing quietly", {
+  levels <- as_voxel(terra::rast(make_template(), nlyrs = 4, vals = 1),
+                     depths = c(0, 100, 200, 300))
+  deep <- as_vector3d(make_polygon(), depth_min = 500,
+                      depth_max = terra::setValues(make_template(), 600))
+  expect_error(vector3d_to_voxel(deep, levels),
+               "cover no cell and depth level",
+               class = "ocean3d_error_envelope_empty")
+  expect_no_warning(masked <- mask(levels, deep))
+  expect_true(all(is.na(terra::values(masked))))
 })
 
 test_that("polygons with a surface aren't compared with other shapes", {

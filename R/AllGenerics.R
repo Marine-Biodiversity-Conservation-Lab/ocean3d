@@ -24,11 +24,12 @@ NULL
 #'   \item{[SpatVoxel-class]}{Depth is the layer index. Each occupied voxel
 #'     contributes its cell area times the thickness of the slab its depth
 #'     level stands for, so interior gaps are excluded rather than filled.}
-#'   \item{[SpatVector3D-class] polygons}{Measured from the outlines, not a
-#'     grid: each polygon's area on the WGS84 ellipsoid times
-#'     `depth_max - depth_min`. Polygon edges are geodesics, so a polygon
-#'     drawn along a grid's cell edges measures slightly differently from
-#'     its envelope on that grid, whose cells are bounded by parallels.
+#'   \item{[SpatVector3D-class] polygons}{With numbers for `depth_min` and
+#'     `depth_max`, measured from the outlines, not a grid: each polygon's
+#'     area on the WGS84 ellipsoid times `depth_max - depth_min`. Polygon
+#'     edges are geodesics, so a polygon drawn along a grid's cell edges
+#'     measures slightly differently from its envelope on that grid, whose
+#'     cells are bounded by parallels.
 #'     The time interval doesn't change the volume. The total adds up the
 #'     polygons, so where they overlap the shared space is counted once for
 #'     each; the overlap between two sets is `volume(intersect_3d(x, y))`.
@@ -36,7 +37,9 @@ NULL
 #'     on a grid with [vector3d_to_envelope()] first. Polygons with a raster
 #'     depth surface (see [as_vector3d()]) are measured cell by cell on the
 #'     surface's grid instead: each cell's thickness times its area inside
-#'     the polygon, an estimate at the surface's resolution. Points and
+#'     the polygon, an estimate at the surface's resolution. Cells where the
+#'     surface is `NA` (an unknown depth) or leaves no water add nothing, as
+#'     in [vect_to_envelope()]. Points and
 #'     lines have no volume, so they are an error; [buffer_3d()] turns them
 #'     into polygons.}
 #' }
@@ -229,7 +232,10 @@ setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
 #'     matching pair gives one point, numbered, with columns `feature_id_x`
 #'     and `feature_id_y` naming the pair and the inputs' other columns
 #'     dropped. Two sets of points share no space, so they are an error.
-#'     Lines aren't supported; [buffer_3d()] turns them into polygons.}
+#'     Lines aren't supported; [buffer_3d()] turns them into polygons.
+#'     Polygons with a raster depth surface are an error here too; put them
+#'     on a grid with [vector3d_to_envelope()] or [vector3d_to_voxel()]
+#'     first.}
 #'   \item{Two sets of [SpatVector3D-class] polygons}{Each pair of polygons,
 #'     one from `x` and one from `y`, whose outlines, depth ranges and times
 #'     overlap gives one polygon: the shared outline (as
@@ -244,9 +250,9 @@ setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
 #'     `feature_id_y` say which polygons each came from, and the inputs'
 #'     other columns are dropped. Pairs that share nothing give no polygon,
 #'     so the result can have none. To measure the overlap, use
-#'     `volume(intersect_3d(x, y))`.
-#'     Polygons with a raster depth surface can't be compared this way, or
-#'     with points; put them on a grid with [vector3d_to_envelope()] first.}
+#'     `volume(intersect_3d(x, y))`. Two sets of polygons can't be
+#'     intersected when either has a raster depth surface; put them on a
+#'     grid with [vector3d_to_envelope()] or [vector3d_to_voxel()] first.}
 #' }
 #'
 #' The order of `x` and `y` does not matter.
