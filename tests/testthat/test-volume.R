@@ -389,6 +389,14 @@ test_that("reading a step in groups of depth layers gives the same volume", {
                whole_cells)
 })
 
+test_that("a one-level voxel without edges measures no volume as a proxy", {
+  # A single level without stored edges has no slab, as for the voxel.
+  v <- as_voxel(terra::rast(nrows = 2, ncols = 2, vals = 1), depths = 5)
+  expect_identical(as_proxy(v)@axes$depth$edges, "none")
+  expect_equal(volume(as_proxy(v))$volume_km3, 0)
+  expect_equal(volume(as_proxy(v))$volume_km3, volume(v))
+})
+
 test_that("a proxy cropped across the antimeridian is measured in groups", {
   # A -180 to 180 grid cropped to the cells either side of 180 degrees: the
   # depth groups go through the same reader, which joins the two ends.

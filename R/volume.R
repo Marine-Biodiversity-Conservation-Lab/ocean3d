@@ -212,17 +212,24 @@ setMethod("volume", "SpatProxy", function(x, per_cell = FALSE,
   # builder dated, NA when it has none. Each step is asked for by number.
   times <- rep(NA_real_, n_steps)
   results <- lapply(seq_len(n_steps), function(step) {
-    parts <- lapply(groups, function(span) {
+    total <- NULL
+    for (span in groups) {
       v <- .proxy_to_voxel(x, if (is.null(axis)) NULL else step,
                            variable$name, "nearest", NULL, depth = span)
       times[step] <<- as.numeric(.voxel_time(v))
       if (!is.null(fun)) v <- occupied(v, fun)
-      volume(v, per_cell = per_cell)
-    })
-    if (!per_cell) return(sum(unlist(parts)))
-    parts <- terra::rast(parts)
-    # NA where no group has an occupied level, as volume() gives.
-    terra::ifel(terra::allNA(parts), NA, sum(parts, na.rm = TRUE))
+      part <- volume(v, per_cell = per_cell)
+      # Added up as each group is read, so only the running total is kept.
+      # A cell stays NA until a group has water in it, as volume() gives.
+      total <- if (is.null(total)) {
+        part
+      } else if (per_cell) {
+        terra::cover(terra::cover(total + part, total), part)
+      } else {
+        total + part
+      }
+    }
+    total
   })
   times <- .POSIXct(times, tz = "UTC")
 

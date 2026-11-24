@@ -543,7 +543,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
                  upper = lat + half[2L], edges = "bounds"),
       depth = list(dim = "depth", centres = d, lower = slabs$lower,
                    upper = slabs$upper,
-                   edges = if (is.null(stored)) "inferred" else "bounds",
+                   # A single level without stored edges has no slab, as
+                   # in a file without depth bounds.
+                   edges = if (!is.null(stored)) "bounds" else
+                     if (length(d) == 1L) "none" else "inferred",
                    storage = "shallow_first"),
       time = if (dated) {
         list(dim = "time", edges = "none", cftime = CFtime::CFtime(
