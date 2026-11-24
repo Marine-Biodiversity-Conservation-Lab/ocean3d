@@ -989,12 +989,12 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
 # longitude convention finds its cells. An area whose edge only touches a
 # cell, within rounding (as after projecting it), doesn't take that cell. An
 # area with no width (a single point) takes the cell that contains it, or
-# both cells when it sits on their shared edge. The cells must be next to
-# each other in the file, or, for an area across the grid's longitude edge
-# (the antimeridian of a -180 to 180 grid), form one run at each end: the
-# run with the higher longitudes comes first, and the other is shifted by 360
-# degrees so the axis stays continuous, in the area's own convention. Raised
-# from here only, for both axes of crop().
+# both cells when it sits on their shared edge. The cells are next to each
+# other in the file, or, for an area across the grid's longitude edge (the
+# antimeridian of a -180 to 180 grid), one run at each end: the run with the
+# higher longitudes comes first, and the other is shifted by 360 degrees so
+# the axis stays continuous, in the area's own convention. Its error is
+# raised from here only, for both axes of crop().
 .crop_span <- function(axis, low, high, label, wrap = FALSE) {
   lo <- pmin(axis$lower, axis$upper)
   hi <- pmax(axis$lower, axis$upper)
@@ -1007,20 +1007,14 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
       which(hi - tol > low + s & lo + tol < high + s)
     }
   }))))
-  runs <- split(hit, cumsum(c(1L, diff(hit) != 1L)))
-  # Two runs, one at each end of the axis, meet across its edge.
-  ends <- length(runs) == 2L && runs[[1L]][1L] == 1L &&
-    max(runs[[2L]]) == length(lo)
-  problem <- if (!length(hit)) {
-    glue::glue("doesn't overlap the grid's {label}s")
-  } else if (length(runs) > 1L && !(wrap && ends)) {
-    glue::glue("takes cells in more than one place along the grid's {label}s")
-  }
-  if (!is.null(problem)) {
-    rlang::abort(glue::glue("The area {problem}."),
+  if (!length(hit)) {
+    rlang::abort(glue::glue("The area doesn't overlap the grid's {label}s."),
                  class = "ocean3d_error_proxy_crop", call = NULL)
   }
+  runs <- split(hit, cumsum(c(1L, diff(hit) != 1L)))
   if (length(runs) == 1L) return(list(index = hit, shift = rep(0, length(hit))))
+  # Axes run strictly one way, so cells split into two runs only when a
+  # wrapped area takes both ends of the grid, across its longitude edge.
   east <- which.max(vapply(runs, function(r) mean(axis$centres[r]), 0))
   east_run <- runs[[east]]
   west_run <- runs[[3L - east]]
