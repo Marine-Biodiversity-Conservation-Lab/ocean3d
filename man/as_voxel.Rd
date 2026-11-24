@@ -4,7 +4,15 @@
 \alias{as_voxel}
 \title{Create a voxel object}
 \usage{
-as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL, time = NULL)
+as_voxel(
+  x,
+  depths = NULL,
+  varname = "value",
+  depth_bounds = NULL,
+  time = NULL,
+  time_match = c("nearest", "exact"),
+  max_time_diff = NULL
+)
 }
 \arguments{
 \item{x}{A \link[=SpatProxy-class]{SpatProxy}, a SpatRaster, a list of SpatRasters (one per
@@ -12,9 +20,9 @@ depth, combined with \code{\link[terra:rast]{terra::rast()}}, which keeps their 
 each has them set; otherwise pass \code{depths}), or an existing
 \link[=SpatVoxel-class]{SpatVoxel}. This is how gridded data
 enter the \code{SpatVoxel} model: describe a netCDF file with \code{\link[=as_proxy]{as_proxy()}} and
-pass the proxy here, which reads one time step. Crop the proxy first with
-\code{terra::crop()} to read only part of the grid. netCDF paths aren't
-accepted directly.}
+pass the proxy here, which reads the time steps you choose with \code{time}.
+Crop the proxy first with \code{terra::crop()} to read only part of the grid.
+netCDF paths aren't accepted directly.}
 
 \item{depths}{Optional numeric vector, one depth per layer, in metres. When
 supplied, it sets the depths, and the layers are named
@@ -38,14 +46,49 @@ the edges an existing \code{SpatVoxel} carries, unless \code{depths} renames its
 layers; a voxel without edges uses the \code{bounds} argument of the functions
 it is passed to.}
 
-\item{time}{For a \link[=SpatProxy-class]{SpatProxy} only: the time step to read, as a step
-number, or a date or date-time that matches one step exactly. A date such
-as \code{"2020-01-02"} matches the step on that day; with several steps a day,
-give a date-time. \code{NULL} (the default) reads the only step of a proxy
-that has one; a proxy with more needs \code{time}.}
+\item{time}{For a \link[=SpatProxy-class]{SpatProxy} only: which time steps to read.
+\itemize{
+\item \code{NULL} (the default) reads the only step of a proxy that has one; a
+proxy with more needs \code{time}.
+\item A step number reads that step.
+\item One date or date-time (a \code{Date}, \code{POSIXct}, or text such as
+\code{"2020-01-02"} or \code{"2020-01-02 06:00"}, read as \code{\link[=extract_to_point]{extract_to_point()}}
+reads observation times) reads one step: the nearest, or an exact
+match, as set by \code{time_match}. A date is compared by UTC day, so it
+matches the step on that day; with several steps a day, give a
+date-time.
+\item A window of two dates or date-times (start, end) reads every step
+inside it, as a list. The window includes both ends; with dates, it
+covers whole UTC days including the end day, as a polygon's interval
+does in \code{\link[=as_vector3d]{as_vector3d()}}. A window with no step inside it is an error.
+\item A \link[=SpatVector3D-class]{SpatVector3D} with one feature reads the steps for that
+feature, always as a list, so a loop over shapes gets one kind of
+result: a point's time picks one step as a date-time does (a list of
+one), and a polygon's time interval is a window. On a source with one
+time step, such as a World Ocean Atlas climatology, that step is read
+whatever time the feature has, or none, so dated observations can be
+read against a climatology. On a source with several steps a feature
+without a time is an error. Lines are an error; \code{\link[=buffer_3d]{buffer_3d()}} turns
+them into polygons.
+}}
+
+\item{time_match}{For a \link[=SpatProxy-class]{SpatProxy} with one date or date-time in
+\code{time}. \code{"nearest"} (default) reads the closest step; when \code{time} is
+exactly halfway between two steps, the step on the same UTC day wins,
+and otherwise the earlier one. \code{"exact"} reads the step on the same UTC
+day (for a date) or at the same instant (for a date-time), and is an
+error when there is none. The same rule as in \code{\link[=extract_to_point]{extract_to_point()}}.
+Not used for a window.}
+
+\item{max_time_diff}{For \code{time_match = "nearest"}: the largest allowed gap,
+in days, between \code{time} and the step read. \code{NULL} (the default) sets no
+limit. A gap beyond it is an error. As in \code{\link[=extract_to_point]{extract_to_point()}}.}
 }
 \value{
-A \link[=SpatVoxel-class]{SpatVoxel} whose layers are ordered shallow to deep.
+A \link[=SpatVoxel-class]{SpatVoxel} whose layers are ordered shallow to deep. For
+a \link[=SpatProxy-class]{SpatProxy} with a time window or a \link[=SpatVector3D-class]{SpatVector3D} in
+\code{time}, an unnamed list of such voxels in time order, one per step, each
+with its step's date in \code{\link[terra:time]{terra::time()}}, even when that is one step.
 }
 \description{
 Wrap a multi-depth raster as a \link[=SpatVoxel-class]{SpatVoxel}: the validated 3D form used

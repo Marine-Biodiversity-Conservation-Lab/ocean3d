@@ -67,6 +67,11 @@ NULL
 #'   [as_voxel()].
 #' @param per_cell `FALSE` (default) for the total volume, `TRUE` for the
 #'   volume of each cell. Not for [SpatVector3D-class] polygons.
+#' @param per_level SpatVoxel only, with `per_cell = TRUE`: `TRUE` for the
+#'   volume of each cell *at each depth level*, the weights
+#'   [summarise_3d()] uses. Envelopes and polygons have no levels, so it is
+#'   an error for them. It is an error for a [SpatProxy-class] too: read a
+#'   time step with [as_voxel()] and measure that.
 #' @param ... Arguments for the [SpatVoxel-class] method, which are an error
 #'   for an envelope or polygons.
 #' @param bounds SpatVoxel only. What each depth level stands for vertically:
@@ -81,7 +86,11 @@ NULL
 #' @returns With `per_cell = FALSE`, a number: the total volume in km³. With
 #'   `per_cell = TRUE`, a single-layer `SpatRaster` named `volume` on the grid
 #'   of `x`: the volume of each cell in km³, `NA` where `x` is absent (no
-#'   depth interval, or no occupied level). Its sum is the total.
+#'   depth interval, or no occupied level). Its sum is the total. With
+#'   `per_level = TRUE` as well, a [SpatVoxel-class] on the depth levels and
+#'   edges of `x`, layers `volume_depth=<value>`: the volume of each cell at
+#'   each level in km³, `NA` where the level is unoccupied. Summing its
+#'   layers gives the per-cell raster.
 #'
 #'   For a [SpatProxy-class], one result per time step: with
 #'   `per_cell = FALSE` a data frame with columns `time` (the step's
@@ -121,6 +130,9 @@ NULL
 #' # Per cell: the fourth cell is outside the domain, so it is NA.
 #' terra::values(volume(e, per_cell = TRUE))
 #'
+#' # Per cell and level: each occupied level's share of the column.
+#' terra::values(volume(v, per_cell = TRUE, per_level = TRUE))
+#'
 #' # Overlap with a second domain at 100-300 m: intersect, then measure.
 #' b <- as_envelope(fp, depth_min = 100, depth_max = 300)
 #' ov <- intersect_3d(e, b)
@@ -136,12 +148,13 @@ NULL
 #' p <- as_proxy(system.file("extdata", "example_3d.nc", package = "ocean3d"))
 #' volume(p, fun = function(v) v > 2)
 #' @export
-setGeneric("volume", function(x, per_cell = FALSE, ...) {
+setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
   # Checked once here, before a method computes anything.
   if (!rlang::is_bool(per_cell)) {
     rlang::abort("`per_cell` must be TRUE or FALSE.",
                  class = "ocean3d_error_per_cell", call = NULL)
   }
+  .check_per_level(per_level, per_cell)
   standardGeneric("volume")
 }, signature = "x")
 
@@ -172,14 +185,21 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'     `sfc` object. The polygons are rasterised onto the 3D object's grid. A
 #'     cell is inside when a polygon touches it. Polygons in another CRS are
 #'     projected first.}
-#'   \item{An envelope or voxel and [SpatVector3D-class] polygons}{The
-#'     polygons are first put on the envelope's or voxel's grid with
-#'     [vector3d_to_envelope()], then compared as an envelope. Each cell a
-#'     polygon touches gets its depth range; where polygons overlap, a cell
-#'     gets the shallowest top and the deepest bottom, so a depth gap between
-#'     two polygons over one cell is filled. The polygons' time intervals are
-#'     dropped, with a message. Polygons that miss the grid, or a set with no
-#'     polygons, give an empty result.}
+#'   \item{An envelope and [SpatVector3D-class] polygons}{The polygons are
+#'     first put on the envelope's grid with [vector3d_to_envelope()], then
+#'     compared as an envelope. Each cell a polygon touches gets its depth
+#'     range; where polygons overlap, a cell gets the shallowest top and the
+#'     deepest bottom, so a depth gap between two polygons over one cell is
+#'     filled.}
+#'   \item{A voxel and [SpatVector3D-class] polygons}{The polygons are first
+#'     put on the voxel's grid and depth levels with [vector3d_to_voxel()],
+#'     one level at a time, then compared as a voxel. A depth gap between two
+#'     polygons over one cell stays empty. When the voxel has no depth edges,
+#'     you set each level's slab with `bounds`, as in [envelope_to_voxel()].}
+#'   \item{An envelope or voxel and [SpatVector3D-class] polygons, either
+#'     way}{The polygons' time intervals are dropped, with a message.
+#'     Polygons that miss the grid, or a set with no polygons, give an empty
+#'     result.}
 #'   \item{A voxel and [SpatVector3D-class] points}{A point covers one cell
 #'     and one depth level: the cell that holds it and the level whose depth
 #'     is nearest the point's depth (a tie goes to the shallower level, as in
@@ -241,11 +261,12 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' @param ... Arguments for the voxel methods. They are an error when both
 #'   inputs are envelopes, or when one is points and the other an envelope
 #'   or a voxel.
-#' @param bounds Only when one input is an envelope and the other a voxel. How
-#'   the envelope is placed on the voxel's depth levels: `"midpoint"`
-#'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
-#'   carries its own depth edges (see [SpatVoxel-class]). To measure the
-#'   result, pass the same `bounds` to [volume()].
+#' @param bounds Only when one input is a voxel and the other an envelope or
+#'   [SpatVector3D-class] polygons. How the envelope or polygons are placed
+#'   on the voxel's depth levels: `"midpoint"` (default) or `"top"`. See
+#'   [envelope_to_voxel()]. Not used when the voxel carries its own depth
+#'   edges (see [SpatVoxel-class]). To measure the result, pass the same
+#'   `bounds` to [volume()].
 #'
 #' @returns [SpatVector3D-class] polygons when both inputs are polygons, and
 #'   [SpatVector3D-class] points when one is points and the other polygons. A

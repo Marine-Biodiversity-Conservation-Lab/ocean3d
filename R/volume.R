@@ -27,10 +27,35 @@
   methods::as(vol_rast, "SpatRaster")  # remove the 3D class
 }
 
+# Internal: the one producer of `ocean3d_error_volume_per_level`. The generic
+# checks that `per_level` is a flag and comes with `per_cell`; the envelope,
+# polygon and proxy methods name their objects in `what`, with the `reason`
+# per-level volume doesn't apply and the `fix`.
+.check_per_level <- function(per_level, per_cell, what = NULL,
+                             reason = "have no depth levels",
+                             fix = paste("Put them on a voxel's levels with",
+                                         "envelope_to_voxel() first.")) {
+  problem <- if (!rlang::is_bool(per_level)) {
+    "`per_level` must be TRUE or FALSE."
+  } else if (per_level && !per_cell) {
+    paste("`per_level = TRUE` gives the volume of each cell at each depth",
+          "level, so it needs `per_cell = TRUE`.")
+  } else if (per_level && !is.null(what)) {
+    glue::glue("{what} {reason}, so `per_level = TRUE` doesn't apply. {fix}")
+  }
+  if (!is.null(problem)) {
+    rlang::abort(problem, class = "ocean3d_error_volume_per_level",
+                 call = NULL)
+  }
+  invisible(TRUE)
+}
+
 #' @rdname volume
 #' @export
-setMethod("volume", "SpatEnvelope", function(x, per_cell = FALSE, ...) {
+setMethod("volume", "SpatEnvelope", function(x, per_cell = FALSE,
+                                             per_level = FALSE, ...) {
   .no_extra_args(...)
+  .check_per_level(per_level, per_cell, "Envelopes")
   .check_3d(x, "x")
 
   depth_extent <- .envelope_layer(x, "depth_max") -
@@ -45,7 +70,8 @@ setMethod("volume", "SpatEnvelope", function(x, per_cell = FALSE, ...) {
 #' @export
 setMethod(
   "volume", "SpatVoxel",
-  function(x, per_cell = FALSE, bounds = c("midpoint", "top")) {
+  function(x, per_cell = FALSE, per_level = FALSE,
+           bounds = c("midpoint", "top")) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
 
@@ -53,14 +79,23 @@ setMethod(
     slab <- .depth_slabs(depths(x), bounds, depth_bounds(x))
     # Summing thickness over occupied levels only is what makes an interior
     # gap cost volume, unlike voxel_to_envelope() plus the envelope formula.
-    thickness_m <- slab$upper - slab$lower
     # The raster stays on the left of the operator: terra mishandles
     # `numeric <op> SpatRaster`. The vector is recycled layer-wise.
-    occupied_m <- sum(occ * thickness_m)
-    # Occupancy is 0 at unoccupied levels, so a cell with none would read 0;
-    # masking makes it NA, as outside an envelope.
+    occupied_m <- occ * (slab$upper - slab$lower)
+    if (per_level) {
+      # Each occupied level's volume, NA where a level is unoccupied, as
+      # everywhere a shape is absent (SPEC.md, "Absent is NA").
+      per_level_km3 <- terra::mask(.cell_area_km2(x) * (occupied_m / 1000),
+                                   occ, maskvalues = 0)
+      return(as_voxel(per_level_km3, depths = depths(x), varname = "volume",
+                      depth_bounds = depth_bounds(x)))
+    }
+    # The column's thickness times the cell area, in that order, so the result
+    # matches an envelope of the same column to the last bit. A cell with no
+    # occupied level would read 0; masking makes it NA, as outside an
+    # envelope.
     vol_rast <- terra::ifel(.footprint(x),
-                            .cell_area_km2(x) * (occupied_m / 1000), NA)
+                            .cell_area_km2(x) * (sum(occupied_m) / 1000), NA)
 
     .volume_result(vol_rast, per_cell)
   }
@@ -74,8 +109,10 @@ setMethod(
 # Points and lines have no volume.
 #' @rdname volume
 #' @export
-setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {
+setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE,
+                                             per_level = FALSE, ...) {
   .no_extra_args(...)
+  .check_per_level(per_level, per_cell, "Polygons")
   if (x@type != "polygons") {
     rlang::abort(glue::glue(
       "These are {x@type}, which have no volume. Volume is defined for ",
@@ -100,7 +137,9 @@ setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE, ...) {
 #' @rdname volume
 #' @export
 setMethod("volume", "SpatRaster",
-          function(x, per_cell = FALSE, ...) .check_3d(x, "x"))
+          function(x, per_cell = FALSE, per_level = FALSE, ...) {
+            .check_3d(x, "x")
+          })
 
 # A SpatProxy is measured one time step at a time, reading each step through
 # .proxy_to_voxel(); a step larger than the read budget is read in groups of
@@ -129,9 +168,14 @@ setMethod("volume", "SpatRaster",
 #' shape, read each step and intersect it:
 #' `volume(intersect_3d(as_voxel(x, time = i), shape))` for each step `i`.
 #' @export
-setMethod("volume", "SpatProxy", function(x, per_cell = FALSE, fun = NULL,
+setMethod("volume", "SpatProxy", function(x, per_cell = FALSE,
+                                          per_level = FALSE, fun = NULL,
                                           ...) {
   .no_extra_args(...)
+  .check_per_level(per_level, per_cell, "A SpatProxy",
+                   reason = "is measured one time step at a time",
+                   fix = paste("Read a step with as_voxel() and measure it",
+                               "with `per_level = TRUE`."))
   if (!is.null(fun) && !is.function(fun)) {
     rlang::abort("`fun` must be NULL or a function of a layer's values.",
                  class = "ocean3d_error_volume_fun", call = NULL)
@@ -165,15 +209,13 @@ setMethod("volume", "SpatProxy", function(x, per_cell = FALSE, fun = NULL,
   }
 
   # Each step's total (or per-cell raster), and its date from the voxel the
-  # builder dated, NA when it has none.
+  # builder dated, NA when it has none. Each step is asked for by number.
   times <- rep(NA_real_, n_steps)
   results <- lapply(seq_len(n_steps), function(step) {
     parts <- lapply(groups, function(span) {
       v <- .proxy_to_voxel(x, if (is.null(axis)) NULL else step,
-                           variable$name, depth = span)
-      if (terra::timeInfo(v)$time) {
-        times[step] <<- as.numeric(terra::time(v)[1L])
-      }
+                           variable$name, "nearest", NULL, depth = span)
+      times[step] <<- as.numeric(.voxel_time(v))
       if (!is.null(fun)) v <- occupied(v, fun)
       volume(v, per_cell = per_cell)
     })

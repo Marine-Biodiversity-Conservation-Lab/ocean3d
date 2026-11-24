@@ -511,27 +511,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   d <- depths(v)
   stored <- depth_bounds(v)
   slabs <- .depth_slabs(d, "midpoint", stored)
-  dated <- isTRUE(terra::timeInfo(v)$time)
-  # terra::time() is a date-time (step "seconds") or a date ("days"); a
-  # year, a year and month, a month of the year or a plain number has no
-  # date to place on the time axis, so it stops rather than being guessed
-  # or dropped.
-  step <- if (dated) terra::timeInfo(v)$step
-  if (dated && !step %in% c("seconds", "days")) {
-    what <- c(years = "a year", yearmonths = "a year and month",
-              months = "a month of the year")[step]
-    if (is.na(what)) what <- "a plain number"
-    rlang::abort(glue::glue(
-      "The voxel's time is {what} ({format(terra::time(v)[1L])}), not a ",
-      "date or date-time, so it can't be placed on a time axis. Give it a ",
-      "date-time with terra::time(), or remove it with ",
-      "`terra::time(v) <- NULL`."
-    ), class = "ocean3d_error_voxel_time", call = NULL)
-  }
-  # A date is midnight UTC.
-  seconds <- if (dated) {
-    as.numeric(as.POSIXct(terra::time(v)[1L], tz = "UTC"))
-  }
+  # The voxel's date-time, or NA without one; a year or a month stops there.
+  time <- .voxel_time(v)
+  dated <- !is.na(time)
+  seconds <- if (dated) as.numeric(time)
   dims <- c("lon", "lat", "depth", if (dated) "time")
   lengths <- c(lon = nc, lat = nr, depth = terra::nlyr(v),
                if (dated) c(time = 1L))
@@ -621,34 +604,51 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     keep <- lapply(spans, function(s) seq(s[1L], s[2L]))
     return(values[keep$lon, keep$lat, keep$depth, keep$time, drop = FALSE])
   }
-  # A proxy cut down with crop() reads its window at an offset in the file,
-  # and checks the file against the file's own dimension lengths.
+  # A proxy cut down with crop() records the file's longitude index of each
+  # cell and its latitude offset in the file, and checks the file against
+  # the file's own dimension lengths. Across the grid's longitude edge the
+  # cells are two runs in the file, each read as its own window.
   file_spans <- spans
-  for (axis in names(source$offset)) {
-    file_spans[[axis]] <- spans[[axis]] + source$offset[[axis]]
+  if (!is.null(source$lat_offset)) {
+    file_spans$lat <- spans$lat + source$lat_offset
   }
+  lon_file <- seq(spans$lon[1L], spans$lon[2L])
+  if (!is.null(source$lon_index)) lon_file <- source$lon_index[lon_file]
+  runs <- split(lon_file, cumsum(c(1L, diff(lon_file) != 1L)))
   file_lengths <- if (is.null(source$file_lengths)) variable$dim_lengths else
     source$file_lengths
-  if (!identical(source$type, "series")) {
-    return(.read_file_window(source$path, variable, file_spans, file_lengths))
-  }
-  # A series: each file's share of the time window, joined along time, the
-  # slowest-varying axis of the fixed order.
-  time_dim <- variable$axis_dims$time
-  last <- cumsum(source$steps)
-  first <- last - source$steps + 1L
-  parts <- list()
-  for (i in which(first <= spans$time[2L] & last >= spans$time[1L])) {
-    local <- file_spans
-    local$time <- c(max(spans$time[1L], first[i]),
-                    min(spans$time[2L], last[i])) - first[i] + 1L
-    lengths <- file_lengths
-    lengths[[time_dim]] <- source$steps[i]
-    parts[[length(parts) + 1L]] <- .read_file_window(source$path[i], variable,
-                                                     local, lengths)
-  }
   shape <- vapply(spans, function(s) s[2L] - s[1L] + 1L, integer(1))
-  array(unlist(parts, use.names = FALSE), unname(shape))
+  if (length(runs) > 1L) out <- array(NA_real_, unname(shape))
+  done <- 0L
+  for (run in runs) {
+    file_spans$lon <- range(run)
+    values <- if (!identical(source$type, "series")) {
+      .read_file_window(source$path, variable, file_spans, file_lengths)
+    } else {
+      # A series: each file's share of the time window, joined along time,
+      # the slowest-varying axis of the fixed order.
+      time_dim <- variable$axis_dims$time
+      last <- cumsum(source$steps)
+      first <- last - source$steps + 1L
+      parts <- list()
+      for (i in which(first <= spans$time[2L] & last >= spans$time[1L])) {
+        local <- file_spans
+        local$time <- c(max(spans$time[1L], first[i]),
+                        min(spans$time[2L], last[i])) - first[i] + 1L
+        lengths <- file_lengths
+        lengths[[time_dim]] <- source$steps[i]
+        parts[[length(parts) + 1L]] <- .read_file_window(
+          source$path[i], variable, local, lengths
+        )
+      }
+      array(unlist(parts, use.names = FALSE),
+            c(length(run), unname(shape[-1L])))
+    }
+    if (length(runs) == 1L) return(values)
+    out[done + seq_along(run), , , ] <- values
+    done <- done + length(run)
+  }
+  out
 }
 
 # One file's index window for .read_proxy_window(): `spans` per axis, and
@@ -705,115 +705,232 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   values
 }
 
-# The voxel builder (SPEC.md, "SpatVoxel / SpatEnvelope", Builder): one time
-# step of a SpatProxy read into memory as a SpatVoxel, for as_voxel(). The
-# raster's extent comes from the cell edges and its CRS from the proxy; depth
-# goes in terra::depth() with the proxy's depth edges, and the date of the
-# step in terra::time(). `depth`, a first and last index in storage order,
-# reads only those levels, so volume() can measure a large step in groups of
-# layers; NULL reads them all. Every source, a voxel in memory too, reads a
-# span through the same path below, so each group carries the proxy's depth
-# edges.
-.proxy_to_voxel <- function(x, time, varname, depth = NULL) {
-  # A voxel already in memory is its own only time step.
-  if (identical(x@source$type, "voxel") && is.null(depth)) {
-    .proxy_time_step(x, time)
-    return(x@source$voxel)
-  }
+# The voxel builder (SPEC.md, "SpatVoxel / SpatEnvelope", Builder): the time
+# steps `time` selects from a SpatProxy, read into memory as SpatVoxels, for
+# as_voxel(). Each raster's extent comes from the cell edges and its CRS from
+# the proxy; depth goes in terra::depth() with the proxy's depth edges, and
+# the date of the step in terra::time(). One voxel when `time` names one
+# step, a list of voxels for a time window or a shape. `depth`, a first and
+# last index in storage order, reads only those levels, so volume() can
+# measure a large step in groups of layers; NULL reads them all. Every
+# source, a voxel in memory too, reads a span through the same per-step path,
+# so each group carries the proxy's depth edges.
+.proxy_to_voxel <- function(x, time, varname, time_match, max_time_diff,
+                            depth = NULL) {
+  selected <- .proxy_time_step(x, time, time_match, max_time_diff)
   axes <- x@axes
-  if (is.null(axes$depth)) {
-    rlang::abort(glue::glue(
-      "Variable `{x@variable$name}` has no depth axis, so it isn't a voxel. ",
-      "Read 2D data with terra::rast()."
-    ), class = "ocean3d_error_proxy_no_depth", call = NULL)
+  if (identical(x@source$type, "voxel") && is.null(depth)) {
+    # A voxel already in memory is its own only time step.
+    out <- list(x@source$voxel)
+  } else {
+    if (is.null(axes$depth)) {
+      rlang::abort(glue::glue(
+        "Variable `{x@variable$name}` has no depth axis, so it isn't a voxel. ",
+        "Read 2D data with terra::rast()."
+      ), class = "ocean3d_error_proxy_no_depth", call = NULL)
+    }
+    if (!is.null(depth)) {
+      axes$depth[c("centres", "lower", "upper")] <- lapply(
+        axes$depth[c("centres", "lower", "upper")], `[`,
+        seq(depth[1L], depth[2L])
+      )
+    }
+    # terra's cells run west to east, then north to south.
+    lon <- .regular_extent(axes$lon, "longitude")
+    lat <- .regular_extent(axes$lat, "latitude")
+    lon_order <- order(axes$lon$centres)
+    lat_order <- order(axes$lat$centres, decreasing = TRUE)
+    n_depth <- length(axes$depth$centres)
+    depth_bounds <- if (!identical(axes$depth$edges, "none")) {
+      cbind(axes$depth$lower, axes$depth$upper)
+    }
+    # One read per step; a proxy without a time axis is read whole.
+    steps <- if (is.null(selected$steps)) list(NULL) else selected$steps
+    out <- lapply(seq_along(steps), function(i) {
+      step <- steps[[i]]
+      window <- if (is.null(step)) list() else list(time = c(step, step))
+      window$depth <- depth
+      values <- .read_proxy_window(x, window)
+      r <- terra::rast(nrows = length(lat_order), ncols = length(lon_order),
+                       nlyrs = n_depth, xmin = lon$min, xmax = lon$max,
+                       ymin = lat$min, ymax = lat$max, crs = x@crs)
+      terra::values(r) <- matrix(
+        values[lon_order, lat_order, , 1L, drop = FALSE], ncol = n_depth
+      )
+      v <- as_voxel(r, depths = axes$depth$centres, varname = varname,
+                    depth_bounds = depth_bounds)
+      if (!is.null(x@variable$units)) terra::units(v) <- x@variable$units
+      if (!is.null(selected$dates)) {
+        terra::time(v) <- rep(selected$dates[i], terra::nlyr(v))
+      }
+      v
+    })
   }
-  step <- .proxy_time_step(x, time)
-  window <- if (is.null(step)) list() else list(time = c(step, step))
-  if (!is.null(depth)) {
-    window$depth <- depth
-    axes$depth[c("centres", "lower", "upper")] <- lapply(
-      axes$depth[c("centres", "lower", "upper")], `[`,
-      seq(depth[1L], depth[2L])
-    )
-  }
-  values <- .read_proxy_window(x, window)
-
-  # terra's cells run west to east, then north to south.
-  lon <- .regular_extent(axes$lon, "longitude")
-  lat <- .regular_extent(axes$lat, "latitude")
-  lon_order <- order(axes$lon$centres)
-  lat_order <- order(axes$lat$centres, decreasing = TRUE)
-  n_depth <- length(axes$depth$centres)
-  r <- terra::rast(nrows = length(lat_order), ncols = length(lon_order),
-                   nlyrs = n_depth, xmin = lon$min, xmax = lon$max,
-                   ymin = lat$min, ymax = lat$max, crs = x@crs)
-  terra::values(r) <- matrix(values[lon_order, lat_order, , 1L, drop = FALSE],
-                             ncol = n_depth)
-
-  depth_bounds <- if (!identical(axes$depth$edges, "none")) {
-    cbind(axes$depth$lower, axes$depth$upper)
-  }
-  v <- as_voxel(r, depths = axes$depth$centres, varname = varname,
-                depth_bounds = depth_bounds)
-  if (!is.null(x@variable$units)) terra::units(v) <- x@variable$units
-  if (!is.null(step) && !isTRUE(axes$time$climatology)) {
-    date <- axes$time$cftime$as_timestamp(asPOSIX = TRUE)[step]
-    terra::time(v) <- rep(date, terra::nlyr(v))
-  }
-  v
+  if (selected$list) out else out[[1L]]
 }
 
-# The index of the time step `time` selects: a step number, or a date or
-# date-time matched exactly at its own resolution (a date selects that day).
-# NULL when the proxy has no time axis. Without `time`, a proxy with one step
-# (or a one-step climatology) gives that step, and one with more is an error.
-.proxy_time_step <- function(x, time) {
+# The time steps `time` selects: `steps` (their indices, or NULL when the
+# proxy has no time axis), `dates` (their date-times, or NULL when the axis
+# has none: a climatology or no time axis) and `list` (whether as_voxel()
+# returns a list). `time` is a step number; a date or date-time matched with
+# the nearest or exact rule (`time_match`, `max_time_diff`, as in
+# extract_to_point()); a window of two dates or date-times, giving every step
+# inside it; or a SpatVector3D with one feature, whose time (a point) or
+# interval (a polygon) is used the same way and always gives a list. Without
+# `time`, a proxy with one step (or a one-step climatology) gives that step,
+# and one with more is an error.
+.proxy_time_step <- function(x, time, time_match = "nearest",
+                             max_time_diff = NULL) {
+  stop_time <- function(message) {
+    rlang::abort(message, class = "ocean3d_error_proxy_time", call = NULL)
+  }
   axis <- x@axes$time
+  n <- if (is.null(axis)) 1L else x@variable$dim_lengths[[axis$dim]]
+  dated <- !is.null(axis) && !isTRUE(axis$climatology)
+  selected <- function(steps, as_list) {
+    list(steps = steps, dates = if (dated && !is.null(steps)) dates[steps],
+         list = as_list)
+  }
+  dates <- if (dated) axis$cftime$as_timestamp(asPOSIX = TRUE)
+  as_list <- FALSE
+  resolution <- NULL
+
+  # A shape stands for its own time: a point's time, or a polygon's interval.
+  # On a source with one step, such as a WOA climatology, that step is read
+  # whatever time the shape has.
+  if (methods::is(time, "SpatVector3D")) {
+    if (length(time) != 1L) {
+      stop_time(glue::glue(
+        "`time` must be a SpatVector3D with one feature; this one has ",
+        "{length(time)}. Pick one with `x[i]`."
+      ))
+    }
+    # Lines have no single time to read; buffer_3d() turns them into
+    # polygons, whose interval is a window.
+    .check_geomtype(time, c("polygons", "points"))
+    as_list <- TRUE
+    if (n == 1L) return(selected(if (!is.null(axis)) 1L, as_list))
+    resolution <- time@time_resolution
+    table <- as.data.frame(time)
+    time <- if (time@type == "polygons") {
+      c(table$time_start, table$time_end)
+    } else {
+      table$time
+    }
+    if (anyNA(time)) {
+      stop_time(glue::glue(
+        "The shape has no time, but variable `{x@variable$name}` has {n} ",
+        "time steps. Give the shape a time in as_vector3d(), or choose the ",
+        "steps with `time`."
+      ))
+    }
+  }
+
   if (is.null(axis)) {
     if (!is.null(time)) {
-      rlang::abort(glue::glue(
+      stop_time(glue::glue(
         "Variable `{x@variable$name}` has no time axis, so `time` can't ",
         "select a step."
-      ), class = "ocean3d_error_proxy_time", call = NULL)
+      ))
     }
-    return(NULL)
+    return(selected(NULL, as_list))
   }
-  n <- x@variable$dim_lengths[[axis$dim]]
   if (is.null(time)) {
-    if (n == 1L) return(1L)
-    rlang::abort(glue::glue(
+    if (n == 1L) return(selected(1L, as_list))
+    stop_time(glue::glue(
       "Variable `{x@variable$name}` has {n} time steps. Choose one with ",
-      "`time`, a step number or a date."
-    ), class = "ocean3d_error_proxy_time", call = NULL)
+      "`time`, a step number or a date, or several with a window of two ",
+      "dates."
+    ))
   }
-  if (is.numeric(time) && length(time) == 1L && !is.na(time) &&
-        time == round(time)) {
-    if (time >= 1 && time <= n) return(as.integer(time))
-    rlang::abort(glue::glue("`time` must be a step from 1 to {n}."),
-                 class = "ocean3d_error_proxy_time", call = NULL)
+  if (anyNA(time)) stop_time("`time` must not be NA.")
+  if (is.numeric(time)) {
+    if (length(time) == 1L && time == round(time) && time >= 1 && time <= n) {
+      return(selected(as.integer(time), as_list))
+    }
+    stop_time(glue::glue(
+      "A numeric `time` must be one whole step number from 1 to {n}. For ",
+      "several steps, give a window of two dates or date-times."
+    ))
   }
   if (isTRUE(axis$climatology)) {
-    rlang::abort(
-      "The time axis is a climatology, so `time` can only be step 1.",
-      class = "ocean3d_error_proxy_time", call = NULL
+    stop_time("The time axis is a climatology, so `time` can only be step 1.")
+  }
+  if (!length(time) %in% 1:2) {
+    stop_time(paste(
+      "`time` must be a step number, one date or date-time, a window of two,",
+      "or a SpatVector3D with one feature."
+    ))
+  }
+  # Dates compare by UTC day, date-times exactly; a shape keeps its own
+  # resolution. Text is read as extract_to_point() reads observation times,
+  # and warns the same way when it has no time zone.
+  prepared <- tryCatch(
+    .prepare_time_input(time, "auto", input_name = "`time`"),
+    error = function(e) {
+      reason <- sub("\n.*", "", conditionMessage(e))
+      stop_time(glue::glue(
+        "`time` couldn't be read as dates or date-times: {reason} Give a ",
+        "date (\"2020-01-02\") or a date-time (\"2020-01-02 06:00\"), and ",
+        "for a window two of the same kind."
+      ))
+    }
+  )
+  .warn_time_zone(prepared, "`time`")
+  if (is.null(resolution) || is.na(resolution)) {
+    resolution <- prepared$resolution
+  }
+  shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
+                 collapse = " to ")
+  if (length(time) == 1L) {
+    # Several steps on the day of a date tie; a date-time tells them apart.
+    step <- tryCatch(
+      .match_time_indices(dates, prepared$values, time_match, max_time_diff,
+                          resolution),
+      ocean3d_error_repeated_time = function(e) {
+        stop_time(glue::glue(
+          "Several time steps fall on the day of `time` ",
+          "({format(prepared$values)}). Give a date-time to read one of ",
+          "them, or a window of two dates to read them all."
+        ))
+      }
     )
+    if (is.na(step)) {
+      how <- if (time_match == "exact" || is.null(max_time_diff)) {
+        "matches"
+      } else {
+        glue::glue("is within {max_time_diff} days of")
+      }
+      stop_time(glue::glue(
+        "No time step {how} `time` ({format(prepared$values)}). The steps ",
+        "run from {shown} UTC; give a step number, a date or date-time, or ",
+        "a window of two."
+      ))
+    }
+    return(selected(step, as_list))
   }
-  dates <- axis$cftime$as_timestamp(asPOSIX = TRUE)
-  step <- if (length(time) == 1L) {
-    .match_time_index(dates, time, time_match = "exact")
+  # A window: every step from the start to the end. With dates, the whole
+  # of the end day counts, as a polygon's interval does in as_vector3d().
+  edges <- as.numeric(.time_comparison_values(prepared$values, resolution))
+  if (edges[1L] > edges[2L]) {
+    stop_time("A time window's start must not be after its end.")
+  }
+  at <- as.numeric(dates)
+  inside <- if (resolution == "daily") {
+    at >= edges[1L] & at < edges[2L] + 86400
   } else {
-    NA_integer_
+    at >= edges[1L] & at <= edges[2L]
   }
-  if (is.na(step)) {
-    shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
-                   collapse = " to ")
-    rlang::abort(glue::glue(
-      "No time step matches `time` ({toString(format(time))}). The steps run ",
-      "from {shown} UTC; give a step number, or a date or date-time that ",
-      "matches one."
-    ), class = "ocean3d_error_proxy_time", call = NULL)
+  if (!any(inside)) {
+    window <- paste(format(prepared$values, "%Y-%m-%d %H:%M:%S"),
+                    collapse = " to ")
+    stop_time(glue::glue(
+      "No time step falls in the window {window} UTC. The steps run from ",
+      "{shown} UTC; widen the window (for a shape, `time_window` in ",
+      "buffer_3d())."
+    ))
   }
-  step
+  selected(which(inside), TRUE)
 }
 
 # The extent of a regular horizontal axis: `min` and `max` from its cell
@@ -848,17 +965,22 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 #' @rdname SpatProxy-class
 #' @param x A `SpatProxy`.
 #' @param y For `crop()`: the area to keep, as a [terra::SpatExtent] or
-#'   anything with an extent ([terra::SpatRaster], [terra::SpatVector], or an
-#'   sf object). The result keeps the cells whose longitude and latitude
+#'   anything with an extent ([terra::SpatRaster], [terra::SpatVector], an
+#'   sf object, or a [SpatVector3D-class] such as a buffer from
+#'   [buffer_3d()]). The result keeps the cells whose longitude and latitude
 #'   ranges overlap the area's extent, still without reading values, so
 #'   [as_voxel()] then reads only those cells from the file. A polygon is cut
 #'   to its extent; to keep only the cells inside it, mask the voxel with it
 #'   afterwards. An area in another CRS is projected first, and on a
 #'   longitude-latitude grid an extent in the other longitude convention (0 to
 #'   360 or -180 to 180) finds its cells too. An area that crosses the edge of
-#'   the grid's longitudes (the
-#'   antimeridian on a -180 to 180 grid) can't be read as one window and
-#'   stops; crop each side separately.
+#'   the grid's longitudes (the antimeridian on a -180 to 180 grid, or 0
+#'   degrees on a 0 to 360 grid) is read from both ends of the grid: the
+#'   cropped grid runs on across the edge, for example from 179 to 181
+#'   degrees, so [as_voxel()] gives one voxel and [mask()] with the same
+#'   shape keeps the right cells. A [SpatVector3D-class] across the
+#'   antimeridian has such an extent (see its `ext()`). A `SpatVector3D` with
+#'   no features has no extent, so `crop()` stops.
 #' @param ... Not used.
 #' @export
 setMethod("crop", "SpatProxy", function(x, y, ...) {
@@ -925,63 +1047,93 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
     lat = .crop_span(x@axes$lat, e[["ymin"]], e[["ymax"]], "latitude")
   )
   # A voxel in memory is cropped as the raster it is, to the edges of the
-  # same cells a file would give.
+  # same cells a file would give. Across the grid's longitude edge, each run
+  # is cropped on its own, shifted by its 360 degrees and the two joined.
   if (identical(x@source$type, "voxel")) {
-    edges <- lapply(names(spans), function(axis) {
-      keep <- seq(spans[[axis]][1L], spans[[axis]][2L])
-      range(x@axes[[axis]]$lower[keep], x@axes[[axis]]$upper[keep])
+    v <- x@source$voxel
+    lat <- spans$lat$index
+    lat_edges <- range(x@axes$lat$lower[lat], x@axes$lat$upper[lat])
+    parts <- lapply(split(spans$lon$index, spans$lon$shift), function(lon) {
+      box <- terra::ext(c(range(x@axes$lon$lower[lon], x@axes$lon$upper[lon]),
+                          lat_edges))
+      shift <- spans$lon$shift[match(lon[1L], spans$lon$index)]
+      # remove the 3D class
+      terra::shift(terra::crop(methods::as(v, "SpatRaster"), box), dx = shift)
     })
-    box <- terra::ext(c(edges[[1L]], edges[[2L]]))
-    return(.voxel_to_proxy(terra::crop(x@source$voxel, box)))
+    if (length(parts) == 1L) {
+      return(.voxel_to_proxy(terra::crop(v, terra::ext(parts[[1L]]))))
+    }
+    joined <- terra::merge(parts[[1L]], parts[[2L]])
+    terra::time(joined) <- terra::time(v)
+    terra::units(joined) <- terra::units(v)
+    terra::varnames(joined) <- terra::varnames(v)
+    names(joined) <- names(v)
+    return(.voxel_to_proxy(as_voxel(joined, depths = depths(v),
+                                    varname = terra::varnames(v)[1L],
+                                    depth_bounds = depth_bounds(v))))
   }
-  # The cropped axes and lengths describe the smaller grid; the offset and
-  # the file's own lengths let the reader find it in the file.
+  # The cropped axes and lengths describe the smaller grid. The file's own
+  # lengths, its longitude index of each cell and its latitude offset let the
+  # reader find it in the file.
   out <- x
-  offset <- if (is.null(x@source$offset)) c(lon = 0L, lat = 0L) else
-    x@source$offset
-  if (is.null(out@source$file_lengths)) {
-    out@source$file_lengths <- x@variable$dim_lengths
-  }
+  source <- x@source
+  source$file_lengths <- source$file_lengths %||% x@variable$dim_lengths
+  lon_index <- source$lon_index %||% seq_along(x@axes$lon$centres)
+  source$lon_index <- lon_index[spans$lon$index]
+  source$lat_offset <- (source$lat_offset %||% 0L) + spans$lat$index[1L] - 1L
   for (axis in names(spans)) {
-    keep <- seq(spans[[axis]][1L], spans[[axis]][2L])
+    keep <- spans[[axis]]$index
     out@axes[[axis]][c("centres", "lower", "upper")] <-
-      lapply(x@axes[[axis]][c("centres", "lower", "upper")], `[`, keep)
+      lapply(x@axes[[axis]][c("centres", "lower", "upper")],
+             function(values) values[keep] + spans[[axis]]$shift)
     out@variable$dim_lengths[[x@variable$axis_dims[[axis]]]] <- length(keep)
-    offset[[axis]] <- offset[[axis]] + spans[[axis]][1L] - 1L
   }
-  out@source$offset <- offset
+  out@source <- source
   methods::validObject(out)
   out
 })
 
-# Internal: the first and last index, in storage order, of the cells of a
-# longitude or latitude `axis` whose range overlaps `low` to `high`. With
-# `wrap`, the range is also tried 360 degrees either way, so an area in the
-# other longitude convention finds its cells. An area whose edge only touches
-# a cell, within rounding (as after projecting it), doesn't take that cell.
-# The cells must be next to each other in the file, or one read window can't
-# hold them. Raised from here only, for both axes of crop().
+# Internal: the cells of a longitude or latitude `axis` whose range overlaps
+# `low` to `high`, as `index` (storage indices, in the cropped axis's order)
+# and `shift` (degrees to add to each cell's coordinates). With `wrap`, the
+# range is also tried 360 degrees either way, so an area in the other
+# longitude convention finds its cells. An area whose edge only touches a
+# cell, within rounding (as after projecting it), doesn't take that cell. An
+# area with no width (a single point) takes the cell that contains it, or
+# both cells when it sits on their shared edge. The cells are next to each
+# other in the file, or, for an area across the grid's longitude edge (the
+# antimeridian of a -180 to 180 grid), one run at each end: the run with the
+# higher longitudes comes first, and the other is shifted by 360 degrees so
+# the axis stays continuous, in the area's own convention. Its error is
+# raised from here only, for both axes of crop().
 .crop_span <- function(axis, low, high, label, wrap = FALSE) {
   lo <- pmin(axis$lower, axis$upper)
   hi <- pmax(axis$lower, axis$upper)
   tol <- .interval_tolerance(lo, hi)
   shifts <- if (wrap) c(0, 360, -360) else 0
   hit <- sort(unique(unlist(lapply(shifts, function(s) {
-    which(hi - tol > low + s & lo + tol < high + s)
+    if (high - low <= tol) {
+      which(lo - tol <= low + s & hi + tol >= high + s)
+    } else {
+      which(hi - tol > low + s & lo + tol < high + s)
+    }
   }))))
-  problem <- if (!length(hit)) {
-    glue::glue("doesn't overlap the grid's {label}s")
-  } else if (any(diff(hit) != 1L)) {
-    glue::glue(
-      "crosses the edge of the grid's {label}s, so it can't be read as one ",
-      "window; crop each side separately"
-    )
-  }
-  if (!is.null(problem)) {
-    rlang::abort(glue::glue("The area {problem}."),
+  if (!length(hit)) {
+    rlang::abort(glue::glue("The area doesn't overlap the grid's {label}s."),
                  class = "ocean3d_error_proxy_crop", call = NULL)
   }
-  range(hit)
+  runs <- split(hit, cumsum(c(1L, diff(hit) != 1L)))
+  if (length(runs) == 1L) return(list(index = hit, shift = rep(0, length(hit))))
+  # Axes run strictly one way, so cells split into two runs only when a
+  # wrapped area takes both ends of the grid, across its longitude edge.
+  east <- which.max(vapply(runs, function(r) mean(axis$centres[r]), 0))
+  east_run <- runs[[east]]
+  west_run <- runs[[3L - east]]
+  # An area reaching west of the grid keeps its western longitudes.
+  west_side <- low < min(lo) - tol
+  list(index = c(east_run, west_run),
+       shift = c(rep(if (west_side) -360 else 0, length(east_run)),
+                 rep(if (west_side) 0 else 360, length(west_run))))
 }
 
 #' @rdname SpatProxy-class

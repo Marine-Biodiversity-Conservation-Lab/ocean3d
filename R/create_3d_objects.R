@@ -190,9 +190,9 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   each has them set; otherwise pass `depths`), or an existing
 #'   [SpatVoxel-class]. This is how gridded data
 #'   enter the `SpatVoxel` model: describe a netCDF file with [as_proxy()] and
-#'   pass the proxy here, which reads one time step. Crop the proxy first with
-#'   `terra::crop()` to read only part of the grid. netCDF paths aren't
-#'   accepted directly.
+#'   pass the proxy here, which reads the time steps you choose with `time`.
+#'   Crop the proxy first with `terra::crop()` to read only part of the grid.
+#'   netCDF paths aren't accepted directly.
 #' @param depths Optional numeric vector, one depth per layer, in metres. When
 #'   supplied, it sets the depths, and the layers are named
 #'   `{varname}_depth={value}`, replacing any existing names. Required if `x`
@@ -202,11 +202,39 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   `depths`, or from a proxy's depths, where it defaults to the proxy's
 #'   variable name; it is also stored in [terra::varnames()], which renaming
 #'   the layers keeps. Ignored otherwise.
-#' @param time For a [SpatProxy-class] only: the time step to read, as a step
-#'   number, or a date or date-time that matches one step exactly. A date such
-#'   as `"2020-01-02"` matches the step on that day; with several steps a day,
-#'   give a date-time. `NULL` (the default) reads the only step of a proxy
-#'   that has one; a proxy with more needs `time`.
+#' @param time For a [SpatProxy-class] only: which time steps to read.
+#'   * `NULL` (the default) reads the only step of a proxy that has one; a
+#'     proxy with more needs `time`.
+#'   * A step number reads that step.
+#'   * One date or date-time (a `Date`, `POSIXct`, or text such as
+#'     `"2020-01-02"` or `"2020-01-02 06:00"`, read as [extract_to_point()]
+#'     reads observation times) reads one step: the nearest, or an exact
+#'     match, as set by `time_match`. A date is compared by UTC day, so it
+#'     matches the step on that day; with several steps a day, give a
+#'     date-time.
+#'   * A window of two dates or date-times (start, end) reads every step
+#'     inside it, as a list. The window includes both ends; with dates, it
+#'     covers whole UTC days including the end day, as a polygon's interval
+#'     does in [as_vector3d()]. A window with no step inside it is an error.
+#'   * A [SpatVector3D-class] with one feature reads the steps for that
+#'     feature, always as a list, so a loop over shapes gets one kind of
+#'     result: a point's time picks one step as a date-time does (a list of
+#'     one), and a polygon's time interval is a window. On a source with one
+#'     time step, such as a World Ocean Atlas climatology, that step is read
+#'     whatever time the feature has, or none, so dated observations can be
+#'     read against a climatology. On a source with several steps a feature
+#'     without a time is an error. Lines are an error; [buffer_3d()] turns
+#'     them into polygons.
+#' @param time_match For a [SpatProxy-class] with one date or date-time in
+#'   `time`. `"nearest"` (default) reads the closest step; when `time` is
+#'   exactly halfway between two steps, the step on the same UTC day wins,
+#'   and otherwise the earlier one. `"exact"` reads the step on the same UTC
+#'   day (for a date) or at the same instant (for a date-time), and is an
+#'   error when there is none. The same rule as in [extract_to_point()].
+#'   Not used for a window.
+#' @param max_time_diff For `time_match = "nearest"`: the largest allowed gap,
+#'   in days, between `time` and the step read. `NULL` (the default) sets no
+#'   limit. A gap beyond it is an error. As in [extract_to_point()].
 #' @param depth_bounds Optional two-column matrix or data frame: the top and
 #'   bottom of the slab of water each layer stands for, in metres positive
 #'   down, one row per layer of `x` in its current order (for example a netCDF
@@ -218,7 +246,10 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   layers; a voxel without edges uses the `bounds` argument of the functions
 #'   it is passed to.
 #'
-#' @returns A [SpatVoxel-class] whose layers are ordered shallow to deep.
+#' @returns A [SpatVoxel-class] whose layers are ordered shallow to deep. For
+#'   a [SpatProxy-class] with a time window or a [SpatVector3D-class] in
+#'   `time`, an unnamed list of such voxels in time order, one per step, each
+#'   with its step's date in [terra::time()], even when that is one step.
 #' @examples
 #' r <- terra::rast(nrows = 2, ncols = 2, nlyrs = 3)
 #' terra::values(r) <- runif(terra::ncell(r) * 3)
@@ -244,24 +275,36 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' depth_bounds(v)
 #' @export
 as_voxel <- function(x, depths = NULL, varname = "value",
-                     depth_bounds = NULL, time = NULL) {
+                     depth_bounds = NULL, time = NULL,
+                     time_match = c("nearest", "exact"), max_time_diff = NULL) {
   # A SpatProxy is read one time step at a time; it gives its own depths and
-  # edges, and `time` applies only to it.
+  # edges, and the time arguments apply only to it.
   proxy <- methods::is(x, "SpatProxy")
   misplaced <- if (proxy) {
     if (!is.null(depths) || !is.null(depth_bounds)) {
       paste("A SpatProxy gives its own depths and edges; omit `depths`",
             "and `depth_bounds`.")
     }
-  } else if (!is.null(time)) {
-    "`time` selects a time step of a SpatProxy; `x` isn't one."
+  } else if (!is.null(time) || !missing(time_match) ||
+               !is.null(max_time_diff)) {
+    paste("`time`, `time_match` and `max_time_diff` select time steps of a",
+          "SpatProxy; `x` isn't one.")
   }
   if (!is.null(misplaced)) {
     .abort_voxel_input(misplaced)
   }
   if (proxy) {
     if (missing(varname)) varname <- x@variable$name
-    return(.proxy_to_voxel(x, time, varname))
+    time_match <- match.arg(time_match)
+    if (!is.null(max_time_diff) && (!is.numeric(max_time_diff) ||
+                                      length(max_time_diff) != 1L ||
+                                      is.na(max_time_diff) ||
+                                      max_time_diff < 0)) {
+      .abort_voxel_input(
+        "`max_time_diff` must be one number of days, 0 or more."
+      )
+    }
+    return(.proxy_to_voxel(x, time, varname, time_match, max_time_diff))
   }
   # Idempotent: a valid SpatVoxel comes back as it is, so re-wrapping is cheap
   # and callers can do it defensively. terra propagates the class tag through
@@ -698,13 +741,8 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   # Plain layers, so the occupancy stack built from them is a plain SpatRaster.
   lower <- .envelope_layer(x, "depth_min")
   upper <- .envelope_layer(x, "depth_max")
-  deepest <- length(depths)
   ind <- terra::rast(lapply(seq_along(depths), function(i) {
-    if (closed && i == deepest) {
-      (lower <= slab$upper[i]) & (upper > slab$lower[i])
-    } else {
-      (lower < slab$upper[i]) & (upper > slab$lower[i])
-    }
+    .in_slab(lower, upper, slab, i, closed)
   }))
   # number of depth levels present per vertical column, cell 
   n_depths <- sum(ind)
@@ -784,6 +822,22 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
     },
     stop("Unhandled `bounds`: \"", bounds, "\".", call. = FALSE)
   ) # nolint: unreachable_code_linter. switch() default, not dead code.
+}
+
+# Internal: whether the depth range `lower` to `upper` shares some thickness
+# of water with slab `i` of `slab` (from .depth_slabs()): strict on both
+# sides, so a range that only touches the slab misses it, except that the
+# deepest slab is closed at its bottom when `closed` (slabs worked out from
+# `depths`, where under "top" it has no height). Works on numbers and on
+# SpatRaster layers alike, so envelope_to_voxel() and vector3d_to_voxel()
+# put the same range on the same levels.
+.in_slab <- function(lower, upper, slab, i, closed) {
+  below_top <- if (closed && i == length(slab$lower)) {
+    lower <= slab$upper[i]
+  } else {
+    lower < slab$upper[i]
+  }
+  below_top & (upper > slab$lower[i])
 }
 
 #' Collapse Voxel 3D -> Envelope 2.5D
@@ -1005,8 +1059,9 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
   rlang::abort(message, class = "ocean3d_error_envelope_input", call = NULL)
 }
 
-# The one producer of `ocean3d_error_envelope_empty`: an envelope with no
-# cells left, because the shapes miss the grid or have no thickness.
+# The one producer of `ocean3d_error_envelope_empty`: an envelope or voxel
+# with no cells left, because the shapes miss the grid, have no thickness or
+# lie outside the depth levels.
 .abort_envelope_empty <- function(message) {
   rlang::abort(message, class = "ocean3d_error_envelope_empty", call = NULL)
 }

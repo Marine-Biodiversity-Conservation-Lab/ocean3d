@@ -15,17 +15,22 @@
 \item{x}{A \code{SpatProxy}.}
 
 \item{y}{For \code{crop()}: the area to keep, as a \link[terra:SpatExtent]{terra::SpatExtent} or
-anything with an extent (\link[terra:SpatRaster]{terra::SpatRaster}, \link[terra:SpatVector]{terra::SpatVector}, or an
-sf object). The result keeps the cells whose longitude and latitude
+anything with an extent (\link[terra:SpatRaster]{terra::SpatRaster}, \link[terra:SpatVector]{terra::SpatVector}, an
+sf object, or a \link[=SpatVector3D-class]{SpatVector3D} such as a buffer from
+\code{\link[=buffer_3d]{buffer_3d()}}). The result keeps the cells whose longitude and latitude
 ranges overlap the area's extent, still without reading values, so
 \code{\link[=as_voxel]{as_voxel()}} then reads only those cells from the file. A polygon is cut
 to its extent; to keep only the cells inside it, mask the voxel with it
 afterwards. An area in another CRS is projected first, and on a
 longitude-latitude grid an extent in the other longitude convention (0 to
 360 or -180 to 180) finds its cells too. An area that crosses the edge of
-the grid's longitudes (the
-antimeridian on a -180 to 180 grid) can't be read as one window and
-stops; crop each side separately.}
+the grid's longitudes (the antimeridian on a -180 to 180 grid, or 0
+degrees on a 0 to 360 grid) is read from both ends of the grid: the
+cropped grid runs on across the edge, for example from 179 to 181
+degrees, so \code{\link[=as_voxel]{as_voxel()}} gives one voxel and \code{\link[terra:mask]{mask()}} with the same
+shape keeps the right cells. A \link[=SpatVector3D-class]{SpatVector3D} across the
+antimeridian has such an extent (see its \code{ext()}). A \code{SpatVector3D} with
+no features has no extent, so \code{crop()} stops.}
 
 \item{...}{Not used.}
 
