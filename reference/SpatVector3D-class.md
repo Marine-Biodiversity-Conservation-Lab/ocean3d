@@ -22,6 +22,15 @@ length(x)
 # S4 method for class 'SpatVector3D'
 show(object)
 
+# S4 method for class 'SpatVector3D,ANY,ANY'
+x[i, j, ..., drop = TRUE]
+
+# S4 method for class 'SpatVector3D'
+ext(x, ...)
+
+# S4 method for class 'SpatVector3D'
+crs(x, proj = FALSE, describe = FALSE, parse = FALSE)
+
 # S3 method for class 'SpatVector3D'
 as.data.frame(x, row.names = NULL, optional = FALSE, ...)
 ```
@@ -40,11 +49,46 @@ as.data.frame(x, row.names = NULL, optional = FALSE, ...)
 
   A `SpatVector3D`.
 
+- i:
+
+  For `[`: the features to keep, by position (negative numbers drop), by
+  a logical vector, or by feature ID (character). The result keeps the
+  features in the order of `i`, with their IDs and other columns. For
+  points and lines, every vertex of each chosen feature is kept.
+
+- j, drop:
+
+  Not used; `j` must be left out.
+
+- proj, describe, parse:
+
+  For `crs()`: as in
+  [`terra::crs()`](https://rspatial.github.io/terra/reference/crs.html).
+
 - row.names, optional:
 
   Not used.
 
 ## Value
+
+`[`: a `SpatVector3D` of the same type with the chosen features, which
+can be none.
+
+`ext()`: the features' horizontal extent as a
+[terra::SpatExtent](https://rspatial.github.io/terra/reference/SpatExtent-class.html)
+in longitude and latitude: the shortest range of longitudes that covers
+every feature, going either way round the globe. A shape that crosses
+the antimeridian keeps its extent across it, with `xmax` past 180 (for
+example 179 to 181), so a
+[`terra::crop()`](https://rspatial.github.io/terra/reference/crop.html)
+with it reads only the cells near the antimeridian. A polygon around a
+pole covers every longitude, from -180 to 180, and reaches the pole.
+Lines go the short way between vertices, as in
+[`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md).
+A `SpatVector3D` with no features has no extent, and `ext()` stops.
+
+`crs()`: WGS84 (EPSG:4326), the CRS of every `SpatVector3D`, in the form
+chosen with `proj`, `describe` or `parse`.
 
 [`as.data.frame()`](https://rdrr.io/r/base/as.data.frame.html): the
 vertex table for points and lines, or the polygon table, with its sf
@@ -116,4 +160,23 @@ pts
 #> vertices   : 2 
 #> depth (m)  : 10 to 35 
 #> time       : none
+
+# One feature at a time, by position or ID, as in a loop over shapes.
+pts[2]
+#> class      : SpatVector3D
+#> geometry   : points 
+#> features   : 1 
+#> vertices   : 1 
+#> depth (m)  : 35 to 35 
+#> time       : none
+as.data.frame(pts["1"])
+#>   feature_id vertex lon lat depth time
+#> 1          1      1 150 -20    10 <NA>
+
+# The horizontal extent and CRS let terra functions take the shape as an
+# area, for example crop() of a SpatProxy.
+terra::ext(pts)
+#> SpatExtent : 150, 151, -21, -20 (xmin, xmax, ymin, ymax)
+terra::crs(pts, describe = TRUE)$name
+#> [1] "WGS 84"
 ```

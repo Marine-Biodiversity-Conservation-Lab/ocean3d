@@ -383,8 +383,13 @@ with `unique(depths)`.
   ([\#113](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/113)).
   An area in another CRS is projected first, and an extent in the other
   longitude convention (0 to 360 or -180 to 180) finds its cells. An
-  area that crosses the edge of the grid’s longitudes stops; crop each
-  side separately.
+  area that crosses the edge of the grid’s longitudes, such as the
+  antimeridian of a -180 to 180 grid, is read from both ends of the
+  grid, for files, series and voxels in memory: the cropped grid runs on
+  across the edge (for example 179 to 181 degrees), so
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  gives one voxel
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
 
   `SpatProxy`,
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
@@ -467,6 +472,21 @@ with `unique(depths)`.
   of two sets of `SpatVector3D` polygons gives, for each polygon of `x`,
   the feature IDs of the polygons of `y` it shares 3D space with, as a
   list named by the IDs of `x`
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
+
+- A `SpatVector3D` can be subset by feature with `x[i]`, by position,
+  logical vector or feature ID, keeping the IDs and other columns, so a
+  loop can take one shape at a time.
+  [`terra::ext()`](https://rspatial.github.io/terra/reference/ext.html)
+  gives its horizontal extent and
+  [`terra::crs()`](https://rspatial.github.io/terra/reference/crs.html)
+  its CRS (WGS84 for every `SpatVector3D`), so
+  [`terra::crop()`](https://rspatial.github.io/terra/reference/crop.html)
+  of a `SpatProxy` takes a `SpatVector3D`, such as a buffer from
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
+  as the area to read. The extent stays continuous across the
+  antimeridian (a line from 179 to -179 degrees has an extent from 179
+  to 181), and a polygon around a pole covers every longitude
   ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
 
 - A `SpatVoxel` can carry the top and bottom of the slab of water each

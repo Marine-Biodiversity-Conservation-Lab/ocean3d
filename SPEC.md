@@ -620,12 +620,18 @@ Jay Matsushiba on 2 November 2026 (#112).
   Block reads for many shapes were dropped with the coverage function on
   23 November 2026 (#115). A faster path for many points is deferred to
   \#163.
-  - **Shapes across the 180° meridian:** a known limitation for now.
+  - **Shapes across the antimeridian:** read from both ends of the grid.
+    A `SpatVector3D`’s extent stays continuous across the antimeridian
+    (a line from 179 to -179 degrees, or a buffer that
     [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
-    splits such a buffer into parts of one feature, whose extent then
-    runs from -180 to 180, so `crop()` reads the whole latitude band
-    around the globe for that shape. Reading one window per part isn’t
-    planned yet.
+    splits there, has an extent from 179 to 181), and a polygon around a
+    pole covers every longitude. `crop()` of a core object reads an area
+    across the edge of the grid’s longitudes (the antimeridian of a -180
+    to 180 grid) as two windows, one at each end of the grid, and the
+    cropped grid runs on across the edge, so it gives one voxel. Decided
+    by Jay Matsushiba on 24 November 2026 (#166), replacing the 23
+    November 2026 decision in \#115 to document this as a known
+    limitation.
 - **Extraction:**
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
   [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)

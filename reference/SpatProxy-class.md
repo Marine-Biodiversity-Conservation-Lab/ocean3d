@@ -29,17 +29,29 @@ show(object)
   or anything with an extent
   ([terra::SpatRaster](https://rspatial.github.io/terra/reference/SpatRaster-class.html),
   [terra::SpatVector](https://rspatial.github.io/terra/reference/SpatVector-class.html),
-  or an sf object). The result keeps the cells whose longitude and
-  latitude ranges overlap the area's extent, still without reading
-  values, so
+  an sf object, or a
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  such as a buffer from
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)).
+  The result keeps the cells whose longitude and latitude ranges overlap
+  the area's extent, still without reading values, so
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   then reads only those cells from the file. A polygon is cut to its
   extent; to keep only the cells inside it, mask the voxel with it
   afterwards. An area in another CRS is projected first, and on a
   longitude-latitude grid an extent in the other longitude convention (0
   to 360 or -180 to 180) finds its cells too. An area that crosses the
-  edge of the grid's longitudes (the antimeridian on a -180 to 180 grid)
-  can't be read as one window and stops; crop each side separately.
+  edge of the grid's longitudes (the antimeridian on a -180 to 180 grid,
+  or 0 degrees on a 0 to 360 grid) is read from both ends of the grid:
+  the cropped grid runs on across the edge, for example from 179 to 181
+  degrees, so
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  gives one voxel and
+  [`mask()`](https://rspatial.github.io/terra/reference/mask.html) with
+  the same shape keeps the right cells. A
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  across the antimeridian has such an extent (see its `ext()`). A
+  `SpatVector3D` with no features has no extent, so `crop()` stops.
 
 - ...:
 

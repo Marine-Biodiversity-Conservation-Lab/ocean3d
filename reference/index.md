@@ -17,6 +17,9 @@ with a depth and time at each vertex, or polygons with a depth range.
 - [`geomtype(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
   [`length(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
   [`show(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  [`` `[`( ``*`<SpatVector3D>`*`,`*`<ANY>`*`,`*`<ANY>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  [`ext(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  [`crs(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
   [`as.data.frame(`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
   : 3D points, lines and polygons with depth and time
 - [`SpatVolume-class`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVolume-class.md)
