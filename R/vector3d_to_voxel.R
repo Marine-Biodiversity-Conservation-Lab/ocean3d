@@ -2,7 +2,7 @@
 # Each level is filled on its own, so a depth gap between two polygons over
 # one cell stays a gap; vector3d_to_envelope() merges them into one range.
 
-#' Convert 3D polygons to a voxel on another voxel's depth levels
+#' Convert 3D polygons to a voxel on a template's grid and depth levels
 #'
 #' Puts [SpatVector3D-class] polygons onto the grid and depth levels of
 #' `template` as a presence [SpatVoxel-class]: `1` at every cell and level a
@@ -12,10 +12,10 @@
 #' [envelope_to_voxel()]. The slabs come from the template's depth edges (see
 #' [depth_bounds()]), or from `bounds` when it has none.
 #'
-#' Each level is filled on its own, so where polygons overlap over a cell,
-#' the levels between them stay empty: polygons from 0 to 50 m and from 200
-#' to 300 m over the same cell cover the levels in those two ranges and not
-#' the ones between. [vector3d_to_envelope()] gives that cell one range, 0 to
+#' Each level is filled on its own, so where two polygons cover one cell at
+#' different depths, the levels between them stay empty: polygons from 0 to
+#' 50 m and from 200 to 300 m over the same cell cover the levels in those
+#' two ranges and not the ones between. [vector3d_to_envelope()] gives that cell one range, 0 to
 #' 300 m, because an envelope holds one interval per cell. Use this function
 #' when the next step works on a voxel's levels, for example to compare the
 #' polygons with a [SpatVoxel-class] of data; [intersect_3d()],

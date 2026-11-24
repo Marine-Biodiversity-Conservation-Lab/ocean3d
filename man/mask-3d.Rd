@@ -76,8 +76,8 @@ terra would read the mask's first layer only.}
 put on the voxel's grid and levels with \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}}, then
 used as a voxel mask as above: the voxel keeps its values in the cells
 and levels the polygons reach, and a depth gap between polygons over
-one cell stays empty. \code{bounds} places the slabs when the voxel has no
-depth edges.}
+one cell stays empty. When the voxel has no depth edges, you set each
+level's slab with \code{bounds}, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}.}
 \item{envelope or plain \code{SpatRaster} masked by \link[=SpatVector3D-class]{SpatVector3D}
 polygons}{The polygons are put on the grid of \code{x} with
 \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then used as an envelope mask as above. Where

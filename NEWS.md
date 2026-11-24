@@ -5,13 +5,18 @@
 `intersect_3d()`, `intersects_3d()` and `mask()` between `SpatVector3D`
 polygons and a `SpatVoxel` now put the polygons on the voxel's levels with
 `vector3d_to_voxel()`, one level at a time, instead of as an envelope that
-was then placed on the levels (#115). Results differ only where polygons
-with separate depth ranges overlap over a cell: the levels between the two
-ranges used to count as covered and now don't, so an overlap or a mask no
-longer includes the water between two depth bands. With an envelope, the
-polygons still become an envelope, which fills that gap, because an envelope
-holds one depth range per cell. `mask(voxel, polygons)` takes `bounds`, as
-the other methods do, for a voxel without depth edges.
+was then placed on the levels (#115). Results differ only where two
+polygons cover one cell with a gap between their depth ranges: the levels
+in the gap used to count as covered and now don't, so an overlap or a mask
+no longer includes the water between two depth bands. This holds whether
+or not the voxel has depth edges. Between polygons and a `SpatEnvelope`,
+nothing changes: the polygons still become an envelope, which fills that
+gap, because an envelope holds one depth range per cell. To get the old
+result with a voxel, convert the polygons first, for example
+`intersect_3d(vector3d_to_envelope(polygons, voxel), voxel, bounds = bounds)`,
+and the same for `intersects_3d()` and `mask()`.
+`mask(voxel, polygons)` gains a `bounds` argument, as `intersect_3d()` and
+`intersects_3d()` have, for a voxel without depth edges.
 
 `calc_volume_overlap()` is removed (#150). It returned a nine-layer
 `SpatRaster` that the other 3D functions could only use as a flat 2D layer,

@@ -165,12 +165,13 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'   \item{A voxel and [SpatVector3D-class] polygons}{The polygons are first
 #'     put on the voxel's grid and depth levels with [vector3d_to_voxel()],
 #'     one level at a time, then compared as a voxel. A depth gap between two
-#'     polygons over one cell stays empty. `bounds` places the slabs when the
-#'     voxel has no depth edges.}
+#'     polygons over one cell stays empty. When the voxel has no depth edges,
+#'     you set each level's slab with `bounds`, as in [envelope_to_voxel()].}
 #' }
 #'
-#' With polygons, the time intervals are dropped, with a message. Polygons
-#' that miss the grid, or a set with no polygons, give an empty result.
+#' With an envelope or voxel and [SpatVector3D-class] polygons, the polygons'
+#' time intervals are dropped, with a message. Polygons that miss the grid,
+#' or a set with no polygons, give an empty result.
 #' Points and lines aren't supported yet; [buffer_3d()] turns them into
 #' polygons.
 #'
@@ -300,9 +301,9 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' sums and plots like any other boolean layer. Depth intervals that only touch
 #' do not overlap. When `y` is a 2D footprint or polygons there is no depth
 #' axis to compare, so the test is only whether both are present.
-#' [SpatVector3D-class] polygons have depths, so they are compared as an
-#' envelope or a voxel, after being put on the 3D object's grid as in
-#' [intersect_3d()].
+#' [SpatVector3D-class] polygons have depths, so they are put on the 3D
+#' object's grid as in [intersect_3d()] and compared as whichever that object
+#' is, an envelope or a voxel.
 #'
 #' Two sets of [SpatVector3D-class] polygons have no grid to answer on, so
 #' the answer is a list instead, as [sf::st_intersects()] gives in 2D: for

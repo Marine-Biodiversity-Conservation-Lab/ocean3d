@@ -2,7 +2,7 @@
 % Please edit documentation in R/vector3d_to_voxel.R
 \name{vector3d_to_voxel}
 \alias{vector3d_to_voxel}
-\title{Convert 3D polygons to a voxel on another voxel's depth levels}
+\title{Convert 3D polygons to a voxel on a template's grid and depth levels}
 \usage{
 vector3d_to_voxel(x, template, bounds = c("midpoint", "top"))
 }
@@ -34,10 +34,10 @@ shares some thickness with the slab of water that level stands for, as in
 \code{\link[=depth_bounds]{depth_bounds()}}), or from \code{bounds} when it has none.
 }
 \details{
-Each level is filled on its own, so where polygons overlap over a cell,
-the levels between them stay empty: polygons from 0 to 50 m and from 200
-to 300 m over the same cell cover the levels in those two ranges and not
-the ones between. \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} gives that cell one range, 0 to
+Each level is filled on its own, so where two polygons cover one cell at
+different depths, the levels between them stay empty: polygons from 0 to
+50 m and from 200 to 300 m over the same cell cover the levels in those
+two ranges and not the ones between. \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} gives that cell one range, 0 to
 300 m, because an envelope holds one interval per cell. Use this function
 when the next step works on a voxel's levels, for example to compare the
 polygons with a \link[=SpatVoxel-class]{SpatVoxel} of data; \code{\link[=intersect_3d]{intersect_3d()}},

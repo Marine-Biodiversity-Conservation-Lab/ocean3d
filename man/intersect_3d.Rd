@@ -112,12 +112,13 @@ filled.}
 \item{A voxel and \link[=SpatVector3D-class]{SpatVector3D} polygons}{The polygons are first
 put on the voxel's grid and depth levels with \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}},
 one level at a time, then compared as a voxel. A depth gap between two
-polygons over one cell stays empty. \code{bounds} places the slabs when the
-voxel has no depth edges.}
+polygons over one cell stays empty. When the voxel has no depth edges,
+you set each level's slab with \code{bounds}, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}.}
 }
 
-With polygons, the time intervals are dropped, with a message. Polygons
-that miss the grid, or a set with no polygons, give an empty result.
+With an envelope or voxel and \link[=SpatVector3D-class]{SpatVector3D} polygons, the polygons'
+time intervals are dropped, with a message. Polygons that miss the grid,
+or a set with no polygons, give an empty result.
 Points and lines aren't supported yet; \code{\link[=buffer_3d]{buffer_3d()}} turns them into
 polygons.
 

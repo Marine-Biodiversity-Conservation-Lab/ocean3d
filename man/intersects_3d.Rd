@@ -63,9 +63,9 @@ This is how \code{terra} answers the 2D question for two rasters, so the result
 sums and plots like any other boolean layer. Depth intervals that only touch
 do not overlap. When \code{y} is a 2D footprint or polygons there is no depth
 axis to compare, so the test is only whether both are present.
-\link[=SpatVector3D-class]{SpatVector3D} polygons have depths, so they are compared as an
-envelope or a voxel, after being put on the 3D object's grid as in
-\code{\link[=intersect_3d]{intersect_3d()}}.
+\link[=SpatVector3D-class]{SpatVector3D} polygons have depths, so they are put on the 3D
+object's grid as in \code{\link[=intersect_3d]{intersect_3d()}} and compared as whichever that object
+is, an envelope or a voxel.
 
 Two sets of \link[=SpatVector3D-class]{SpatVector3D} polygons have no grid to answer on, so
 the answer is a list instead, as \code{\link[sf:st_intersects]{sf::st_intersects()}} gives in 2D: for
