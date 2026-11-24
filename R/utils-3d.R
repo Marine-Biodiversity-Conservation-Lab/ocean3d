@@ -229,8 +229,8 @@
 # grid's CRS when it isn't WGS84. On a longitude-latitude grid a point is also
 # tried 360 degrees either way, so points land on a grid in the other
 # longitude convention (0 to 360, or -180 to 180), as vector3d_to_envelope()
-# does for polygons. Used by .footprint() and the point queries in
-# R/intersect.R.
+# does for polygons. Used by .footprint() and by the point queries in the
+# intersect file.
 .point_cells <- function(x, grid) {
   if (terra::crs(grid) == "") {
     .abort_envelope_input(paste0(
