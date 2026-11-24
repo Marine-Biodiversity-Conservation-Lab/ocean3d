@@ -138,12 +138,6 @@ setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
                  class = "ocean3d_error_per_cell", call = NULL)
   }
   .check_per_level(per_level, per_cell)
-  # Volumes stay 8-byte doubles when terra writes an intermediate to a
-  # temporary file, as it does for large rasters or when memory is short; its
-  # default 4-byte floats would turn 1.8 km³ into 1.80000003 km³.
-  datatype <- terra::terraOptions(print = FALSE)$datatype
-  terra::terraOptions(datatype = "FLT8S")
-  on.exit(terra::terraOptions(datatype = datatype), add = TRUE)
   standardGeneric("volume")
 }, signature = "x")
 

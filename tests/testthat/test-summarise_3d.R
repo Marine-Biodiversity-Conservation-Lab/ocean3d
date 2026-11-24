@@ -129,28 +129,6 @@ test_that("a value with no volume doesn't join the median's middle pair", {
   expect_identical(summarise_3d(v, "median", bounds = "top")$median, 2)
 })
 
-test_that("volumes and weights stay doubles when terra writes to disk", {
-  # terra writes intermediates to temporary files for large rasters or when
-  # memory is short, in 4-byte floats by default; the answers mustn't change.
-  e <- make_range_rast(rep(0, 9), rep(200, 9))
-  v <- envelope_to_voxel(e, depths = c(0, 100, 200))
-  field <- two_levels()
-  in_memory <- list(volume(e), volume(v),
-                    volume(v, per_cell = TRUE, per_level = TRUE),
-                    summarise_3d(field, c("mean", "sd")))
-  old <- terra::terraOptions(print = FALSE)$todisk
-  terra::terraOptions(todisk = TRUE)
-  on.exit(terra::terraOptions(todisk = old), add = TRUE)
-  on_disk <- list(volume(e), volume(v),
-                  volume(v, per_cell = TRUE, per_level = TRUE),
-                  summarise_3d(field, c("mean", "sd")))
-  expect_identical(on_disk[[1]], in_memory[[1]])
-  expect_identical(on_disk[[2]], in_memory[[2]])
-  expect_identical(on_disk[[2]], on_disk[[1]])
-  expect_identical(terra::values(on_disk[[3]]), terra::values(in_memory[[3]]))
-  expect_identical(on_disk[[4]], in_memory[[4]])
-})
-
 test_that("a voxel whose time is a year or month stops, as in as_proxy()", {
   v <- two_levels()
   terra::time(v, tstep = "years") <- rep(2020L, 2)

@@ -76,23 +76,25 @@ setMethod(
 
     occ <- .voxel_occupancy(x)
     slab <- .depth_slabs(depths(x), bounds, depth_bounds(x))
-    # Each occupied level's volume is its slab thickness times the cell area.
-    # Summing over occupied levels only is what makes an interior gap cost
-    # volume, unlike voxel_to_envelope() plus the envelope formula.
-    thickness_m <- slab$upper - slab$lower
+    # Summing thickness over occupied levels only is what makes an interior
+    # gap cost volume, unlike voxel_to_envelope() plus the envelope formula.
     # The raster stays on the left of the operator: terra mishandles
     # `numeric <op> SpatRaster`. The vector is recycled layer-wise.
-    per_level_km3 <- .cell_area_km2(x) * (occ * thickness_m) / 1000
+    occupied_m <- occ * (slab$upper - slab$lower)
     if (per_level) {
-      # Occupancy is 0 at unoccupied levels; NA there, as everywhere a shape
-      # is absent (SPEC.md, "Absent is NA").
-      per_level_km3 <- terra::mask(per_level_km3, occ, maskvalues = 0)
+      # Each occupied level's volume, NA where a level is unoccupied, as
+      # everywhere a shape is absent (SPEC.md, "Absent is NA").
+      per_level_km3 <- terra::mask(.cell_area_km2(x) * (occupied_m / 1000),
+                                   occ, maskvalues = 0)
       return(as_voxel(per_level_km3, depths = depths(x), varname = "volume",
                       depth_bounds = depth_bounds(x)))
     }
-    # A cell with no occupied level would read 0; masking makes it NA, as
-    # outside an envelope.
-    vol_rast <- terra::ifel(.footprint(x), sum(per_level_km3), NA)
+    # The column's thickness times the cell area, in that order, so the result
+    # matches an envelope of the same column to the last bit. A cell with no
+    # occupied level would read 0; masking makes it NA, as outside an
+    # envelope.
+    vol_rast <- terra::ifel(.footprint(x),
+                            .cell_area_km2(x) * (sum(occupied_m) / 1000), NA)
 
     .volume_result(vol_rast, per_cell)
   }
