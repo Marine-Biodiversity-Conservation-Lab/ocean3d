@@ -49,7 +49,7 @@ vector3d_to_envelope <- function(x, template) {
   if (!methods::is(x, "SpatVector3D")) {
     .abort_envelope_input("`x` must be SpatVector3D polygons.")
   }
-  .check_polygons(x)
+  .check_geomtype(x)
   if (!inherits(template, "SpatRaster")) {
     .abort_envelope_input(
       "`template` must be a SpatRaster that defines the grid."
