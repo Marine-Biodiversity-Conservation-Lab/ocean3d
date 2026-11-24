@@ -680,6 +680,13 @@ test_that("queries with a voxel keep the depth gap between polygons", {
   expect_true(all(terra::values(mask(voxel, bands, bounds = "top"))[
     inside(), c(2, 4)
   ] |> is.na()))
+
+  # Without a voxel there are no levels to place, so `bounds` is an error,
+  # as for two envelopes.
+  for (x in list(envelope_50_200(), make_template(1))) {
+    expect_error(mask(x, bands, bounds = "top"), "unused argument",
+                 class = "ocean3d_error_unused_argument")
+  }
 })
 
 test_that("intersects_3d() of polygons tests depth overlap per cell", {

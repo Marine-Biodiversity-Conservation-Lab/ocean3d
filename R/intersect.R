@@ -585,11 +585,12 @@ setMethod(
 #' @export
 setMethod("mask", c("SpatRaster", "SpatVector3D"),
           function(x, mask, bounds = c("midpoint", "top"), ...) {
-            bounds <- match.arg(bounds)
-            polygons <- if (methods::is(x, "SpatVoxel")) {
-              .polygons_on_grid(mask, x, bounds = bounds)
-            } else {
+            # `bounds` goes on only when given, so for an envelope or a plain
+            # raster it is the same unused-argument error as elsewhere.
+            polygons <- if (missing(bounds)) {
               .polygons_on_grid(mask, x)
+            } else {
+              .polygons_on_grid(mask, x, bounds = bounds)
             }
             mask(x, polygons, ...)
           })
