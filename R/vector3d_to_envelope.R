@@ -55,12 +55,6 @@ vector3d_to_envelope <- function(x, template) {
       "`template` must be a SpatRaster that defines the grid."
     )
   }
-  if (terra::crs(template) == "") {
-    .abort_envelope_input(paste0(
-      "`template` has no CRS, so the polygons can't be placed on it. Set one ",
-      "with terra::crs()."
-    ))
-  }
   f <- x@features
   if (nrow(f) == 0L) {
     .abort_envelope_input("`x` has no polygons to put on the grid.")
@@ -77,20 +71,7 @@ vector3d_to_envelope <- function(x, template) {
   # Only the grid is used. Dropping the class tag keeps a voxel template's
   # layers away from the depth-aware methods in R/intersect.R.
   grid <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
-  polygons <- terra::vect(sf::st_sf(depth_min = f$depth_min,
-                                    depth_max = f$depth_max,
-                                    geometry = f$geometry))
-  if (!terra::same.crs(polygons, grid)) {
-    polygons <- terra::project(polygons, terra::crs(grid))
-  }
-  # Grids and outlines can each use longitudes from -180 to 180 or from 0 to
-  # 360 (an sf polygon from 178 to 182 is kept as given). Copies shifted by
-  # 360 degrees either way put every outline, and both halves of one split at
-  # the antimeridian, wherever the grid is; copies off the grid touch no cell.
-  if (terra::is.lonlat(grid)) {
-    polygons <- rbind(polygons, terra::shift(polygons, dx = 360),
-                      terra::shift(polygons, dx = -360))
-  }
+  polygons <- .outlines_on_grid(x, grid, c("depth_min", "depth_max"))
   # Each cell's shallowest top and deepest bottom over the polygons touching
   # it, picked as terra::mask() picks cells in vect_to_envelope(). terra
   # rasterizes polygon values as 4-byte floats (since 1.9-60 whatever the

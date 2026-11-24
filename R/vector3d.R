@@ -312,6 +312,37 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   invisible(x)
 }
 
+# Internal: the outlines of SpatVector3D polygons as a SpatVector in the CRS
+# of `grid`, ready to rasterize onto it, for vector3d_to_envelope() and
+# vector3d_to_voxel(). Column `row` gives each outline's polygon (its row of
+# `x@features`) and `fields` names other feature columns to carry. Grids and
+# outlines can each use longitudes from -180 to 180 or from 0 to 360 (an sf
+# polygon from 178 to 182 is kept as given), so on a lon/lat grid copies
+# shifted by 360 degrees either way put every outline, and both halves of
+# one split at the antimeridian, wherever the grid is; copies off the grid
+# touch no cell. The outlines are projected here rather than left to
+# terra's rasterizing, because the shift has to happen in the grid's
+# longitudes. A grid without a CRS can't take them, so it stops.
+.outlines_on_grid <- function(x, grid, fields = NULL) {
+  if (terra::crs(grid) == "") {
+    .abort_envelope_input(paste0(
+      "`template` has no CRS, so the polygons can't be placed on it. Set one ",
+      "with terra::crs()."
+    ))
+  }
+  f <- x@features
+  polygons <- terra::vect(sf::st_sf(row = seq_len(nrow(f)), f[fields],
+                                    geometry = f$geometry))
+  if (!terra::same.crs(polygons, grid)) {
+    polygons <- terra::project(polygons, terra::crs(grid))
+  }
+  if (terra::is.lonlat(grid)) {
+    polygons <- rbind(polygons, terra::shift(polygons, dx = 360),
+                      terra::shift(polygons, dx = -360))
+  }
+  polygons
+}
+
 # The one producer of `ocean3d_message_time_dropped`: polygon times don't
 # fit a grid, as an envelope or a voxel holds no time interval. Raised by
 # vector3d_to_envelope() and vector3d_to_voxel().

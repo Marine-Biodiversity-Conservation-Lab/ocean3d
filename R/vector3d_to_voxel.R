@@ -75,34 +75,26 @@ vector3d_to_voxel <- function(x, template, bounds = c("midpoint", "top")) {
   depths <- depths(template)
   edges <- depth_bounds(template)
   slab <- .depth_slabs(depths, bounds, edges)
-  # Slabs worked out from `depths` are half-open with the deepest closed,
-  # given edges all half-open: the rule of .promote_to_voxel(), so a polygon
-  # and the same range as an envelope land on the same levels.
-  closed <- is.null(edges)
-  deepest <- length(depths)
-  # A polygon with no thickness covers nothing, as in vector3d_to_envelope().
-  thick <- f$depth_max > f$depth_min
-
-  # Only the grid is used. Copies shifted by 360 degrees put outlines on a
-  # grid in either longitude convention, as in vector3d_to_envelope().
+  # Only the grid is used; the class tag would reach the depth-aware methods.
   grid <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
-  polygons <- terra::vect(sf::st_sf(geometry = f$geometry))
-  if (!terra::same.crs(polygons, grid)) {
-    polygons <- terra::project(polygons, terra::crs(grid))
-  }
-  copies <- 1L
-  if (terra::is.lonlat(grid)) {
-    polygons <- rbind(polygons, terra::shift(polygons, dx = 360),
-                      terra::shift(polygons, dx = -360))
-    copies <- 3L
-  }
-  occ <- terra::rast(lapply(seq_len(deepest), function(i) {
-    covers <- thick & f$depth_max > slab$lower[i] &
-      if (closed && i == deepest) f$depth_min <= slab$upper[i] else
-        f$depth_min < slab$upper[i]
-    if (!any(covers)) return(terra::setValues(terra::rast(grid), 0))
-    .footprint(polygons[which(rep(covers, copies))], grid)
-  }))
+  polygons <- .outlines_on_grid(x, grid)
+
+  # The polygons covering each level, by the rule envelope_to_voxel() uses,
+  # so one polygon lands on the same levels as its range as an envelope. A
+  # polygon with no thickness covers nothing, as in vector3d_to_envelope().
+  thick <- f$depth_max > f$depth_min
+  covers <- lapply(seq_along(depths), function(i) {
+    which(thick & .in_slab(f$depth_min, f$depth_max, slab, i,
+                           closed = is.null(edges)))
+  })
+  # Each set of polygons is rasterized once: a polygon set with one depth
+  # range covers a run of levels, often dozens on a World Ocean Atlas grid.
+  sets <- unique(covers)
+  footprints <- lapply(sets, function(rows) {
+    if (!length(rows)) return(terra::setValues(terra::rast(grid), 0))
+    .footprint(polygons[polygons$row %in% rows], grid)
+  })
+  occ <- terra::rast(footprints[match(covers, sets)])
   if (!any(terra::global(occ, "max", na.rm = TRUE)[, 1] > 0)) {
     .abort_envelope_empty(paste0(
       "The polygons cover no cell and depth level of `template`: they miss ",
