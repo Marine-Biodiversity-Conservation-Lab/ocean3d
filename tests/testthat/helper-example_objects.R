@@ -49,8 +49,8 @@ points_at <- function(lon, lat, depth, ...) {
   as_vector3d(data.frame(lon = lon, lat = lat, depth = depth, ...))
 }
 voxel_1_2_3 <- function() {
-  as_voxel(terra::rast(lapply(1:3, function(i) make_template(i))),
-           depths = c(0, 100, 200), varname = "temp")
+  make_voxel(matrix(rep(1:3, each = 25), 25), c(0, 100, 200),
+             varname = "temp", grid = make_template())
 }
 
 # Helpers for intersect and volume tests. The LAEA projection makes every cell
@@ -86,8 +86,9 @@ edges_of <- function(v) {
 }
 
 # Helper: a SpatVoxel from a cells x depths matrix of values (NA = unoccupied).
-make_voxel <- function(vals, depths, ncol = 3, nrow = 3, varname = "presence") {
-  r <- terra::rast(make_grid(ncol, nrow), nlyrs = length(depths))
+make_voxel <- function(vals, depths, ncol = 3, nrow = 3, varname = "presence",
+                       grid = make_grid(ncol, nrow)) {
+  r <- terra::rast(grid, nlyrs = length(depths))
   terra::values(r) <- vals
   as_voxel(r, depths = depths, varname = varname)
 }
