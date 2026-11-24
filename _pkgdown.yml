@@ -41,9 +41,10 @@ reference:
   - intersects_3d
   - mask-3d
 - title: Summarise
-  desc: Measure 3D objects and their overlap.
+  desc: Measure 3D objects and their overlap, and summarise their values.
   contents:
   - volume
+  - summarise_3d
 - title: Extraction
   desc: >
     Extract environmental values from netCDF files at points, in buffers,

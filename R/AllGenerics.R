@@ -63,6 +63,10 @@ NULL
 #'   [as_proxy()] and read one time step with [as_voxel()].
 #' @param per_cell `FALSE` (default) for the total volume, `TRUE` for the
 #'   volume of each cell. Not for [SpatVector3D-class] polygons.
+#' @param per_level SpatVoxel only, with `per_cell = TRUE`: `TRUE` for the
+#'   volume of each cell *at each depth level*, the weights
+#'   [summarise_3d()] uses. Envelopes and polygons have no levels, so it is
+#'   an error for them.
 #' @param ... Arguments for the [SpatVoxel-class] method, which are an error
 #'   for an envelope or polygons.
 #' @param bounds SpatVoxel only. What each depth level stands for vertically:
@@ -77,7 +81,11 @@ NULL
 #' @returns With `per_cell = FALSE`, a number: the total volume in km³. With
 #'   `per_cell = TRUE`, a single-layer `SpatRaster` named `volume` on the grid
 #'   of `x`: the volume of each cell in km³, `NA` where `x` is absent (no
-#'   depth interval, or no occupied level). Its sum is the total.
+#'   depth interval, or no occupied level). Its sum is the total. With
+#'   `per_level = TRUE` as well, a [SpatVoxel-class] on the depth levels and
+#'   edges of `x`, layers `volume_depth=<value>`: the volume of each cell at
+#'   each level in km³, `NA` where the level is unoccupied. Summing its
+#'   layers gives the per-cell raster.
 #'
 #' @seealso [intersect_3d()] for the space two domains share, which `volume()`
 #'   then measures; [intersects_3d()] for whether two domains share any depth
@@ -109,6 +117,9 @@ NULL
 #' # Per cell: the fourth cell is outside the domain, so it is NA.
 #' terra::values(volume(e, per_cell = TRUE))
 #'
+#' # Per cell and level: each occupied level's share of the column.
+#' terra::values(volume(v, per_cell = TRUE, per_level = TRUE))
+#'
 #' # Overlap with a second domain at 100-300 m: intersect, then measure.
 #' b <- as_envelope(fp, depth_min = 100, depth_max = 300)
 #' ov <- intersect_3d(e, b)
@@ -120,12 +131,13 @@ NULL
 #' detection <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 35))
 #' volume(buffer_3d(detection, radius_km = 10, depth_window = 25))
 #' @export
-setGeneric("volume", function(x, per_cell = FALSE, ...) {
+setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
   # Checked once here, before a method computes anything.
   if (!rlang::is_bool(per_cell)) {
     rlang::abort("`per_cell` must be TRUE or FALSE.",
                  class = "ocean3d_error_per_cell", call = NULL)
   }
+  .check_per_level(per_level, per_cell)
   standardGeneric("volume")
 }, signature = "x")
 

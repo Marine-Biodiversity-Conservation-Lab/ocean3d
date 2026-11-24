@@ -54,6 +54,29 @@ depths <- function(x) {
   terra::depth(x)
 }
 
+# Internal: the time step a voxel shows, as a POSIXct in UTC, or NA when
+# terra holds no time. terra::time() is a date-time (step "seconds") or a date
+# ("days", read as midnight UTC); a year, a year and month, a month of the
+# year or a plain number has no date to place on a time axis, so it stops
+# rather than being guessed or dropped. Shared by .voxel_to_proxy() and
+# summarise_3d(). The one producer of `ocean3d_error_voxel_time`.
+.voxel_time <- function(v) {
+  info <- terra::timeInfo(v)
+  if (!isTRUE(info$time)) return(.POSIXct(NA_real_, tz = "UTC"))
+  if (!info$step %in% c("seconds", "days")) {
+    what <- c(years = "a year", yearmonths = "a year and month",
+              months = "a month of the year")[info$step]
+    if (is.na(what)) what <- "a plain number"
+    rlang::abort(glue::glue(
+      "The voxel's time is {what} ({format(terra::time(v)[1L])}), not a ",
+      "date or date-time, so it can't be placed on a time axis. Give it a ",
+      "date-time with terra::time(), or remove it with ",
+      "`terra::time(v) <- NULL`."
+    ), class = "ocean3d_error_voxel_time", call = NULL)
+  }
+  as.POSIXct(terra::time(v)[1L], tz = "UTC")
+}
+
 # Internal: whether terra holds the raster's depths. terra sets a flag when
 # depths are set with terra::depth() or read from a netCDF file, even when
 # they are all 0, and clears it whenever an operation resets them to 0

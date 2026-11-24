@@ -110,6 +110,54 @@ test_that("volume(per_cell = TRUE) is NA outside the domain", {
   expect_true(all(is.na(terra::values(volume(nowhere, per_cell = TRUE)))))
 })
 
+# ---- per_level (#116) -------------------------------------------------------
+
+test_that("volume(per_level = TRUE) gives each level its slab times the cell", {
+  # Uneven levels: under "midpoint" the slabs are 25, 75, 100 and 50 m thick,
+  # and every cell is 1 km x 1 km.
+  depths <- c(0, 50, 150, 250)
+  v <- make_voxel(cbind(rep(1, 9), c(NA, rep(1, 8)), rep(1, 9), rep(NA, 9)),
+                  depths)
+  per_level <- volume(v, per_cell = TRUE, per_level = TRUE)
+
+  expect_s4_class(per_level, "SpatVoxel")
+  expect_identical(depths(per_level), depths)
+  expect_identical(names(per_level), paste0("volume_depth=", depths))
+  vals <- unname(terra::values(per_level, mat = TRUE))
+  expect_equal(vals[1, ], c(0.025, NA, 0.1, NA), tolerance = 0.01)
+  expect_equal(vals[2, 2], 0.075, tolerance = 0.01)
+  # Unoccupied levels are NA, as everywhere a shape is absent.
+  expect_true(all(is.na(vals[, 4])))
+
+  # The levels sum to the per-cell volume, and keep the voxel's edges.
+  expect_equal(rowSums(vals, na.rm = TRUE),
+               terra::values(volume(v, per_cell = TRUE))[, 1])
+  edged <- as_voxel(v, depth_bounds = cbind(c(0, 40, 100, 200),
+                                            c(40, 100, 200, 300)))
+  per_level <- volume(edged, per_cell = TRUE, per_level = TRUE)
+  expect_equal(depth_bounds(per_level), depth_bounds(edged))
+  expect_equal(unname(terra::values(per_level)[2, 1]), 0.04, tolerance = 0.01)
+})
+
+test_that("per_level needs per_cell and a voxel", {
+  v <- make_voxel(1, c(0, 100))
+  cases <- list(
+    list(x = v, args = list(per_level = TRUE), pattern = "needs `per_cell"),
+    list(x = v, args = list(per_cell = TRUE, per_level = NA),
+         pattern = "TRUE or FALSE"),
+    list(x = make_range_rast(rep(0, 9), rep(100, 9)),
+         args = list(per_cell = TRUE, per_level = TRUE),
+         pattern = "Envelopes have no depth levels"),
+    list(x = as_vector3d(make_polygon(), depth_min = 0, depth_max = 100),
+         args = list(per_cell = TRUE, per_level = TRUE),
+         pattern = "Polygons have no depth levels")
+  )
+  for (case in cases) {
+    expect_error(do.call(volume, c(list(case$x), case$args)), case$pattern,
+                 class = "ocean3d_error_volume_per_level")
+  }
+})
+
 # ---- measuring an overlap ---------------------------------------------------
 
 test_that("volume(intersect_3d()) matches hand-computed overlaps", {
