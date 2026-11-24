@@ -101,22 +101,84 @@ test_that("the samples can be buffered into polygons", {
   expect_identical(length(b), length(sample_3d(dive(), spacing_km = 5)))
 })
 
+test_that("merged_steps keeps distance points and time-step points", {
+  # Two hours over one 5.2 km segment: a 2 km spacing alone gives points
+  # every 40 minutes, and hourly steps add a point at 01:00.
+  line <- as_vector3d(
+    data.frame(id = "A", lon = c(150, 150.05), lat = -20, depth = 0,
+               time = as.POSIXct(c("2020-01-01 00:00", "2020-01-01 02:00"),
+                                 tz = "UTC")),
+    type = "lines", id = "id", time = "time"
+  )
+  even <- as.data.frame(sample_3d(line, spacing_km = 2))
+  merged <- as.data.frame(sample_3d(line, sampling = "merged_steps",
+                                    spacing_km = 2, time_step = 1))
+  hour <- as.POSIXct("2020-01-01 01:00", tz = "UTC")
+  expect_false(any(abs(as.numeric(even$time - hour)) < 1e-6))
+  expect_true(any(abs(as.numeric(merged$time - hour)) < 1e-6))
+  expect_true(all(round(even$distance_km, 9) %in%
+                    round(merged$distance_km, 9)))
+})
+
 test_that("sample_3d() rejects input it can't sample", {
   pts <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 10))
   untimed <- as_vector3d(
     data.frame(id = "B", lon = c(0, 1), lat = 0, depth = 5),
     type = "lines", id = "id"
   )
-  expect_error(sample_3d(pts), "must be SpatVector3D lines",
-               class = "ocean3d_error_vector3d")
-  expect_error(sample_3d(untimed, time_step = 1), "needs a time at each",
-               class = "ocean3d_error_vector3d")
-  expect_error(sample_3d(dive(), sampling = "vertices", spacing_km = 1),
-               "cannot be used with vertices")
-  expect_error(sample_3d(dive(), sampling = "balanced"), "needs an explicit")
-  expect_error(sample_3d(dive(), spacing_km = -1), "positive")
-  expect_error(sample_3d(dive(), time_step = 1.5, time_unit = "months"),
-               "whole months")
+  partly <- dive()
+  partly@vertices$time[2] <- NA
+  # One timed line and one without times.
+  mixed <- as_vector3d(
+    data.frame(id = rep(c("a", "b"), each = 2), lon = c(0, 1, 5, 6), lat = 0,
+               depth = 5,
+               time = as.POSIXct(c("2020-01-01", "2020-01-02", NA, NA),
+                                 tz = "UTC")),
+    type = "lines", id = "id", time = "time"
+  )
+  daily <- as_vector3d(
+    data.frame(id = "D", lon = c(0, 1), lat = 0, depth = 5,
+               date = as.Date(c("2020-01-01", "2020-01-05"))),
+    type = "lines", id = "id", time = "date"
+  )
+  clashing <- as_vector3d(
+    data.frame(seg = "S", track_id = "T1", lon = c(0, 1), lat = 0, depth = 5),
+    type = "lines", id = "seg"
+  )
+  cases <- list(
+    list(quote(sample_3d(data.frame(lon = 1))), "must be SpatVector3D lines",
+         "ocean3d_error_vector3d"),
+    list(quote(sample_3d(pts)), "Points are already samples",
+         "ocean3d_error_vector3d_type"),
+    list(quote(sample_3d(untimed, time_step = 1)),
+         "`time_step` needs a time at every vertex", "ocean3d_error_vector3d"),
+    list(quote(sample_3d(mixed, time_step = 1)),
+         "Feature b of `x` has no time", "ocean3d_error_vector3d"),
+    list(quote(sample_3d(partly)),
+         "Line A of `x` has a time at some vertices", "ocean3d_error_vector3d"),
+    list(quote(sample_3d(daily, time_step = 6)), "must be whole days",
+         "ocean3d_error_vector3d"),
+    list(quote(sample_3d(clashing)),
+         "columns track_id, which sample_3d() adds", "ocean3d_error_vector3d"),
+    list(quote(sample_3d(dive(), sampling = "vertices", spacing_km = 1)),
+         "cannot be used with vertices", "ocean3d_error_track_sampling"),
+    list(quote(sample_3d(dive(), sampling = "balanced")), "needs an explicit",
+         "ocean3d_error_track_sampling"),
+    list(quote(sample_3d(dive(), spacing_km = -1)),
+         "`spacing_km` must be one finite positive number",
+         "ocean3d_error_track_sampling"),
+    list(quote(sample_3d(dive(), time_step = 1.5, time_unit = "months")),
+         "whole months", "ocean3d_error_track_sampling"),
+    list(quote(sample_3d(dive(), max_samples = 10.5)), "positive integer",
+         "ocean3d_error_track_sampling")
+  )
+  for (case in cases) {
+    expect_error(eval(case[[1]]), case[[2]], class = case[[3]], fixed = TRUE,
+                 label = deparse(case[[1]]))
+  }
+  # A whole number of days on dates is fine.
+  expect_s4_class(sample_3d(daily, time_step = 1, time_unit = "days"),
+                  "SpatVector3D")
   expect_error(sample_3d(dive(), spacing_km = 0.01, max_samples = 10),
                "max_samples")
 })

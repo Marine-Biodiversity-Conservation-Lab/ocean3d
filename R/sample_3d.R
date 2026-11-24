@@ -10,28 +10,39 @@
 #' step, points in between. Each point has the depth and time interpolated
 #' along the segment it lies on. The points can then go into the
 #' intersect step ([intersect_3d()], [mask()]) or be buffered with
-#' [buffer_3d()], so a track is handled as a set of points or buffers.
+#' [buffer_3d()].
 #'
 #' Points between vertices follow the WGS84 geodesic (the shortest path on
 #' the ellipsoid), so a segment across the antimeridian goes the short way.
 #' Depth and time change linearly with distance along each segment.
 #' Distances are horizontal, not three-dimensional.
 #'
+#' A line with a time at some vertices but not others is an error: its time
+#' between those vertices isn't known. Give every vertex a time, or none.
+#'
 #' @param x A [SpatVector3D-class] of lines, from [as_vector3d()].
 #' @param sampling How to place the points, as in [extract_to_track()]:
-#'   `"vertices"` keeps only the vertices; `"balanced"` divides each segment
-#'   evenly so that every step limit below holds; `"merged_steps"` combines
-#'   the distance and depth cuts with the time cuts. `NULL` (default) gives
-#'   `"balanced"` when a step is given and `"vertices"` otherwise.
+#'   * `"vertices"` keeps only the vertices.
+#'   * `"balanced"` spaces points evenly along each segment, as many as the
+#'     strictest step limit needs. With calendar steps, it keeps the step
+#'     dates and spaces points evenly between them.
+#'   * `"merged_steps"` places the evenly spaced points that the distance
+#'     and depth limits need, and separately a point at each time step, and
+#'     keeps both sets, so the points can be unevenly spaced.
+#'
+#'   `NULL` (default) gives `"balanced"` when a step is given and
+#'   `"vertices"` otherwise.
 #' @param spacing_km Largest horizontal distance between points, in
 #'   kilometres.
 #' @param depth_step_m Largest change in depth between points, in metres.
 #' @param time_step,time_unit Largest change in time between points, and its
 #'   unit: seconds, minutes, hours, days, or whole calendar months or years.
-#'   Needs a time at every vertex. Calendar steps count from the first vertex
-#'   of each segment, so a route that starts on 31 January with monthly steps
-#'   gets 29 February, 31 March, 30 April.
-#' @param max_samples Most points to make, in total.
+#'   Needs a time at every vertex. If the lines have dates without a time of
+#'   day, the step must be whole days, months or years. Calendar steps count
+#'   from the first vertex of each segment, so a segment that starts on
+#'   31 January with monthly steps gets 29 February, 31 March, 30 April.
+#' @param max_samples Largest total number of points, across all lines.
+#'   `sample_3d()` stops with an error if the steps need more.
 #'
 #' @return A [SpatVector3D-class] of points, one per sample, in order along
 #'   each line. Each point's feature ID is the line's ID and the sample
@@ -41,8 +52,8 @@
 #'   duration of the segments either side, as weights for summaries along
 #'   the track; `NA` without times), `is_interpolated` (`FALSE` for the
 #'   line's own vertices), and the line's columns that have one value along
-#'   it. With dates and no hours, each point's time is the UTC day it falls
-#'   on.
+#'   it. If the lines have dates without a time of day, each point's time is
+#'   the UTC date it falls on.
 #' @seealso [buffer_3d()] to turn the points into polygons;
 #'   [extract_to_track()], which samples tracks the same way.
 #' @examples
@@ -67,27 +78,43 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
                       time_unit = c("hours", "minutes", "seconds", "days",
                                     "months", "years"),
                       max_samples = 100000L) {
-  if (!methods::is(x, "SpatVector3D") || x@type != "lines") {
-    .abort_vector3d(paste0(
-      "`x` must be SpatVector3D lines, from as_vector3d(type = \"lines\"). ",
-      "Points are already samples, and polygons have no path to follow."
-    ))
+  if (!methods::is(x, "SpatVector3D")) {
+    .abort_vector3d(
+      "`x` must be SpatVector3D lines, from as_vector3d(type = \"lines\")."
+    )
   }
+  .check_geomtype(
+    x, "lines",
+    "Points are already samples, and polygons have no path to follow."
+  )
   if (!is.null(sampling)) {
     sampling <- match.arg(sampling, c("vertices", "balanced", "merged_steps"))
   }
   time_unit <- match.arg(time_unit)
   sampling <- .track_sampling(sampling, spacing_km, depth_step_m, time_step,
-                              time_unit)
-  .track_positive(max_samples, "max_samples", optional = FALSE)
+                              time_unit, max_samples)
+  # Vertices in feature order, then in order along each line, as
+  # buffer_3d() reads them: the sampler takes each line's rows in order.
   v <- x@vertices
   ids <- unique(v$feature_id)
   v <- v[order(match(v$feature_id, ids), v$vertex), , drop = FALSE]
+  .check_vertex_times(v, if (!is.null(time_step)) "`time_step`")
+  if (!is.null(time_step) && !time_unit %in% c("months", "years")) {
+    .check_whole_days(x, time_step * .time_unit_seconds(time_unit),
+                      "`time_step`")
+  }
   timed <- !all(is.na(v$time))
-  if (!is.null(time_step) && !timed) {
-    .abort_vector3d(
-      "`time_step` needs a time at each vertex; give `time` in as_vector3d()."
-    )
+
+  # The points' own columns can't also come from the lines.
+  extra <- .feature_attributes(v)
+  generated <- c("track_id", "sample_id", "distance_km", "support_km",
+                 "support_seconds", "is_interpolated")
+  clash <- intersect(names(extra), generated)
+  if (length(clash)) {
+    .abort_vector3d(glue::glue(
+      "The lines have columns {toString(clash)}, which sample_3d() adds to ",
+      "each point. Rename them first."
+    ))
   }
 
   vertices <- data.frame(track_id = v$feature_id, lon = v$lon, lat = v$lat,
@@ -98,18 +125,11 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
     time_step = time_step, time_unit = time_unit, interpolate_depth = TRUE,
     interpolate_time = timed, land_mask = NULL, land_policy = "skip"
   )
-  time_values <- if (timed) as.numeric(v$time)
-  remaining <- max_samples
-  pieces <- lapply(ids, function(id) {
-    sampled <- .track_sample_one(
-      vertices, which(vertices$track_id == id), options, "lon", "lat",
-      "depth", "time", time_values, depth_used = TRUE, time_used = timed,
-      budget = remaining
-    )$samples
-    remaining <<- remaining - nrow(sampled)
-    sampled
-  })
-  s <- do.call(rbind, pieces)
+  s <- .track_sample_all(
+    vertices, options, "lon", "lat", "depth", "time",
+    time_values = if (timed) as.numeric(v$time), depth_used = TRUE,
+    time_used = timed, max_samples = max_samples
+  )$samples
 
   time <- s$time
   if (identical(x@time_resolution, "daily")) {
@@ -130,7 +150,6 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
     is_interpolated = s$is_interpolated,
     stringsAsFactors = FALSE
   )
-  extra <- .feature_attributes(v)
   extra <- extra[match(points$track_id, ids), , drop = FALSE]
   .new_vector3d("points", x@time_resolution,
                 vertices = .add_attributes(points, extra))

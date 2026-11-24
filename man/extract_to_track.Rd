@@ -59,7 +59,9 @@ one track. IDs are returned as text.}
 depth_step_m, time_step_seconds or time_step is supplied, and
 'vertices' otherwise. 'vertices' uses observations only; 'balanced'
 uses a shared subdivision satisfying all explicit step limits;
-'merged_steps' combines distance/depth cuts with temporal cuts;
+'merged_steps' places the evenly spaced samples that the distance and
+depth limits need, and separately a sample at each time step, and keeps
+both sets;
 'cells' splits each connection at
 grid boundaries and samples interval midpoints, retaining original
 vertices.
@@ -116,11 +118,11 @@ remain.}
 minutes,
 hours, elapsed days, whole calendar months or years. Balanced sampling uses
 one equal subdivision per original segment for elapsed-time limits.
-Calendar steps count from the segment's start in UTC, clamping to the
-end of a shorter month: from 31 January, monthly steps give
-29 February, 31 March, 30 April. Balanced sampling preserves these
-calendar anchors and subdivides each calendar span to satisfy
-distance/depth limits.}
+Calendar steps count from the segment's start in UTC, and fall on the
+last day of a shorter month: from 31 January, monthly steps give
+29 February, 31 March, 30 April. Balanced sampling keeps these dates and
+adds points between them where needed to meet the distance and depth
+limits.}
 
 \item{land_mask}{Optional sf polygon or single-layer terra SpatRaster mask.
 With no mask, marine connectivity is not checked.

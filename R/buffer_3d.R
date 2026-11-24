@@ -60,12 +60,13 @@
 #' buffer_3d(track, radius_km = 5, depth_window = 10)
 #' @export
 buffer_3d <- function(x, radius_km, depth_window, time_window = NULL) {
-  if (!methods::is(x, "SpatVector3D") || x@type == "polygons") {
-    .abort_vector3d(paste0(
-      "`x` must be SpatVector3D points or lines, from as_vector3d(). ",
-      "Polygons already have a depth range."
-    ))
+  if (!methods::is(x, "SpatVector3D")) {
+    .abort_vector3d(
+      "`x` must be SpatVector3D points or lines, from as_vector3d()."
+    )
   }
+  .check_geomtype(x, c("points", "lines"),
+                  "Polygons already have a depth range.")
   if (length(x) == 0L) {
     .abort_vector3d("`x` has no points or lines to buffer.")
   }
@@ -78,6 +79,18 @@ buffer_3d <- function(x, radius_km, depth_window, time_window = NULL) {
   if (!is.numeric(depth_window) || length(depth_window) != 1L ||
         !is.finite(depth_window) || depth_window < 0) {
     .abort_vector3d("`depth_window` must be one number of metres, 0 or more.")
+  }
+  if (!is.null(time_window)) {
+    seconds <- if (inherits(time_window, "difftime")) {
+      as.numeric(time_window, units = "secs")
+    } else if (is.numeric(time_window)) {
+      time_window * 86400
+    }
+    if (length(seconds) != 1L || !is.finite(seconds) || seconds < 0) {
+      .abort_vector3d(
+        "`time_window` must be one number of days, 0 or more, or a difftime."
+      )
+    }
   }
 
   # Vertices in feature order, then in order along each line: the geometry
@@ -94,19 +107,9 @@ buffer_3d <- function(x, radius_km, depth_window, time_window = NULL) {
   }
 
   # Each feature's earliest and latest time, or NA for a feature without
-  # times. A line timed at only some vertices has no clear time range.
+  # times.
+  .check_vertex_times(v, if (!is.null(time_window)) "`time_window`")
   timed <- !is.na(v$time)
-  timed_count <- tabulate(feature[timed], nbins = length(ids))
-  vertex_count <- tabulate(feature, nbins = length(ids))
-  partial <- ids[timed_count > 0L & timed_count < vertex_count]
-  if (length(partial)) {
-    noun <- if (length(partial) == 1L) "Line" else "Lines"
-    verb <- if (length(partial) == 1L) "has" else "have"
-    .abort_vector3d(glue::glue(
-      "{noun} {toString(partial)} of `x` {verb} a time at some vertices but ",
-      "not others. Give every vertex a time, or none."
-    ))
-  }
   seconds_utc <- as.numeric(v$time)
   start <- feature_min(ifelse(timed, seconds_utc, Inf))
   end <- feature_max(ifelse(timed, seconds_utc, -Inf))
@@ -115,37 +118,7 @@ buffer_3d <- function(x, radius_km, depth_window, time_window = NULL) {
   start <- .POSIXct(start, tz = "UTC")
   end <- .POSIXct(end, tz = "UTC")
   if (!is.null(time_window)) {
-    seconds <- if (inherits(time_window, "difftime")) {
-      as.numeric(time_window, units = "secs")
-    } else if (is.numeric(time_window)) {
-      time_window * 86400
-    }
-    if (length(seconds) != 1L || !is.finite(seconds) || seconds < 0) {
-      .abort_vector3d(
-        "`time_window` must be one number of days, 0 or more, or a difftime."
-      )
-    }
-    untimed <- ids[timed_count == 0L]
-    if (length(untimed)) {
-      noun <- if (length(untimed) == 1L) "Feature" else "Features"
-      verb <- if (length(untimed) == 1L) "has" else "have"
-      .abort_vector3d(glue::glue(
-        "`time_window` needs a time at every vertex. {noun} ",
-        "{toString(untimed)} of `x` {verb} no time; give `time` in ",
-        "as_vector3d()."
-      ))
-    }
-    if (identical(x@time_resolution, "daily")) {
-      days <- seconds / 86400
-      if (abs(days - round(days)) > 1e-6) {
-        .abort_vector3d(paste0(
-          "`x` has dates without hours, so `time_window` must be whole ",
-          "days. Give the times with hours in as_vector3d() for a finer ",
-          "window."
-        ))
-      }
-      seconds <- round(days) * 86400
-    }
+    seconds <- .check_whole_days(x, seconds, "`time_window`")
     start <- start - seconds
     end <- end + seconds
   }
@@ -190,4 +163,49 @@ buffer_3d <- function(x, radius_km, depth_window, time_window = NULL) {
     }))
   }, logical(1))
   extra[!duplicated(feature), constant, drop = FALSE]
+}
+
+# Internal: the times at each feature's vertices, checked for buffer_3d()
+# and sample_3d(). A line with a time at some vertices but not others has
+# no clear time range or steps, so it stops. With `arg`, the argument that
+# needs times (such as "`time_window`"), a feature without times stops too.
+.check_vertex_times <- function(v, arg = NULL) {
+  ids <- unique(v$feature_id)
+  feature <- factor(v$feature_id, levels = ids)
+  timed_count <- tabulate(feature[!is.na(v$time)], nbins = length(ids))
+  vertex_count <- tabulate(feature, nbins = length(ids))
+  partial <- ids[timed_count > 0L & timed_count < vertex_count]
+  if (length(partial)) {
+    noun <- if (length(partial) == 1L) "Line" else "Lines"
+    verb <- if (length(partial) == 1L) "has" else "have"
+    .abort_vector3d(glue::glue(
+      "{noun} {toString(partial)} of `x` {verb} a time at some vertices but ",
+      "not others. Give every vertex a time, or none."
+    ))
+  }
+  untimed <- ids[timed_count == 0L]
+  if (!is.null(arg) && length(untimed)) {
+    noun <- if (length(untimed) == 1L) "Feature" else "Features"
+    verb <- if (length(untimed) == 1L) "has" else "have"
+    .abort_vector3d(glue::glue(
+      "{arg} needs a time at every vertex. {noun} {toString(untimed)} of ",
+      "`x` {verb} no time; give `time` in as_vector3d()."
+    ))
+  }
+  invisible(NULL)
+}
+
+# Internal: a time window or step of `seconds`, for buffer_3d() and
+# sample_3d(). On dates without hours (time resolution "daily") it must be
+# whole days, and comes back rounded to them; `arg` names it in the error.
+.check_whole_days <- function(x, seconds, arg) {
+  if (!identical(x@time_resolution, "daily")) return(seconds)
+  days <- seconds / 86400
+  if (abs(days - round(days)) > 1e-6) {
+    .abort_vector3d(glue::glue(
+      "`x` has dates without hours, so {arg} must be whole days. Give the ",
+      "times with hours in as_vector3d() to use part of a day."
+    ))
+  }
+  round(days) * 86400
 }

@@ -66,27 +66,41 @@
 }
 
 
-# The sampling mode, checked with its step limits, for extract_to_track()
-# and sample_track(). NULL picks "balanced" when a step is given and
-# "vertices" otherwise. Steps must be positive, calendar steps whole months
-# or years; vertices sampling takes no steps, and the stepped modes need one.
+# The sampling mode, checked with its step limits and `max_samples`, for
+# extract_to_track() and sample_3d(). NULL picks "balanced" when a step is
+# given and "vertices" otherwise. Steps must be positive, calendar steps
+# whole months or years, and `max_samples` a positive whole number;
+# vertices sampling takes no steps, and the stepped modes need one. The one
+# producer of `ocean3d_error_track_sampling`.
 .track_sampling <- function(sampling, spacing_km, depth_step_m, time_step,
-                            time_unit) {
+                            time_unit, max_samples) {
+  fail <- function(message) {
+    rlang::abort(message, class = "ocean3d_error_track_sampling", call = NULL)
+  }
+  positive <- function(value) {
+    is.numeric(value) && length(value) == 1L && is.finite(value) && value > 0
+  }
   for (name in c("spacing_km", "depth_step_m", "time_step")) {
-    .track_positive(get(name), name)
+    value <- get(name)
+    if (!is.null(value) && !positive(value)) {
+      fail(glue::glue("`{name}` must be one finite positive number."))
+    }
+  }
+  if (!positive(max_samples) || max_samples != floor(max_samples)) {
+    fail("`max_samples` must be a positive integer.")
   }
   has_steps <- !is.null(spacing_km) || !is.null(depth_step_m) ||
     !is.null(time_step)
   if (is.null(sampling)) sampling <- if (has_steps) "balanced" else "vertices"
   if (time_unit %in% c("months", "years") && !is.null(time_step) &&
         time_step != floor(time_step)) {
-    stop("Calendar steps require whole months or years.")
+    fail("Calendar steps require whole months or years.")
   }
   if (sampling %in% c("balanced", "merged_steps") && !has_steps) {
-    stop("Balanced or merged_steps sampling needs an explicit spacing or step.")
+    fail("Balanced or merged_steps sampling needs an explicit spacing or step.")
   }
   if (sampling == "vertices" && has_steps) {
-    stop("Step limits cannot be used with vertices sampling.", call. = FALSE)
+    fail("Step limits cannot be used with vertices sampling.")
   }
   sampling
 }
@@ -818,6 +832,35 @@
 }
 
 
+# Every track of `vertices` sampled with .track_sample_one(), sharing one
+# budget of `max_samples` points, for extract_to_track() and sample_3d().
+# Returns the samples, in input row order for vertices sampling and in
+# track order otherwise, and the per-track list .track_collapse_cells()
+# reads.
+.track_sample_all <- function(vertices, options, lon_col, lat_col, depth_col,
+                              date_col, time_values, depth_used, time_used,
+                              max_samples) {
+  pieces <- list()
+  tracks <- list()
+  remaining <- max_samples
+  for (id in unique(vertices$track_id)) {
+    sampled <- .track_sample_one(
+      vertices, which(vertices$track_id == id), options, lon_col, lat_col,
+      depth_col, date_col, time_values, depth_used, time_used, remaining
+    )
+    remaining <- remaining - nrow(sampled$samples)
+    pieces[[length(pieces) + 1L]] <- sampled$samples
+    tracks[[id]] <- sampled$track
+  }
+  samples <- do.call(rbind, pieces)
+  if (options$sampling == "vertices") {
+    samples <- samples[order(samples$source_row), , drop = FALSE]
+  }
+  rownames(samples) <- NULL
+  list(samples = samples, tracks = tracks)
+}
+
+
 .track_collapse_cells <- function(samples, columns, context, lon_col,
                                   lat_col, depth_col, date_col) {
   pieces <- list()
@@ -932,7 +975,9 @@
 #'   depth_step_m, time_step_seconds or time_step is supplied, and
 #'   'vertices' otherwise. 'vertices' uses observations only; 'balanced'
 #'   uses a shared subdivision satisfying all explicit step limits;
-#'   'merged_steps' combines distance/depth cuts with temporal cuts;
+#'   'merged_steps' places the evenly spaced samples that the distance and
+#'   depth limits need, and separately a sample at each time step, and keeps
+#'   both sets;
 #'   'cells' splits each connection at
 #'   grid boundaries and samples interval midpoints, retaining original
 #'   vertices.
@@ -951,11 +996,11 @@
 #'   minutes,
 #'   hours, elapsed days, whole calendar months or years. Balanced sampling uses
 #'   one equal subdivision per original segment for elapsed-time limits.
-#'   Calendar steps count from the segment's start in UTC, clamping to the
-#'   end of a shorter month: from 31 January, monthly steps give
-#'   29 February, 31 March, 30 April. Balanced sampling preserves these
-#'   calendar anchors and subdivides each calendar span to satisfy
-#'   distance/depth limits.
+#'   Calendar steps count from the segment's start in UTC, and fall on the
+#'   last day of a shorter month: from 31 January, monthly steps give
+#'   29 February, 31 March, 30 April. Balanced sampling keeps these dates and
+#'   adds points between them where needed to meet the distance and depth
+#'   limits.
 #' @param land_mask Optional sf polygon or single-layer terra SpatRaster mask.
 #'   With no mask, marine connectivity is not checked.
 #'   Geographic rasters must use longitudes from -180 to 180; rotate or
@@ -1205,6 +1250,7 @@ extract_to_track <- function(
   }
   .track_positive(args$mask_step_km, "mask_step_km", FALSE)
   .track_positive(args$time_step, "time_step")
+  .track_positive(args$time_step_seconds, "time_step_seconds")
   if (!is.null(args$time_step_seconds)) {
     if (!is.null(args$time_step)) {
       stop("Use time_step or time_step_seconds, not both.")
@@ -1214,7 +1260,7 @@ extract_to_track <- function(
   }
   args$sampling <- .track_sampling(
     args$sampling, args$spacing_km, args$depth_step_m, args$time_step,
-    args$time_unit
+    args$time_unit, args$max_samples
   )
   if (!is.null(args$time_step) && !args$interpolate_time) {
     stop("time_step requires interpolate_time.")
@@ -1236,10 +1282,6 @@ extract_to_track <- function(
   }
   for (name in c("max_segment_km", "max_gap_hours")) {
     .track_positive(args[[name]], name)
-  }
-  .track_positive(args$max_samples, "max_samples", optional = FALSE)
-  if (args$max_samples != floor(args$max_samples)) {
-    stop("`max_samples` must be an integer.", call. = FALSE)
   }
   fraction <- args$min_valid_fraction
   if (!is.numeric(fraction) || length(fraction) != 1L ||
@@ -1458,26 +1500,13 @@ extract_to_track <- function(
     ),
     args[c("max_segment_km", "max_gap_hours")]
   )
-  pieces <- list()
-  tracks <- list()
-  remaining <- args$max_samples
-  for (id in unique(vertices$track_id)) {
-    sampled <- .track_sample_one(
-      vertices, which(vertices$track_id == id), options,
-      args$lon_col, args$lat_col, args$depth_col, args$date_col, time_values,
-      depth_used, time_used || args$weighting == "duration", remaining
-    )
-    remaining <- remaining - nrow(sampled$samples)
-    pieces[[length(pieces) + 1L]] <- sampled$samples
-    tracks[[id]] <- sampled$track
-  }
-  samples <- do.call(rbind, pieces)
-  if (args$sampling == "vertices") {
-    samples <- samples[order(samples$source_row), , drop = FALSE]
-  }
-  rownames(samples) <- NULL
+  sampled <- .track_sample_all(
+    vertices, options, args$lon_col, args$lat_col, args$depth_col,
+    args$date_col, time_values, depth_used,
+    time_used || args$weighting == "duration", args$max_samples
+  )
   list(
-    samples = samples, metadata = metadata, prepared = prepared,
-    options = options, vertices = vertices, tracks = tracks
+    samples = sampled$samples, metadata = metadata, prepared = prepared,
+    options = options, vertices = vertices, tracks = sampled$tracks
   )
 }

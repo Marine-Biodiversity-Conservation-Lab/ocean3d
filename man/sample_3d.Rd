@@ -18,10 +18,18 @@ sample_3d(
 \item{x}{A \link[=SpatVector3D-class]{SpatVector3D} of lines, from \code{\link[=as_vector3d]{as_vector3d()}}.}
 
 \item{sampling}{How to place the points, as in \code{\link[=extract_to_track]{extract_to_track()}}:
-\code{"vertices"} keeps only the vertices; \code{"balanced"} divides each segment
-evenly so that every step limit below holds; \code{"merged_steps"} combines
-the distance and depth cuts with the time cuts. \code{NULL} (default) gives
-\code{"balanced"} when a step is given and \code{"vertices"} otherwise.}
+\itemize{
+\item \code{"vertices"} keeps only the vertices.
+\item \code{"balanced"} spaces points evenly along each segment, as many as the
+strictest step limit needs. With calendar steps, it keeps the step
+dates and spaces points evenly between them.
+\item \code{"merged_steps"} places the evenly spaced points that the distance
+and depth limits need, and separately a point at each time step, and
+keeps both sets, so the points can be unevenly spaced.
+}
+
+\code{NULL} (default) gives \code{"balanced"} when a step is given and
+\code{"vertices"} otherwise.}
 
 \item{spacing_km}{Largest horizontal distance between points, in
 kilometres.}
@@ -30,11 +38,13 @@ kilometres.}
 
 \item{time_step, time_unit}{Largest change in time between points, and its
 unit: seconds, minutes, hours, days, or whole calendar months or years.
-Needs a time at every vertex. Calendar steps count from the first vertex
-of each segment, so a route that starts on 31 January with monthly steps
-gets 29 February, 31 March, 30 April.}
+Needs a time at every vertex. If the lines have dates without a time of
+day, the step must be whole days, months or years. Calendar steps count
+from the first vertex of each segment, so a segment that starts on
+31 January with monthly steps gets 29 February, 31 March, 30 April.}
 
-\item{max_samples}{Most points to make, in total.}
+\item{max_samples}{Largest total number of points, across all lines.
+\code{sample_3d()} stops with an error if the steps need more.}
 }
 \value{
 A \link[=SpatVector3D-class]{SpatVector3D} of points, one per sample, in order along
@@ -45,8 +55,8 @@ start), \code{support_km} and \code{support_seconds} (half the length and
 duration of the segments either side, as weights for summaries along
 the track; \code{NA} without times), \code{is_interpolated} (\code{FALSE} for the
 line's own vertices), and the line's columns that have one value along
-it. With dates and no hours, each point's time is the UTC day it falls
-on.
+it. If the lines have dates without a time of day, each point's time is
+the UTC date it falls on.
 }
 \description{
 Turns each line of a \link[=SpatVector3D-class]{SpatVector3D}, such as a dive track or a
@@ -54,13 +64,16 @@ vessel route, into points along it: its vertices, and with a spacing or
 step, points in between. Each point has the depth and time interpolated
 along the segment it lies on. The points can then go into the
 intersect step (\code{\link[=intersect_3d]{intersect_3d()}}, \code{\link[terra:mask]{mask()}}) or be buffered with
-\code{\link[=buffer_3d]{buffer_3d()}}, so a track is handled as a set of points or buffers.
+\code{\link[=buffer_3d]{buffer_3d()}}.
 }
 \details{
 Points between vertices follow the WGS84 geodesic (the shortest path on
 the ellipsoid), so a segment across the antimeridian goes the short way.
 Depth and time change linearly with distance along each segment.
 Distances are horizontal, not three-dimensional.
+
+A line with a time at some vertices but not others is an error: its time
+between those vertices isn't known. Give every vertex a time, or none.
 }
 \examples{
 dive <- data.frame(tag = "A", lon = c(150, 150.1, 150.2), lat = -20,
