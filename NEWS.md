@@ -200,6 +200,17 @@ Pass each depth once, for example with `unique(depths)`.
   = TRUE)` returns a `SpatVoxel` with the volume of each cell at each depth
   level, in km³, `NA` where the level is unoccupied. Its layers sum to
   `volume(v, per_cell = TRUE)`.
+* `intersect_3d()`, `intersects_3d()` and `mask()` take `SpatVector3D`
+  points (#115). A point covers one cell and one depth level. With a voxel,
+  the result is a presence voxel marking, for each point, the cell that
+  holds it and the level nearest its depth (ties go to the shallower level).
+  With an envelope, it is an envelope over the cells where a point's depth
+  lies within the interval, running from the shallowest to the deepest such
+  point (a lone point has zero thickness). With polygons, each point inside
+  a polygon's outline, depth range and time interval gives one point, with
+  `feature_id_x` and `feature_id_y` naming the pair. `mask(voxel, points)`
+  keeps the value at each point's cell and level. Lines are still an error;
+  the message refers to `buffer_3d()`.
 * New arguments `spatial_match`, `max_distance_km`, `spatial_report` and
   `depth_report`. Longitudes match across the 0-360 and -180-180
   conventions and across the antimeridian.
