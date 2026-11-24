@@ -116,9 +116,11 @@ remain.}
 minutes,
 hours, elapsed days, whole calendar months or years. Balanced sampling uses
 one equal subdivision per original segment for elapsed-time limits.
-Calendar steps advance from each preceding step in UTC, clamping to the
-destination month's end. Balanced sampling preserves these calendar anchors
-and subdivides each calendar span to satisfy distance/depth limits.}
+Calendar steps count from the segment's start in UTC, clamping to the
+end of a shorter month: from 31 January, monthly steps give
+29 February, 31 March, 30 April. Balanced sampling preserves these
+calendar anchors and subdivides each calendar span to satisfy
+distance/depth limits.}
 
 \item{land_mask}{Optional sf polygon or single-layer terra SpatRaster mask.
 With no mask, marine connectivity is not checked.

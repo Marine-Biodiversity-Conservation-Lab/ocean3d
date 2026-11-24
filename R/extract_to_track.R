@@ -66,6 +66,32 @@
 }
 
 
+# The sampling mode, checked with its step limits, for extract_to_track()
+# and sample_track(). NULL picks "balanced" when a step is given and
+# "vertices" otherwise. Steps must be positive, calendar steps whole months
+# or years; vertices sampling takes no steps, and the stepped modes need one.
+.track_sampling <- function(sampling, spacing_km, depth_step_m, time_step,
+                            time_unit) {
+  for (name in c("spacing_km", "depth_step_m", "time_step")) {
+    .track_positive(get(name), name)
+  }
+  has_steps <- !is.null(spacing_km) || !is.null(depth_step_m) ||
+    !is.null(time_step)
+  if (is.null(sampling)) sampling <- if (has_steps) "balanced" else "vertices"
+  if (time_unit %in% c("months", "years") && !is.null(time_step) &&
+        time_step != floor(time_step)) {
+    stop("Calendar steps require whole months or years.")
+  }
+  if (sampling %in% c("balanced", "merged_steps") && !has_steps) {
+    stop("Balanced or merged_steps sampling needs an explicit spacing or step.")
+  }
+  if (sampling == "vertices" && has_steps) {
+    stop("Step limits cannot be used with vertices sampling.", call. = FALSE)
+  }
+  sampling
+}
+
+
 .track_interpolate <- function(x, i, fractions, enabled, name, used) {
   a <- x[i]
   b <- x[i + 1L]
@@ -329,15 +355,20 @@
   }
   # .prepare_track() has validated `step`, including whole calendar steps.
   if (unit %in% c("months", "years")) {
-    current <- as.POSIXct(start, origin = "1970-01-01", tz = "UTC")
+    # Break k is k steps from the start, not one step from the previous
+    # break: end-of-month clamping (31 January + 1 month = 29 February)
+    # would otherwise carry forward and every later break would drift (#146).
+    first <- as.POSIXct(start, origin = "1970-01-01", tz = "UTC")
     values <- start
-    while (as.numeric(current) < end) {
-      following <- .buffer_shift_time(current, step, unit)
+    k <- 1
+    repeat {
+      following <- as.numeric(.buffer_shift_time(first, k * step, unit))
       if (length(values) >= budget) {
         stop("time_step exceeds max_samples.")
       }
-      values <- c(values, min(end, as.numeric(following)))
-      current <- following
+      values <- c(values, min(end, following))
+      if (following >= end) break
+      k <- k + 1
     }
     return((values - start) / (end - start))
   }
@@ -920,9 +951,11 @@
 #'   minutes,
 #'   hours, elapsed days, whole calendar months or years. Balanced sampling uses
 #'   one equal subdivision per original segment for elapsed-time limits.
-#'   Calendar steps advance from each preceding step in UTC, clamping to the
-#'   destination month's end. Balanced sampling preserves these calendar anchors
-#'   and subdivides each calendar span to satisfy distance/depth limits.
+#'   Calendar steps count from the segment's start in UTC, clamping to the
+#'   end of a shorter month: from 31 January, monthly steps give
+#'   29 February, 31 March, 30 April. Balanced sampling preserves these
+#'   calendar anchors and subdivides each calendar span to satisfy
+#'   distance/depth limits.
 #' @param land_mask Optional sf polygon or single-layer terra SpatRaster mask.
 #'   With no mask, marine connectivity is not checked.
 #'   Geographic rasters must use longitudes from -180 to 180; rotate or
@@ -1166,13 +1199,6 @@ extract_to_track <- function(
 # `sampling = NULL` chooses balanced sampling when a step is supplied and
 # vertices otherwise. `dots` holds the point-selection options.
 .prepare_track <- function(args, dots) {
-  steps <- list(
-    args$spacing_km, args$depth_step_m, args$time_step_seconds, args$time_step
-  )
-  has_steps <- any(!vapply(steps, is.null, logical(1)))
-  if (is.null(args$sampling)) {
-    args$sampling <- if (has_steps) "balanced" else "vertices"
-  }
   spatial_policy <- dots$spatial_match
   if (!is.null(spatial_policy)) {
     spatial_policy <- match.arg(spatial_policy, c("within", "nearest"))
@@ -1186,17 +1212,12 @@ extract_to_track <- function(
     args$time_step <- args$time_step_seconds
     args$time_unit <- "seconds"
   }
-  if (args$time_unit %in% c("months", "years") && !is.null(args$time_step) &&
-        args$time_step != floor(args$time_step)) {
-    stop("Calendar steps require whole months or years.")
-  }
+  args$sampling <- .track_sampling(
+    args$sampling, args$spacing_km, args$depth_step_m, args$time_step,
+    args$time_unit
+  )
   if (!is.null(args$time_step) && !args$interpolate_time) {
     stop("time_step requires interpolate_time.")
-  }
-  no_steps <- is.null(args$spacing_km) && is.null(args$depth_step_m) &&
-    is.null(args$time_step)
-  if (args$sampling %in% c("balanced", "merged_steps") && no_steps) {
-    stop("Balanced or merged_steps sampling needs an explicit spacing or step.")
   }
   custom_matching <- identical(spatial_policy, "nearest") ||
     identical(args$time_resolution, "custom")
@@ -1213,8 +1234,7 @@ extract_to_track <- function(
   for (name in c("interpolate_depth", "interpolate_time", "quiet")) {
     .track_flag(args[[name]], name)
   }
-  for (name in c("spacing_km", "depth_step_m", "time_step_seconds",
-                 "max_segment_km", "max_gap_hours")) {
+  for (name in c("max_segment_km", "max_gap_hours")) {
     .track_positive(args[[name]], name)
   }
   .track_positive(args$max_samples, "max_samples", optional = FALSE)
@@ -1289,9 +1309,6 @@ extract_to_track <- function(
       "Step limits require the corresponding interpolation switch.",
       call. = FALSE
     )
-  }
-  if (args$sampling == "vertices" && has_steps) {
-    stop("Step limits cannot be used with vertices sampling.", call. = FALSE)
   }
   if (!is.null(dots$time_match)) {
     dots$time_match <- match.arg(dots$time_match, c("nearest", "exact"))
