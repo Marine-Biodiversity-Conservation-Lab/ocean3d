@@ -202,7 +202,20 @@ object with `as_envelope()` or `as_voxel()` first.
 depth, as `as_voxel()` does (#97). It used to drop the repeats silently.
 Pass each depth once, for example with `unique(depths)`.
 
+`as_voxel()` on a `SpatProxy` now reads the step nearest to a date or
+date-time in `time`, as `extract_to_point()` does (#115). It used to require
+an exact match and stop otherwise. For the old behaviour, pass
+`time_match = "exact"`; to cap the gap of a nearest match, pass
+`max_time_diff` in days (no cap by default).
+
 ## New features
+
+* `as_voxel()` on a `SpatProxy` reads several time steps at once (#115):
+  `time` can be a window of two dates or date-times, giving a list of
+  voxels, one per step inside it, or a `SpatVector3D` with one feature,
+  read at the feature's time (a point) or over its time interval (a
+  polygon), always as a list. On a one-step source, such as a World Ocean
+  Atlas climatology, a shape reads that step whatever time it has.
 
 * New `summarise_3d()` summarises a `SpatVoxel`'s values across all its
   cells and depth levels at once (#116): mean, sd, min, max and median. By
