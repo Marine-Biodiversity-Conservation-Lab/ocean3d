@@ -34,17 +34,19 @@ intersects_3d(x, y, ...)
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
   and
   [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
-  polygons, in any pairing, or an envelope or voxel with a 2D object (a
-  single-layer `SpatRaster` footprint or 2D polygons: `SpatVector`,
-  `sf`, `sfc`). Rasters must share one grid (CRS, extent, resolution).
-  netCDF files aren't accepted; load them with terra and wrap them with
+  polygons or points, in any pairing except two sets of points, or an
+  envelope or voxel with a 2D object (a single-layer `SpatRaster`
+  footprint or 2D polygons: `SpatVector`, `sf`, `sfc`). Rasters must
+  share one grid (CRS, extent, resolution). netCDF files aren't
+  accepted; load them with terra and wrap them with
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   first.
 
 - ...:
 
   Arguments for the voxel methods. They are an error when both inputs
-  are envelopes.
+  are envelopes, or when one is points and the other an envelope or a
+  voxel.
 
 - bounds:
 
@@ -60,11 +62,11 @@ intersects_3d(x, y, ...)
 ## Value
 
 A single-layer boolean `SpatRaster` named `intersects`, on the grid of
-the 3D input: `TRUE`, `FALSE` or `NA` per cell as above. For two sets of
+the 3D input: `TRUE`, `FALSE` or `NA` per cell as above. For two
 [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
-polygons, a list with one element per polygon of `x`, named by its
-feature ID: the feature IDs of the polygons of `y` it shares space with,
-in the order of `y`, or `character(0)` for none.
+sets, a list with one element per feature of `x`, named by its feature
+ID: the feature IDs of the features of `y` it shares space with, in the
+order of `y`, or `character(0)` for none.
 
 ## Details
 
@@ -83,20 +85,23 @@ only touch do not overlap. When `y` is a 2D footprint or polygons there
 is no depth axis to compare, so the test is only whether both are
 present.
 [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
-polygons have depths, so they are compared as an envelope, after being
-put on the 3D object's grid as in
-[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md).
+polygons and points have depths, so they are compared as
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+compares them, after being put on the 3D object's grid. A cell is `TRUE`
+where the voxel has a value at the level nearest a point's depth, or
+where a point's depth lies within the envelope's interval.
 
-Two sets of
+Two
 [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
-polygons have no grid to answer on, so the answer is a list instead, as
+sets (polygons with polygons, or points with polygons) have no grid to
+answer on, so the answer is a list instead, as
 [`sf::st_intersects()`](https://r-spatial.github.io/sf/reference/geos_binary_pred.html)
-gives in 2D: for each polygon of `x`, the polygons of `y` it shares 3D
+gives in 2D: for each feature of `x`, the features of `y` it shares 3D
 space with. A pair is listed exactly when
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
-gives it a polygon, so outlines that only share an edge, depth ranges
-that only touch and times that don't overlap aren't listed. Swapping `x`
-and `y` gives the same pairs listed the other way round.
+gives it a polygon or point, so outlines that only share an edge, depth
+ranges that only touch and times that don't overlap aren't listed.
+Swapping `x` and `y` gives the same pairs listed the other way round.
 
 The order of `x` and `y` does not matter.
 

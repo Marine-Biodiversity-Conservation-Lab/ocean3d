@@ -99,7 +99,7 @@ accepted: describe it with <code><a href="as_proxy.html">as_proxy()</a></code> a
 <dt id="arg-mask">mask<a class="anchor" aria-label="anchor" href="#arg-mask"></a></dt>
 <dd><p>The 3D domain to keep <code>x</code> inside: a <a href="SpatEnvelope-class.html">SpatEnvelope</a> or a
 <a href="SpatVoxel-class.html">SpatVoxel</a> on the same grid as <code>x</code>, or <a href="SpatVector3D-class.html">SpatVector3D</a>
-polygons, which are put on that grid.</p></dd>
+polygons or points, which are put on that grid.</p></dd>
 
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
@@ -151,6 +151,16 @@ an envelope mask as above. A voxel keeps its values in the cells and
 levels the polygons reach. Where polygons overlap, a cell gets the
 shallowest top and the deepest bottom, so a depth gap between them is
 kept too. The time intervals are dropped, with a message.</p></dd>
+
+<dt>anything masked by <a href="SpatVector3D-class.html">SpatVector3D</a> points</dt>
+<dd><p>A point covers
+one cell and one depth level, as in <code><a href="intersect_3d.html">intersect_3d()</a></code>. A voxel keeps
+its value in each point's cell at the level nearest the point's depth
+(chosen by depth, not by where the voxel has values), so <code>bounds</code> is
+an error with points. An envelope
+keeps its interval whole in the cells where a point lies within it. A
+plain <code>SpatRaster</code> keeps the cells that hold a point. Lines aren't
+supported; <code><a href="buffer_3d.html">buffer_3d()</a></code> turns them into polygons.</p></dd>
 
 
 </dl><p>A voxel or envelope masked by a plain <code>SpatRaster</code> or by polygons is

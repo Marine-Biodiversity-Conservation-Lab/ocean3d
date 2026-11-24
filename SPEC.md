@@ -70,7 +70,7 @@ on its own.
 | Step | Question | Exists now | Planned additions |
 |----|----|----|----|
 | Build | What is the 3D shape or grid? | [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md), [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md), [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md), [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md), [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md), [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md), [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md), [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md), data loaders ([`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)) | track sampling; picking out features of a `SpatVector3D` (`x[i]`); `crop()` of a `SpatProxy` by a `SpatVector3D`; time matching in [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md) for a `SpatProxy` (one voxel for one time, or a list of voxels, one per time step, for a time window) |
-| Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D` (polygons with envelopes, voxels and other polygons done; points to come; lines go through [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md) or track sampling) |
+| Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D` (polygons with envelopes, voxels and other polygons done; points with envelopes, voxels and polygons done; lines go through [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md) or track sampling) |
 | Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md) (total or per cell; total only for `SpatVector3D` polygons) | `summarise_3d()` for statistics on the values in a voxel, such as one masked to a shape; per-level cell volume (`volume(x, per_cell = TRUE, per_level = TRUE)`) |
 
 The planned functions are added alongside the existing ones: every
@@ -655,12 +655,12 @@ Jay Matsushiba on 2 November 2026 (#112).
 
 #### Open questions
 
-- **Nearest depth with missing layers:**
+- **Nearest depth with missing layers:** whether
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-  skips missing layers when choosing the nearest depth. Whether the
-  point methods of
+  keeps skipping missing layers when choosing the nearest depth, once it
+  is rebuilt on the three steps (#116). The point methods of
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
-  and `mask()` keep this (#115).
+  and `mask()` don’t skip them (#168).
 - **Zarr layouts:** Copernicus Marine serves each product chunked by
   time step (for maps) and by location (for time series). How the core
   object records both and which one each step reads (#151).
@@ -789,9 +789,9 @@ and weights, and its block reads. This section plans the parts
 extraction still needs: picking out one shape, cropping a proxy to a
 shape, time matching in
 [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
-point methods for the intersect functions, per-level cell volume and
-`summarise_3d()`. Function names marked “planned” are working names, to
-be settled in the issue for each step.
+per-level cell volume and `summarise_3d()`. The point methods for the
+intersect functions are done (#168). Function names marked “planned” are
+working names, to be settled in the issue for each step.
 
 *1. Build.* `SpatVector3D` builders create shapes without reading the
 data they will be compared with.
@@ -868,10 +868,10 @@ build step.
   the shape’s depth range overlaps the level’s slab, taken from the
   voxel’s depth edges or else from the `bounds` rule (`"midpoint"` or
   `"top"`).
-- *(planned)* A point covers one cell and one depth level: the cell it
-  falls in and the nearest depth level, as
+- A point covers one cell and one depth level: the cell it falls in and
+  the nearest depth level, as
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-  does with `method = "nearest"`.
+  does with `method = "nearest"` (#168).
 - Lines aren’t supported:
   [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
   turns them into polygons, and track sampling turns them into points
@@ -1021,10 +1021,12 @@ of 23 November 2026.
     [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
     and
     [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
-    between two sets of polygons. Next: `x[i]` for a `SpatVector3D`,
-    `ext()` and `crs()` for a `SpatVector3D` so that `crop()` of a
-    `SpatProxy` takes one, points in the intersect functions, time
-    matching in
+    between two sets of polygons. The second (#168) adds points to
+    [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+    [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+    and `mask()`, with a voxel, an envelope or polygons. Next: `x[i]`
+    for a `SpatVector3D`, `ext()` and `crs()` for a `SpatVector3D` so
+    that `crop()` of a `SpatProxy` takes one, time matching in
     [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
     for a `SpatProxy`, a vignette with the per-shape loop, and
     `vector3d_to_voxel()` (puts polygons on a voxel’s levels without
@@ -1114,37 +1116,40 @@ made depth-aware. Keeps `x`’s values where the mask reaches that cell at
 that depth. A voxel masked by an envelope puts the envelope on the
 voxel’s own levels, so the caller cannot misalign them.
 
-`SpatVector3D` methods (polygons with an envelope, a voxel or other
-polygons exist; points and lines are *(planned)*): - **Vector with
-vector**:
+`SpatVector3D` methods (polygons and points with an envelope, a voxel or
+polygons exist; lines aren’t compared directly: buffer them with
+[`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
+or sample along them as a track, \#105): - **Vector with vector**:
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 intersects the geometries, the depths and the time intervals. Time
 intervals include both ends, a feature without a time overlaps any time,
 and features whose times don’t overlap don’t intersect. - Two polygon
 sets give one polygon per overlapping pair (footprints and depth
 intervals intersected), numbered, with `feature_id_x` and `feature_id_y`
-naming the pair. -
+naming the pair. - Points with polygons give one point per (point,
+polygon) pair where the point lies within the outline, the depth range
+and the time interval, numbered the same way (#168). Two sets of points
+share no space, so they are an error. -
 [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
-of two polygon sets returns, for each feature of `x`, the IDs of the
-features of `y` it shares space with, as
+of two sets returns, for each feature of `x`, the IDs of the features of
+`y` it shares space with, as
 [`sf::st_intersects()`](https://r-spatial.github.io/sf/reference/geos_binary_pred.html)
-does. - *(planned)* Points with polygons give the points inside them.
-Lines aren’t supported:
-[`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
-turns them into polygons, and track sampling into points (#105). -
-**Vector with envelope or voxel**: polygons are evaluated on the
+does. - **Vector with envelope or voxel**: polygons are evaluated on the
 raster’s grid (as in
 [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md))
 and compared cell by cell as two envelopes are. Where polygons overlap
-over a cell, the depth gap between them is filled. `mask(voxel, x)`
-keeps the voxel values in the cells and levels `x` reaches. *(planned)*
+over a cell, the depth gap between them is filled. A point covers one
+cell and one depth level (#168): on a voxel, the cell that holds it and
+the level nearest its depth (ties go shallower; the level is chosen by
+depth, not by where the voxel has values); on an envelope, the cell
+where its depth lies within the interval. `mask(voxel, x)` keeps the
+voxel values in the cells and levels `x` reaches. *(planned)*
 `vector3d_to_voxel()` will put polygons on a voxel’s levels one level at
-a time and keep the gap; points will be compared in the cell each one
-falls in and its nearest depth level. - **Vector with a data source**:
-no separate function. *(planned)*
-`as_voxel(crop(proxy, shape), time = shape)` reads the data around a
-shape, and `mask()` keeps the values inside it; users loop over shapes
-(see [Extraction on the three steps](#extraction-on-the-three-steps)).
+a time and keep the gap. - **Vector with a data source**: no separate
+function. *(planned)* `as_voxel(crop(proxy, shape), time = shape)` reads
+the data around a shape, and `mask()` keeps the values inside it; users
+loop over shapes (see [Extraction on the three
+steps](#extraction-on-the-three-steps)).
 
 These functions are the intersect step of the [package
 design](#package-design-build-intersect-summarise).

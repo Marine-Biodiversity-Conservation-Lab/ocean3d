@@ -81,16 +81,18 @@ it is the cheap choice for richness and tally maps.</p>
 
 <dl><dt id="arg-x-y">x, y<a class="anchor" aria-label="anchor" href="#arg-x-y"></a></dt>
 <dd><p>The two objects: two of <a href="SpatEnvelope-class.html">SpatEnvelope</a>,
-<a href="SpatVoxel-class.html">SpatVoxel</a> and <a href="SpatVector3D-class.html">SpatVector3D</a> polygons, in any pairing, or
-an envelope or voxel with a 2D object (a single-layer <code>SpatRaster</code>
-footprint or 2D polygons: <code>SpatVector</code>, <code>sf</code>, <code>sfc</code>). Rasters
-must share one grid (CRS, extent, resolution). netCDF files aren't
-accepted; load them with terra and wrap them with <code><a href="as_voxel.html">as_voxel()</a></code> first.</p></dd>
+<a href="SpatVoxel-class.html">SpatVoxel</a> and <a href="SpatVector3D-class.html">SpatVector3D</a> polygons or points, in any
+pairing except two sets of points, or an envelope or voxel with a 2D
+object (a single-layer <code>SpatRaster</code> footprint or 2D polygons:
+<code>SpatVector</code>, <code>sf</code>, <code>sfc</code>). Rasters must share one grid (CRS, extent,
+resolution). netCDF files aren't accepted; load them with terra and
+wrap them with <code><a href="as_voxel.html">as_voxel()</a></code> first.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Arguments for the voxel methods. They are an error when both
-inputs are envelopes.</p></dd>
+inputs are envelopes, or when one is points and the other an envelope
+or a voxel.</p></dd>
 
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
@@ -105,10 +107,9 @@ result, pass the same <code>bounds</code> to <code><a href="volume.html">volume(
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A single-layer boolean <code>SpatRaster</code> named <code>intersects</code>, on the
 grid of the 3D input: <code>TRUE</code>, <code>FALSE</code> or <code>NA</code> per cell as above. For two
-sets of <a href="SpatVector3D-class.html">SpatVector3D</a> polygons, a list with one element per
-polygon of <code>x</code>, named by its feature ID: the feature IDs of the
-polygons of <code>y</code> it shares space with, in the order of <code>y</code>, or
-<code>character(0)</code> for none.</p>
+<a href="SpatVector3D-class.html">SpatVector3D</a> sets, a list with one element per feature of <code>x</code>,
+named by its feature ID: the feature IDs of the features of <code>y</code> it
+shares space with, in the order of <code>y</code>, or <code>character(0)</code> for none.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -120,15 +121,19 @@ one of them is present.</p></li>
 sums and plots like any other boolean layer. Depth intervals that only touch
 do not overlap. When <code>y</code> is a 2D footprint or polygons there is no depth
 axis to compare, so the test is only whether both are present.
-<a href="SpatVector3D-class.html">SpatVector3D</a> polygons have depths, so they are compared as an
-envelope, after being put on the 3D object's grid as in <code><a href="intersect_3d.html">intersect_3d()</a></code>.</p>
-<p>Two sets of <a href="SpatVector3D-class.html">SpatVector3D</a> polygons have no grid to answer on, so
-the answer is a list instead, as <code><a href="https://r-spatial.github.io/sf/reference/geos_binary_pred.html" class="external-link">sf::st_intersects()</a></code> gives in 2D: for
-each polygon of <code>x</code>, the polygons of <code>y</code> it shares 3D space with. A pair
-is listed exactly when <code><a href="intersect_3d.html">intersect_3d()</a></code> gives it a polygon, so outlines
-that only share an edge, depth ranges that only touch and times that
-don't overlap aren't listed. Swapping <code>x</code> and <code>y</code> gives the same pairs
-listed the other way round.</p>
+<a href="SpatVector3D-class.html">SpatVector3D</a> polygons and points have depths, so they are compared
+as <code><a href="intersect_3d.html">intersect_3d()</a></code> compares them, after being put on the 3D object's
+grid. A cell is <code>TRUE</code> where the voxel has a value at the level nearest a
+point's depth, or where a point's depth lies within the envelope's
+interval.</p>
+<p>Two <a href="SpatVector3D-class.html">SpatVector3D</a> sets (polygons with polygons, or points with
+polygons) have no grid to answer on, so the answer is a list instead, as
+<code><a href="https://r-spatial.github.io/sf/reference/geos_binary_pred.html" class="external-link">sf::st_intersects()</a></code> gives in 2D: for each feature of <code>x</code>, the features
+of <code>y</code> it shares 3D space with. A pair is listed exactly when
+<code><a href="intersect_3d.html">intersect_3d()</a></code> gives it a polygon or point, so outlines that only share
+an edge, depth ranges that only touch and times that don't overlap aren't
+listed. Swapping <code>x</code> and <code>y</code> gives the same pairs listed the other way
+round.</p>
 <p>The order of <code>x</code> and <code>y</code> does not matter.</p>
     </div>
     <div class="section level2">

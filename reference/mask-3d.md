@@ -57,7 +57,7 @@ mask(x, mask, ...)
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
   on the same grid as `x`, or
   [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
-  polygons, which are put on that grid.
+  polygons or points, which are put on that grid.
 
 - bounds:
 
@@ -123,6 +123,20 @@ What each pairing does:
   cell gets the shallowest top and the deepest bottom, so a depth gap
   between them is kept too. The time intervals are dropped, with a
   message.
+
+- anything masked by
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  points:
+
+  A point covers one cell and one depth level, as in
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md).
+  A voxel keeps its value in each point's cell at the level nearest the
+  point's depth (chosen by depth, not by where the voxel has values), so
+  `bounds` is an error with points. An envelope keeps its interval whole
+  in the cells where a point lies within it. A plain `SpatRaster` keeps
+  the cells that hold a point. Lines aren't supported;
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
+  turns them into polygons.
 
 A voxel or envelope masked by a plain `SpatRaster` or by polygons is
 terra's own `mask()`. Every layer is masked by the same 2D pattern and
