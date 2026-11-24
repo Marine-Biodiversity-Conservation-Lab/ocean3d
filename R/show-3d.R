@@ -34,18 +34,22 @@ setMethod("show", "SpatVoxel", function(object) {
     levels <- if (n == 1L) "1 level" else glue::glue("{n} levels")
     shown <- if (n <= 6L) toString(d) else glue::glue("{min(d)} to {max(d)}")
     # terra::time() is a date-time, a date, or a number for a year, a year
-    # and month or a plain step, which format() shows as it is.
-    time <- terra::time(object)[1L]
+    # and month or a plain step, which format() shows as it is. Layers with
+    # different times show their range.
+    time <- range(terra::time(object))
+    shown_time <- if (inherits(time, "POSIXt")) {
+      format(time, "%Y-%m-%d %H:%M:%S", tz = "UTC", usetz = TRUE)
+    } else {
+      format(time)
+    }
     c(
       `depth (m)` = glue::glue("{shown} ({levels})"),
       `depth edges` = if (is.null(depth_bounds(object))) "none" else
         "from depth_bounds",
       time = if (!isTRUE(terra::timeInfo(object)$time)) {
         "none"
-      } else if (inherits(time, "POSIXt")) {
-        format(time, "%Y-%m-%d %H:%M:%S", tz = "UTC", usetz = TRUE)
       } else {
-        format(time)
+        paste(unique(shown_time), collapse = " to ")
       }
     )
   })

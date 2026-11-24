@@ -45,8 +45,17 @@ test_that("a voxel's time prints whatever form terra holds it in", {
   expect_match(shown(v), "^time +: 2020-01-02$", all = FALSE)
   terra::time(v, tstep = "years") <- rep(2020, 4)
   expect_match(shown(v), "^time +: 2020$", all = FALSE)
-  terra::time(v, tstep = "raw") <- 1:4
+  terra::time(v, tstep = "raw") <- rep(1, 4)
   expect_match(shown(v), "^time +: 1$", all = FALSE)
+
+  # Layers with different times show their range.
+  start <- as.POSIXct("2020-01-01", tz = "UTC")
+  terra::time(v) <- start + c(0, 6, 12, 18) * 3600
+  expect_match(shown(v),
+               "^time +: 2020-01-01 00:00:00 UTC to 2020-01-01 18:00:00 UTC$",
+               all = FALSE)
+  terra::time(v, tstep = "raw") <- 1:4
+  expect_match(shown(v), "^time +: 1 to 4$", all = FALSE)
 })
 
 test_that("an envelope prints its class, depth range and occupied cells", {
