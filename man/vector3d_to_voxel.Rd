@@ -37,8 +37,9 @@ shares some thickness with the slab of water that level stands for, as in
 Each level is filled on its own, so where two polygons cover one cell at
 different depths, the levels between them stay empty: polygons from 0 to
 50 m and from 200 to 300 m over the same cell cover the levels in those
-two ranges and not the ones between. \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} gives that cell one range, 0 to
-300 m, because an envelope holds one interval per cell. Use this function
+two ranges and not the ones between. \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} gives that
+cell one range, 0 to 300 m, because an envelope holds one interval per
+cell. Use this function
 when the next step works on a voxel's levels, for example to compare the
 polygons with a \link[=SpatVoxel-class]{SpatVoxel} of data; \code{\link[=intersect_3d]{intersect_3d()}},
 \code{\link[=intersects_3d]{intersects_3d()}} and \code{\link[terra:mask]{mask()}} use it for polygons and a voxel.

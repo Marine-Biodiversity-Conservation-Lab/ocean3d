@@ -15,8 +15,9 @@
 #' Each level is filled on its own, so where two polygons cover one cell at
 #' different depths, the levels between them stay empty: polygons from 0 to
 #' 50 m and from 200 to 300 m over the same cell cover the levels in those
-#' two ranges and not the ones between. [vector3d_to_envelope()] gives that cell one range, 0 to
-#' 300 m, because an envelope holds one interval per cell. Use this function
+#' two ranges and not the ones between. [vector3d_to_envelope()] gives that
+#' cell one range, 0 to 300 m, because an envelope holds one interval per
+#' cell. Use this function
 #' when the next step works on a voxel's levels, for example to compare the
 #' polygons with a [SpatVoxel-class] of data; [intersect_3d()],
 #' [intersects_3d()] and [mask()] use it for polygons and a voxel.
