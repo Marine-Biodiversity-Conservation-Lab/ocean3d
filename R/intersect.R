@@ -425,7 +425,7 @@ setMethod(
 # raised while S4 evaluates an argument for dispatch loses its class.
 .polygons_on_grid <- function(x, template) {
   # Checked first, so empty points or lines are still an error.
-  .check_polygons(x)
+  .check_geomtype(x)
   empty <- function(...) {
     # remove the 3D class
     grid <- methods::as(template[[1]], "SpatRaster")
@@ -472,8 +472,8 @@ setMethod(
   "intersect_3d", c("SpatVector3D", "SpatVector3D"),
   function(x, y, ...) {
     .no_extra_args(...)
-    .check_polygons(x)
-    .check_polygons(y)
+    .check_geomtype(x)
+    .check_geomtype(y)
     resolution <- unique(stats::na.omit(c(x@time_resolution,
                                           y@time_resolution)))
     if (length(resolution) > 1L) {

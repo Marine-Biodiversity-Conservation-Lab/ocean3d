@@ -313,6 +313,7 @@ test_that("a SpatVector3D feature reads its steps, always as a list", {
                                  depth = 5),
                       type = "lines", id = "id")
   expect_error(as_voxel(g$proxy, time = line),
+               "needs polygons or points, but these are lines",
                class = "ocean3d_error_vector3d_type")
 
   # The time arguments belong to a proxy.

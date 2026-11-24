@@ -793,12 +793,9 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         "{length(time)}. Pick one with `x[i]`."
       ))
     }
-    if (time@type == "lines") {
-      rlang::abort(paste(
-        "`time` can't be a line. buffer_3d() turns lines into polygons,",
-        "whose time interval selects the steps."
-      ), class = "ocean3d_error_vector3d_type", call = NULL)
-    }
+    # Lines have no single time to read; buffer_3d() turns them into
+    # polygons, whose interval is a window.
+    .check_geomtype(time, c("polygons", "points"))
     as_list <- TRUE
     if (n == 1L) return(selected(if (!is.null(axis)) 1L, as_list))
     resolution <- time@time_resolution
