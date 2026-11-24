@@ -280,6 +280,14 @@ with `unique(depths)`.
 
 ### New features
 
+- Printing a `SpatVoxel` or `SpatEnvelope` now shows its class and its
+  3D information
+  ([\#61](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/61)).
+  For a voxel: the depth levels, whether it carries depth edges, and its
+  time. For an envelope: the depth range and how many cells it occupies.
+  terra’s description of the grid follows. Before, both printed as a
+  plain `SpatRaster`.
+
 - [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
   [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
   and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)

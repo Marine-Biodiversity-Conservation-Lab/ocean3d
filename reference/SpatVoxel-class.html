@@ -57,7 +57,7 @@ grid-wide: every cell is sampled at the same set of standard depths."></head><bo
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>3D voxel model: one layer per standard depth level</h1>
-      <small class="dont-index">Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/AllClasses.R" class="external-link"><code>R/AllClasses.R</code></a>, <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/create_3d_objects.R" class="external-link"><code>R/create_3d_objects.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/AllClasses.R" class="external-link"><code>R/AllClasses.R</code></a>, <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/create_3d_objects.R" class="external-link"><code>R/create_3d_objects.R</code></a>, <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/show-3d.R" class="external-link"><code>R/show-3d.R</code></a></small>
       <div class="d-none name"><code>SpatVoxel-class.Rd</code></div>
     </div>
 
@@ -85,7 +85,10 @@ grid-wide: every cell is sampled at the same set of standard depths.</p>
 <span><span class="va">x</span><span class="op">[[</span><span class="va">i</span>, <span class="va">j</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">value</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatVoxel,character'</span></span>
-<span><span class="va">x</span><span class="op">[[</span><span class="va">i</span>, <span class="va">j</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">value</span></span></code></pre></div>
+<span><span class="va">x</span><span class="op">[[</span><span class="va">i</span>, <span class="va">j</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="va">value</span></span>
+<span></span>
+<span><span class="co"># S4 method for class 'SpatVoxel'</span></span>
+<span><span class="fu">show</span><span class="op">(</span><span class="va">object</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -113,6 +116,12 @@ that keeps each layer's depth through later operations.</p></dd>
 <dt id="arg-i-j-value">i, j, value<a class="anchor" aria-label="anchor" href="#arg-i-j-value"></a></dt>
 <dd><p>For <code>[[&lt;-</code>: the layer to replace, by number or name, and
 its new values, as with terra. A replaced layer keeps its depth.</p></dd>
+
+
+<dt id="arg-object">object<a class="anchor" aria-label="anchor" href="#arg-object"></a></dt>
+<dd><p>A <code>SpatVoxel</code>. <code>show()</code> prints the class, the depth levels,
+whether the voxel carries depth edges (see <code><a href="depth_bounds.html">depth_bounds()</a></code>) and the
+time, then terra's description of the grid.</p></dd>
 
 </dl></div>
     <div class="section level2">

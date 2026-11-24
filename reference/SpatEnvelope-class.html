@@ -49,7 +49,7 @@ variable within it."></head><body>
   <main id="main" class="col-md-9"><div class="page-header">
 
       <h1>2.5D min-max envelope: exactly depth_min, depth_max</h1>
-      <small class="dont-index">Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/AllClasses.R" class="external-link"><code>R/AllClasses.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/AllClasses.R" class="external-link"><code>R/AllClasses.R</code></a>, <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/R/show-3d.R" class="external-link"><code>R/show-3d.R</code></a></small>
       <div class="d-none name"><code>SpatEnvelope-class.Rd</code></div>
     </div>
 
@@ -61,7 +61,22 @@ a spatial phenomenon (typically a species range) rather than sampling a
 variable within it.</p>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="co"># S4 method for class 'SpatEnvelope'</span></span>
+<span><span class="fu">show</span><span class="op">(</span><span class="va">object</span><span class="op">)</span></span></code></pre></div>
+    </div>
 
+    <div class="section level2">
+    <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
+
+
+<dl><dt id="arg-object">object<a class="anchor" aria-label="anchor" href="#arg-object"></a></dt>
+<dd><p>A <code>SpatEnvelope</code>. <code>show()</code> prints the class, the depth range
+(the shallowest <code>depth_min</code> to the deepest <code>depth_max</code>) and how many
+cells the envelope occupies, then terra's description of the grid.</p></dd>
+
+</dl></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The vertical interval is per-cell and continuous, and is solid by

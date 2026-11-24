@@ -30,6 +30,9 @@ x[[i, j]] <- value
 
 # S4 method for class 'SpatVoxel,character'
 x[[i, j]] <- value
+
+# S4 method for class 'SpatVoxel'
+show(object)
 ```
 
 ## Arguments
@@ -59,6 +62,13 @@ x[[i, j]] <- value
 
   For `[[<-`: the layer to replace, by number or name, and its new
   values, as with terra. A replaced layer keeps its depth.
+
+- object:
+
+  A `SpatVoxel`. `show()` prints the class, the depth levels, whether
+  the voxel carries depth edges (see
+  [`depth_bounds()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depth_bounds.md))
+  and the time, then terra's description of the grid.
 
 ## Details
 

@@ -7,6 +7,21 @@ is the cell value**. The variable is the object itself: the envelope
 delimits the vertical extent of a spatial phenomenon (typically a
 species range) rather than sampling a variable within it.
 
+## Usage
+
+``` r
+# S4 method for class 'SpatEnvelope'
+show(object)
+```
+
+## Arguments
+
+- object:
+
+  A `SpatEnvelope`. `show()` prints the class, the depth range (the
+  shallowest `depth_min` to the deepest `depth_max`) and how many cells
+  the envelope occupies, then terra's description of the grid.
+
 ## Details
 
 The vertical interval is per-cell and continuous, and is solid by

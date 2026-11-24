@@ -563,7 +563,9 @@ range_env <- vect_to_envelope(
 
 # The result is our species' potential 3D distribution as a SpatEnvelope.
 range_env
-#> class       : SpatRaster
+#> class       : SpatEnvelope
+#> depth (m)   : 0 to 600
+#> cells       : 192 of 400 occupied
 #> size        : 20, 20, 2  (nrow, ncol, nlyr)
 #> resolution  : 1, 1  (x, y)
 #> extent      : 0, 20, 0, 20  (xmin, xmax, ymin, ymax)
