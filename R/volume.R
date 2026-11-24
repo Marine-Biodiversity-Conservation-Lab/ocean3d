@@ -104,24 +104,27 @@ setMethod("volume", "SpatRaster",
 
 # A SpatProxy is measured one time step at a time, reading each step through
 # .proxy_to_voxel(); a step larger than the read budget is read in groups of
-# depth layers. A voxel read from a proxy always carries its depth edges, so
-# each layer stands for the same slab whichever layers are read with it, and
-# the groups' volumes add up to the whole step's.
+# depth layers. Every group is read with the proxy's depth edges, so each
+# layer stands for the same slab whichever layers are read with it, and the
+# groups' volumes add up to the whole step's. Only the per-cell result keeps
+# a raster per step.
 #' @rdname volume
 #' @param fun SpatProxy only. Which values count as occupied, as in
 #'   [occupied()]: `NULL` (default) counts every non-`NA` value; otherwise a
 #'   function of a layer's values returning `TRUE` where the cell is
 #'   occupied, for example `function(v) v > 10 & v < 15` for the water
-#'   between 10 and 15 degrees.
+#'   between 10 and 15 °C.
 #' @section Memory:
-#' `volume()` on a [SpatProxy-class] holds one time step in memory at a time.
-#' When one step is larger than the read budget, the option
-#' `ocean3d.max_read_mb` (default 1024, in megabytes of doubles: cells times
-#' layers times 8 bytes), the step is read in groups of depth layers that
-#' each fit the budget, and the groups' volumes are added. Set the option
-#' lower on a machine with little memory, or higher for faster reads.
+#' `volume()` on a [SpatProxy-class] holds at most one time step in memory.
+#' A step larger than the read budget (option `ocean3d.max_read_mb`, 1024 MB
+#' by default) is read in groups of depth layers, and their volumes are
+#' added. A step takes cells x layers x 8 bytes. Each read holds at least one
+#' depth layer of the whole grid, even when that is larger than the budget.
+#' Set the option lower on a machine with little memory, or higher for
+#' faster reads. With `per_cell = TRUE`, the result itself holds one layer
+#' per time step.
 #' @section Overlap through time:
-#' `intersect_3d()` and the other query functions take voxels, not a
+#' `intersect_3d()`, `intersects_3d()` and `mask()` don't take a
 #' `SpatProxy`. To measure the overlap of a time-varying dataset with a
 #' shape, read each step and intersect it:
 #' `volume(intersect_3d(as_voxel(x, time = i), shape))` for each step `i`.
@@ -129,21 +132,29 @@ setMethod("volume", "SpatRaster",
 setMethod("volume", "SpatProxy", function(x, per_cell = FALSE, fun = NULL,
                                           ...) {
   .no_extra_args(...)
+  if (!is.null(fun) && !is.function(fun)) {
+    rlang::abort("`fun` must be NULL or a function of a layer's values.",
+                 class = "ocean3d_error_volume_fun", call = NULL)
+  }
+  budget <- getOption("ocean3d.max_read_mb", 1024)
+  if (!is.numeric(budget) || length(budget) != 1L || !is.finite(budget) ||
+        budget <= 0) {
+    rlang::abort(glue::glue(
+      "The option `ocean3d.max_read_mb` must be one positive number of ",
+      "megabytes; got {format(budget)}."
+    ), class = "ocean3d_error_read_budget", call = NULL)
+  }
   variable <- x@variable
   axis <- x@axes$time
   n_steps <- if (is.null(axis)) 1L else variable$dim_lengths[[axis$dim]]
-  dated <- !is.null(axis) && !isTRUE(axis$climatology)
-  times <- if (dated) axis$cftime$as_timestamp(asPOSIX = TRUE) else
-    .POSIXct(rep(NA_real_, n_steps), tz = "UTC")
 
   # Groups of depth layers (first and last index, storage order) that fit
-  # the read budget; a proxy without a depth axis gets one group of nothing,
-  # and .proxy_to_voxel() stops for it.
+  # the read budget, at least one layer each; a proxy without a depth axis
+  # gets one group of nothing, and .proxy_to_voxel() stops for it.
   depth_dim <- variable$axis_dims$depth
   n_depth <- if (is.null(depth_dim)) 1L else variable$dim_lengths[[depth_dim]]
   n_cells <- prod(variable$dim_lengths[unlist(variable$axis_dims[c("lon",
                                                                    "lat")])])
-  budget <- getOption("ocean3d.max_read_mb", 1024)
   per_group <- max(1L, min(n_depth, floor(budget * 1024^2 / (8 * n_cells))))
   groups <- if (is.null(depth_dim)) {
     list(NULL)
@@ -153,24 +164,31 @@ setMethod("volume", "SpatProxy", function(x, per_cell = FALSE, fun = NULL,
     })
   }
 
-  layers <- lapply(seq_len(n_steps), function(step) {
+  # Each step's total (or per-cell raster), and its date from the voxel the
+  # builder dated, NA when it has none.
+  times <- rep(NA_real_, n_steps)
+  results <- lapply(seq_len(n_steps), function(step) {
     parts <- lapply(groups, function(span) {
       v <- .proxy_to_voxel(x, if (is.null(axis)) NULL else step,
                            variable$name, depth = span)
+      if (terra::timeInfo(v)$time) {
+        times[step] <<- as.numeric(terra::time(v)[1L])
+      }
       if (!is.null(fun)) v <- occupied(v, fun)
-      volume(v, per_cell = TRUE)
+      volume(v, per_cell = per_cell)
     })
+    if (!per_cell) return(sum(unlist(parts)))
     parts <- terra::rast(parts)
     # NA where no group has an occupied level, as volume() gives.
     terra::ifel(terra::allNA(parts), NA, sum(parts, na.rm = TRUE))
   })
+  times <- .POSIXct(times, tz = "UTC")
 
   if (!per_cell) {
-    totals <- vapply(layers, .volume_result, numeric(1), per_cell = FALSE)
-    return(data.frame(time = times, volume_km3 = totals))
+    return(data.frame(time = times, volume_km3 = unlist(results)))
   }
-  out <- terra::rast(layers)
+  out <- terra::rast(results)
   names(out) <- rep("volume", n_steps)
-  if (dated) terra::time(out) <- times
+  if (!anyNA(times)) terra::time(out) <- times
   out
 })

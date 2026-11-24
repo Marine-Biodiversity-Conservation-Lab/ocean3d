@@ -327,9 +327,18 @@ test_that("reading a step in groups of depth layers gives the same volume", {
   expect_equal(volume(g$proxy), whole)
   expect_equal(terra::values(volume(g$proxy, per_cell = TRUE)),
                terra::values(whole_cells))
-  # A voxel in memory is grouped the same way.
-  v <- as_voxel(g$proxy, time = 1)
-  expect_equal(volume(as_proxy(v))$volume_km3, volume(v))
+  # A voxel in memory without stored edges keeps the proxy's halfway slabs
+  # in every group, so one level at a time gives the whole volume.
+  v <- as_voxel(terra::rast(nrows = 2, ncols = 2, nlyrs = 4, vals = 1),
+                depths = c(5, 15, 25, 35))
+  rlang::local_options(ocean3d.max_read_mb = 1024)
+  whole <- volume(as_proxy(v))$volume_km3
+  whole_cells <- terra::values(volume(as_proxy(v), per_cell = TRUE))
+  expect_gt(whole, 0)
+  rlang::local_options(ocean3d.max_read_mb = 1e-9)
+  expect_equal(volume(as_proxy(v))$volume_km3, whole)
+  expect_equal(terra::values(volume(as_proxy(v), per_cell = TRUE)),
+               whole_cells)
 })
 
 test_that("volume() of a series measures every file's steps", {
@@ -348,9 +357,18 @@ test_that("volume() of a series measures every file's steps", {
 test_that("volume() of a proxy rejects what it can't measure", {
   g <- proxy_and_file()
   on.exit(unlink(g$file), add = TRUE)
-  expect_error(volume(g$proxy, bounds = "top"),
+  expect_error(volume(g$proxy, bounds = "top"), "unused argument",
                class = "ocean3d_error_unused_argument")
+  expect_error(volume(g$proxy, fun = "warm"), "must be NULL or a function",
+               class = "ocean3d_error_volume_fun")
+  for (budget in list(NA, "512", -1, c(1, 2))) {
+    rlang::local_options(ocean3d.max_read_mb = budget)
+    expect_error(volume(g$proxy), "`ocean3d.max_read_mb` must be one",
+                 class = "ocean3d_error_read_budget")
+  }
+  rlang::local_options(ocean3d.max_read_mb = NULL)
   no_depth <- proxy_and_file(depth = NULL)
   on.exit(unlink(no_depth$file), add = TRUE)
-  expect_error(volume(no_depth$proxy), class = "ocean3d_error_proxy_no_depth")
+  expect_error(volume(no_depth$proxy), "no depth axis",
+               class = "ocean3d_error_proxy_no_depth")
 })

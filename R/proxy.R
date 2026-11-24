@@ -711,14 +711,14 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # goes in terra::depth() with the proxy's depth edges, and the date of the
 # step in terra::time(). `depth`, a first and last index in storage order,
 # reads only those levels, so volume() can measure a large step in groups of
-# layers; NULL reads them all.
+# layers; NULL reads them all. Every source, a voxel in memory too, reads a
+# span through the same path below, so each group carries the proxy's depth
+# edges.
 .proxy_to_voxel <- function(x, time, varname, depth = NULL) {
-  # A voxel already in memory is its own only time step; its layers are in
-  # storage order.
-  if (identical(x@source$type, "voxel")) {
+  # A voxel already in memory is its own only time step.
+  if (identical(x@source$type, "voxel") && is.null(depth)) {
     .proxy_time_step(x, time)
-    v <- x@source$voxel
-    return(if (is.null(depth)) v else v[[seq(depth[1L], depth[2L])]])
+    return(x@source$voxel)
   }
   axes <- x@axes
   if (is.null(axes$depth)) {

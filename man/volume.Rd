@@ -49,7 +49,7 @@ for a voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVo
 \code{\link[=occupied]{occupied()}}: \code{NULL} (default) counts every non-\code{NA} value; otherwise a
 function of a layer's values returning \code{TRUE} where the cell is
 occupied, for example \code{function(v) v > 10 & v < 15} for the water
-between 10 and 15 degrees.}
+between 10 and 15 °C.}
 }
 \value{
 With \code{per_cell = FALSE}, a number: the total volume in km³. With
@@ -59,16 +59,17 @@ depth interval, or no occupied level). Its sum is the total.
 
 For a \link[=SpatProxy-class]{SpatProxy}, one result per time step: with
 \code{per_cell = FALSE} a data frame with columns \code{time} (the step's
-date-time in UTC, or \code{NA} for a climatology or a dataset without a time
-axis) and \code{volume_km3}; with \code{per_cell = TRUE} a \code{SpatRaster} with one
+date-time in UTC, or \code{NA} for a one-step climatology or a dataset
+without a time axis) and \code{volume_km3}; with \code{per_cell = TRUE} a
+\code{SpatRaster} with one
 layer per step, named \code{volume}, with the steps' dates in
 \code{\link[terra:time]{terra::time()}}.
 }
 \description{
 Measures the occupied volume of a \link[=SpatEnvelope-class]{SpatEnvelope}, a
 \link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons, as a total, or cell by
-cell for envelopes and voxels. A \link[=SpatProxy-class]{SpatProxy} is measured one time
-step at a time, giving the volume of each step (see the sections below).
+cell for envelopes and voxels. For a \link[=SpatProxy-class]{SpatProxy}, it gives the volume
+of each time step (see the "Memory" and "Overlap through time" sections).
 Envelopes and voxels describe a 3D
 domain over a 2D grid, but they store depth in dual roles, so each
 computes the vertical extent differently:
@@ -117,17 +118,19 @@ volumes are measured on different slabs and don't add up.
 }
 \section{Memory}{
 
-\code{volume()} on a \link[=SpatProxy-class]{SpatProxy} holds one time step in memory at a time.
-When one step is larger than the read budget, the option
-\code{ocean3d.max_read_mb} (default 1024, in megabytes of doubles: cells times
-layers times 8 bytes), the step is read in groups of depth layers that
-each fit the budget, and the groups' volumes are added. Set the option
-lower on a machine with little memory, or higher for faster reads.
+\code{volume()} on a \link[=SpatProxy-class]{SpatProxy} holds at most one time step in memory.
+A step larger than the read budget (option \code{ocean3d.max_read_mb}, 1024 MB
+by default) is read in groups of depth layers, and their volumes are
+added. A step takes cells x layers x 8 bytes. Each read holds at least one
+depth layer of the whole grid, even when that is larger than the budget.
+Set the option lower on a machine with little memory, or higher for
+faster reads. With \code{per_cell = TRUE}, the result itself holds one layer
+per time step.
 }
 
 \section{Overlap through time}{
 
-\code{intersect_3d()} and the other query functions take voxels, not a
+\code{intersect_3d()}, \code{intersects_3d()} and \code{mask()} don't take a
 \code{SpatProxy}. To measure the overlap of a time-varying dataset with a
 shape, read each step and intersect it:
 \code{volume(intersect_3d(as_voxel(x, time = i), shape))} for each step \code{i}.
@@ -169,7 +172,7 @@ terra::values(volume(ov, per_cell = TRUE))
 detection <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 35))
 volume(buffer_3d(detection, radius_km = 10, depth_window = 25))
 
-# Through time: each step of a dataset, here the water warmer than 2.
+# Through time: the volume of water warmer than 2 °C in each step.
 p <- as_proxy(system.file("extdata", "example_3d.nc", package = "ocean3d"))
 volume(p, fun = function(v) v > 2)
 }
