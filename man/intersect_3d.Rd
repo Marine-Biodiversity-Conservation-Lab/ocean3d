@@ -53,14 +53,16 @@ intersect_3d(x, y, ...)
 }
 \arguments{
 \item{x, y}{The two objects: two of \link[=SpatEnvelope-class]{SpatEnvelope},
-\link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatVector3D-class]{SpatVector3D} polygons, in any pairing, or
-an envelope or voxel with a 2D object (a single-layer \code{SpatRaster}
-footprint or 2D polygons: \code{SpatVector}, \code{sf}, \code{sfc}). Rasters
-must share one grid (CRS, extent, resolution). netCDF files aren't
-accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
+\link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatVector3D-class]{SpatVector3D} polygons or points, in any
+pairing except two sets of points, or an envelope or voxel with a 2D
+object (a single-layer \code{SpatRaster} footprint or 2D polygons:
+\code{SpatVector}, \code{sf}, \code{sfc}). Rasters must share one grid (CRS, extent,
+resolution). netCDF files aren't accepted; load them with terra and
+wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
 \item{...}{Arguments for the voxel methods. They are an error when both
-inputs are envelopes.}
+inputs are envelopes, or when one is points and the other an envelope
+or a voxel.}
 
 \item{bounds}{Only when one input is a voxel and the other an envelope or
 \link[=SpatVector3D-class]{SpatVector3D} polygons. How the envelope or polygons are placed
@@ -70,9 +72,10 @@ edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure the result, pass the 
 \code{bounds} to \code{\link[=volume]{volume()}}.}
 }
 \value{
-\link[=SpatVector3D-class]{SpatVector3D} polygons when both inputs are polygons. A
+\link[=SpatVector3D-class]{SpatVector3D} polygons when both inputs are polygons, and
+\link[=SpatVector3D-class]{SpatVector3D} points when one is points and the other polygons. A
 \link[=SpatEnvelope-class]{SpatEnvelope} when both inputs are envelopes, or when one
-is an envelope and the other is 2D or \link[=SpatVector3D-class]{SpatVector3D} polygons.
+is an envelope and the other is 2D or a \link[=SpatVector3D-class]{SpatVector3D}.
 Otherwise a \link[=SpatVoxel-class]{SpatVoxel} of
 presence. Either is on the grid of the 3D input.
 }
@@ -84,9 +87,9 @@ values where the other is present, use \code{\link[terra:mask]{mask()}}.
 }
 \details{
 At least one of \code{x} and \code{y} must be a 3D object: a \link[=SpatEnvelope-class]{SpatEnvelope}, a
-\link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons. The other can be a 3D
-object too, or, with an envelope or voxel, a 2D object. A 2D object
-restricts the result horizontally and leaves its depths alone.
+\link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons or points. The other
+can be a 3D object too, or, with an envelope or voxel, a 2D object. A 2D
+object restricts the result horizontally and leaves its depths alone.
 
 \describe{
 \item{Two envelopes}{Cell by cell, the result runs from the deeper
@@ -114,15 +117,37 @@ put on the voxel's grid and depth levels with \code{\link[=vector3d_to_voxel]{ve
 one level at a time, then compared as a voxel. A depth gap between two
 polygons over one cell stays empty. When the voxel has no depth edges,
 you set each level's slab with \code{bounds}, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}.}
-}
-
-With an envelope or voxel and \link[=SpatVector3D-class]{SpatVector3D} polygons, the polygons'
-time intervals are dropped, with a message. Polygons that miss the grid,
-or a set with no polygons, give an empty result.
-Points and lines aren't supported yet; \code{\link[=buffer_3d]{buffer_3d()}} turns them into
-polygons.
-
-\describe{
+\item{An envelope or voxel and \link[=SpatVector3D-class]{SpatVector3D} polygons, either
+way}{The polygons' time intervals are dropped, with a message.
+Polygons that miss the grid, or a set with no polygons, give an empty
+result.}
+\item{A voxel and \link[=SpatVector3D-class]{SpatVector3D} points}{A point covers one cell
+and one depth level: the cell that holds it and the level whose depth
+is nearest the point's depth (a tie goes to the shallower level, as in
+\code{\link[=extract_to_point]{extract_to_point()}}). The level is chosen by depth alone, so a point
+whose nearest level has no value in the voxel shares nothing there.
+When the voxel's depth edges give uneven slabs, the slab that contains
+a point can belong to another level; the nearest level is used. The
+result is a presence voxel on the voxel's levels, and \code{bounds} doesn't
+apply. Points off the grid share nothing. Points' times aren't
+compared, since a voxel shows one time step.}
+\item{An envelope and \link[=SpatVector3D-class]{SpatVector3D} points}{In each cell where a
+point's depth lies within the envelope's interval (both ends
+included), the result holds an interval from the shallowest such point
+to the deepest. A lone point gives a zero-thickness interval, so the
+result's \code{\link[=volume]{volume()}} is 0: points have no volume.}
+\item{\link[=SpatVector3D-class]{SpatVector3D} points and polygons}{A point is inside a
+polygon when \code{\link[sf:st_intersects]{sf::st_intersects()}} finds its position in the outline
+(on WGS84 coordinates sf uses the sphere by default, where a point
+exactly on an edge may not count), its depth is within \code{depth_min} to
+\code{depth_max} and its time within the polygon's time interval. Depth and
+time include both ends (with dates, the interval covers all of its
+end day). A point or polygon without a time matches any
+time; one side with dates and the other with hours is an error. Each
+matching pair gives one point, numbered, with columns \code{feature_id_x}
+and \code{feature_id_y} naming the pair and the inputs' other columns
+dropped. Two sets of points share no space, so they are an error.
+Lines aren't supported; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}
 \item{Two sets of \link[=SpatVector3D-class]{SpatVector3D} polygons}{Each pair of polygons,
 one from \code{x} and one from \code{y}, whose outlines, depth ranges and times
 overlap gives one polygon: the shared outline (as
@@ -189,6 +214,12 @@ deep <- as_vector3d(
   depth_min = 80, depth_max = 300
 )
 terra::values(intersect_3d(a, deep))
+
+# A SpatVector3D point covers the cell that holds it and, on a voxel, the
+# level nearest its depth: here the 50 m level of `bv` in the first cell
+# (the point is projected onto the grid's CRS).
+detection <- as_vector3d(data.frame(lon = 0.0045, lat = 0.0045, depth = 60))
+terra::values(intersect_3d(detection, bv))
 
 # Two sets of SpatVector3D polygons give the polygons they share.
 square <- function(x0) {

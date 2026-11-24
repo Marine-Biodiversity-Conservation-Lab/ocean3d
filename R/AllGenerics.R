@@ -137,9 +137,9 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' values where the other is present, use [mask()].
 #'
 #' At least one of `x` and `y` must be a 3D object: a [SpatEnvelope-class], a
-#' [SpatVoxel-class] or [SpatVector3D-class] polygons. The other can be a 3D
-#' object too, or, with an envelope or voxel, a 2D object. A 2D object
-#' restricts the result horizontally and leaves its depths alone.
+#' [SpatVoxel-class] or [SpatVector3D-class] polygons or points. The other
+#' can be a 3D object too, or, with an envelope or voxel, a 2D object. A 2D
+#' object restricts the result horizontally and leaves its depths alone.
 #'
 #' \describe{
 #'   \item{Two envelopes}{Cell by cell, the result runs from the deeper
@@ -167,15 +167,37 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'     one level at a time, then compared as a voxel. A depth gap between two
 #'     polygons over one cell stays empty. When the voxel has no depth edges,
 #'     you set each level's slab with `bounds`, as in [envelope_to_voxel()].}
-#' }
-#'
-#' With an envelope or voxel and [SpatVector3D-class] polygons, the polygons'
-#' time intervals are dropped, with a message. Polygons that miss the grid,
-#' or a set with no polygons, give an empty result.
-#' Points and lines aren't supported yet; [buffer_3d()] turns them into
-#' polygons.
-#'
-#' \describe{
+#'   \item{An envelope or voxel and [SpatVector3D-class] polygons, either
+#'     way}{The polygons' time intervals are dropped, with a message.
+#'     Polygons that miss the grid, or a set with no polygons, give an empty
+#'     result.}
+#'   \item{A voxel and [SpatVector3D-class] points}{A point covers one cell
+#'     and one depth level: the cell that holds it and the level whose depth
+#'     is nearest the point's depth (a tie goes to the shallower level, as in
+#'     [extract_to_point()]). The level is chosen by depth alone, so a point
+#'     whose nearest level has no value in the voxel shares nothing there.
+#'     When the voxel's depth edges give uneven slabs, the slab that contains
+#'     a point can belong to another level; the nearest level is used. The
+#'     result is a presence voxel on the voxel's levels, and `bounds` doesn't
+#'     apply. Points off the grid share nothing. Points' times aren't
+#'     compared, since a voxel shows one time step.}
+#'   \item{An envelope and [SpatVector3D-class] points}{In each cell where a
+#'     point's depth lies within the envelope's interval (both ends
+#'     included), the result holds an interval from the shallowest such point
+#'     to the deepest. A lone point gives a zero-thickness interval, so the
+#'     result's [volume()] is 0: points have no volume.}
+#'   \item{[SpatVector3D-class] points and polygons}{A point is inside a
+#'     polygon when [sf::st_intersects()] finds its position in the outline
+#'     (on WGS84 coordinates sf uses the sphere by default, where a point
+#'     exactly on an edge may not count), its depth is within `depth_min` to
+#'     `depth_max` and its time within the polygon's time interval. Depth and
+#'     time include both ends (with dates, the interval covers all of its
+#'     end day). A point or polygon without a time matches any
+#'     time; one side with dates and the other with hours is an error. Each
+#'     matching pair gives one point, numbered, with columns `feature_id_x`
+#'     and `feature_id_y` naming the pair and the inputs' other columns
+#'     dropped. Two sets of points share no space, so they are an error.
+#'     Lines aren't supported; [buffer_3d()] turns them into polygons.}
 #'   \item{Two sets of [SpatVector3D-class] polygons}{Each pair of polygons,
 #'     one from `x` and one from `y`, whose outlines, depth ranges and times
 #'     overlap gives one polygon: the shared outline (as
@@ -201,13 +223,15 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' values of a voxel input are not carried over. To keep them, use [mask()].
 #'
 #' @param x,y The two objects: two of [SpatEnvelope-class],
-#'   [SpatVoxel-class] and [SpatVector3D-class] polygons, in any pairing, or
-#'   an envelope or voxel with a 2D object (a single-layer `SpatRaster`
-#'   footprint or 2D polygons: `SpatVector`, `sf`, `sfc`). Rasters
-#'   must share one grid (CRS, extent, resolution). netCDF files aren't
-#'   accepted; load them with terra and wrap them with [as_voxel()] first.
+#'   [SpatVoxel-class] and [SpatVector3D-class] polygons or points, in any
+#'   pairing except two sets of points, or an envelope or voxel with a 2D
+#'   object (a single-layer `SpatRaster` footprint or 2D polygons:
+#'   `SpatVector`, `sf`, `sfc`). Rasters must share one grid (CRS, extent,
+#'   resolution). netCDF files aren't accepted; load them with terra and
+#'   wrap them with [as_voxel()] first.
 #' @param ... Arguments for the voxel methods. They are an error when both
-#'   inputs are envelopes.
+#'   inputs are envelopes, or when one is points and the other an envelope
+#'   or a voxel.
 #' @param bounds Only when one input is a voxel and the other an envelope or
 #'   [SpatVector3D-class] polygons. How the envelope or polygons are placed
 #'   on the voxel's depth levels: `"midpoint"` (default) or `"top"`. See
@@ -215,9 +239,10 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'   edges (see [SpatVoxel-class]). To measure the result, pass the same
 #'   `bounds` to [volume()].
 #'
-#' @returns [SpatVector3D-class] polygons when both inputs are polygons. A
+#' @returns [SpatVector3D-class] polygons when both inputs are polygons, and
+#'   [SpatVector3D-class] points when one is points and the other polygons. A
 #'   [SpatEnvelope-class] when both inputs are envelopes, or when one
-#'   is an envelope and the other is 2D or [SpatVector3D-class] polygons.
+#'   is an envelope and the other is 2D or a [SpatVector3D-class].
 #'   Otherwise a [SpatVoxel-class] of
 #'   presence. Either is on the grid of the 3D input.
 #'
@@ -262,6 +287,12 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #' )
 #' terra::values(intersect_3d(a, deep))
 #'
+#' # A SpatVector3D point covers the cell that holds it and, on a voxel, the
+#' # level nearest its depth: here the 50 m level of `bv` in the first cell
+#' # (the point is projected onto the grid's CRS).
+#' detection <- as_vector3d(data.frame(lon = 0.0045, lat = 0.0045, depth = 60))
+#' terra::values(intersect_3d(detection, bv))
+#'
 #' # Two sets of SpatVector3D polygons give the polygons they share.
 #' square <- function(x0) {
 #'   sf::st_polygon(list(rbind(c(x0, 0), c(x0 + 2, 0), c(x0 + 2, 2),
@@ -301,17 +332,20 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' sums and plots like any other boolean layer. Depth intervals that only touch
 #' do not overlap. When `y` is a 2D footprint or polygons there is no depth
 #' axis to compare, so the test is only whether both are present.
-#' [SpatVector3D-class] polygons have depths, so they are put on the 3D
-#' object's grid as in [intersect_3d()] and compared as whichever that object
-#' is, an envelope or a voxel.
+#' [SpatVector3D-class] polygons and points have depths, so they are compared
+#' as [intersect_3d()] compares them, after being put on the 3D object's
+#' grid. A cell is `TRUE` where the voxel has a value at the level nearest a
+#' point's depth, or where a point's depth lies within the envelope's
+#' interval.
 #'
-#' Two sets of [SpatVector3D-class] polygons have no grid to answer on, so
-#' the answer is a list instead, as [sf::st_intersects()] gives in 2D: for
-#' each polygon of `x`, the polygons of `y` it shares 3D space with. A pair
-#' is listed exactly when [intersect_3d()] gives it a polygon, so outlines
-#' that only share an edge, depth ranges that only touch and times that
-#' don't overlap aren't listed. Swapping `x` and `y` gives the same pairs
-#' listed the other way round.
+#' Two [SpatVector3D-class] sets (polygons with polygons, or points with
+#' polygons) have no grid to answer on, so the answer is a list instead, as
+#' [sf::st_intersects()] gives in 2D: for each feature of `x`, the features
+#' of `y` it shares 3D space with. A pair is listed exactly when
+#' [intersect_3d()] gives it a polygon or point, so outlines that only share
+#' an edge, depth ranges that only touch and times that don't overlap aren't
+#' listed. Swapping `x` and `y` gives the same pairs listed the other way
+#' round.
 #'
 #' The order of `x` and `y` does not matter.
 #'
@@ -319,10 +353,9 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #'
 #' @returns A single-layer boolean `SpatRaster` named `intersects`, on the
 #'   grid of the 3D input: `TRUE`, `FALSE` or `NA` per cell as above. For two
-#'   sets of [SpatVector3D-class] polygons, a list with one element per
-#'   polygon of `x`, named by its feature ID: the feature IDs of the
-#'   polygons of `y` it shares space with, in the order of `y`, or
-#'   `character(0)` for none.
+#'   [SpatVector3D-class] sets, a list with one element per feature of `x`,
+#'   named by its feature ID: the feature IDs of the features of `y` it
+#'   shares space with, in the order of `y`, or `character(0)` for none.
 #'
 #' @seealso [intersect_3d()] for the shared space itself; [mask()] to keep a
 #'   voxel's values inside a domain.

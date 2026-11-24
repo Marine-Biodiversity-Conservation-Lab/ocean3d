@@ -298,14 +298,17 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   )
 }
 
-# The one producer of `ocean3d_error_vector3d_type`: SpatVector3D points or
-# lines where polygons are needed, from vector3d_to_envelope() and the 3D
-# queries in R/intersect.R (which take points and lines later, #115). The
-# message names no argument, because the polygons can be `x`, `y` or `mask`.
-.check_polygons <- function(x) {
-  if (x@type != "polygons") {
+# The one producer of `ocean3d_error_vector3d_type`: a SpatVector3D whose
+# geometry type a function doesn't take, such as points where
+# vector3d_to_envelope() needs polygons, or lines in the 3D queries in
+# R/intersect.R, which take polygons and points. `types` are the types the
+# caller accepts. The message names no argument, because the object can be
+# `x`, `y` or `mask`.
+.check_geomtype <- function(x, types = "polygons") {
+  if (!x@type %in% types) {
+    wanted <- glue::glue_collapse(types, sep = ", ", last = " or ")
     rlang::abort(glue::glue(
-      "This needs polygons, but these are {x@type}. buffer_3d() turns ",
+      "This needs {wanted}, but these are {x@type}. buffer_3d() turns ",
       "{x@type} into polygons."
     ), class = "ocean3d_error_vector3d_type", call = NULL)
   }

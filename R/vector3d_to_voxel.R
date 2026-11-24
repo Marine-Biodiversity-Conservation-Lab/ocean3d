@@ -65,7 +65,7 @@ vector3d_to_voxel <- function(x, template, bounds = c("midpoint", "top")) {
   if (!methods::is(x, "SpatVector3D")) {
     .abort_voxel_input("`x` must be SpatVector3D polygons.")
   }
-  .check_polygons(x)
+  .check_geomtype(x)
   .check_3d(template, "template", "SpatVoxel")
   f <- x@features
   if (nrow(f) == 0L) {

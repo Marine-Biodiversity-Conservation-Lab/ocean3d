@@ -20,14 +20,16 @@ intersects_3d(x, y, ...)
 }
 \arguments{
 \item{x, y}{The two objects: two of \link[=SpatEnvelope-class]{SpatEnvelope},
-\link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatVector3D-class]{SpatVector3D} polygons, in any pairing, or
-an envelope or voxel with a 2D object (a single-layer \code{SpatRaster}
-footprint or 2D polygons: \code{SpatVector}, \code{sf}, \code{sfc}). Rasters
-must share one grid (CRS, extent, resolution). netCDF files aren't
-accepted; load them with terra and wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
+\link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatVector3D-class]{SpatVector3D} polygons or points, in any
+pairing except two sets of points, or an envelope or voxel with a 2D
+object (a single-layer \code{SpatRaster} footprint or 2D polygons:
+\code{SpatVector}, \code{sf}, \code{sfc}). Rasters must share one grid (CRS, extent,
+resolution). netCDF files aren't accepted; load them with terra and
+wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
 \item{...}{Arguments for the voxel methods. They are an error when both
-inputs are envelopes.}
+inputs are envelopes, or when one is points and the other an envelope
+or a voxel.}
 
 \item{bounds}{Only when one input is a voxel and the other an envelope or
 \link[=SpatVector3D-class]{SpatVector3D} polygons. How the envelope or polygons are placed
@@ -39,10 +41,9 @@ edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure the result, pass the 
 \value{
 A single-layer boolean \code{SpatRaster} named \code{intersects}, on the
 grid of the 3D input: \code{TRUE}, \code{FALSE} or \code{NA} per cell as above. For two
-sets of \link[=SpatVector3D-class]{SpatVector3D} polygons, a list with one element per
-polygon of \code{x}, named by its feature ID: the feature IDs of the
-polygons of \code{y} it shares space with, in the order of \code{y}, or
-\code{character(0)} for none.
+\link[=SpatVector3D-class]{SpatVector3D} sets, a list with one element per feature of \code{x},
+named by its feature ID: the feature IDs of the features of \code{y} it
+shares space with, in the order of \code{y}, or \code{character(0)} for none.
 }
 \description{
 \code{intersects_3d()} tests, cell by cell, whether \code{x} and \code{y} overlap in 3D.
@@ -63,17 +64,20 @@ This is how \code{terra} answers the 2D question for two rasters, so the result
 sums and plots like any other boolean layer. Depth intervals that only touch
 do not overlap. When \code{y} is a 2D footprint or polygons there is no depth
 axis to compare, so the test is only whether both are present.
-\link[=SpatVector3D-class]{SpatVector3D} polygons have depths, so they are put on the 3D
-object's grid as in \code{\link[=intersect_3d]{intersect_3d()}} and compared as whichever that object
-is, an envelope or a voxel.
+\link[=SpatVector3D-class]{SpatVector3D} polygons and points have depths, so they are compared
+as \code{\link[=intersect_3d]{intersect_3d()}} compares them, after being put on the 3D object's
+grid. A cell is \code{TRUE} where the voxel has a value at the level nearest a
+point's depth, or where a point's depth lies within the envelope's
+interval.
 
-Two sets of \link[=SpatVector3D-class]{SpatVector3D} polygons have no grid to answer on, so
-the answer is a list instead, as \code{\link[sf:st_intersects]{sf::st_intersects()}} gives in 2D: for
-each polygon of \code{x}, the polygons of \code{y} it shares 3D space with. A pair
-is listed exactly when \code{\link[=intersect_3d]{intersect_3d()}} gives it a polygon, so outlines
-that only share an edge, depth ranges that only touch and times that
-don't overlap aren't listed. Swapping \code{x} and \code{y} gives the same pairs
-listed the other way round.
+Two \link[=SpatVector3D-class]{SpatVector3D} sets (polygons with polygons, or points with
+polygons) have no grid to answer on, so the answer is a list instead, as
+\code{\link[sf:st_intersects]{sf::st_intersects()}} gives in 2D: for each feature of \code{x}, the features
+of \code{y} it shares 3D space with. A pair is listed exactly when
+\code{\link[=intersect_3d]{intersect_3d()}} gives it a polygon or point, so outlines that only share
+an edge, depth ranges that only touch and times that don't overlap aren't
+listed. Swapping \code{x} and \code{y} gives the same pairs listed the other way
+round.
 
 The order of \code{x} and \code{y} does not matter.
 }
