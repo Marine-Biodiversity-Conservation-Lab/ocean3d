@@ -93,23 +93,39 @@ test_that("`time` picks a step by number or date", {
 
   errors <- list(
     list(time = NULL, pattern = "has 2 time steps. Choose one"),
-    list(time = 3, pattern = "a step from 1 to 2"),
+    list(time = 3, pattern = "step number from 1 to 2"),
     list(time = "2021-06-01", time_match = "exact",
          pattern = "No time step matches"),
     list(time = "2021-06-01", max_time_diff = 30,
          pattern = "No time step is within 30 days"),
     list(time = c("2020-01-01", "2020-01-02", "2020-01-03"),
-         pattern = "one date or date-time, a window of two")
+         pattern = "one date or date-time, a window of two"),
+    list(time = NA, pattern = "must not be NA"),
+    list(time = c("2020-01-01", NA), pattern = "must not be NA"),
+    list(time = 1.5, pattern = "one whole step number from 1 to 2"),
+    list(time = c(1, 2), pattern = "one whole step number from 1 to 2"),
+    list(time = c("2020-01-01", "2020-01-02 06:00"),
+         pattern = "couldn't be read as dates or date-times")
   )
   for (case in errors) {
-    err <- expect_error(
+    expect_error(
       as_voxel(g$proxy, time = case$time,
                time_match = case$time_match %||% "nearest",
                max_time_diff = case$max_time_diff),
-      class = "ocean3d_error_proxy_time"
+      case$pattern, class = "ocean3d_error_proxy_time"
     )
-    expect_match(conditionMessage(err), case$pattern)
   }
+  # Several steps on one day: a date is ambiguous, a date-time isn't.
+  hourly <- proxy_and_file(time = c(0, 6, 12),
+                           time_units = "hours since 2020-01-01")
+  on.exit(unlink(hourly$file), add = TRUE)
+  expect_error(as_voxel(hourly$proxy, time = as.Date("2020-01-01")),
+               "Give a date-time", class = "ocean3d_error_proxy_time")
+  expect_s4_class(as_voxel(hourly$proxy, time = "2020-01-01 06:00Z"),
+                  "SpatVoxel")
+  # Text without a time zone is read as UTC, with the extraction warning.
+  expect_warning(as_voxel(hourly$proxy, time = "2020-01-01 06:00"),
+                 class = "ocean3d_timezone_warning")
   expect_error(as_voxel(g$proxy, time = 1, max_time_diff = -1),
                class = "ocean3d_error_voxel_input")
 
@@ -170,8 +186,8 @@ test_that("a date reads the nearest step, or the exact one on request", {
     format(terra::time(v)[1L], "%Y-%m-%d")
   }
   # Halfway between two steps the earlier wins; before the first, the first.
-  expect_identical(step_of(time = "2020-01-02 12:00"), "2020-01-02")
-  expect_identical(step_of(time = "2020-01-02 13:00"), "2020-01-03")
+  expect_identical(step_of(time = "2020-01-02 12:00Z"), "2020-01-02")
+  expect_identical(step_of(time = "2020-01-02 13:00Z"), "2020-01-03")
   expect_identical(step_of(time = "2019-12-01"), "2020-01-01")
   expect_identical(step_of(time = "2020-01-03", time_match = "exact"),
                    "2020-01-03")
@@ -179,7 +195,7 @@ test_that("a date reads the nearest step, or the exact one on request", {
                    "2020-01-02")
   # Date-times with no step at their instant are exact misses.
   expect_error(
-    as_voxel(g$proxy, time = "2020-01-02 06:00", time_match = "exact"),
+    as_voxel(g$proxy, time = "2020-01-02 06:00Z", time_match = "exact"),
     class = "ocean3d_error_proxy_time"
   )
 })
@@ -245,44 +261,54 @@ test_that("a time window gives a list of voxels, one per step inside it", {
                class = "ocean3d_error_proxy_time")
 })
 
-test_that("a SpatVector3D feature selects steps by its own time", {
+test_that("a SpatVector3D feature reads its steps, always as a list", {
   g <- proxy_and_file(time = c(0, 1, 2))
   on.exit(unlink(g$file), add = TRUE)
   point <- as_vector3d(data.frame(lon = 1, lat = 11, depth = 5,
                                   date = as.Date("2020-01-03")),
                        time = "date")
+  # A point is a list of one, so a loop over shapes gets one kind of result.
   v <- as_voxel(g$proxy, time = point)
-  expect_s4_class(v, "SpatVoxel")
-  expect_equal(terra::time(v)[1L], as.POSIXct("2020-01-03", tz = "UTC"))
+  expect_type(v, "list")
+  expect_length(v, 1L)
+  expect_equal(terra::time(v[[1L]])[1L], as.POSIXct("2020-01-03", tz = "UTC"))
   # A buffer a day either side of the point covers two of the three steps.
   buffer <- buffer_3d(point, radius_km = 10, depth_window = 5,
                       time_window = 1)
-  two <- as_voxel(g$proxy, time = buffer)
-  expect_type(two, "list")
-  expect_length(two, 2L)
+  expect_length(as_voxel(g$proxy, time = buffer), 2L)
   # A polygon at a single date covers that day: a list of one.
-  day <- as_voxel(g$proxy, time = buffer_3d(point, 10, 5))
-  expect_type(day, "list")
-  expect_length(day, 1L)
+  expect_length(as_voxel(g$proxy, time = buffer_3d(point, 10, 5)), 1L)
 
-  # Without a time, a shape fits a one-step source and nothing else.
+  # On a one-step source, the shape's time, or lack of one, is ignored:
+  # dated observations read a World Ocean Atlas climatology.
   untimed <- as_vector3d(data.frame(lon = 1, lat = 11, depth = 5))
   one <- proxy_and_file(time = 0)
-  on.exit(unlink(one$file), add = TRUE)
-  expect_s4_class(as_voxel(one$proxy, time = untimed), "SpatVoxel")
-  expect_type(as_voxel(one$proxy, time = buffer_3d(untimed, 10, 5)), "list")
   flat <- proxy_and_file(time = NULL)
-  on.exit(unlink(flat$file), add = TRUE)
-  expect_s4_class(as_voxel(flat$proxy, time = untimed), "SpatVoxel")
-  err <- expect_error(as_voxel(g$proxy, time = untimed),
-                      class = "ocean3d_error_proxy_time")
-  expect_match(conditionMessage(err), "shape has no time")
+  clim <- proxy_and_file(time = 6,
+                         time_units = "months since 0000-01-01 00:00:00")
+  on.exit(unlink(c(one$file, flat$file, clim$file)), add = TRUE)
+  dated <- make_voxel(1, c(0, 10))
+  terra::time(dated) <- rep(as.POSIXct("2019-06-01", tz = "UTC"), 2)
+  sources <- list(one$proxy, flat$proxy, clim$proxy, as_proxy(dated))
+  for (p in sources) {
+    for (shape in list(point, buffer, untimed)) {
+      out <- as_voxel(p, time = shape)
+      expect_type(out, "list")
+      expect_length(out, 1L)
+      expect_s4_class(out[[1L]], "SpatVoxel")
+    }
+  }
+  # A plain date on a climatology is still an error.
+  expect_error(as_voxel(clim$proxy, time = "2020-01-03"), "climatology",
+               class = "ocean3d_error_proxy_time")
+  expect_error(as_voxel(g$proxy, time = untimed), "shape has no time",
+               class = "ocean3d_error_proxy_time")
 
   # One feature at a time, and no lines.
   two_points <- as_vector3d(data.frame(lon = c(1, 2), lat = 11, depth = 5))
-  err <- expect_error(as_voxel(g$proxy, time = two_points),
-                      class = "ocean3d_error_proxy_time")
-  expect_match(conditionMessage(err), "one feature; this one has 2")
+  expect_error(as_voxel(g$proxy, time = two_points),
+               "one feature; this one has 2",
+               class = "ocean3d_error_proxy_time")
   line <- as_vector3d(data.frame(id = "a", lon = c(1, 2), lat = 11,
                                  depth = 5),
                       type = "lines", id = "id")

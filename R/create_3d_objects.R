@@ -190,9 +190,9 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   each has them set; otherwise pass `depths`), or an existing
 #'   [SpatVoxel-class]. This is how gridded data
 #'   enter the `SpatVoxel` model: describe a netCDF file with [as_proxy()] and
-#'   pass the proxy here, which reads the time steps `time` selects. Crop the
-#'   proxy first with `terra::crop()` to read only part of the grid. netCDF
-#'   paths aren't accepted directly.
+#'   pass the proxy here, which reads the time steps you choose with `time`.
+#'   Crop the proxy first with `terra::crop()` to read only part of the grid.
+#'   netCDF paths aren't accepted directly.
 #' @param depths Optional numeric vector, one depth per layer, in metres. When
 #'   supplied, it sets the depths, and the layers are named
 #'   `{varname}_depth={value}`, replacing any existing names. Required if `x`
@@ -208,26 +208,30 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   * A step number reads that step.
 #'   * One date or date-time (a `Date`, `POSIXct`, or text such as
 #'     `"2020-01-02"` or `"2020-01-02 06:00"`, read as [extract_to_point()]
-#'     reads observation times) reads the step `time_match` picks: the
-#'     nearest step, or the step that matches exactly. A date compares by UTC
-#'     day, so it matches the step on that day; with several steps a day,
-#'     give a date-time.
+#'     reads observation times) reads one step: the nearest, or an exact
+#'     match, as set by `time_match`. A date is compared by UTC day, so it
+#'     matches the step on that day; with several steps a day, give a
+#'     date-time.
 #'   * A window of two dates or date-times (start, end) reads every step
 #'     inside it, as a list. The window includes both ends; with dates, it
 #'     covers whole UTC days including the end day, as a polygon's interval
 #'     does in [as_vector3d()]. A window with no step inside it is an error.
-#'   * A [SpatVector3D-class] with one feature uses that feature's time: a
-#'     point's time picks one step as a date-time does, and a polygon's time
-#'     interval is a window. A feature without a time reads the only step of
-#'     a proxy that has one (such as a World Ocean Atlas climatology), and is
-#'     an error on a proxy with several. Lines are an error; [buffer_3d()]
-#'     turns them into polygons.
+#'   * A [SpatVector3D-class] with one feature reads the steps for that
+#'     feature, always as a list, so a loop over shapes gets one kind of
+#'     result: a point's time picks one step as a date-time does (a list of
+#'     one), and a polygon's time interval is a window. On a source with one
+#'     time step, such as a World Ocean Atlas climatology, that step is read
+#'     whatever time the feature has, or none, so dated observations can be
+#'     read against a climatology. On a source with several steps a feature
+#'     without a time is an error. Lines are an error; [buffer_3d()] turns
+#'     them into polygons.
 #' @param time_match For a [SpatProxy-class] with one date or date-time in
-#'   `time`: `"nearest"` (default) reads the closest step, with a tie going
-#'   to the step on the same UTC day, or else the earlier one; `"exact"`
-#'   reads the step with the same comparison value (the same day for a date,
-#'   the same instant for a date-time) and is an error when none has it. The
-#'   same rule as in [extract_to_point()]. Not used for a window.
+#'   `time`. `"nearest"` (default) reads the closest step; when `time` is
+#'   exactly halfway between two steps, the step on the same UTC day wins,
+#'   and otherwise the earlier one. `"exact"` reads the step on the same UTC
+#'   day (for a date) or at the same instant (for a date-time), and is an
+#'   error when there is none. The same rule as in [extract_to_point()].
+#'   Not used for a window.
 #' @param max_time_diff For `time_match = "nearest"`: the largest allowed gap,
 #'   in days, between `time` and the step read. `NULL` (the default) sets no
 #'   limit. A gap beyond it is an error. As in [extract_to_point()].
@@ -243,9 +247,9 @@ as_envelope <- function(x, depth_min, depth_max) {
 #'   it is passed to.
 #'
 #' @returns A [SpatVoxel-class] whose layers are ordered shallow to deep. For
-#'   a [SpatProxy-class] with a time window or a polygon in `time`, an unnamed
-#'   list of them, one per time step in order, each with its step's date in
-#'   [terra::time()], even when the window covers one step.
+#'   a [SpatProxy-class] with a time window or a [SpatVector3D-class] in
+#'   `time`, an unnamed list of such voxels in time order, one per step, each
+#'   with its step's date in [terra::time()], even when that is one step.
 #' @examples
 #' r <- terra::rast(nrows = 2, ncols = 2, nlyrs = 3)
 #' terra::values(r) <- runif(terra::ncell(r) * 3)
@@ -296,7 +300,9 @@ as_voxel <- function(x, depths = NULL, varname = "value",
                                       length(max_time_diff) != 1L ||
                                       is.na(max_time_diff) ||
                                       max_time_diff < 0)) {
-      .abort_voxel_input("`max_time_diff` must be one number of days, 0 or more.")
+      .abort_voxel_input(
+        "`max_time_diff` must be one number of days, 0 or more."
+      )
     }
     return(.proxy_to_voxel(x, time, varname, time_match, max_time_diff))
   }

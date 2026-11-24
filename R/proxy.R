@@ -710,7 +710,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # as_voxel(). Each raster's extent comes from the cell edges and its CRS from
 # the proxy; depth goes in terra::depth() with the proxy's depth edges, and
 # the date of the step in terra::time(). One voxel when `time` names one
-# step, a list of voxels for a time window or a polygon.
+# step, a list of voxels for a time window or a shape.
 .proxy_to_voxel <- function(x, time, varname, time_match, max_time_diff) {
   selected <- .proxy_time_step(x, time, time_match, max_time_diff)
   axes <- x@axes
@@ -733,11 +733,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     depth_bounds <- if (!identical(axes$depth$edges, "none")) {
       cbind(axes$depth$lower, axes$depth$upper)
     }
-    dated <- !is.null(selected$steps) && !isTRUE(axes$time$climatology)
-    dates <- if (dated) axes$time$cftime$as_timestamp(asPOSIX = TRUE)
     # One read per step; a proxy without a time axis is read whole.
     steps <- if (is.null(selected$steps)) list(NULL) else selected$steps
-    out <- lapply(steps, function(step) {
+    out <- lapply(seq_along(steps), function(i) {
+      step <- steps[[i]]
       window <- if (is.null(step)) list() else list(time = c(step, step))
       values <- .read_proxy_window(x, window)
       r <- terra::rast(nrows = length(lat_order), ncols = length(lon_order),
@@ -749,21 +748,25 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       v <- as_voxel(r, depths = axes$depth$centres, varname = varname,
                     depth_bounds = depth_bounds)
       if (!is.null(x@variable$units)) terra::units(v) <- x@variable$units
-      if (dated) terra::time(v) <- rep(dates[step], terra::nlyr(v))
+      if (!is.null(selected$dates)) {
+        terra::time(v) <- rep(selected$dates[i], terra::nlyr(v))
+      }
       v
     })
   }
   if (selected$list) out else out[[1L]]
 }
 
-# The time steps `time` selects, as `steps` (their indices, or NULL when the
-# proxy has no time axis) and `list` (whether as_voxel() returns a list).
-# `time` is a step number; a date or date-time matched with the nearest or
-# exact rule (`time_match`, `max_time_diff`, as in extract_to_point()); a
-# window of two dates or date-times, giving every step inside it; or a
-# SpatVector3D with one feature, whose time (a point) or interval (a polygon)
-# is used the same way. Without `time`, a proxy with one step (or a one-step
-# climatology) gives that step, and one with more is an error.
+# The time steps `time` selects: `steps` (their indices, or NULL when the
+# proxy has no time axis), `dates` (their date-times, or NULL when the axis
+# has none: a climatology or no time axis) and `list` (whether as_voxel()
+# returns a list). `time` is a step number; a date or date-time matched with
+# the nearest or exact rule (`time_match`, `max_time_diff`, as in
+# extract_to_point()); a window of two dates or date-times, giving every step
+# inside it; or a SpatVector3D with one feature, whose time (a point) or
+# interval (a polygon) is used the same way and always gives a list. Without
+# `time`, a proxy with one step (or a one-step climatology) gives that step,
+# and one with more is an error.
 .proxy_time_step <- function(x, time, time_match = "nearest",
                              max_time_diff = NULL) {
   stop_time <- function(message) {
@@ -771,10 +774,18 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   }
   axis <- x@axes$time
   n <- if (is.null(axis)) 1L else x@variable$dim_lengths[[axis$dim]]
+  dated <- !is.null(axis) && !isTRUE(axis$climatology)
+  selected <- function(steps, as_list) {
+    list(steps = steps, dates = if (dated && !is.null(steps)) dates[steps],
+         list = as_list)
+  }
+  dates <- if (dated) axis$cftime$as_timestamp(asPOSIX = TRUE)
   as_list <- FALSE
   resolution <- NULL
 
   # A shape stands for its own time: a point's time, or a polygon's interval.
+  # On a source with one step, such as a WOA climatology, that step is read
+  # whatever time the shape has.
   if (methods::is(time, "SpatVector3D")) {
     if (length(time) != 1L) {
       stop_time(glue::glue(
@@ -788,15 +799,16 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         "whose time interval selects the steps."
       ), class = "ocean3d_error_vector3d_type", call = NULL)
     }
-    as_list <- time@type == "polygons"
+    as_list <- TRUE
+    if (n == 1L) return(selected(if (!is.null(axis)) 1L, as_list))
     resolution <- time@time_resolution
     table <- as.data.frame(time)
-    time <- if (as_list) c(table$time_start, table$time_end) else table$time
-    # A shape without a time fits a source with one step, and nothing else.
+    time <- if (time@type == "polygons") {
+      c(table$time_start, table$time_end)
+    } else {
+      table$time
+    }
     if (anyNA(time)) {
-      if (n == 1L) {
-        return(list(steps = if (!is.null(axis)) 1L, list = as_list))
-      }
       stop_time(glue::glue(
         "The shape has no time, but variable `{x@variable$name}` has {n} ",
         "time steps. Give the shape a time in as_vector3d(), or choose the ",
@@ -812,22 +824,25 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         "select a step."
       ))
     }
-    return(list(steps = NULL, list = as_list))
+    return(selected(NULL, as_list))
   }
   if (is.null(time)) {
-    if (n == 1L) return(list(steps = 1L, list = as_list))
+    if (n == 1L) return(selected(1L, as_list))
     stop_time(glue::glue(
       "Variable `{x@variable$name}` has {n} time steps. Choose one with ",
       "`time`, a step number or a date, or several with a window of two ",
       "dates."
     ))
   }
-  if (is.numeric(time) && length(time) == 1L && !is.na(time) &&
-        time == round(time)) {
-    if (time >= 1 && time <= n) {
-      return(list(steps = as.integer(time), list = as_list))
+  if (anyNA(time)) stop_time("`time` must not be NA.")
+  if (is.numeric(time)) {
+    if (length(time) == 1L && time == round(time) && time >= 1 && time <= n) {
+      return(selected(as.integer(time), as_list))
     }
-    stop_time(glue::glue("`time` must be a step from 1 to {n}."))
+    stop_time(glue::glue(
+      "A numeric `time` must be one whole step number from 1 to {n}. For ",
+      "several steps, give a window of two dates or date-times."
+    ))
   }
   if (isTRUE(axis$climatology)) {
     stop_time("The time axis is a climatology, so `time` can only be step 1.")
@@ -839,19 +854,40 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     ))
   }
   # Dates compare by UTC day, date-times exactly; a shape keeps its own
-  # resolution. Text is read as extract_to_point() reads observation times.
-  prepared <- .prepare_time_input(time, "auto", input_name = "`time`")
+  # resolution. Text is read as extract_to_point() reads observation times,
+  # and warns the same way when it has no time zone.
+  prepared <- tryCatch(
+    .prepare_time_input(time, "auto", input_name = "`time`"),
+    error = function(e) {
+      reason <- sub("\n.*", "", conditionMessage(e))
+      stop_time(glue::glue(
+        "`time` couldn't be read as dates or date-times: {reason} Give a ",
+        "date (\"2020-01-02\") or a date-time (\"2020-01-02 06:00\"), and ",
+        "for a window two of the same kind."
+      ))
+    }
+  )
+  .warn_time_zone(prepared, "`time`")
   if (is.null(resolution) || is.na(resolution)) {
     resolution <- prepared$resolution
   }
-  dates <- axis$cftime$as_timestamp(asPOSIX = TRUE)
   shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
                  collapse = " to ")
   if (length(time) == 1L) {
-    step <- .match_time_indices(dates, prepared$values, time_match,
-                                max_time_diff, resolution)
+    # Several steps on the day of a date tie; a date-time tells them apart.
+    step <- tryCatch(
+      .match_time_indices(dates, prepared$values, time_match, max_time_diff,
+                          resolution),
+      ocean3d_error_repeated_time = function(e) {
+        stop_time(glue::glue(
+          "Several time steps fall on the day of `time` ",
+          "({format(prepared$values)}). Give a date-time to read one of ",
+          "them, or a window of two dates to read them all."
+        ))
+      }
+    )
     if (is.na(step)) {
-      how <- if (time_match == "exact") {
+      how <- if (time_match == "exact" || is.null(max_time_diff)) {
         "matches"
       } else {
         glue::glue("is within {max_time_diff} days of")
@@ -862,7 +898,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         "a window of two."
       ))
     }
-    return(list(steps = step, list = as_list))
+    return(selected(step, as_list))
   }
   # A window: every step from the start to the end. With dates, the whole
   # of the end day counts, as a polygon's interval does in as_vector3d().
@@ -885,7 +921,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       "buffer_3d())."
     ))
   }
-  list(steps = which(inside), list = TRUE)
+  selected(which(inside), TRUE)
 }
 
 # The extent of a regular horizontal axis: `min` and `max` from its cell
