@@ -50,9 +50,10 @@
   nms <- if (is.null(nms)) rep("", length(extra)) else nms
   nms[nms == ""] <- "<unnamed>"
   rlang::abort(glue::glue(
-    "unused argument(s): {toString(nms)}. `bounds` applies only when one ",
-    "input is a SpatVoxel; envelopes and polygons carry their own depth ",
-    "intervals."
+    "unused argument(s): {toString(nms)}. `bounds` applies only when an ",
+    "envelope or polygons meet a SpatVoxel; envelopes and polygons carry ",
+    "their own depth intervals, and a point takes the level nearest its ",
+    "depth."
   ), class = "ocean3d_error_unused_argument", call = NULL)
 }
 
@@ -164,15 +165,25 @@
 # An envelope cell is present when both depth layers are non-NA, a voxel cell
 # when it is occupied at any level. The 2D side of a query is put on
 # `template`'s grid: a plain SpatRaster is read by its non-NA pattern and must
-# be single-layer and already on the grid. Polygons (SpatVector, sf, sfc) are
-# projected onto the template's CRS when they differ, then rasterised with the
-# rule vect_to_envelope() uses: terra::mask()'s default, under which every
-# cell a polygon touches is inside. Anything else is rejected, naming `arg`,
-# with the list of accepted types.
+# be single-layer and already on the grid. Polygons (SpatVector, sf, sfc, or
+# SpatVector3D polygons) are projected onto the template's CRS when they
+# differ, then rasterised with the rule vect_to_envelope() uses:
+# terra::mask()'s default, under which every cell a polygon touches is
+# inside. SpatVector3D points are present in the cells that contain them.
+# Anything else is rejected, naming `arg`, with the list of accepted types.
 .footprint <- function(x, template = NULL, arg = "y") {
   if (inherits(x, c("sf", "sfc"))) x <- terra::vect(x)
+  if (methods::is(x, "SpatVector3D")) {
+    .check_geomtype(x, c("polygons", "points"))
+    if (x@type == "polygons") x <- terra::vect(x@features$geometry)
+  }
 
-  out <- if (methods::is(x, "SpatEnvelope")) {
+  out <- if (methods::is(x, "SpatVector3D")) {
+    # remove the 3D class
+    grid <- methods::as(template[[1]], "SpatRaster")
+    cells <- .point_cells(x, grid)
+    terra::setValues(terra::rast(grid), seq_len(terra::ncell(grid)) %in% cells)
+  } else if (methods::is(x, "SpatEnvelope")) {
     !is.na(.envelope_layer(x, "depth_min")) &
       !is.na(.envelope_layer(x, "depth_max"))
   } else if (methods::is(x, "SpatVoxel")) {
@@ -205,9 +216,43 @@
     got <- paste(class(x), collapse = "/")
     rlang::abort(glue::glue(
       "`{arg}` must be a SpatEnvelope, a SpatVoxel, a single-layer ",
-      "SpatRaster footprint, or polygons (SpatVector, sf, sfc); got {got}."
+      "SpatRaster footprint, SpatVector3D polygons or points, or polygons ",
+      "(SpatVector, sf, sfc); got {got}."
     ), class = "ocean3d_error_footprint_type", call = NULL)
   }
   names(out) <- "footprint"
   methods::as(out, "SpatRaster")  # remove the 3D class
+}
+
+# Internal: the cell of `grid` that holds each point of SpatVector3D points
+# `x`, or NA for a point off the grid. The points are projected onto the
+# grid's CRS when it isn't WGS84. On a longitude-latitude grid a point is also
+# tried 360 degrees either way, so points land on a grid in the other
+# longitude convention (0 to 360, or -180 to 180), as vector3d_to_envelope()
+# does for polygons. Used by .footprint() and by the point queries in the
+# intersect file.
+.point_cells <- function(x, grid) {
+  if (terra::crs(grid) == "") {
+    .abort_envelope_input(paste0(
+      "The grid has no CRS, so the points can't be placed on it. Set one ",
+      "with terra::crs()."
+    ))
+  }
+  v <- x@vertices
+  if (nrow(v) == 0L) return(integer(0))
+  points <- terra::vect(cbind(v$lon, v$lat), crs = "EPSG:4326")
+  if (!terra::same.crs(points, grid)) {
+    points <- terra::project(points, terra::crs(grid))
+  }
+  xy <- terra::crds(points)
+  cells <- terra::cellFromXY(grid, xy)
+  if (terra::is.lonlat(grid)) {
+    for (shift in c(360, -360)) {
+      off <- which(is.na(cells))
+      if (!length(off)) break
+      cells[off] <- terra::cellFromXY(grid, cbind(xy[off, 1L] + shift,
+                                                  xy[off, 2L]))
+    }
+  }
+  cells
 }
