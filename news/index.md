@@ -307,6 +307,27 @@ with `unique(depths)`.
 
 ### New features
 
+- New
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+  summarises a `SpatVoxel`’s values across all its cells and depth
+  levels at once
+  ([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)):
+  mean, sd, min, max and median. By default each value is weighted by
+  the volume of its cell and depth level (`weighting = "volume"`);
+  `weighting = "equal"` counts each value once. `x` is one voxel,
+  typically `mask(v, shape)` for the values inside a shape, or a list of
+  voxels, one per time step. The result has one row per voxel, or one
+  per depth level and voxel with `by = "depth"`, and a column `n` with
+  the number of values in each row.
+
+- [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+  gains `per_level`
+  ([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)):
+  `volume(v, per_cell = TRUE, per_level = TRUE)` returns a `SpatVoxel`
+  with the volume of each cell at each depth level, in km³, `NA` where
+  the level is unoccupied. Its layers sum to
+  `volume(v, per_cell = TRUE)`.
+
 - Printing a `SpatVoxel` or `SpatEnvelope` now shows its class and its
   3D information
   ([\#61](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/61)).

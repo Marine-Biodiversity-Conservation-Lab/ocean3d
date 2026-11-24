@@ -13,19 +13,19 @@ depth in dual roles, so each computes the vertical extent differently:
 ## Usage
 
 ``` r
-volume(x, per_cell = FALSE, ...)
+volume(x, per_cell = FALSE, per_level = FALSE, ...)
 
 # S4 method for class 'SpatEnvelope'
-volume(x, per_cell = FALSE, ...)
+volume(x, per_cell = FALSE, per_level = FALSE, ...)
 
 # S4 method for class 'SpatVoxel'
-volume(x, per_cell = FALSE, bounds = c("midpoint", "top"))
+volume(x, per_cell = FALSE, per_level = FALSE, bounds = c("midpoint", "top"))
 
 # S4 method for class 'SpatVector3D'
-volume(x, per_cell = FALSE, ...)
+volume(x, per_cell = FALSE, per_level = FALSE, ...)
 
 # S4 method for class 'SpatRaster'
-volume(x, per_cell = FALSE, ...)
+volume(x, per_cell = FALSE, per_level = FALSE, ...)
 ```
 
 ## Arguments
@@ -55,6 +55,14 @@ volume(x, per_cell = FALSE, ...)
   [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
   polygons.
 
+- per_level:
+
+  SpatVoxel only, with `per_cell = TRUE`: `TRUE` for the volume of each
+  cell *at each depth level*, the weights
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+  uses. Envelopes and polygons have no levels, so it is an error for
+  them.
+
 - ...:
 
   Arguments for the
@@ -79,7 +87,12 @@ volume(x, per_cell = FALSE, ...)
 With `per_cell = FALSE`, a number: the total volume in km³. With
 `per_cell = TRUE`, a single-layer `SpatRaster` named `volume` on the
 grid of `x`: the volume of each cell in km³, `NA` where `x` is absent
-(no depth interval, or no occupied level). Its sum is the total.
+(no depth interval, or no occupied level). Its sum is the total. With
+`per_level = TRUE` as well, a
+[SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
+on the depth levels and edges of `x`, layers `volume_depth=<value>`: the
+volume of each cell at each level in km³, `NA` where the level is
+unoccupied. Summing its layers gives the per-cell raster.
 
 ## Details
 
@@ -182,6 +195,14 @@ terra::values(volume(e, per_cell = TRUE))
 #> [2,]    0.2
 #> [3,]    0.2
 #> [4,]     NA
+
+# Per cell and level: each occupied level's share of the column.
+terra::values(volume(v, per_cell = TRUE, per_level = TRUE))
+#>      volume_depth=0 volume_depth=100 volume_depth=200
+#> [1,]           0.05              0.1             0.05
+#> [2,]           0.05              0.1             0.05
+#> [3,]           0.05              0.1             0.05
+#> [4,]             NA               NA               NA
 
 # Overlap with a second domain at 100-300 m: intersect, then measure.
 b <- as_envelope(fp, depth_min = 100, depth_max = 300)

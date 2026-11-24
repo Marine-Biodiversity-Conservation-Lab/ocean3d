@@ -78,10 +78,12 @@ Find where 3D objects meet.
 
 ## Summarise
 
-Measure 3D objects and their overlap.
+Measure 3D objects and their overlap, and summarise their values.
 
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
   : 3D volume of a domain
+- [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+  : Summarise a voxel's values across cells and depth levels
 
 ## Extraction
 

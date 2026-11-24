@@ -71,7 +71,7 @@ on its own.
 |----|----|----|----|
 | Build | What is the 3D shape or grid? | [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md), [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md), [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md), [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md), [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md), [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md), [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md), [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md), [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md), data loaders ([`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)) | track sampling; picking out features of a `SpatVector3D` (`x[i]`); `crop()` of a `SpatProxy` by a `SpatVector3D`; time matching in [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md) for a `SpatProxy` (one voxel for one time, or a list of voxels, one per time step, for a time window) |
 | Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D` (polygons with envelopes, voxels and other polygons done; points with envelopes, voxels and polygons done; lines go through [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md) or track sampling) |
-| Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md) (total or per cell; total only for `SpatVector3D` polygons) | `summarise_3d()` for statistics on the values in a voxel, such as one masked to a shape; per-level cell volume (`volume(x, per_cell = TRUE, per_level = TRUE)`) |
+| Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md) (total, per cell, or per cell and depth level with `volume(x, per_cell = TRUE, per_level = TRUE)`; total only for `SpatVector3D` polygons), [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md) for statistics on the values in a voxel, such as one masked to a shape |  |
 
 The planned functions are added alongside the existing ones: every
 function in “Exists now” stays, and the existing intersect functions
@@ -125,10 +125,12 @@ on 23 November 2026 (#116).
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
   `crop()`,
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
-  `mask()` and `summarise_3d()`) and nothing else. Rebuilding the
-  extraction functions adds no new functions or internal helpers. What a
-  wrapper needs that the exported functions can’t do yet is added to
-  those functions, or left out of the wrapper.
+  `mask()` and
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md))
+  and nothing else. Rebuilding the extraction functions adds no new
+  functions or internal helpers. What a wrapper needs that the exported
+  functions can’t do yet is added to those functions, or left out of the
+  wrapper.
 - **Arguments and output:** each wrapper keeps the arguments the steps
   support.
   [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
@@ -320,9 +322,8 @@ This section is the plan from \#99, decided with the stars and ncdfCF
 trial (#112). The core object (`SpatProxy`, experimental) is
 implemented: it reads a netCDF file, a series of files or a voxel in
 memory, and builds a `SpatVoxel` for one time step. Time matching for
-shapes, the point methods, `summarise_3d()` and volume through time
-aren’t built yet (see [Order of work](#order-of-work), steps 5, 7 and
-8).
+shapes, the point methods and volume through time aren’t built yet (see
+[Order of work](#order-of-work), steps 5, 7 and 8).
 
 #### Requirements
 
@@ -652,10 +653,11 @@ Jay Matsushiba on 2 November 2026 (#112).
   matching a point to a cell and depth level moves into the point
   methods of
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
-  and `mask()`, and the statistics move into `summarise_3d()`. The steps
-  accept any source of the core object: a netCDF file or series, a Zarr
-  store, or a `SpatVoxel`. Area extraction becomes `mask()` on a voxel
-  read from the core object, so
+  and `mask()`, and the statistics move into
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md).
+  The steps accept any source of the core object: a netCDF file or
+  series, a Zarr store, or a `SpatVoxel`. Area extraction becomes
+  `mask()` on a voxel read from the core object, so
   [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
   works on netCDF files and voxels alike.
 
@@ -795,9 +797,11 @@ and weights, and its block reads. This section plans the parts
 extraction still needs: picking out one shape, cropping a proxy to a
 shape, time matching in
 [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
-per-level cell volume and `summarise_3d()`. The point methods for the
-intersect functions are done (#168). Function names marked “planned” are
-working names, to be settled in the issue for each step.
+per-level cell volume and
+[`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md).
+The point methods for the intersect functions are done (#168). Function
+names marked “planned” are working names, to be settled in the issue for
+each step.
 
 *1. Build.* `SpatVector3D` builders create shapes without reading the
 data they will be compared with.
@@ -887,10 +891,11 @@ build step.
   merged, so users loop over shapes one at a time to keep each shape’s
   values separate.
 
-*3. Summarise.* *(planned)* `summarise_3d()` summarises the values in a
-voxel, typically one masked to a shape, or in a list of voxels, one per
-time step. It doesn’t read files or handle geometry, so it can be tested
-on small synthetic voxels.
+*3. Summarise.*
+[`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+(done, \#167) summarises the values in a voxel, typically one masked to
+a shape, or in a list of voxels, one per time step. It doesn’t read
+files or handle geometry, so it can be tested on small synthetic voxels.
 
 ``` r
 
@@ -909,12 +914,15 @@ results <- do.call(rbind, results)
   and depth level (cell area × slab thickness), because cells shrink
   towards the poles and depth levels range from a few metres to 100 m or
   more thick. `"equal"` counts each value once. The slabs come from the
-  voxel’s depth edges or else the `bounds` rule, and `summarise_3d()`
+  voxel’s depth edges or else the `bounds` rule, and
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
   takes the same `bounds` argument as
   [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md).
-  *(planned)* The same weights are available directly from
+  The same weights are available directly from
   `volume(x, per_cell = TRUE, per_level = TRUE)`, a `SpatVoxel` of km³
-  per cell and depth level.
+  per cell and depth level. When every value in a row has zero volume (a
+  single-level voxel without depth edges, or the deepest level under
+  `bounds = "top"`), the row uses equal weights.
 - `by = NULL` gives one row. `by = "depth"` gives one row per depth
   level (a depth profile); over a list of voxels, it gives one row per
   depth level per time step, not pooled across steps (#159).
@@ -931,9 +939,9 @@ results <- do.call(rbind, results)
   sampling (#105).
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
   measures shapes rather than values. Its existing results don’t change:
-  *(planned)* the voxel method computes the volume per cell and depth
-  level first, and `per_cell = TRUE` (one total per water column) and
-  the total are sums of it.
+  the voxel method computes the volume per cell and depth level first,
+  and `per_cell = TRUE` (one total per water column) and the total are
+  sums of it.
 
 #### Order of work
 
@@ -1042,11 +1050,16 @@ of 23 November 2026.
     for a `SpatProxy`, and a vignette with the per-shape loop. The
     coverage function planned here was dropped on 23 November 2026 (see
     [Extraction on the three steps](#extraction-on-the-three-steps)).
-8.  **Add `summarise_3d()` on voxels, per-level cell volume
-    (`volume(per_level = TRUE)`) and workflow vignettes** for points,
-    buffers, tracks and areas. Then, one function per PR, rebuild each
-    extraction function as a convenience wrapper over the exported step
-    functions, adding no new functions or helpers (#116). *Not started.*
+8.  **Add
+    [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+    on voxels, per-level cell volume (`volume(per_level = TRUE)`) and
+    workflow vignettes** for points, buffers, tracks and areas. Then,
+    one function per PR, rebuild each extraction function as a
+    convenience wrapper over the exported step functions, adding no new
+    functions or helpers (#116). *In progress:*
+    [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+    and per-level cell volume are done (#167); the vignettes and the
+    wrappers aren’t started.
 9.  **Add track sampling** as a build step and buffered tracks (#105);
     then named shapes, raster and function surfaces for polygons (#117).
     *Not started.*
@@ -1221,12 +1234,14 @@ design](#package-design-build-intersect-summarise). Items marked
   envelope, `bounds` sets whether a depth level counts when the envelope
   reaches its top or its midpoint. The Getting Started vignette uses
   this to get temperatures within a species’ 3D range.
-- **Extraction at a `SpatVector3D`** *(planned)*. For each shape,
-  `as_voxel(crop(proxy, shape), time = shape)` reads its time steps,
-  `mask()` keeps the values in the cells and levels it covers, and
-  `summarise_3d()` turns them into statistics. Observations are points,
-  buffers and areas are polygons, and tracks are sampled into points, so
-  this one path replaces the separate code in each function above.
+- **Extraction at a `SpatVector3D`** *(in progress, \#115 and \#116)*.
+  For each shape, `as_voxel(crop(proxy, shape), time = shape)` reads its
+  time steps, `mask()` keeps the values in the cells and levels it
+  covers, and
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+  turns them into statistics. Observations are points, buffers and areas
+  are polygons, and tracks are sampled into points, so this one path
+  replaces the separate code in each function above.
 
 ### Summarise: volume calculations
 
