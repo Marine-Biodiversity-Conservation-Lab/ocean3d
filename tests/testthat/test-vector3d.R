@@ -678,3 +678,154 @@ test_that("polygons land on grids with longitudes past 180", {
   v <- terra::values(vector3d_to_envelope(p, west))[, "depth_min"]
   expect_identical(sum(!is.na(v)), 4L)
 })
+
+# ---- vector3d_to_voxel ------------------------------------------------------
+
+# A voxel on envelope_grid() with levels 0, 100, 200 and 300 m.
+voxel_grid <- function(depth_bounds = NULL) {
+  r <- terra::rast(envelope_grid(), nlyrs = 4, vals = 1)
+  as_voxel(r, depths = c(0, 100, 200, 300), varname = "temp",
+           depth_bounds = depth_bounds)
+}
+
+# Two squares over the same cells, 0 to 50 m and 200 to 300 m.
+stacked_bands <- function() {
+  stacked <- areas()
+  stacked$geometry[2] <- stacked$geometry[1]
+  stacked$top <- c(0, 200)
+  stacked$bottom <- c(50, 300)
+  as_vector3d(stacked, depth_min = "top", depth_max = "bottom")
+}
+
+test_that("a depth gap between polygons over one cell stays empty", {
+  v <- vector3d_to_voxel(stacked_bands(), voxel_grid())
+  expect_s4_class(v, "SpatVoxel")
+  expect_identical(depths(v), c(0, 100, 200, 300))
+  expect_identical(names(v), paste0("presence_depth=", c(0, 100, 200, 300)))
+  vals <- terra::values(v)
+  covered <- !is.na(vals[, 1])
+  expect_true(any(covered))
+  # Midpoint slabs: 0-50, 50-150, 150-250 and 250-300 m. The 100 m level
+  # lies between the bands.
+  expect_true(all(vals[covered, 1] == 1))
+  expect_true(all(is.na(vals[covered, 2])))
+  expect_true(all(vals[covered, 3:4] == 1))
+  expect_true(all(is.na(vals[!covered, ])))
+
+  # An envelope can't hold the gap, so the same polygons fill the 100 m level.
+  filled <- envelope_to_voxel(vector3d_to_envelope(stacked_bands(),
+                                                   voxel_grid()),
+                              depths(voxel_grid()))
+  expect_true(all(terra::values(filled)[covered, 2] == 1))
+})
+
+test_that("one depth range lands on the same levels as an envelope", {
+  p <- as_vector3d(areas(), depth_min = "top", depth_max = "bottom")
+  for (bounds in c("midpoint", "top")) {
+    v <- vector3d_to_voxel(p, voxel_grid(), bounds = bounds)
+    expected <- envelope_to_voxel(vector3d_to_envelope(p, voxel_grid()),
+                                  depths(voxel_grid()), bounds = bounds)
+    expect_equal(terra::values(v), terra::values(expected),
+                 ignore_attr = TRUE)
+  }
+})
+
+test_that("the template's depth edges are used before `bounds`", {
+  # Slabs 0-20, 20-180, 180-220 and 220-400 m: the 100 m level now reaches
+  # the 0-50 m band, and the 200 m level only the 200-300 m band.
+  edged <- voxel_grid(depth_bounds = cbind(c(0, 20, 180, 220),
+                                           c(20, 180, 220, 400)))
+  v <- vector3d_to_voxel(stacked_bands(), edged, bounds = "top")
+  vals <- terra::values(v)
+  covered <- !is.na(vals[, 1])
+  expect_true(all(vals[covered, 1:4] == 1))
+  expect_identical(depth_bounds(v), depth_bounds(edged))
+
+  shallow <- as_vector3d(areas(), depth_min = 0, depth_max = 10)
+  vals <- terra::values(vector3d_to_voxel(shallow, edged))
+  expect_true(all(is.na(vals[, 2:4])))
+})
+
+test_that("polygons land on a voxel in another CRS or past 180 degrees", {
+  p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
+  # Projecting drops terra's depths, so they are set again.
+  projected <- as_voxel(terra::project(voxel_grid(), "EPSG:3857"),
+                        depths = depths(voxel_grid()))
+  v <- vector3d_to_voxel(p, projected)
+  expected <- vect_to_envelope(terra::project(terra::vect(areas()), projected),
+                               projected, depth_min = 0, depth_max = 200)
+  expect_identical(is.na(terra::values(v)[, 1]),
+                   is.na(terra::values(expected)[, 1]))
+
+  past <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(rbind(
+    c(178, -1), c(182, -1), c(182, 1), c(178, 1), c(178, -1)
+  ))), crs = 4326))
+  p <- as_vector3d(past, depth_min = 0, depth_max = 10)
+  west <- terra::rast(nrows = 2, ncols = 10, xmin = -180, xmax = -170,
+                      ymin = -1, ymax = 1, crs = "EPSG:4326", nlyrs = 2,
+                      vals = 1)
+  west <- as_voxel(west, depths = c(0, 50))
+  # It covers -180 to -178 on this 1-degree grid: 2 columns by 2 rows.
+  v <- terra::values(vector3d_to_voxel(p, west))
+  expect_identical(sum(!is.na(v[, 1])), 4L)
+})
+
+test_that("polygon times are dropped with a message for a voxel too", {
+  timed <- as_vector3d(areas(), depth_min = 0, depth_max = 200,
+                       time = c("from", "to"))
+  expect_message(vector3d_to_voxel(timed, voxel_grid()),
+                 "times are dropped", class = "ocean3d_message_time_dropped")
+  untimed <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
+  expect_no_message(vector3d_to_voxel(untimed, voxel_grid()))
+})
+
+test_that("vector3d_to_voxel() rejects inputs it can't convert", {
+  input <- "ocean3d_error_voxel_input"
+  empty <- "ocean3d_error_envelope_empty"
+  pts <- as_vector3d(data.frame(lon = 151, lat = -20.5, depth = 5))
+  p <- as_vector3d(areas(), depth_min = 0, depth_max = 200)
+  none <- p
+  none@features <- p@features[0, ]
+  far <- as_voxel(terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 1,
+                              ymin = 0, ymax = 1, crs = "EPSG:4326",
+                              nlyrs = 2, vals = 1),
+                  depths = c(0, 50))
+  cases <- list(
+    list(label = "points", x = pts, template = voxel_grid(),
+         class = "ocean3d_error_vector3d_type",
+         pattern = "these are points. buffer_3d() turns points into polygons",
+         fixed = TRUE),
+    list(label = "sf polygons", x = areas(), template = voxel_grid(),
+         class = input, pattern = "must be SpatVector3D polygons"),
+    list(label = "envelope template", x = p, template = envelope_50_200(),
+         class = "ocean3d_error_not_3d",
+         pattern = "`template` must be a SpatVoxel"),
+    list(label = "plain raster template", x = p, template = envelope_grid(),
+         class = "ocean3d_error_not_3d",
+         pattern = "`template` must be a SpatVoxel"),
+    list(label = "no polygons", x = none, template = voxel_grid(),
+         class = input, pattern = "`x` has no polygons"),
+    list(label = "template without a CRS", x = p,
+         template = as_voxel(terra::rast(nrows = 2, ncols = 2, xmin = 150,
+                                         xmax = 153, ymin = -21, ymax = -20,
+                                         crs = "", nlyrs = 2, vals = 1),
+                             depths = c(0, 50)),
+         class = "ocean3d_error_envelope_input",
+         pattern = "`template` has no CRS"),
+    list(label = "template away from the polygons", x = p, template = far,
+         class = empty, pattern = "cover no cell and depth level"),
+    list(label = "polygons with no thickness",
+         x = buffer_3d(pts, radius_km = 20, depth_window = 0),
+         template = voxel_grid(), class = empty,
+         pattern = "cover no cell and depth level"),
+    list(label = "polygons below every level",
+         x = as_vector3d(areas(), depth_min = 500, depth_max = 600),
+         template = voxel_grid(), class = empty,
+         pattern = "cover no cell and depth level")
+  )
+  for (case in cases) {
+    expect_error(vector3d_to_voxel(case$x, case$template), case$pattern,
+                 class = case$class, fixed = isTRUE(case$fixed),
+                 label = case$label)
+  }
+})

@@ -31,11 +31,12 @@ wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 inputs are envelopes, or when one is points and the other an envelope
 or a voxel.}
 
-\item{bounds}{Only when one input is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: \code{"midpoint"}
-(default) or \code{"top"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel
-carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure the
-result, pass the same \code{bounds} to \code{\link[=volume]{volume()}}.}
+\item{bounds}{Only when one input is a voxel and the other an envelope or
+\link[=SpatVector3D-class]{SpatVector3D} polygons. How the envelope or polygons are placed
+on the voxel's depth levels: \code{"midpoint"} (default) or \code{"top"}. See
+\code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel carries its own depth
+edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure the result, pass the same
+\code{bounds} to \code{\link[=volume]{volume()}}.}
 }
 \value{
 A single-layer boolean \code{SpatRaster} named \code{intersects}, on the
