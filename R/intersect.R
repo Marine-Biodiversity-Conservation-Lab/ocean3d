@@ -19,22 +19,31 @@
 # through as_envelope() or as_voxel() so the validity rules run.
 
 # Internal: the one producer of `ocean3d_error_query_input`, for a pair no
-# method takes: neither side is a 3D object, or SpatVector3D polygons meet
-# something other than an envelope, a voxel or other polygons.
+# method takes: neither side is a 3D object, SpatVector3D polygons or points
+# meet something other than an envelope, a voxel or a SpatVector3D, or two
+# sets of points meet (points have no extent, so they share no space).
 .stop_neither_3d <- function(x, y) {
   vector <- methods::is(x, "SpatVector3D") || methods::is(y, "SpatVector3D")
-  message <- if (vector) {
+  both <- methods::is(x, "SpatVector3D") && methods::is(y, "SpatVector3D")
+  message <- if (both && x@type == "points" && y@type == "points") {
+    glue::glue(
+      "Two sets of points share no space; compare points with polygons, an ",
+      "envelope or a voxel, or buffer one set with buffer_3d()."
+    )
+  } else if (vector) {
     other <- if (methods::is(x, "SpatVector3D")) y else x
     glue::glue(
-      "SpatVector3D polygons can be compared with a SpatEnvelope, a ",
-      "SpatVoxel or other SpatVector3D polygons, not with ",
-      "{class(other)[1L]}. Build 3D polygons from 2D ones with as_vector3d()."
+      "SpatVector3D polygons or points can be compared with a SpatEnvelope, ",
+      "a SpatVoxel or a SpatVector3D (polygons, or points with polygons), ",
+      "not with {class(other)[1L]}. Build 3D polygons from 2D ones with ",
+      "as_vector3d()."
     )
   } else {
-    paste0(
+    glue::glue(
       "neither `x` nor `y` is a SpatEnvelope, a SpatVoxel or SpatVector3D ",
-      "polygons. A 3D query needs at least one 3D object; build one with ",
-      "as_envelope(), vect_to_envelope(), as_voxel() or as_vector3d()."
+      "polygons or points. A 3D query needs at least one 3D object; build ",
+      "one with as_envelope(), vect_to_envelope(), as_voxel() or ",
+      "as_vector3d()."
     )
   }
   rlang::abort(message, class = "ocean3d_error_query_input", call = NULL)
@@ -216,17 +225,21 @@ setMethod(
 setMethod(
   "intersects_3d", c("ANY", "ANY"),
   function(x, y, ...) {
-    # Polygons go on the other object's grid as an envelope, then take the
-    # envelope methods, including the promotion onto a voxel's levels.
-    # Assigned first: an error raised while S4 evaluates an argument for
-    # dispatch loses its class.
-    if (methods::is(x, "SpatVector3D") && .is_grid_3d(y)) {
-      polygons <- .polygons_on_grid(x, y)
-      return(intersects_3d(polygons, y, ...))
+    # Polygons go on the other object's grid as an envelope, and points on a
+    # voxel's grid as a presence voxel, then take that object's methods,
+    # including the promotion onto a voxel's levels. Points with an envelope
+    # take the general path below: intersect_3d() gives the part of the
+    # envelope they reach. Assigned first: an error raised while S4
+    # evaluates an argument for dispatch loses its class.
+    if (methods::is(x, "SpatVector3D") && .is_grid_3d(y) &&
+          .placed_on_grid(x, y)) {
+      shape <- .vector3d_on_grid(x, y)
+      return(intersects_3d(shape, y, ...))
     }
-    if (methods::is(y, "SpatVector3D") && .is_grid_3d(x)) {
-      polygons <- .polygons_on_grid(y, x)
-      return(intersects_3d(x, polygons, ...))
+    if (methods::is(y, "SpatVector3D") && .is_grid_3d(x) &&
+          .placed_on_grid(y, x)) {
+      shape <- .vector3d_on_grid(y, x)
+      return(intersects_3d(x, shape, ...))
     }
 
     shared <- intersect_3d(x, y, ...)
@@ -276,6 +289,14 @@ setMethod(
 #'     levels the polygons reach. Where polygons overlap, a cell gets the
 #'     shallowest top and the deepest bottom, so a depth gap between them is
 #'     kept too. The time intervals are dropped, with a message.}
+#'   \item{anything masked by [SpatVector3D-class] points}{A point covers
+#'     one cell and one depth level, as in [intersect_3d()]. A voxel keeps
+#'     its value in each point's cell at the level nearest the point's depth
+#'     (chosen by depth, not by where the voxel has values), so `bounds` is
+#'     an error with points. An envelope
+#'     keeps its interval whole in the cells where a point lies within it. A
+#'     plain `SpatRaster` keeps the cells that hold a point. Lines aren't
+#'     supported; [buffer_3d()] turns them into polygons.}
 #' }
 #'
 #' A voxel or envelope masked by a plain `SpatRaster` or by polygons is
@@ -288,7 +309,7 @@ setMethod(
 #'   [as_voxel()].
 #' @param mask The 3D domain to keep `x` inside: a [SpatEnvelope-class] or a
 #'   [SpatVoxel-class] on the same grid as `x`, or [SpatVector3D-class]
-#'   polygons, which are put on that grid.
+#'   polygons or points, which are put on that grid.
 #' @param bounds Only when one side is an envelope and the other a voxel. How
 #'   the envelope is placed on the voxel's depth levels: `"midpoint"`
 #'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
@@ -413,45 +434,105 @@ setMethod(
   }
 )
 
-# ---- SpatVector3D polygons --------------------------------------------------
+# ---- SpatVector3D polygons and points ---------------------------------------
 
-# Internal: SpatVector3D polygons on the grid of `template` as an envelope,
-# so the queries above compare them with an envelope or voxel cell by cell,
-# as SPEC.md ("Intersect: spatial query") plans. No polygons, polygons that
-# miss the grid and polygons with no thickness give an empty envelope instead
-# of vector3d_to_envelope()'s errors: sharing no space is an answer here, as
-# it is for two envelopes, and intersect_3d() of two polygon sets can return
-# no polygons. Callers assign its result before passing it on: an error
-# raised while S4 evaluates an argument for dispatch loses its class.
-.polygons_on_grid <- function(x, template) {
-  # Checked first, so empty points or lines are still an error.
-  .check_geomtype(x)
-  empty <- function(...) {
-    # remove the 3D class
-    grid <- methods::as(template[[1]], "SpatRaster")
-    out <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
-    names(out) <- c("depth_min", "depth_max")
-    as_envelope(out)
+# Internal: a SpatVector3D on the grid of `template`, so the queries above
+# compare it with an envelope or voxel cell by cell, as SPEC.md ("Intersect:
+# spatial query") plans. Lines are an error. Polygons become an envelope as
+# vector3d_to_envelope() makes it; no polygons, polygons that miss the grid
+# and polygons with no thickness give an empty envelope instead of its
+# errors: sharing no space is an answer here, as it is for two envelopes, and
+# intersect_3d() of two polygon sets can return no polygons.
+#
+# A point covers one cell and one depth level (#115). On a voxel, the points
+# become a presence voxel on its levels: 1 at each point's cell and the level
+# whose depth is nearest the point's depth (a tie goes to the shallower
+# level, as in extract_to_point()), NA elsewhere. The level is chosen by
+# depth alone, not by where the voxel has values. On an envelope, the result
+# is the envelope's part the points reach: in each cell holding a point whose
+# depth lies within the cell's interval (both ends included), the shallowest
+# and deepest such depth, so a lone point is a zero-thickness interval; NA
+# elsewhere. Points off the grid aren't present. Callers assign the result
+# before passing it on: an error raised while S4 evaluates an argument for
+# dispatch loses its class.
+.vector3d_on_grid <- function(x, template) {
+  .check_geomtype(x, c("polygons", "points"))
+  # remove the 3D class
+  grid <- methods::as(template[[1]], "SpatRaster")
+  # An envelope with no cells, filled below where points reach it.
+  out <- terra::rast(grid, nlyrs = 2, vals = NA_real_)
+  names(out) <- c("depth_min", "depth_max")
+  if (x@type == "polygons") {
+    if (length(x) == 0L) return(as_envelope(out))
+    return(tryCatch(vector3d_to_envelope(x, template),
+                    ocean3d_error_envelope_empty = function(e) {
+                      as_envelope(out)
+                    }))
   }
-  if (length(x) == 0L) return(empty())
-  tryCatch(vector3d_to_envelope(x, template),
-           ocean3d_error_envelope_empty = empty)
+  v <- x@vertices
+  cells <- .point_cells(x, grid)
+  on <- !is.na(cells)
+  if (methods::is(template, "SpatVoxel")) {
+    # The level nearest the point's depth, as extract_to_point() picks it.
+    # With uneven slabs (stored depth edges), the slab that contains the
+    # point can belong to another level; the nearest level is still used.
+    d <- depths(template)
+    level <- vapply(v$depth, function(z) which.min(abs(d - z)), integer(1))
+    occ <- matrix(0, terra::ncell(grid), length(d))
+    occ[cbind(cells[on], level[on])] <- 1
+    occ <- terra::setValues(terra::rast(grid, nlyrs = length(d)), occ)
+    return(.presence_voxel(occ, d, depth_bounds(template)))
+  }
+  limits <- terra::values(template, mat = TRUE)[cells[on], , drop = FALSE]
+  depth <- v$depth[on]
+  inside <- !is.na(limits[, "depth_min"]) & limits[, "depth_min"] <= depth &
+    depth <= limits[, "depth_max"]
+  if (!any(inside)) return(as_envelope(out))
+  cell <- factor(cells[on][inside])
+  reached <- data.frame(
+    cell = as.integer(levels(cell)),
+    depth_min = tapply(depth[inside], cell, min),
+    depth_max = tapply(depth[inside], cell, max)
+  )
+  out[reached$cell] <- as.matrix(reached[c("depth_min", "depth_max")])
+  as_envelope(out)
 }
 
+# Internal: whether a SpatVector3D goes on a grid object's grid before the
+# two are compared, as .vector3d_on_grid() puts it. Polygons always do, and
+# points on a voxel; points with an envelope are compared directly, since
+# intersect_3d() gives the part of the envelope they reach. Shared by
+# intersects_3d() and mask().
+.placed_on_grid <- function(x, grid) {
+  x@type == "polygons" || methods::is(grid, "SpatVoxel")
+}
+
+# Polygons go on the grid, then take the envelope methods. Points on a voxel
+# do the same as a presence voxel; on an envelope, the part they reach is
+# the answer itself (a second envelope intersection would drop a lone
+# point's zero-thickness interval).
 #' @rdname intersect_3d
 #' @export
 setMethod("intersect_3d", c("SpatVector3D", "SpatEnvelope"),
           function(x, y, ...) {
-            polygons <- .polygons_on_grid(x, y)
-            intersect_3d(polygons, y, ...)
+            .check_3d(y, "y")
+            on_grid <- .vector3d_on_grid(x, y)
+            if (x@type == "points") {
+              .no_extra_args(...)
+              return(on_grid)
+            }
+            intersect_3d(on_grid, y, ...)
           })
 
 #' @rdname intersect_3d
 #' @export
 setMethod("intersect_3d", c("SpatVector3D", "SpatVoxel"),
           function(x, y, ...) {
-            polygons <- .polygons_on_grid(x, y)
-            intersect_3d(polygons, y, ...)
+            # Points take the level nearest their depth, so `bounds` has
+            # nothing to place.
+            if (x@type == "points") .no_extra_args(...)
+            on_grid <- .vector3d_on_grid(x, y)
+            intersect_3d(on_grid, y, ...)
           })
 
 #' @rdname intersect_3d
@@ -465,23 +546,31 @@ setMethod("intersect_3d", c("SpatVoxel", "SpatVector3D"),
           function(x, y, ...) intersect_3d(y, x, ...))
 
 # Two sets of polygons: every pair whose outlines, depth ranges and times
-# overlap gives one polygon, as sf::st_intersection() does in 2D.
+# overlap gives one polygon, as sf::st_intersection() does in 2D. Points and
+# polygons: every point inside a polygon's outline, depth range and time
+# interval gives one point. Two sets of points share no space, and lines
+# aren't taken.
 #' @rdname intersect_3d
 #' @export
 setMethod(
   "intersect_3d", c("SpatVector3D", "SpatVector3D"),
   function(x, y, ...) {
     .no_extra_args(...)
-    .check_geomtype(x)
-    .check_geomtype(y)
+    .check_geomtype(x, c("polygons", "points"))
+    .check_geomtype(y, c("polygons", "points"))
+    if (x@type == "points" && y@type == "points") .stop_neither_3d(x, y)
     resolution <- unique(stats::na.omit(c(x@time_resolution,
                                           y@time_resolution)))
     if (length(resolution) > 1L) {
       rlang::abort(paste0(
-        "One set of polygons has dates and the other has hours, so their ",
+        "One set has dates and the other has hours, so their ",
         "times can't be compared. Rebuild one with as_vector3d() from ",
         "times of the same kind."
       ), class = "ocean3d_error_time_resolution_differ", call = NULL)
+    }
+    resolution <- if (length(resolution)) resolution else NA_character_
+    if (x@type == "points" || y@type == "points") {
+      return(.points_in_polygons(x, y, resolution))
     }
     as_pieces <- function(v, suffix) {
       f <- v@features
@@ -533,23 +622,74 @@ setMethod(
       stringsAsFactors = FALSE
     )
     features$geometry <- geometry[keep]
-    .new_vector3d("polygons",
-                  if (length(resolution)) resolution else NA_character_,
-                  features = features)
+    .new_vector3d("polygons", resolution, features = features)
   }
 )
 
-# Two sets of polygons: for each polygon of `x`, the polygons of `y` it
+# Internal: the points of one SpatVector3D inside the polygons of the other,
+# for intersect_3d(). A point is inside a polygon when its position is within
+# the outline, its depth within the depth range and its time within the time
+# interval, all with both ends included. With dates, a polygon's interval
+# covers all of its end day. A point or polygon without a time matches any
+# time. One point per matching pair, numbered, with `feature_id_x` and
+# `feature_id_y` naming the pair as the polygon-pair result does; the inputs'
+# other columns are dropped. `resolution` is the pair's shared time
+# resolution, already checked.
+.points_in_polygons <- function(x, y, resolution) {
+  points_first <- x@type == "points"
+  points <- if (points_first) x else y
+  polygons <- if (points_first) y else x
+  v <- points@vertices
+  f <- polygons@features
+  # Outlines and positions are both WGS84, so sf tests them with its own
+  # model for geographic coordinates (the sphere, by default).
+  positions <- sf::st_geometry(
+    sf::st_as_sf(v[c("lon", "lat")], coords = c("lon", "lat"), crs = 4326)
+  )
+  hits <- sf::st_intersects(positions, f$geometry)
+  i <- rep(seq_len(nrow(v)), lengths(hits))
+  j <- unlist(hits)
+  # Depths within the range, both ends included: a point at a polygon's
+  # bottom is inside it.
+  inside <- v$depth[i] >= f$depth_min[j] & v$depth[i] <= f$depth_max[j]
+  # Times within the interval, both ends included, the rule the polygon pairs
+  # use. With dates, every time is stored at midnight UTC and the two sides
+  # share one resolution (checked by the caller), so `time <= time_end` also
+  # takes a point on the interval's end day. A missing time on either side
+  # matches any time.
+  time <- v$time[i]
+  in_time <- is.na(time) | is.na(f$time_start[j]) |
+    (time >= f$time_start[j] & time <= f$time_end[j])
+  keep <- inside & in_time
+  i <- i[keep]
+  j <- j[keep]
+  vertices <- data.frame(
+    feature_id = as.character(seq_along(i)),
+    vertex = rep(1L, length(i)),
+    lon = v$lon[i], lat = v$lat[i], depth = v$depth[i], time = v$time[i],
+    feature_id_x = if (points_first) v$feature_id[i] else f$feature_id[j],
+    feature_id_y = if (points_first) f$feature_id[j] else v$feature_id[i],
+    stringsAsFactors = FALSE
+  )
+  # The points keep their times, so the result has their resolution.
+  .new_vector3d("points", if (all(is.na(v$time[i]))) NA_character_ else
+                  resolution, vertices = vertices)
+}
+
+# Two SpatVector3D sets: for each feature of `x`, the features of `y` it
 # shares 3D space with. The pairs come from intersect_3d(), so the two always
-# agree. That builds every shared outline, which a yes/no answer doesn't
-# need; testing outlines with a predicate that ignores shared edges, then
-# depths and times, would be faster for large sets.
+# agree. For two polygon sets that builds every shared outline, which a
+# yes/no answer doesn't need; testing outlines with a predicate that ignores
+# shared edges, then depths and times, would be faster for large sets.
 #' @rdname intersects_3d
 #' @export
 setMethod(
   "intersects_3d", c("SpatVector3D", "SpatVector3D"),
   function(x, y, ...) {
-    shared <- as.data.frame(intersect_3d(x, y, ...))
+    # Assigned first: an error raised while S4 evaluates an argument for
+    # dispatch loses its class.
+    shared <- intersect_3d(x, y, ...)
+    shared <- as.data.frame(shared)
     ids_x <- as.data.frame(x)$feature_id
     ids_y <- as.data.frame(y)$feature_id
     hits <- split(shared$feature_id_y, factor(shared$feature_id_x, ids_x))
@@ -558,15 +698,35 @@ setMethod(
   }
 )
 
-# One signature serves voxels, envelopes and plain rasters: the polygons go
-# on the grid of `x`, and mask() then dispatches to the envelope methods
-# above for that class of `x`.
+# One signature serves voxels, envelopes and plain rasters. Polygons go on
+# the grid of `x` as an envelope, and points on a voxel as a presence voxel,
+# so mask() then dispatches to the methods above for that class of `x`. An
+# envelope keeps the cells where a point lies within its interval, and a
+# plain raster the cells that hold a point.
 #' @rdname mask-3d
 #' @export
 setMethod("mask", c("SpatRaster", "SpatVector3D"),
           function(x, mask, ...) {
-            polygons <- .polygons_on_grid(mask, x)
-            mask(x, polygons, ...)
+            # Checked first: below, an error raised while S4 evaluates
+            # ifel()'s argument would lose its class.
+            .check_geomtype(mask, c("polygons", "points"))
+            if (.placed_on_grid(mask, x)) {
+              # Points take the level nearest their depth, so `bounds` has
+              # nothing to place; the rest of `...` is terra's.
+              extra <- list(...)
+              if (mask@type == "points" && "bounds" %in% names(extra)) {
+                .no_extra_args(bounds = extra$bounds)
+              }
+              shape <- .vector3d_on_grid(mask, x)
+              return(mask(x, shape, ...))
+            }
+            if (methods::is(x, "SpatEnvelope")) {
+              .check_3d(x, "x")
+              keep <- terra::ifel(intersects_3d(x, mask), 1, NA)
+              return(as_envelope(.mask_plain(x, keep, ...)))
+            }
+            terra::mask(x, terra::ifel(.footprint(mask, x, "mask"), 1, NA),
+                        ...)
           })
 
 # ---- terra::intersect() guard -----------------------------------------------

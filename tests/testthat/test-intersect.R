@@ -721,15 +721,255 @@ test_that("comparing polygons with a grid drops their times with a message", {
                  class = "ocean3d_message_time_dropped")
 })
 
-test_that("points and lines aren't compared with a grid yet", {
-  points <- as_vector3d(data.frame(lon = 2.5, lat = 2.5, depth = 10))
-  for (call in list(function() intersect_3d(points, envelope_50_200()),
-                    function() intersects_3d(envelope_50_200(), points),
-                    function() mask(envelope_50_200(), points))) {
-    expect_error(call(), "This needs polygons, but these are points",
+test_that("lines aren't compared with a grid or polygons", {
+  line <- as_vector3d(data.frame(id = "a", lon = c(1, 2), lat = c(1, 2),
+                                 depth = c(1, 2)), type = "lines", id = "id")
+  voxel <- envelope_to_voxel(envelope_50_200(), depths = c(0, 100))
+  for (call in list(function() intersect_3d(line, envelope_50_200()),
+                    function() intersects_3d(envelope_50_200(), line),
+                    function() mask(envelope_50_200(), line),
+                    function() intersect_3d(voxel, line),
+                    function() mask(voxel, line),
+                    function() mask(make_template(1), line),
+                    function() intersect_3d(line, polygons_0_100()),
+                    function() intersects_3d(polygons_0_100(), line))) {
+    expect_error(call(), "This needs polygons or points, but these are lines",
                  class = "ocean3d_error_vector3d_type")
-    expect_error(call(), "buffer_3d() turns points into polygons",
+    expect_error(call(), "buffer_3d() turns lines into polygons",
                  class = "ocean3d_error_vector3d_type", fixed = TRUE)
+  }
+})
+
+# SpatVector3D points (#115) ------------------------------------------------
+
+test_that("a point covers its cell and the level nearest its depth", {
+  voxel <- voxel_1_2_3()
+  # Cell 13 (the middle) at 40 m: nearest level 0 m. Cell 23 at 160 m:
+  # nearest level 200 m. The third point is off the grid.
+  points <- points_at(lon = c(2.5, 2.5, 20), lat = c(2.5, 0.5, 2.5),
+                      depth = c(40, 160, 10))
+  for (shared in list(intersect_3d(points, voxel),
+                      intersect_3d(voxel, points))) {
+    expect_s4_class(shared, "SpatVoxel")
+    expect_identical(depths(shared), c(0, 100, 200))
+    vals <- terra::values(shared)
+    expect_identical(which(!is.na(vals[, 1])), 13L)
+    expect_identical(which(!is.na(vals[, 2])), integer(0))
+    expect_identical(which(!is.na(vals[, 3])), 23L)
+    expect_true(all(vals[c(13, 23), c(1, 3)][c(1, 4)] == 1))
+  }
+  # A point halfway between two levels takes the shallower one, and the
+  # result carries the voxel's depth edges.
+  edged <- as_voxel(voxel, depth_bounds = cbind(c(0, 50, 150),
+                                                c(50, 150, 250)))
+  halfway <- intersect_3d(points_at(2.5, 2.5, 50), edged)
+  expect_identical(which(!is.na(terra::values(halfway)[, 1])), 13L)
+  expect_true(all(is.na(terra::values(halfway)[, 2:3])))
+  expect_identical(depth_bounds(halfway), depth_bounds(edged))
+
+  # intersects_3d(): TRUE in the point's cell, FALSE where only the voxel is.
+  answer <- terra::values(intersects_3d(points, voxel))[, 1]
+  expect_identical(which(answer), c(13L, 23L))
+  expect_false(any(answer[-c(13, 23)]))
+  expect_identical(terra::values(intersects_3d(voxel, points)),
+                   terra::values(intersects_3d(points, voxel)))
+})
+
+test_that("mask(voxel, points) keeps the value at each point's level only", {
+  voxel <- voxel_1_2_3()
+  points <- points_at(lon = c(2.5, 2.5), lat = c(2.5, 0.5),
+                      depth = c(40, 160))
+  masked <- mask(voxel, points)
+  expect_s4_class(masked, "SpatVoxel")
+  vals <- terra::values(masked)
+  expect_equal(unname(vals[13, ]), c(1, NA, NA))
+  expect_equal(unname(vals[23, ]), c(NA, NA, 3))
+  expect_true(all(is.na(vals[-c(13, 23), ])))
+
+  # The level comes from the point's depth, not from where the voxel has
+  # values: a point at a level that is NA there masks to nothing.
+  gappy <- voxel
+  gappy[[1]] <- terra::setValues(make_template(), NA)
+  gappy <- as_voxel(gappy)
+  expect_true(all(is.na(terra::values(mask(gappy, points_at(2.5, 2.5, 40))))))
+
+  # Points take the nearest level, so `bounds` is an error, not ignored.
+  for (call in list(function() intersect_3d(points, voxel, bounds = "top"),
+                    function() mask(voxel, points, bounds = "top"))) {
+    expect_error(call(), "a point takes the level nearest its depth",
+                 class = "ocean3d_error_unused_argument")
+  }
+  # A grid without a CRS can't place them.
+  bare <- voxel
+  terra::crs(bare) <- ""
+  expect_error(mask(bare, points), "has no CRS",
+               class = "ocean3d_error_envelope_input")
+
+  # Points off the grid share nothing, and so do no points at all.
+  far <- points_at(20, 20, 40)
+  expect_true(all(is.na(terra::values(intersect_3d(far, voxel)))))
+  expect_true(all(is.na(terra::values(mask(voxel, far)))))
+  expect_false(any(terra::values(intersects_3d(far, voxel))))
+})
+
+test_that("points land on a grid in the other longitude convention", {
+  east <- terra::rast(nrows = 2, ncols = 2, xmin = 178, xmax = 182,
+                      ymin = 0, ymax = 2, crs = "EPSG:4326")
+  voxel <- as_voxel(terra::rast(list(terra::setValues(east, 1:4),
+                                     terra::setValues(east, 5:8))),
+                    depths = c(0, 100), varname = "temp")
+  # Longitude -179 is 181 on this grid: the second column.
+  shared <- intersect_3d(points_at(c(-179, 178.5), c(1.5, 0.5), c(0, 100)),
+                         voxel)
+  expect_identical(terra::values(shared)[, 1], c(NA, 1, NA, NA))
+  expect_identical(terra::values(shared)[, 2], c(NA, NA, 1, NA))
+})
+
+test_that("points and an envelope share the depths the points reach", {
+  e <- envelope_50_200()
+  # Two points in cell 13, at the envelope's top and inside it; one in cell
+  # 21 below the envelope; one off the grid.
+  points <- points_at(lon = c(2.5, 2.5, 0.5, 20), lat = c(2.5, 2.5, 0.5, 2.5),
+                      depth = c(50, 120, 300, 10))
+  for (shared in list(intersect_3d(points, e), intersect_3d(e, points))) {
+    expect_s4_class(shared, "SpatEnvelope")
+    vals <- terra::values(shared)
+    expect_identical(vals[13, ], c(depth_min = 50, depth_max = 120))
+    expect_true(all(is.na(vals[-13, ])))
+  }
+  # A lone point is a zero-thickness interval: points have no volume.
+  lone <- intersect_3d(points_at(2.5, 2.5, 200), e)
+  expect_identical(terra::values(lone)[13, ],
+                   c(depth_min = 200, depth_max = 200))
+  expect_identical(volume(lone), 0)
+  # Just outside the interval shares nothing.
+  expect_true(all(is.na(terra::values(intersect_3d(points_at(2.5, 2.5, 201),
+                                                   e)))))
+  # A point in a cell the envelope doesn't reach shares nothing.
+  holed <- as_envelope(terra::setValues(make_template(), c(NA, rep(1, 24))),
+                       depth_min = 50, depth_max = 200)
+  expect_true(all(is.na(terra::values(intersect_3d(points_at(0.5, 4.5, 100),
+                                                   holed)))))
+
+  # intersects_3d(): TRUE where a point lies in the interval, FALSE where
+  # the depths miss or only one side is present, NA where neither is.
+  answer <- terra::values(intersects_3d(e, points))[, 1]
+  expect_true(answer[13])
+  expect_false(answer[21])
+  expect_false(answer[1])
+  holed_answer <- terra::values(intersects_3d(holed, points_at(0.5, 4.5,
+                                                               100)))[, 1]
+  expect_false(holed_answer[1])
+  expect_true(all(holed_answer[-1] == FALSE))
+})
+
+test_that("mask() by points keeps cells the points reach", {
+  e <- envelope_50_200()
+  points <- points_at(lon = c(2.5, 0.5), lat = c(2.5, 0.5),
+                      depth = c(120, 300))
+  masked <- mask(e, points)
+  expect_s4_class(masked, "SpatEnvelope")
+  vals <- terra::values(masked)
+  # The envelope's own interval is kept whole where a point lies in it.
+  expect_identical(vals[13, ], c(depth_min = 50, depth_max = 200))
+  expect_true(all(is.na(vals[-13, ])))
+  # A plain raster keeps the cells that hold a point, whatever their depth.
+  plain <- terra::values(mask(make_template(7), points))[, 1]
+  expect_identical(which(!is.na(plain)), c(13L, 21L))
+  expect_identical(unname(plain[c(13, 21)]), c(7, 7))
+  # terra's own arguments pass through.
+  outside <- terra::values(mask(make_template(7), points, inverse = TRUE))
+  expect_true(all(is.na(outside[c(13, 21), 1])))
+  expect_identical(sum(!is.na(outside)), 23L)
+})
+
+test_that("points inside polygons are matched by outline, depth and time", {
+  polygons <- polygons_0_100()
+  # In the outline at the bottom depth (inside), in the outline but too
+  # deep, and outside the outline.
+  points <- as_vector3d(data.frame(
+    id = c("p1", "p2", "p3"), lon = c(2.5, 2.5, 0.5), lat = c(2.5, 2.5, 0.5),
+    depth = c(100, 120, 10), tag = c("a", "b", "c")
+  ), id = "id")
+  shared <- intersect_3d(points, polygons)
+  expect_s4_class(shared, "SpatVector3D")
+  expect_identical(geomtype(shared), "points")
+  f <- as.data.frame(shared)
+  expect_identical(f$feature_id, "1")
+  expect_identical(f$feature_id_x, "p1")
+  expect_identical(f$feature_id_y, "1")
+  expect_identical(f$depth, 100)
+  expect_null(f$tag)
+  # The other way round names the pair the other way round.
+  swapped <- as.data.frame(intersect_3d(polygons, points))
+  expect_identical(swapped$feature_id_x, "1")
+  expect_identical(swapped$feature_id_y, "p1")
+  expect_identical(swapped[c("lon", "lat", "depth")],
+                   f[c("lon", "lat", "depth")])
+
+  # intersects_3d() lists the same pairs from each side.
+  expect_identical(intersects_3d(points, polygons),
+                   list(p1 = "1", p2 = character(0), p3 = character(0)))
+  expect_identical(intersects_3d(polygons, points), list(`1` = "p1"))
+
+  # A point in two polygons gives one point per pair; none inside gives
+  # no points.
+  two <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(
+    sf::st_geometry(make_polygon())[[1]], sf::st_geometry(make_polygon())[[1]],
+    crs = 4326
+  )), depth_min = 0, depth_max = 100)
+  pairs <- as.data.frame(intersect_3d(points, two))
+  expect_identical(pairs$feature_id, c("1", "2"))
+  expect_identical(pairs$feature_id_y, c("1", "2"))
+  expect_identical(length(intersect_3d(points_at(0.5, 0.5, 10), polygons)),
+                   0L)
+})
+
+test_that("points match polygon times with both ends included", {
+  dated <- sf::st_sf(start = as.Date("2020-01-01"),
+                     end = as.Date("2020-01-15"),
+                     geometry = sf::st_geometry(make_polygon()))
+  dated <- as_vector3d(dated, time = c("start", "end"), depth_min = 0,
+                       depth_max = 100)
+  # On the first day, on the last day (dates include it), the day after,
+  # and without a time.
+  points <- as_vector3d(data.frame(
+    id = c("first", "last", "after", "untimed"), lon = 2.5, lat = 2.5,
+    depth = 50,
+    day = as.Date(c("2020-01-01", "2020-01-15", "2020-01-16", NA))
+  ), id = "id", time = "day")
+  inside <- as.data.frame(intersect_3d(points, dated))
+  expect_identical(inside$feature_id_x, c("first", "last", "untimed"))
+  expect_identical(inside$time[1:2],
+                   as.POSIXct(c("2020-01-01", "2020-01-15"), tz = "UTC"))
+  expect_identical(intersect_3d(points, dated)@time_resolution, "daily")
+
+  # A polygon without a time takes points at any time.
+  expect_identical(length(intersect_3d(points, polygons_0_100())), 4L)
+
+  # With hours, the ends are exact instants.
+  hourly <- sf::st_sf(start = as.POSIXct("2020-01-05 06:00", tz = "UTC"),
+                      end = as.POSIXct("2020-01-05 12:00", tz = "UTC"),
+                      geometry = sf::st_geometry(make_polygon()))
+  hourly <- as_vector3d(hourly, time = c("start", "end"), depth_min = 0,
+                        depth_max = 100)
+  timed <- as_vector3d(data.frame(
+    id = c("at_end", "past_end"), lon = 2.5, lat = 2.5, depth = 50,
+    when = as.POSIXct(c("2020-01-05 12:00", "2020-01-05 12:01"), tz = "UTC")
+  ), id = "id", time = "when")
+  expect_identical(as.data.frame(intersect_3d(timed, hourly))$feature_id_x,
+                   "at_end")
+  # Dates on one side and hours on the other can't be compared.
+  expect_error(intersect_3d(points, hourly), "dates and the other has hours",
+               class = "ocean3d_error_time_resolution_differ")
+})
+
+test_that("two sets of points share no space", {
+  points <- points_at(2.5, 2.5, 10)
+  for (call in list(function() intersect_3d(points, points),
+                    function() intersects_3d(points, points_at(1, 1, 1)))) {
+    expect_error(call(), "Two sets of points share no space",
+                 class = "ocean3d_error_query_input")
   }
 })
 
@@ -877,18 +1117,16 @@ test_that("intersect_3d() of polygon sets compares time intervals", {
                class = "ocean3d_error_time_resolution_differ")
 })
 
-test_that("intersect_3d() of polygon sets rejects points and lines", {
-  points <- as_vector3d(data.frame(lon = 2.5, lat = 2.5, depth = 10))
-  expect_error(intersect_3d(polygons_0_100(), points),
-               "This needs polygons, but these are points",
-               class = "ocean3d_error_vector3d_type")
+test_that("intersect_3d() of a SpatVector3D rejects 2D input", {
   # A 2D object isn't a second set of polygons.
   flat <- sf::st_geometry(make_polygon())
+  points <- as_vector3d(data.frame(lon = 2.5, lat = 2.5, depth = 10))
   for (call in list(function() intersect_3d(polygons_0_100(), flat),
-                    function() intersects_3d(flat, polygons_0_100()))) {
+                    function() intersects_3d(flat, polygons_0_100()),
+                    function() intersect_3d(points, flat))) {
     err <- expect_error(call(), class = "ocean3d_error_query_input")
     expect_match(conditionMessage(err),
-                 "SpatVector3D polygons can be compared with")
+                 "SpatVector3D polygons or points can be compared with")
     expect_match(conditionMessage(err), "not with sfc_POLYGON")
   }
 })
