@@ -741,13 +741,8 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
   # Plain layers, so the occupancy stack built from them is a plain SpatRaster.
   lower <- .envelope_layer(x, "depth_min")
   upper <- .envelope_layer(x, "depth_max")
-  deepest <- length(depths)
   ind <- terra::rast(lapply(seq_along(depths), function(i) {
-    if (closed && i == deepest) {
-      (lower <= slab$upper[i]) & (upper > slab$lower[i])
-    } else {
-      (lower < slab$upper[i]) & (upper > slab$lower[i])
-    }
+    .in_slab(lower, upper, slab, i, closed)
   }))
   # number of depth levels present per vertical column, cell 
   n_depths <- sum(ind)
@@ -827,6 +822,22 @@ envelope_to_voxel <- function(x, depths, values = NULL, profile = NULL,
     },
     stop("Unhandled `bounds`: \"", bounds, "\".", call. = FALSE)
   ) # nolint: unreachable_code_linter. switch() default, not dead code.
+}
+
+# Internal: whether the depth range `lower` to `upper` shares some thickness
+# of water with slab `i` of `slab` (from .depth_slabs()): strict on both
+# sides, so a range that only touches the slab misses it, except that the
+# deepest slab is closed at its bottom when `closed` (slabs worked out from
+# `depths`, where under "top" it has no height). Works on numbers and on
+# SpatRaster layers alike, so envelope_to_voxel() and vector3d_to_voxel()
+# put the same range on the same levels.
+.in_slab <- function(lower, upper, slab, i, closed) {
+  below_top <- if (closed && i == length(slab$lower)) {
+    lower <= slab$upper[i]
+  } else {
+    lower < slab$upper[i]
+  }
+  below_top & (upper > slab$lower[i])
 }
 
 #' Collapse Voxel 3D -> Envelope 2.5D
@@ -1048,8 +1059,9 @@ occupied <- function(x, fun = function(v) !is.na(v)) {
   rlang::abort(message, class = "ocean3d_error_envelope_input", call = NULL)
 }
 
-# The one producer of `ocean3d_error_envelope_empty`: an envelope with no
-# cells left, because the shapes miss the grid or have no thickness.
+# The one producer of `ocean3d_error_envelope_empty`: an envelope or voxel
+# with no cells left, because the shapes miss the grid, have no thickness or
+# lie outside the depth levels.
 .abort_envelope_empty <- function(message) {
   rlang::abort(message, class = "ocean3d_error_envelope_empty", call = NULL)
 }

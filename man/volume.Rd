@@ -8,15 +8,15 @@
 \alias{volume,SpatRaster-method}
 \title{3D volume of a domain}
 \usage{
-volume(x, per_cell = FALSE, ...)
+volume(x, per_cell = FALSE, per_level = FALSE, ...)
 
-\S4method{volume}{SpatEnvelope}(x, per_cell = FALSE, ...)
+\S4method{volume}{SpatEnvelope}(x, per_cell = FALSE, per_level = FALSE, ...)
 
-\S4method{volume}{SpatVoxel}(x, per_cell = FALSE, bounds = c("midpoint", "top"))
+\S4method{volume}{SpatVoxel}(x, per_cell = FALSE, per_level = FALSE, bounds = c("midpoint", "top"))
 
-\S4method{volume}{SpatVector3D}(x, per_cell = FALSE, ...)
+\S4method{volume}{SpatVector3D}(x, per_cell = FALSE, per_level = FALSE, ...)
 
-\S4method{volume}{SpatRaster}(x, per_cell = FALSE, ...)
+\S4method{volume}{SpatRaster}(x, per_cell = FALSE, per_level = FALSE, ...)
 }
 \arguments{
 \item{x}{A \link[=SpatEnvelope-class]{SpatEnvelope}, a \link[=SpatVoxel-class]{SpatVoxel}, or
@@ -27,6 +27,11 @@ rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[
 
 \item{per_cell}{\code{FALSE} (default) for the total volume, \code{TRUE} for the
 volume of each cell. Not for \link[=SpatVector3D-class]{SpatVector3D} polygons.}
+
+\item{per_level}{SpatVoxel only, with \code{per_cell = TRUE}: \code{TRUE} for the
+volume of each cell \emph{at each depth level}, the weights
+\code{\link[=summarise_3d]{summarise_3d()}} uses. Envelopes and polygons have no levels, so it is
+an error for them.}
 
 \item{...}{Arguments for the \link[=SpatVoxel-class]{SpatVoxel} method, which are an error
 for an envelope or polygons.}
@@ -44,7 +49,11 @@ for a voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVo
 With \code{per_cell = FALSE}, a number: the total volume in km³. With
 \code{per_cell = TRUE}, a single-layer \code{SpatRaster} named \code{volume} on the grid
 of \code{x}: the volume of each cell in km³, \code{NA} where \code{x} is absent (no
-depth interval, or no occupied level). Its sum is the total.
+depth interval, or no occupied level). Its sum is the total. With
+\code{per_level = TRUE} as well, a \link[=SpatVoxel-class]{SpatVoxel} on the depth levels and
+edges of \code{x}, layers \verb{volume_depth=<value>}: the volume of each cell at
+each level in km³, \code{NA} where the level is unoccupied. Summing its
+layers gives the per-cell raster.
 }
 \description{
 Measures the occupied volume of a \link[=SpatEnvelope-class]{SpatEnvelope}, a
@@ -119,6 +128,9 @@ volume(voxel_to_envelope(gappy))
 
 # Per cell: the fourth cell is outside the domain, so it is NA.
 terra::values(volume(e, per_cell = TRUE))
+
+# Per cell and level: each occupied level's share of the column.
+terra::values(volume(v, per_cell = TRUE, per_level = TRUE))
 
 # Overlap with a second domain at 100-300 m: intersect, then measure.
 b <- as_envelope(fp, depth_min = 100, depth_max = 300)

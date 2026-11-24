@@ -827,25 +827,6 @@
 }
 
 
-.buffer_statistic <- function(values, weights, statistic) {
-  if (statistic == "min") return(min(values))
-  if (statistic == "max") return(max(values))
-
-  weights <- weights / sum(weights)
-  average <- sum(values * weights)
-  if (statistic == "mean") return(average)
-  if (length(values) < 2L) return(NA_real_)
-
-  correction <- sum(weights * (1 - weights))
-  if (correction <= 0) return(NA_real_)
-  deviation <- sqrt(sum(weights * (values - average)^2) / correction)
-  if (statistic == "sd") return(deviation)
-
-  effective_n <- 1 / sum(weights^2)
-  deviation / sqrt(effective_n)
-}
-
-
 .buffer_summarise_samples <- function(samples, weighting, min_valid_fraction,
                                       statistic = "mean") {
   support <- with(samples, area_fraction * depth_fraction * time_fraction)
@@ -875,7 +856,8 @@
     effective_n <- 1 / sum((weights / sum(weights))^2)
   }
   if (any(valid) && meets_threshold) {
-    value <- .buffer_statistic(samples$value[valid], weights, statistic)
+    # The weighted statistics are shared with summarise_3d().
+    value <- .weighted_statistic(samples$value[valid], weights, statistic)
     if (is.na(value) && statistic %in% c("sd", "se")) {
       status <- "insufficient_variation_samples"
     }

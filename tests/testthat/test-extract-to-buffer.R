@@ -1197,7 +1197,7 @@ test_that("a caller-owned connection is read and left open", {
 
 test_that("buffer SD and SE of identical values are zero", {
   for (statistic in c("sd", "se")) {
-    expect_equal(.buffer_statistic(c(7, 7, 7), c(1, 2, 3), statistic), 0)
+    expect_equal(.weighted_statistic(c(7, 7, 7), c(1, 2, 3), statistic), 0)
   }
 })
 
