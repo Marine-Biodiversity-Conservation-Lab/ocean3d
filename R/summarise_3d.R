@@ -92,20 +92,19 @@ summarise_3d <- function(x, statistic = "mean",
   weighting <- match.arg(weighting)
   bounds <- match.arg(bounds)
   if (!is.null(by) && !identical(by, "depth") && !identical(by, "time")) {
-    rlang::abort(
-      "`by` must be NULL (one row per voxel), \"depth\" or \"time\".",
-      class = "ocean3d_error_summarise_input", call = NULL
+    .abort_summarise_input(
+      "`by` must be NULL (one row per voxel), \"depth\" or \"time\"."
     )
   }
   # One voxel is checked as every 3D input is; a list must hold only voxels.
   if (is.list(x)) {
     is_voxel <- vapply(x, methods::is, logical(1), "SpatVoxel")
     if (!length(x) || !all(is_voxel)) {
-      rlang::abort(paste(
+      .abort_summarise_input(paste(
         "A list `x` must hold one or more SpatVoxels, one per time step,",
         "and nothing else. Build each with as_voxel(), and keep the values",
         "inside a shape with mask()."
-      ), class = "ocean3d_error_summarise_input", call = NULL)
+      ))
     }
     voxels <- x
   } else {
@@ -143,6 +142,12 @@ summarise_3d <- function(x, statistic = "mean",
   out
 }
 
+# The one producer of `ocean3d_error_summarise_input`: a `by` or a list `x`
+# summarise_3d() can't use.
+.abort_summarise_input <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_summarise_input", call = NULL)
+}
+
 # Internal: the statistics of the non-NA `values` with their `weights`, as a
 # named list ending in `n`, the number of values. Called per voxel and per
 # depth level by summarise_3d().
@@ -177,6 +182,9 @@ summarise_3d <- function(x, statistic = "mean",
   if (sum(weights) <= 0) weights <- rep(1, length(values))
   weights <- weights / sum(weights)
   if (statistic == "median") {
+    # A value with no weight can't be the middle, nor half of a middle pair.
+    values <- values[weights > 0]
+    weights <- weights[weights > 0]
     o <- order(values)
     sorted <- values[o]
     cumulative <- cumsum(weights[o])

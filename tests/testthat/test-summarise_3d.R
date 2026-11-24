@@ -120,6 +120,15 @@ test_that("values with no volume are weighted equally", {
   expect_identical(.weighted_statistic(c(1, 3), c(0, 0), "mean"), 2)
 })
 
+test_that("a value with no volume doesn't join the median's middle pair", {
+  # Under "top" the 200 m level has no height: weights 100, 100 and 0 m, so
+  # the median is halfway between the two values with weight, 1 and 3.
+  r <- terra::rast(make_grid(1, 1), nlyrs = 3)
+  terra::values(r) <- t(c(1, 3, 2))
+  v <- as_voxel(r, depths = c(0, 100, 200))
+  expect_identical(summarise_3d(v, "median", bounds = "top")$median, 2)
+})
+
 test_that("a voxel whose time is a year or month stops, as in as_proxy()", {
   v <- two_levels()
   terra::time(v, tstep = "years") <- rep(2020L, 2)
