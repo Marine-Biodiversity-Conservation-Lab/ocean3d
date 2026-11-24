@@ -81,7 +81,8 @@ kept too. The time intervals are dropped, with a message.}
 \item{anything masked by \link[=SpatVector3D-class]{SpatVector3D} points}{A point covers
 one cell and one depth level, as in \code{\link[=intersect_3d]{intersect_3d()}}. A voxel keeps
 its value in each point's cell at the level nearest the point's depth
-(chosen by depth, not by where the voxel has values). An envelope
+(chosen by depth, not by where the voxel has values), so \code{bounds} is
+an error with points. An envelope
 keeps its interval whole in the cells where a point lies within it. A
 plain \code{SpatRaster} keeps the cells that hold a point. Lines aren't
 supported; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}

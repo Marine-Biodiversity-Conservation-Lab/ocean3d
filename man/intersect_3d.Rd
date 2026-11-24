@@ -61,7 +61,8 @@ resolution). netCDF files aren't accepted; load them with terra and
 wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
 \item{...}{Arguments for the voxel methods. They are an error when both
-inputs are envelopes, or points and an envelope.}
+inputs are envelopes, or when one is points and the other an envelope
+or a voxel.}
 
 \item{bounds}{Only when one input is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: \code{"midpoint"}
@@ -117,19 +118,23 @@ and one depth level: the cell that holds it and the level whose depth
 is nearest the point's depth (a tie goes to the shallower level, as in
 \code{\link[=extract_to_point]{extract_to_point()}}). The level is chosen by depth alone, so a point
 whose nearest level has no value in the voxel shares nothing there.
-The result is a presence voxel on the voxel's levels. Points off the
-grid share nothing. Points' times aren't compared, since a voxel shows
-one time step.}
-\item{An envelope and \link[=SpatVector3D-class]{SpatVector3D} points}{The result is an
-envelope holding, in each cell with a point whose depth lies within
-the cell's interval (both ends included), the shallowest and deepest
-such depth. A lone point gives a zero-thickness interval, so the
+When the voxel's depth edges give uneven slabs, the slab that contains
+a point can belong to another level; the nearest level is used. The
+result is a presence voxel on the voxel's levels, and \code{bounds} doesn't
+apply. Points off the grid share nothing. Points' times aren't
+compared, since a voxel shows one time step.}
+\item{An envelope and \link[=SpatVector3D-class]{SpatVector3D} points}{In each cell where a
+point's depth lies within the envelope's interval (both ends
+included), the result holds an interval from the shallowest such point
+to the deepest. A lone point gives a zero-thickness interval, so the
 result's \code{\link[=volume]{volume()}} is 0: points have no volume.}
 \item{\link[=SpatVector3D-class]{SpatVector3D} points and polygons}{A point is inside a
-polygon when its position is within the outline, its depth within
-\code{depth_min} to \code{depth_max} and its time within the polygon's time
-interval, all with both ends included (with dates, the interval covers
-all of its end day). A point or polygon without a time matches any
+polygon when \code{\link[sf:st_intersects]{sf::st_intersects()}} finds its position in the outline
+(on WGS84 coordinates sf uses the sphere by default, where a point
+exactly on an edge may not count), its depth is within \code{depth_min} to
+\code{depth_max} and its time within the polygon's time interval. Depth and
+time include both ends (with dates, the interval covers all of its
+end day). A point or polygon without a time matches any
 time; one side with dates and the other with hours is an error. Each
 matching pair gives one point, numbered, with columns \code{feature_id_x}
 and \code{feature_id_y} naming the pair and the inputs' other columns

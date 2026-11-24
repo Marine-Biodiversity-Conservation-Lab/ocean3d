@@ -28,7 +28,8 @@ resolution). netCDF files aren't accepted; load them with terra and
 wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 
 \item{...}{Arguments for the voxel methods. They are an error when both
-inputs are envelopes, or points and an envelope.}
+inputs are envelopes, or when one is points and the other an envelope
+or a voxel.}
 
 \item{bounds}{Only when one input is an envelope and the other a voxel. How
 the envelope is placed on the voxel's depth levels: \code{"midpoint"}
@@ -64,8 +65,9 @@ do not overlap. When \code{y} is a 2D footprint or polygons there is no depth
 axis to compare, so the test is only whether both are present.
 \link[=SpatVector3D-class]{SpatVector3D} polygons and points have depths, so they are compared
 as \code{\link[=intersect_3d]{intersect_3d()}} compares them, after being put on the 3D object's
-grid: a cell is \code{TRUE} where a point lies at its nearest level of a voxel,
-or within an envelope's interval.
+grid. A cell is \code{TRUE} where the voxel has a value at the level nearest a
+point's depth, or where a point's depth lies within the envelope's
+interval.
 
 Two \link[=SpatVector3D-class]{SpatVector3D} sets (polygons with polygons, or points with
 polygons) have no grid to answer on, so the answer is a list instead, as

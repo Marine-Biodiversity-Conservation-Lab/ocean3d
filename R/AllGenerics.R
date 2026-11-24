@@ -169,19 +169,23 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'     is nearest the point's depth (a tie goes to the shallower level, as in
 #'     [extract_to_point()]). The level is chosen by depth alone, so a point
 #'     whose nearest level has no value in the voxel shares nothing there.
-#'     The result is a presence voxel on the voxel's levels. Points off the
-#'     grid share nothing. Points' times aren't compared, since a voxel shows
-#'     one time step.}
-#'   \item{An envelope and [SpatVector3D-class] points}{The result is an
-#'     envelope holding, in each cell with a point whose depth lies within
-#'     the cell's interval (both ends included), the shallowest and deepest
-#'     such depth. A lone point gives a zero-thickness interval, so the
+#'     When the voxel's depth edges give uneven slabs, the slab that contains
+#'     a point can belong to another level; the nearest level is used. The
+#'     result is a presence voxel on the voxel's levels, and `bounds` doesn't
+#'     apply. Points off the grid share nothing. Points' times aren't
+#'     compared, since a voxel shows one time step.}
+#'   \item{An envelope and [SpatVector3D-class] points}{In each cell where a
+#'     point's depth lies within the envelope's interval (both ends
+#'     included), the result holds an interval from the shallowest such point
+#'     to the deepest. A lone point gives a zero-thickness interval, so the
 #'     result's [volume()] is 0: points have no volume.}
 #'   \item{[SpatVector3D-class] points and polygons}{A point is inside a
-#'     polygon when its position is within the outline, its depth within
-#'     `depth_min` to `depth_max` and its time within the polygon's time
-#'     interval, all with both ends included (with dates, the interval covers
-#'     all of its end day). A point or polygon without a time matches any
+#'     polygon when [sf::st_intersects()] finds its position in the outline
+#'     (on WGS84 coordinates sf uses the sphere by default, where a point
+#'     exactly on an edge may not count), its depth is within `depth_min` to
+#'     `depth_max` and its time within the polygon's time interval. Depth and
+#'     time include both ends (with dates, the interval covers all of its
+#'     end day). A point or polygon without a time matches any
 #'     time; one side with dates and the other with hours is an error. Each
 #'     matching pair gives one point, numbered, with columns `feature_id_x`
 #'     and `feature_id_y` naming the pair and the inputs' other columns
@@ -219,7 +223,8 @@ setGeneric("volume", function(x, per_cell = FALSE, ...) {
 #'   resolution). netCDF files aren't accepted; load them with terra and
 #'   wrap them with [as_voxel()] first.
 #' @param ... Arguments for the voxel methods. They are an error when both
-#'   inputs are envelopes, or points and an envelope.
+#'   inputs are envelopes, or when one is points and the other an envelope
+#'   or a voxel.
 #' @param bounds Only when one input is an envelope and the other a voxel. How
 #'   the envelope is placed on the voxel's depth levels: `"midpoint"`
 #'   (default) or `"top"`. See [envelope_to_voxel()]. Not used when the voxel
@@ -321,8 +326,9 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' axis to compare, so the test is only whether both are present.
 #' [SpatVector3D-class] polygons and points have depths, so they are compared
 #' as [intersect_3d()] compares them, after being put on the 3D object's
-#' grid: a cell is `TRUE` where a point lies at its nearest level of a voxel,
-#' or within an envelope's interval.
+#' grid. A cell is `TRUE` where the voxel has a value at the level nearest a
+#' point's depth, or where a point's depth lies within the envelope's
+#' interval.
 #'
 #' Two [SpatVector3D-class] sets (polygons with polygons, or points with
 #' polygons) have no grid to answer on, so the answer is a list instead, as
