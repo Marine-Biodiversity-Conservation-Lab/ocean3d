@@ -6,6 +6,7 @@
 \alias{volume,SpatVoxel-method}
 \alias{volume,SpatVector3D-method}
 \alias{volume,SpatRaster-method}
+\alias{volume,SpatProxy-method}
 \title{3D volume of a domain}
 \usage{
 volume(x, per_cell = FALSE, per_level = FALSE, ...)
@@ -17,13 +18,17 @@ volume(x, per_cell = FALSE, per_level = FALSE, ...)
 \S4method{volume}{SpatVector3D}(x, per_cell = FALSE, per_level = FALSE, ...)
 
 \S4method{volume}{SpatRaster}(x, per_cell = FALSE, per_level = FALSE, ...)
+
+\S4method{volume}{SpatProxy}(x, per_cell = FALSE, per_level = FALSE, fun = NULL, ...)
 }
 \arguments{
-\item{x}{A \link[=SpatEnvelope-class]{SpatEnvelope}, a \link[=SpatVoxel-class]{SpatVoxel}, or
-\link[=SpatVector3D-class]{SpatVector3D} polygons. A bare SpatRaster is
+\item{x}{A \link[=SpatEnvelope-class]{SpatEnvelope}, a \link[=SpatVoxel-class]{SpatVoxel},
+\link[=SpatVector3D-class]{SpatVector3D} polygons, or a \link[=SpatProxy-class]{SpatProxy}, which is
+measured step by step. A bare SpatRaster is
 rejected; build one with \code{\link[=as_envelope]{as_envelope()}}, \code{\link[=vect_to_envelope]{vect_to_envelope()}} or
 \code{\link[=as_voxel]{as_voxel()}} first. A netCDF file isn't accepted: describe it with
-\code{\link[=as_proxy]{as_proxy()}} and read one time step with \code{\link[=as_voxel]{as_voxel()}}.}
+\code{\link[=as_proxy]{as_proxy()}} and pass the proxy, or read one time step with
+\code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{per_cell}{\code{FALSE} (default) for the total volume, \code{TRUE} for the
 volume of each cell. Not for \link[=SpatVector3D-class]{SpatVector3D} polygons.}
@@ -31,7 +36,8 @@ volume of each cell. Not for \link[=SpatVector3D-class]{SpatVector3D} polygons.}
 \item{per_level}{SpatVoxel only, with \code{per_cell = TRUE}: \code{TRUE} for the
 volume of each cell \emph{at each depth level}, the weights
 \code{\link[=summarise_3d]{summarise_3d()}} uses. Envelopes and polygons have no levels, so it is
-an error for them.}
+an error for them. It is an error for a \link[=SpatProxy-class]{SpatProxy} too: read a
+time step with \code{\link[=as_voxel]{as_voxel()}} and measure that.}
 
 \item{...}{Arguments for the \link[=SpatVoxel-class]{SpatVoxel} method, which are an error
 for an envelope or polygons.}
@@ -44,6 +50,12 @@ the next level. Under \code{"top"} the deepest level has no next level and
 contributes no volume. Outer edges are clamped to \code{range(depths)} under
 both. Same argument, same meaning, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used
 for a voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
+
+\item{fun}{SpatProxy only. Which values count as occupied, as in
+\code{\link[=occupied]{occupied()}}: \code{NULL} (default) counts every non-\code{NA} value; otherwise a
+function of a layer's values returning \code{TRUE} where the cell is
+occupied, for example \code{function(v) v > 10 & v < 15} for the water
+between 10 and 15 °C.}
 }
 \value{
 With \code{per_cell = FALSE}, a number: the total volume in km³. With
@@ -54,11 +66,21 @@ depth interval, or no occupied level). Its sum is the total. With
 edges of \code{x}, layers \verb{volume_depth=<value>}: the volume of each cell at
 each level in km³, \code{NA} where the level is unoccupied. Summing its
 layers gives the per-cell raster.
+
+For a \link[=SpatProxy-class]{SpatProxy}, one result per time step: with
+\code{per_cell = FALSE} a data frame with columns \code{time} (the step's
+date-time in UTC, or \code{NA} for a one-step climatology or a dataset
+without a time axis) and \code{volume_km3}; with \code{per_cell = TRUE} a
+\code{SpatRaster} with one
+layer per step, named \code{volume}, with the steps' dates in
+\code{\link[terra:time]{terra::time()}}.
 }
 \description{
 Measures the occupied volume of a \link[=SpatEnvelope-class]{SpatEnvelope}, a
 \link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatVector3D-class]{SpatVector3D} polygons, as a total, or cell by
-cell for envelopes and voxels. Envelopes and voxels describe a 3D
+cell for envelopes and voxels. For a \link[=SpatProxy-class]{SpatProxy}, it gives the volume
+of each time step (see the "Memory" and "Overlap through time" sections).
+Envelopes and voxels describe a 3D
 domain over a 2D grid, but they store depth in dual roles, so each
 computes the vertical extent differently:
 }
@@ -104,6 +126,26 @@ the same levels, measure the envelope on them too:
 to \code{\link[=intersect_3d]{intersect_3d()}} and \code{volume()}; otherwise the overlap and the input
 volumes are measured on different slabs and don't add up.
 }
+\section{Memory}{
+
+\code{volume()} on a \link[=SpatProxy-class]{SpatProxy} holds at most one time step in memory.
+A step larger than the read budget (option \code{ocean3d.max_read_mb}, 1024 MB
+by default) is read in groups of depth layers, and their volumes are
+added. A step takes cells x layers x 8 bytes. Each read holds at least one
+depth layer of the whole grid, even when that is larger than the budget.
+Set the option lower on a machine with little memory, or higher for
+faster reads. With \code{per_cell = TRUE}, the result itself holds one layer
+per time step.
+}
+
+\section{Overlap through time}{
+
+\code{intersect_3d()}, \code{intersects_3d()} and \code{mask()} don't take a
+\code{SpatProxy}. To measure the overlap of a time-varying dataset with a
+shape, read each step and intersect it:
+\code{volume(intersect_3d(as_voxel(x, time = i), shape))} for each step \code{i}.
+}
+
 \examples{
 fp <- terra::rast(nrows = 2, ncols = 2, xmin = 0, xmax = 2000,
                   ymin = 0, ymax = 2000,
@@ -142,6 +184,10 @@ terra::values(volume(ov, per_cell = TRUE))
 # pi * 10^2 * 0.05 = 15.7 km³.
 detection <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 35))
 volume(buffer_3d(detection, radius_km = 10, depth_window = 25))
+
+# Through time: the volume of water warmer than 2 °C in each step.
+p <- as_proxy(system.file("extdata", "example_3d.nc", package = "ocean3d"))
+volume(p, fun = function(v) v > 2)
 }
 \seealso{
 \code{\link[=intersect_3d]{intersect_3d()}} for the space two domains share, which \code{volume()}

@@ -543,7 +543,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
                  upper = lat + half[2L], edges = "bounds"),
       depth = list(dim = "depth", centres = d, lower = slabs$lower,
                    upper = slabs$upper,
-                   edges = if (is.null(stored)) "inferred" else "bounds",
+                   # A single level without stored edges has no slab, as
+                   # in a file without depth bounds.
+                   edges = if (!is.null(stored)) "bounds" else
+                     if (length(d) == 1L) "none" else "inferred",
                    storage = "shallow_first"),
       time = if (dated) {
         list(dim = "time", edges = "none", cftime = CFtime::CFtime(
@@ -710,11 +713,16 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # as_voxel(). Each raster's extent comes from the cell edges and its CRS from
 # the proxy; depth goes in terra::depth() with the proxy's depth edges, and
 # the date of the step in terra::time(). One voxel when `time` names one
-# step, a list of voxels for a time window or a shape.
-.proxy_to_voxel <- function(x, time, varname, time_match, max_time_diff) {
+# step, a list of voxels for a time window or a shape. `depth`, a first and
+# last index in storage order, reads only those levels, so volume() can
+# measure a large step in groups of layers; NULL reads them all. Every
+# source, a voxel in memory too, reads a span through the same per-step path,
+# so each group carries the proxy's depth edges.
+.proxy_to_voxel <- function(x, time, varname, time_match, max_time_diff,
+                            depth = NULL) {
   selected <- .proxy_time_step(x, time, time_match, max_time_diff)
   axes <- x@axes
-  if (identical(x@source$type, "voxel")) {
+  if (identical(x@source$type, "voxel") && is.null(depth)) {
     # A voxel already in memory is its own only time step.
     out <- list(x@source$voxel)
   } else {
@@ -723,6 +731,12 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         "Variable `{x@variable$name}` has no depth axis, so it isn't a voxel. ",
         "Read 2D data with terra::rast()."
       ), class = "ocean3d_error_proxy_no_depth", call = NULL)
+    }
+    if (!is.null(depth)) {
+      axes$depth[c("centres", "lower", "upper")] <- lapply(
+        axes$depth[c("centres", "lower", "upper")], `[`,
+        seq(depth[1L], depth[2L])
+      )
     }
     # terra's cells run west to east, then north to south.
     lon <- .regular_extent(axes$lon, "longitude")
@@ -738,6 +752,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     out <- lapply(seq_along(steps), function(i) {
       step <- steps[[i]]
       window <- if (is.null(step)) list() else list(time = c(step, step))
+      window$depth <- depth
       values <- .read_proxy_window(x, window)
       r <- terra::rast(nrows = length(lat_order), ncols = length(lon_order),
                        nlyrs = n_depth, xmin = lon$min, xmax = lon$max,

@@ -305,3 +305,149 @@ test_that("volume() of polygons rejects per_cell and voxel arguments", {
   expect_error(volume(polygons, bounds = "top"), "unused argument",
                class = "ocean3d_error_unused_argument")
 })
+
+# ---- SpatProxy: volume through time -----------------------------------------
+
+test_that("volume() of a proxy gives one row per time step", {
+  # Values 1..24 over 3 x 2 cells, 2 depths, 2 steps; a cutoff leaves some
+  # cells unoccupied at some levels.
+  g <- proxy_and_file()
+  on.exit(unlink(g$file), add = TRUE)
+  p <- g$proxy
+  warm <- function(v) v > 8
+
+  out <- volume(p)
+  expect_s3_class(out, "data.frame")
+  expect_identical(names(out), c("time", "volume_km3"))
+  expect_equal(out$time, p@axes$time$cftime$as_timestamp(asPOSIX = TRUE))
+  expect_equal(out$volume_km3,
+               c(volume(as_voxel(p, time = 1)), volume(as_voxel(p, time = 2))))
+
+  with_fun <- volume(p, fun = warm)
+  expect_equal(with_fun$volume_km3, vapply(1:2, function(i) {
+    volume(occupied(as_voxel(p, time = i), warm))
+  }, numeric(1)))
+  expect_lt(with_fun$volume_km3[1L], out$volume_km3[1L])
+
+  # Per cell: one layer per step, dated.
+  cells <- volume(p, per_cell = TRUE, fun = warm)
+  expect_s4_class(cells, "SpatRaster")
+  expect_false(methods::is(cells, "SpatVoxel"))
+  expect_identical(names(cells), c("volume", "volume"))
+  expect_equal(terra::time(cells), out$time)
+  for (i in 1:2) {
+    expect_equal(
+      terra::values(cells[[i]]),
+      terra::values(volume(occupied(as_voxel(p, time = i), warm),
+                           per_cell = TRUE))
+    )
+  }
+})
+
+test_that("volume() of a proxy without dates gives one undated row", {
+  flat <- proxy_and_file(time = NULL)
+  on.exit(unlink(flat$file), add = TRUE)
+  out <- volume(flat$proxy)
+  expect_identical(nrow(out), 1L)
+  expect_s3_class(out$time, "POSIXct")
+  expect_true(is.na(out$time))
+  expect_equal(out$volume_km3, volume(as_voxel(flat$proxy)))
+  expect_false(terra::timeInfo(volume(flat$proxy, per_cell = TRUE))$time)
+
+  clim <- proxy_and_file(time = 6,
+                         time_units = "months since 0000-01-01 00:00:00")
+  on.exit(unlink(clim$file), add = TRUE)
+  expect_true(is.na(volume(clim$proxy)$time))
+})
+
+test_that("reading a step in groups of depth layers gives the same volume", {
+  # Four levels, with a gap in the data so some groups have no occupied level
+  # in some cells.
+  values <- seq_len(3 * 2 * 4 * 2)
+  values[c(1, 7, 13, 19, 2, 8)] <- NA
+  g <- proxy_and_file(depth = c(5, 15, 25, 35), values = values)
+  on.exit(unlink(g$file), add = TRUE)
+  whole <- volume(g$proxy)
+  whole_cells <- volume(g$proxy, per_cell = TRUE)
+
+  # A budget below one layer's size reads one layer at a time.
+  rlang::local_options(ocean3d.max_read_mb = 1e-9)
+  expect_equal(volume(g$proxy), whole)
+  expect_equal(terra::values(volume(g$proxy, per_cell = TRUE)),
+               terra::values(whole_cells))
+  # A voxel in memory without stored edges keeps the proxy's halfway slabs
+  # in every group, so one level at a time gives the whole volume.
+  v <- as_voxel(terra::rast(nrows = 2, ncols = 2, nlyrs = 4, vals = 1),
+                depths = c(5, 15, 25, 35))
+  rlang::local_options(ocean3d.max_read_mb = 1024)
+  whole <- volume(as_proxy(v))$volume_km3
+  whole_cells <- terra::values(volume(as_proxy(v), per_cell = TRUE))
+  expect_gt(whole, 0)
+  rlang::local_options(ocean3d.max_read_mb = 1e-9)
+  expect_equal(volume(as_proxy(v))$volume_km3, whole)
+  expect_equal(terra::values(volume(as_proxy(v), per_cell = TRUE)),
+               whole_cells)
+})
+
+test_that("a one-level voxel without edges measures no volume as a proxy", {
+  # A single level without stored edges has no slab, as for the voxel.
+  v <- as_voxel(terra::rast(nrows = 2, ncols = 2, vals = 1), depths = 5)
+  expect_identical(as_proxy(v)@axes$depth$edges, "none")
+  expect_equal(volume(as_proxy(v))$volume_km3, 0)
+  expect_equal(volume(as_proxy(v))$volume_km3, volume(v))
+})
+
+test_that("a proxy cropped across the antimeridian is measured in groups", {
+  # A -180 to 180 grid cropped to the cells either side of 180 degrees: the
+  # depth groups go through the same reader, which joins the two ends.
+  globe <- make_grid_file(lon = seq(-179.5, 179.5, by = 1),
+                          lat = c(10.5, 11.5), depth = c(5, 15, 25))
+  on.exit(unlink(globe), add = TRUE)
+  small <- terra::crop(as_proxy(globe, var = "temp"),
+                       terra::ext(179.2, 180.8, 10, 12))
+  expect_equal(small@axes$lon$centres, c(179.5, 180.5))
+  whole <- volume(small, per_cell = TRUE)
+  expect_equal(terra::values(whole[[1]]),
+               terra::values(volume(as_voxel(small, time = 1),
+                                    per_cell = TRUE)))
+  rlang::local_options(ocean3d.max_read_mb = 1e-9)
+  expect_equal(terra::values(volume(small, per_cell = TRUE)),
+               terra::values(whole))
+  expect_equal(volume(small)$volume_km3,
+               vapply(1:2, function(i) volume(as_voxel(small, time = i)), 0))
+})
+
+test_that("volume() of a series measures every file's steps", {
+  f1 <- make_grid_file(time = c(0, 1))
+  f2 <- make_grid_file(time = c(2, 3), values = 2 * seq_len(24))
+  on.exit(unlink(c(f1, f2)), add = TRUE)
+  p <- as_proxy(c(f1, f2), var = "temp")
+  out <- volume(p, fun = function(v) v > 30)
+  expect_identical(nrow(out), 4L)
+  expect_equal(out$volume_km3, vapply(1:4, function(i) {
+    volume(occupied(as_voxel(p, time = i), function(v) v > 30))
+  }, numeric(1)))
+  expect_equal(out$volume_km3[1:2], c(0, 0))
+})
+
+test_that("volume() of a proxy rejects what it can't measure", {
+  g <- proxy_and_file()
+  on.exit(unlink(g$file), add = TRUE)
+  expect_error(volume(g$proxy, bounds = "top"), "unused argument",
+               class = "ocean3d_error_unused_argument")
+  expect_error(volume(g$proxy, per_cell = TRUE, per_level = TRUE),
+               "measured one time step at a time",
+               class = "ocean3d_error_volume_per_level")
+  expect_error(volume(g$proxy, fun = "warm"), "must be NULL or a function",
+               class = "ocean3d_error_volume_fun")
+  for (budget in list(NA, "512", -1, c(1, 2))) {
+    rlang::local_options(ocean3d.max_read_mb = budget)
+    expect_error(volume(g$proxy), "`ocean3d.max_read_mb` must be one",
+                 class = "ocean3d_error_read_budget")
+  }
+  rlang::local_options(ocean3d.max_read_mb = NULL)
+  no_depth <- proxy_and_file(depth = NULL)
+  on.exit(unlink(no_depth$file), add = TRUE)
+  expect_error(volume(no_depth$proxy), "no depth axis",
+               class = "ocean3d_error_proxy_no_depth")
+})

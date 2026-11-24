@@ -11,7 +11,9 @@ NULL
 #'
 #' Measures the occupied volume of a [SpatEnvelope-class], a
 #' [SpatVoxel-class] or [SpatVector3D-class] polygons, as a total, or cell by
-#' cell for envelopes and voxels. Envelopes and voxels describe a 3D
+#' cell for envelopes and voxels. For a [SpatProxy-class], it gives the volume
+#' of each time step (see the "Memory" and "Overlap through time" sections).
+#' Envelopes and voxels describe a 3D
 #' domain over a 2D grid, but they store depth in dual roles, so each
 #' computes the vertical extent differently:
 #'
@@ -56,17 +58,20 @@ NULL
 #' to [intersect_3d()] and `volume()`; otherwise the overlap and the input
 #' volumes are measured on different slabs and don't add up.
 #'
-#' @param x A [SpatEnvelope-class], a [SpatVoxel-class], or
-#'   [SpatVector3D-class] polygons. A bare SpatRaster is
+#' @param x A [SpatEnvelope-class], a [SpatVoxel-class],
+#'   [SpatVector3D-class] polygons, or a [SpatProxy-class], which is
+#'   measured step by step. A bare SpatRaster is
 #'   rejected; build one with [as_envelope()], [vect_to_envelope()] or
 #'   [as_voxel()] first. A netCDF file isn't accepted: describe it with
-#'   [as_proxy()] and read one time step with [as_voxel()].
+#'   [as_proxy()] and pass the proxy, or read one time step with
+#'   [as_voxel()].
 #' @param per_cell `FALSE` (default) for the total volume, `TRUE` for the
 #'   volume of each cell. Not for [SpatVector3D-class] polygons.
 #' @param per_level SpatVoxel only, with `per_cell = TRUE`: `TRUE` for the
 #'   volume of each cell *at each depth level*, the weights
 #'   [summarise_3d()] uses. Envelopes and polygons have no levels, so it is
-#'   an error for them.
+#'   an error for them. It is an error for a [SpatProxy-class] too: read a
+#'   time step with [as_voxel()] and measure that.
 #' @param ... Arguments for the [SpatVoxel-class] method, which are an error
 #'   for an envelope or polygons.
 #' @param bounds SpatVoxel only. What each depth level stands for vertically:
@@ -86,6 +91,14 @@ NULL
 #'   edges of `x`, layers `volume_depth=<value>`: the volume of each cell at
 #'   each level in km³, `NA` where the level is unoccupied. Summing its
 #'   layers gives the per-cell raster.
+#'
+#'   For a [SpatProxy-class], one result per time step: with
+#'   `per_cell = FALSE` a data frame with columns `time` (the step's
+#'   date-time in UTC, or `NA` for a one-step climatology or a dataset
+#'   without a time axis) and `volume_km3`; with `per_cell = TRUE` a
+#'   `SpatRaster` with one
+#'   layer per step, named `volume`, with the steps' dates in
+#'   [terra::time()].
 #'
 #' @seealso [intersect_3d()] for the space two domains share, which `volume()`
 #'   then measures; [intersects_3d()] for whether two domains share any depth
@@ -130,6 +143,10 @@ NULL
 #' # pi * 10^2 * 0.05 = 15.7 km³.
 #' detection <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 35))
 #' volume(buffer_3d(detection, radius_km = 10, depth_window = 25))
+#'
+#' # Through time: the volume of water warmer than 2 °C in each step.
+#' p <- as_proxy(system.file("extdata", "example_3d.nc", package = "ocean3d"))
+#' volume(p, fun = function(v) v > 2)
 #' @export
 setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
   # Checked once here, before a method computes anything.
