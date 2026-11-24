@@ -6,9 +6,12 @@ a
 [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
 or
 [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
-polygons, as a total, or cell by cell for envelopes and voxels.
-Envelopes and voxels describe a 3D domain over a 2D grid, but they store
-depth in dual roles, so each computes the vertical extent differently:
+polygons, as a total, or cell by cell for envelopes and voxels. For a
+[SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md),
+it gives the volume of each time step (see the "Memory" and "Overlap
+through time" sections). Envelopes and voxels describe a 3D domain over
+a 2D grid, but they store depth in dual roles, so each computes the
+vertical extent differently:
 
 ## Usage
 
@@ -26,6 +29,9 @@ volume(x, per_cell = FALSE, per_level = FALSE, ...)
 
 # S4 method for class 'SpatRaster'
 volume(x, per_cell = FALSE, per_level = FALSE, ...)
+
+# S4 method for class 'SpatProxy'
+volume(x, per_cell = FALSE, per_level = FALSE, fun = NULL, ...)
 ```
 
 ## Arguments
@@ -36,16 +42,18 @@ volume(x, per_cell = FALSE, per_level = FALSE, ...)
   [SpatEnvelope](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatEnvelope-class.md),
   a
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md),
-  or
   [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
-  polygons. A bare SpatRaster is rejected; build one with
+  polygons, or a
+  [SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md),
+  which is measured step by step. A bare SpatRaster is rejected; build
+  one with
   [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md),
   [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
   or
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   first. A netCDF file isn't accepted: describe it with
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
-  and read one time step with
+  and pass the proxy, or read one time step with
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
 
 - per_cell:
@@ -61,7 +69,11 @@ volume(x, per_cell = FALSE, per_level = FALSE, ...)
   cell *at each depth level*, the weights
   [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
   uses. Envelopes and polygons have no levels, so it is an error for
-  them.
+  them. It is an error for a
+  [SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+  too: read a time step with
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  and measure that.
 
 - ...:
 
@@ -82,6 +94,15 @@ volume(x, per_cell = FALSE, per_level = FALSE, ...)
   Not used for a voxel that carries its own depth edges (see
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)).
 
+- fun:
+
+  SpatProxy only. Which values count as occupied, as in
+  [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md):
+  `NULL` (default) counts every non-`NA` value; otherwise a function of
+  a layer's values returning `TRUE` where the cell is occupied, for
+  example `function(v) v > 10 & v < 15` for the water between 10 and 15
+  °C.
+
 ## Value
 
 With `per_cell = FALSE`, a number: the total volume in km³. With
@@ -93,6 +114,15 @@ grid of `x`: the volume of each cell in km³, `NA` where `x` is absent
 on the depth levels and edges of `x`, layers `volume_depth=<value>`: the
 volume of each cell at each level in km³, `NA` where the level is
 unoccupied. Summing its layers gives the per-cell raster.
+
+For a
+[SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md),
+one result per time step: with `per_cell = FALSE` a data frame with
+columns `time` (the step's date-time in UTC, or `NA` for a one-step
+climatology or a dataset without a time axis) and `volume_km3`; with
+`per_cell = TRUE` a `SpatRaster` with one layer per step, named
+`volume`, with the steps' dates in
+[`terra::time()`](https://rspatial.github.io/terra/reference/time.html).
 
 ## Details
 
@@ -150,6 +180,26 @@ envelope on them too:
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 and `volume()`; otherwise the overlap and the input volumes are measured
 on different slabs and don't add up.
+
+## Memory
+
+`volume()` on a
+[SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+holds at most one time step in memory. A step larger than the read
+budget (option `ocean3d.max_read_mb`, 1024 MB by default) is read in
+groups of depth layers, and their volumes are added. A step takes cells
+x layers x 8 bytes. Each read holds at least one depth layer of the
+whole grid, even when that is larger than the budget. Set the option
+lower on a machine with little memory, or higher for faster reads. With
+`per_cell = TRUE`, the result itself holds one layer per time step.
+
+## Overlap through time
+
+[`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+[`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+and `mask()` don't take a `SpatProxy`. To measure the overlap of a
+time-varying dataset with a shape, read each step and intersect it:
+`volume(intersect_3d(as_voxel(x, time = i), shape))` for each step `i`.
 
 ## See also
 
@@ -221,4 +271,12 @@ terra::values(volume(ov, per_cell = TRUE))
 detection <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 35))
 volume(buffer_3d(detection, radius_km = 10, depth_window = 25))
 #> [1] 15.70776
+
+# Through time: the volume of water warmer than 2 °C in each step.
+p <- as_proxy(system.file("extdata", "example_3d.nc", package = "ocean3d"))
+volume(p, fun = function(v) v > 2)
+#>         time volume_km3
+#> 1 2020-01-01   4706.212
+#> 2 2020-01-03   4706.212
+#> 3 2020-01-06   4706.212
 ```

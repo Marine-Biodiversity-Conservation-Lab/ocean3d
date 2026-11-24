@@ -331,8 +331,16 @@ shapes, the point methods and volume through time aren’t built yet (see
     object (the single object that will describe gridded data; see
     [Direction](#direction-a-hybrid)). Volume, overlap and profiles work
     through time (for example seasonal habitat volume, or overlap by
-    month), not only on a static voxel. Volume through time is planned
-    in \#159.
+    month), not only on a static voxel. Volume through time is done
+    (#159):
+    [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+    on a `SpatProxy` measures each time step. Overlap through time is
+    met one step at a time with
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+    and
+    [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
+    a documented pattern; the query functions have no `SpatProxy`
+    methods.
 2.  **Lazy reads for data larger than memory.** Opening a dataset
     doesn’t read its values, every operation reads only the slices it
     needs, and heavy processing runs per time step, or per tile within a
@@ -498,9 +506,13 @@ Jay Matsushiba on 2 November 2026 (#112).
   1/12° product over 50 levels is about 3.5 GB as doubles). Read the
   slice through the core object, process it with terra, and combine the
   results across tiles and time; volume and overlap add up across them.
-  For now the voxel builder (below) reads a whole time step at once;
-  reading groups of depth layers is planned with volume through time
-  (#159).
+  The voxel builder (below) reads a whole time step at once.
+  [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+  on a `SpatProxy` reads a step larger than the read budget (option
+  `ocean3d.max_read_mb`) in groups of depth layers and adds their
+  volumes (#159). The query functions don’t take a proxy, so overlap
+  through time is measured one step at a time with
+  `volume(intersect_3d(as_voxel(proxy, time = i), shape))`.
 - **`SpatVoxel` / `SpatEnvelope`:** stay terra classes and become views
   of one time step of the core object, so the existing terra-based tools
   keep working on a slice.
@@ -1002,9 +1014,9 @@ of 23 November 2026.
     [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
     now do. Split out of \#113: volume through time, including reads in
     groups of depth layers when one time step is too large for memory
-    (#159); remote Zarr (#151); extraction on the core object (#116).
-    After the core object: the utility that writes a time-sorted copy of
-    a file (see Direction, Time decoding).
+    (#159, *done* in \#171); remote Zarr (#151); extraction on the core
+    object (#116). After the core object: the utility that writes a
+    time-sorted copy of a file (see Direction, Time decoding).
 6.  **Add `SpatVector3D`** with `geomtype()`,
     [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
     and sf input: points and lines with per-vertex depth and time, and
