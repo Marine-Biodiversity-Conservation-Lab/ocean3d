@@ -167,9 +167,11 @@ Input: `SpatRaster` layers, tables of points or lines, and polygons (`sf`,
 Input: `SpatVoxel` or `SpatEnvelope`, compared with another 3D object,
 `SpatVector3D` polygons, or a 2D object: a `SpatRaster` footprint or
 polygons (`SpatVector`, `sf`). A 2D object restricts the domain
-horizontally without restricting the depths. Polygons compared with an
-envelope or voxel are first put on its grid, as `vector3d_to_envelope()`
-does.
+horizontally without restricting the depths. `SpatVector3D` polygons
+compared with an envelope are first put on its grid, as
+`vector3d_to_envelope()` does. With a voxel, they are put on its depth
+levels one level at a time, as `vector3d_to_voxel()` does, so a depth gap
+between two polygons over one cell stays empty.
 
 Two sets of `SpatVector3D` polygons can also be compared: `intersect_3d()`
 returns the polygons they share in outline, depth and time, and

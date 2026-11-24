@@ -2,6 +2,22 @@
 
 ## Breaking changes
 
+`intersect_3d()`, `intersects_3d()` and `mask()` between `SpatVector3D`
+polygons and a `SpatVoxel` now put the polygons on the voxel's levels with
+`vector3d_to_voxel()`, one level at a time, instead of as an envelope that
+was then placed on the levels (#115). Results differ only where two
+polygons cover one cell with a gap between their depth ranges: the levels
+in the gap used to count as covered and now don't, so an overlap or a mask
+no longer includes the water between two depth bands. This holds whether
+or not the voxel has depth edges. Between polygons and a `SpatEnvelope`,
+nothing changes: the polygons still become an envelope, which fills that
+gap, because an envelope holds one depth range per cell. To get the old
+result with a voxel, convert the polygons first, for example
+`intersect_3d(vector3d_to_envelope(polygons, voxel), voxel, bounds = bounds)`,
+and the same for `intersects_3d()` and `mask()`.
+`mask(voxel, polygons)` gains a `bounds` argument, as `intersect_3d()` and
+`intersects_3d()` have, for a voxel without depth edges.
+
 `calc_volume_overlap()` is removed (#150). It returned a nine-layer
 `SpatRaster` that the other 3D functions could only use as a flat 2D layer,
 not as the 3D space it described.
@@ -200,6 +216,11 @@ Pass each depth once, for example with `unique(depths)`.
   = TRUE)` returns a `SpatVoxel` with the volume of each cell at each depth
   level, in km³, `NA` where the level is unoccupied. Its layers sum to
   `volume(v, per_cell = TRUE)`.
+* Printing a `SpatVoxel` or `SpatEnvelope` now shows its class and its 3D
+  information (#61). For a voxel: the depth levels, whether it carries depth
+  edges, and its time. For an envelope: the depth range and how many cells
+  it occupies. terra's description of the grid follows. Before, both printed
+  as a plain `SpatRaster`.
 * `intersect_3d()`, `intersects_3d()` and `mask()` take `SpatVector3D`
   points (#115). A point covers one cell and one depth level. With a voxel,
   the result is a presence voxel marking, for each point, the cell that
@@ -246,7 +267,10 @@ Pass each depth once, for example with `unique(depths)`.
   `as_voxel()` then reads only those cells from the file (#113). An area in
   another CRS is projected first, and an extent in the other longitude
   convention (0 to 360 or -180 to 180) finds its cells. An area that crosses
-  the edge of the grid's longitudes stops; crop each side separately.
+  the edge of the grid's longitudes, such as the antimeridian of a -180 to
+  180 grid, is read from both ends of the grid, for files, series and
+  voxels in memory: the cropped grid runs on across the edge (for example
+  179 to 181 degrees), so `as_voxel()` gives one voxel (#115).
 
   `SpatProxy`, `as_proxy()`, cropping a `SpatProxy` and reading one with
   `as_voxel()` are experimental and may change without notice while the core
@@ -268,6 +292,13 @@ Pass each depth once, for example with `unique(depths)`.
   the polygons covering it, so polygons from 0 to 50 m and from 200 to
   300 m give 0 to 300 m. Cells where top equals bottom are dropped, and so
   are polygon times, with a message (#114).
+* New `vector3d_to_voxel()` puts `SpatVector3D` polygons onto a voxel's
+  grid and depth levels as a presence `SpatVoxel`, one level at a time, so a
+  depth gap between two polygons over one cell stays empty: polygons from 0
+  to 50 m and from 200 to 300 m cover the levels in those ranges and not the
+  ones between. The slabs come from the voxel's depth edges, or from
+  `bounds` when it has none. Polygons with no thickness cover nothing, and
+  polygon times are dropped with a message (#115).
 * `volume()` measures `SpatVector3D` polygons: the sum of each polygon's
   area times its depth range, in km³. Space where polygons overlap is
   counted once for each polygon, so the total isn't the volume of their
@@ -286,6 +317,15 @@ Pass each depth once, for example with `unique(depths)`.
 * `intersects_3d()` of two sets of `SpatVector3D` polygons gives, for each
   polygon of `x`, the feature IDs of the polygons of `y` it shares 3D space
   with, as a list named by the IDs of `x` (#115).
+* A `SpatVector3D` can be subset by feature with `x[i]`, by position,
+  logical vector or feature ID, keeping the IDs and other columns, so a
+  loop can take one shape at a time. `terra::ext()` gives its horizontal
+  extent and `terra::crs()` its CRS (WGS84 for every `SpatVector3D`), so
+  `terra::crop()` of a `SpatProxy` takes a `SpatVector3D`, such as a
+  buffer from `buffer_3d()`, as the area to read. The extent stays
+  continuous across the antimeridian (a line from 179 to -179 degrees has
+  an extent from 179 to 181), and a polygon around a pole covers every
+  longitude (#115).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`, and read them with the new

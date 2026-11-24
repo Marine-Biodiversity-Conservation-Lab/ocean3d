@@ -64,11 +64,12 @@ wrap them with \code{\link[=as_voxel]{as_voxel()}} first.}
 inputs are envelopes, or when one is points and the other an envelope
 or a voxel.}
 
-\item{bounds}{Only when one input is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: \code{"midpoint"}
-(default) or \code{"top"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel
-carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure the
-result, pass the same \code{bounds} to \code{\link[=volume]{volume()}}.}
+\item{bounds}{Only when one input is a voxel and the other an envelope or
+\link[=SpatVector3D-class]{SpatVector3D} polygons. How the envelope or polygons are placed
+on the voxel's depth levels: \code{"midpoint"} (default) or \code{"top"}. See
+\code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel carries its own depth
+edges (see \link[=SpatVoxel-class]{SpatVoxel}). To measure the result, pass the same
+\code{bounds} to \code{\link[=volume]{volume()}}.}
 }
 \value{
 \link[=SpatVector3D-class]{SpatVector3D} polygons when both inputs are polygons, and
@@ -105,14 +106,21 @@ must have one layer and be on the same grid.}
 \code{sfc} object. The polygons are rasterised onto the 3D object's grid. A
 cell is inside when a polygon touches it. Polygons in another CRS are
 projected first.}
-\item{An envelope or voxel and \link[=SpatVector3D-class]{SpatVector3D} polygons}{The
-polygons are first put on the envelope's or voxel's grid with
-\code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then compared as an envelope. Each cell a
-polygon touches gets its depth range; where polygons overlap, a cell
-gets the shallowest top and the deepest bottom, so a depth gap between
-two polygons over one cell is filled. The polygons' time intervals are
-dropped, with a message. Polygons that miss the grid, or a set with no
-polygons, give an empty result.}
+\item{An envelope and \link[=SpatVector3D-class]{SpatVector3D} polygons}{The polygons are
+first put on the envelope's grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then
+compared as an envelope. Each cell a polygon touches gets its depth
+range; where polygons overlap, a cell gets the shallowest top and the
+deepest bottom, so a depth gap between two polygons over one cell is
+filled.}
+\item{A voxel and \link[=SpatVector3D-class]{SpatVector3D} polygons}{The polygons are first
+put on the voxel's grid and depth levels with \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}},
+one level at a time, then compared as a voxel. A depth gap between two
+polygons over one cell stays empty. When the voxel has no depth edges,
+you set each level's slab with \code{bounds}, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}.}
+\item{An envelope or voxel and \link[=SpatVector3D-class]{SpatVector3D} polygons, either
+way}{The polygons' time intervals are dropped, with a message.
+Polygons that miss the grid, or a set with no polygons, give an empty
+result.}
 \item{A voxel and \link[=SpatVector3D-class]{SpatVector3D} points}{A point covers one cell
 and one depth level: the cell that holds it and the level whose depth
 is nearest the point's depth (a tie goes to the shallower level, as in

@@ -184,6 +184,15 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #' pts <- as_vector3d(obs)
 #' geomtype(pts)
 #' pts
+#'
+#' # One feature at a time, by position or ID, as in a loop over shapes.
+#' pts[2]
+#' as.data.frame(pts["1"])
+#'
+#' # The horizontal extent and CRS let terra functions take the shape as an
+#' # area, for example crop() of a SpatProxy.
+#' terra::ext(pts)
+#' terra::crs(pts, describe = TRUE)$name
 #' @export
 setClass("SpatVector3D", slots = c(
   type = "character",

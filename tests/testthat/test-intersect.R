@@ -644,6 +644,51 @@ test_that("intersect_3d() of polygons and a voxel uses the voxel's levels", {
   expect_s4_class(intersect_3d(voxel, polygons), "SpatVoxel")
 })
 
+test_that("queries with a voxel keep the depth gap between polygons", {
+  # Two bands over the polygon's cells, 0-50 m and 200-300 m, on levels
+  # whose midpoint slabs are 0-50, 50-150, 150-250 and 250-300 m: the 100 m
+  # level lies between them.
+  bands <- rbind(make_polygon(), make_polygon())
+  bands$top <- c(0, 200)
+  bands$bottom <- c(50, 300)
+  bands <- as_vector3d(bands, depth_min = "top", depth_max = "bottom")
+  layers <- lapply(1:4, function(i) make_template(i))
+  voxel <- as_voxel(terra::rast(layers), depths = c(0, 100, 200, 300),
+                    varname = "temp")
+
+  on_levels <- vector3d_to_voxel(bands, voxel)
+  for (shared in list(intersect_3d(bands, voxel),
+                      intersect_3d(voxel, bands))) {
+    expect_identical(terra::values(shared), terra::values(on_levels))
+  }
+  masked <- terra::values(mask(voxel, bands))
+  expect_true(all(masked[inside(), c(1, 3, 4)] == rep(c(1, 3, 4), each = 9)))
+  expect_true(all(is.na(masked[inside(), 2])))
+  # The envelope route fills the gap, so a voxel masked by the envelope keeps
+  # the 100 m level.
+  filled <- terra::values(mask(voxel, vector3d_to_envelope(bands, voxel)))
+  expect_true(all(filled[inside(), 2] == 2))
+
+  # `bounds` reaches the placement: under "top" the slabs are 0-100,
+  # 100-200, 200-300 and nothing, so the 300 m level is empty and the 100 m
+  # level is covered by neither band.
+  top <- terra::values(intersect_3d(bands, voxel, bounds = "top"))
+  expect_true(all(top[inside(), c(1, 3)] == 1))
+  expect_true(all(is.na(top[inside(), c(2, 4)])))
+  expect_identical(terra::values(intersects_3d(bands, voxel, bounds = "top")),
+                   terra::values(intersects_3d(voxel, bands, bounds = "top")))
+  expect_true(all(terra::values(mask(voxel, bands, bounds = "top"))[
+    inside(), c(2, 4)
+  ] |> is.na()))
+
+  # Without a voxel there are no levels to place, so `bounds` is an error,
+  # as for two envelopes.
+  for (x in list(envelope_50_200(), make_template(1))) {
+    expect_error(mask(x, bands, bounds = "top"), "unused argument",
+                 class = "ocean3d_error_unused_argument")
+  }
+})
+
 test_that("intersects_3d() of polygons tests depth overlap per cell", {
   deep <- as_envelope(make_template(1), depth_min = 300, depth_max = 400)
   cases <- list(

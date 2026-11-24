@@ -23,7 +23,7 @@
 
 \S4method{mask}{SpatRaster,SpatVoxel}(x, mask, ...)
 
-\S4method{mask}{SpatRaster,SpatVector3D}(x, mask, ...)
+\S4method{mask}{SpatRaster,SpatVector3D}(x, mask, bounds = c("midpoint", "top"), ...)
 }
 \arguments{
 \item{x}{The raster whose values are kept: a \link[=SpatVoxel-class]{SpatVoxel}, a
@@ -35,10 +35,11 @@ accepted: describe it with \code{\link[=as_proxy]{as_proxy()}} and read one time
 \link[=SpatVoxel-class]{SpatVoxel} on the same grid as \code{x}, or \link[=SpatVector3D-class]{SpatVector3D}
 polygons or points, which are put on that grid.}
 
-\item{bounds}{Only when one side is an envelope and the other a voxel. How
-the envelope is placed on the voxel's depth levels: \code{"midpoint"}
-(default) or \code{"top"}. See \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel
-carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
+\item{bounds}{Only when \code{x} is a voxel and \code{mask} an envelope or
+\link[=SpatVector3D-class]{SpatVector3D} polygons. How the envelope or polygons are placed
+on the voxel's depth levels: \code{"midpoint"} (default) or \code{"top"}. See
+\code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used when the voxel carries its own depth
+edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 
 \item{...}{Passed on to \code{\link[terra:mask]{terra::mask()}}. For example, \code{inverse = TRUE}
 keeps the values \emph{outside} the domain instead.}
@@ -72,12 +73,19 @@ interval is kept whole. To narrow the interval instead, use
 \item{plain \code{SpatRaster} masked by an envelope or a voxel}{A cell is kept
 where the mask domain is present at any depth. Without this method
 terra would read the mask's first layer only.}
-\item{anything masked by \link[=SpatVector3D-class]{SpatVector3D} polygons}{The polygons
-are put on the grid of \code{x} with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then used as
-an envelope mask as above. A voxel keeps its values in the cells and
-levels the polygons reach. Where polygons overlap, a cell gets the
-shallowest top and the deepest bottom, so a depth gap between them is
-kept too. The time intervals are dropped, with a message.}
+\item{voxel masked by \link[=SpatVector3D-class]{SpatVector3D} polygons}{The polygons are
+put on the voxel's grid and levels with \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}}, then
+used as a voxel mask as above: the voxel keeps its values in the cells
+and levels the polygons reach, and a depth gap between polygons over
+one cell stays empty. When the voxel has no depth edges, you set each
+level's slab with \code{bounds}, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. The time
+intervals are dropped, with a message.}
+\item{envelope or plain \code{SpatRaster} masked by \link[=SpatVector3D-class]{SpatVector3D}
+polygons}{The polygons are put on the grid of \code{x} with
+\code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}, then used as an envelope mask as above. Where
+polygons overlap, a cell gets the shallowest top and the deepest
+bottom, so a depth gap between them is filled. The time intervals are
+dropped, with a message.}
 \item{anything masked by \link[=SpatVector3D-class]{SpatVector3D} points}{A point covers
 one cell and one depth level, as in \code{\link[=intersect_3d]{intersect_3d()}}. A voxel keeps
 its value in each point's cell at the level nearest the point's depth
