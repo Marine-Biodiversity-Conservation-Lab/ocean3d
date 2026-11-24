@@ -11,8 +11,8 @@ NULL
 #'
 #' Measures the occupied volume of a [SpatEnvelope-class], a
 #' [SpatVoxel-class] or [SpatVector3D-class] polygons, as a total, or cell by
-#' cell for envelopes and voxels. A [SpatProxy-class] is measured one time
-#' step at a time, giving the volume of each step (see the sections below).
+#' cell for envelopes and voxels. For a [SpatProxy-class], it gives the volume
+#' of each time step (see the "Memory" and "Overlap through time" sections).
 #' Envelopes and voxels describe a 3D
 #' domain over a 2D grid, but they store depth in dual roles, so each
 #' computes the vertical extent differently:
@@ -85,8 +85,9 @@ NULL
 #'
 #'   For a [SpatProxy-class], one result per time step: with
 #'   `per_cell = FALSE` a data frame with columns `time` (the step's
-#'   date-time in UTC, or `NA` for a climatology or a dataset without a time
-#'   axis) and `volume_km3`; with `per_cell = TRUE` a `SpatRaster` with one
+#'   date-time in UTC, or `NA` for a one-step climatology or a dataset
+#'   without a time axis) and `volume_km3`; with `per_cell = TRUE` a
+#'   `SpatRaster` with one
 #'   layer per step, named `volume`, with the steps' dates in
 #'   [terra::time()].
 #'
@@ -131,7 +132,7 @@ NULL
 #' detection <- as_vector3d(data.frame(lon = 150, lat = -20, depth = 35))
 #' volume(buffer_3d(detection, radius_km = 10, depth_window = 25))
 #'
-#' # Through time: each step of a dataset, here the water warmer than 2.
+#' # Through time: the volume of water warmer than 2 °C in each step.
 #' p <- as_proxy(system.file("extdata", "example_3d.nc", package = "ocean3d"))
 #' volume(p, fun = function(v) v > 2)
 #' @export
