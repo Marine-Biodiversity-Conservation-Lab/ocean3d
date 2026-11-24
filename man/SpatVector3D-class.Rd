@@ -50,10 +50,14 @@ kept.}
 which can be none.
 
 \code{ext()}: the features' horizontal extent as a \link[terra:SpatExtent]{terra::SpatExtent}
-in longitude and latitude. A shape that crosses the antimeridian spans
--180 to 180, so a \code{\link[terra:crop]{terra::crop()}} with it keeps every longitude: crop
-each side separately. A \code{SpatVector3D} with no features has no extent,
-and \code{ext()} stops.
+in longitude and latitude: the shortest range of longitudes that covers
+every feature, going either way round the globe. A shape that crosses
+the antimeridian keeps its extent across it, with \code{xmax} past 180 (for
+example 179 to 181), so a \code{\link[terra:crop]{terra::crop()}} with it reads only the cells
+near the antimeridian. A polygon around a pole covers every longitude,
+from -180 to 180, and reaches the pole. Lines go the short way between
+vertices, as in \code{\link[=buffer_3d]{buffer_3d()}}. A \code{SpatVector3D} with no features has no
+extent, and \code{ext()} stops.
 
 \code{crs()}: WGS84 (EPSG:4326), the CRS of every \code{SpatVector3D}, in
 the form chosen with \code{proj}, \code{describe} or \code{parse}.

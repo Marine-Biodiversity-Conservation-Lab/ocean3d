@@ -436,6 +436,33 @@ test_that("ext() and crs() give the horizontal extent in WGS84", {
                class = "ocean3d_error_vector3d")
 })
 
+test_that("ext() stays continuous across the antimeridian and round a pole", {
+  lon_range <- function(x) as.vector(terra::ext(x))[c("xmin", "xmax")]
+  # A line from 179 to -179 goes the short way, through 180.
+  seam <- as_vector3d(data.frame(id = "A", lon = c(179, -179), lat = 0,
+                                 depth = 10), type = "lines", id = "id")
+  expect_equal(lon_range(seam), c(xmin = 179, xmax = 181))
+  # A buffer split at the antimeridian, and points on either side of it.
+  buffer <- buffer_3d(seam, radius_km = 20, depth_window = 5)
+  got <- lon_range(buffer)
+  expect_true(got[["xmin"]] > 178.7 && got[["xmin"]] < 179 &&
+                got[["xmax"]] > 181 && got[["xmax"]] < 181.3)
+  points <- as_vector3d(data.frame(lon = c(170, -170, 175), lat = 0,
+                                   depth = 10))
+  expect_equal(lon_range(points), c(xmin = 170, xmax = 190))
+  # Features that leave no gap round the globe cover every longitude.
+  spread <- as_vector3d(data.frame(id = "A", lon = c(-170, -50, 70, 190),
+                                   lat = 0, depth = 10),
+                        type = "lines", id = "id")
+  expect_equal(lon_range(spread), c(xmin = -180, xmax = 180))
+  # A buffer around the North Pole covers every longitude up to the pole.
+  pole <- buffer_3d(as_vector3d(data.frame(lon = 0, lat = 89.9, depth = 10)),
+                    radius_km = 50, depth_window = 5)
+  e <- as.vector(terra::ext(pole))
+  expect_equal(e[c("xmin", "xmax", "ymax")],
+               c(xmin = -180, xmax = 180, ymax = 90))
+})
+
 # Buffers -------------------------------------------------------------------
 
 area_km2 <- function(polygons) {

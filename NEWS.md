@@ -223,7 +223,10 @@ Pass each depth once, for example with `unique(depths)`.
   `as_voxel()` then reads only those cells from the file (#113). An area in
   another CRS is projected first, and an extent in the other longitude
   convention (0 to 360 or -180 to 180) finds its cells. An area that crosses
-  the edge of the grid's longitudes stops; crop each side separately.
+  the edge of the grid's longitudes, such as the antimeridian of a -180 to
+  180 grid, is read from both ends of the grid, for files, series and
+  voxels in memory: the cropped grid runs on across the edge (for example
+  179 to 181 degrees), so `as_voxel()` gives one voxel (#115).
 
   `SpatProxy`, `as_proxy()`, cropping a `SpatProxy` and reading one with
   `as_voxel()` are experimental and may change without notice while the core
@@ -268,9 +271,10 @@ Pass each depth once, for example with `unique(depths)`.
   loop can take one shape at a time. `terra::ext()` gives its horizontal
   extent and `terra::crs()` its CRS (WGS84 for every `SpatVector3D`), so
   `terra::crop()` of a `SpatProxy` takes a `SpatVector3D`, such as a
-  buffer from `buffer_3d()`, as the area to read. A shape that crosses
-  the antimeridian has an extent from -180 to 180, so cropping with it
-  keeps every longitude: crop each side separately (#115).
+  buffer from `buffer_3d()`, as the area to read. The extent stays
+  continuous across the antimeridian (a line from 179 to -179 degrees has
+  an extent from 179 to 181), and a polygon around a pole covers every
+  longitude (#115).
 * A `SpatVoxel` can carry the top and bottom of the slab of water each layer
   stands for, such as a netCDF file's depth bounds: pass `depth_bounds` to
   `as_voxel()` or `envelope_to_voxel()`, and read them with the new

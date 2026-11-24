@@ -439,20 +439,84 @@ setMethod("[", "SpatVector3D", function(x, i, j, ..., drop = TRUE) {
 
 #' @rdname SpatVector3D-class
 #' @return `ext()`: the features' horizontal extent as a [terra::SpatExtent]
-#'   in longitude and latitude. A shape that crosses the antimeridian spans
-#'   -180 to 180, so a [terra::crop()] with it keeps every longitude: crop
-#'   each side separately. A `SpatVector3D` with no features has no extent,
-#'   and `ext()` stops.
+#'   in longitude and latitude: the shortest range of longitudes that covers
+#'   every feature, going either way round the globe. A shape that crosses
+#'   the antimeridian keeps its extent across it, with `xmax` past 180 (for
+#'   example 179 to 181), so a [terra::crop()] with it reads only the cells
+#'   near the antimeridian. A polygon around a pole covers every longitude,
+#'   from -180 to 180, and reaches the pole. Lines go the short way between
+#'   vertices, as in [buffer_3d()]. A `SpatVector3D` with no features has no
+#'   extent, and `ext()` stops.
 #' @export
 setMethod("ext", "SpatVector3D", function(x, ...) {
   if (length(x) == 0L) {
     .abort_vector3d("`x` has no features, so it has no extent.")
   }
   if (x@type == "polygons") {
-    return(terra::ext(terra::vect(x@features$geometry)))
+    # One geometry type, so the last coordinate column is the polygon.
+    g <- sf::st_cast(x@features$geometry, "MULTIPOLYGON")
+    coords <- sf::st_coordinates(g)
+    feature <- coords[, ncol(coords)]
+    lat <- range(coords[, "Y"])
+    # A polygon around a pole covers every longitude up to that pole.
+    poles <- sf::st_sfc(sf::st_point(c(0, 90)), sf::st_point(c(0, -90)),
+                        crs = 4326)
+    around <- sf::st_intersects(g, poles, sparse = FALSE)
+    if (any(around)) lat <- range(lat, c(90, -90)[colSums(around) > 0])
+    lon <- vapply(seq_along(g), function(i) {
+      if (any(around[i, ])) return(c(-180, 180))
+      on <- coords[feature == i, "X"]
+      .longitude_cover(on, on)
+    }, numeric(2))
+  } else {
+    v <- x@vertices
+    lat <- range(v$lat)
+    lon <- vapply(split(v$lon, factor(v$feature_id, unique(v$feature_id))),
+                  function(on) range(.unwrap_longitude(on)), numeric(2))
   }
-  terra::ext(c(range(x@vertices$lon), range(x@vertices$lat)))
+  terra::ext(c(.longitude_cover(lon[1L, ], lon[2L, ]), lat))
 })
+
+# Internal: the shortest range of longitudes, west to east, that covers every
+# interval from `west` to `east` (each at most 360 degrees wide) on the
+# circle: the complement of the widest gap between them. The west end is in
+# [-180, 180) and the east end may pass 180; intervals that leave no gap
+# give -180 to 180. Used by ext() for each polygon's vertices and to combine
+# the features of any type.
+.longitude_cover <- function(west, east) {
+  start <- .normalise_longitude(west)
+  end <- start + (east - west)
+  o <- order(start)
+  start <- start[o]
+  end <- end[o]
+  # Join intervals that overlap, west to east.
+  s <- start[1L]
+  e <- end[1L]
+  for (k in seq_along(start)[-1L]) {
+    if (start[k] <= e[length(e)]) {
+      e[length(e)] <- max(e[length(e)], end[k])
+    } else {
+      s <- c(s, start[k])
+      e <- c(e, end[k])
+    }
+  }
+  # The last can reach round past 180 into the first ones.
+  while (length(s) > 1L && s[1L] + 360 <= e[length(e)]) {
+    e[length(e)] <- max(e[length(e)], e[1L] + 360)
+    s <- s[-1L]
+    e <- e[-1L]
+  }
+  n <- length(s)
+  gaps <- c(s[-1L], s[1L] + 360) - e
+  if (max(gaps) <= 0) return(c(-180, 180))
+  j <- which.max(gaps)
+  # The cover runs from the start after the widest gap to the end before it.
+  first <- if (j == n) 1L else j + 1L
+  west <- s[first]
+  width <- (if (j == n) e[n] else e[j] + 360) - west
+  west <- .normalise_longitude(west)
+  c(west, west + width)
+}
 
 #' @rdname SpatVector3D-class
 #' @param proj,describe,parse For `crs()`: as in [terra::crs()].
