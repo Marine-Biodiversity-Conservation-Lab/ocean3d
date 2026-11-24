@@ -578,6 +578,13 @@ setMethod(
     .check_geomtype(x, c("polygons", "points"))
     .check_geomtype(y, c("polygons", "points"))
     if (x@type == "points" && y@type == "points") .stop_neither_3d(x, y)
+    if (length(x@surfaces) || length(y@surfaces)) {
+      .abort_vector3d(paste0(
+        "Polygons with a raster depth surface work with grids only. Put ",
+        "them on a grid with vector3d_to_envelope() or vector3d_to_voxel() ",
+        "first."
+      ))
+    }
     resolution <- unique(stats::na.omit(c(x@time_resolution,
                                           y@time_resolution)))
     if (length(resolution) > 1L) {

@@ -128,6 +128,14 @@ setMethod("volume", "SpatVector3D", function(x, per_cell = FALSE,
   }
   f <- x@features
   if (nrow(f) == 0L) return(0)
+  # With a raster surface, thickness times the area inside each polygon,
+  # cell by cell on the surface's grid: an estimate at its resolution.
+  if (length(x@surfaces)) {
+    cells <- .surface_cells(f, lapply(x@surfaces, terra::unwrap),
+                            exact = TRUE)
+    return(sum(cells$fraction * cells$area_km2 *
+                 (cells$bottom - cells$top), na.rm = TRUE) / 1000)
+  }
   area_km2 <- terra::expanse(terra::vect(f$geometry), unit = "km")
   sum(area_km2 * (f$depth_max - f$depth_min) / 1000)
 })

@@ -33,9 +33,12 @@ NULL
 #'     polygons, so where they overlap the shared space is counted once for
 #'     each; the overlap between two sets is `volume(intersect_3d(x, y))`.
 #'     `per_cell = TRUE` is an error, since polygons have no cells; put them
-#'     on a grid with [vector3d_to_envelope()] first. Points and lines have
-#'     no volume, so they are an error; [buffer_3d()] turns them into
-#'     polygons.}
+#'     on a grid with [vector3d_to_envelope()] first. Polygons with a raster
+#'     depth surface (see [as_vector3d()]) are measured cell by cell on the
+#'     surface's grid instead: each cell's thickness times its area inside
+#'     the polygon, an estimate at the surface's resolution. Points and
+#'     lines have no volume, so they are an error; [buffer_3d()] turns them
+#'     into polygons.}
 #' }
 #'
 #' A voxel volume is quantized to the levels the voxel was sampled at, and a
@@ -241,7 +244,9 @@ setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
 #'     `feature_id_y` say which polygons each came from, and the inputs'
 #'     other columns are dropped. Pairs that share nothing give no polygon,
 #'     so the result can have none. To measure the overlap, use
-#'     `volume(intersect_3d(x, y))`.}
+#'     `volume(intersect_3d(x, y))`.
+#'     Polygons with a raster depth surface can't be compared this way, or
+#'     with points; put them on a grid with [vector3d_to_envelope()] first.}
 #' }
 #'
 #' The order of `x` and `y` does not matter.

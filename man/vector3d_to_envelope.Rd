@@ -33,6 +33,11 @@ deepest \code{depth_max} of the polygons that cover it. An envelope has one
 depth range per cell, so polygons from 0 to 50 m and from 200 to 300 m
 over the same cell give 0 to 300 m there.
 
+Where an end is a raster surface (see \code{\link[=as_vector3d]{as_vector3d()}}), each cell takes
+its depth from the surface, resampled onto \code{template} with bilinear
+interpolation when the grids differ, and cells where the surface has no
+value are \code{NA}.
+
 An envelope has no time, so the polygons' time intervals are dropped, with
 a message when any polygon has one. To make an envelope for one period,
 keep only the polygons for that period first.

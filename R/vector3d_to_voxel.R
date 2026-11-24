@@ -22,6 +22,10 @@
 #' polygons with a [SpatVoxel-class] of data; [intersect_3d()],
 #' [intersects_3d()] and [mask()] use it for polygons and a voxel.
 #'
+#' With a raster surface at either end (see [as_vector3d()]), the polygons
+#' over a cell share that end, so they cover one unbroken range there; it is
+#' read from the surface in each cell, as in [vector3d_to_envelope()].
+#'
 #' Polygons with `depth_min` equal to `depth_max` have no thickness and cover
 #' nothing. A voxel has no time, so the polygons' time intervals are dropped,
 #' with a message when any polygon has one.
@@ -71,14 +75,21 @@ vector3d_to_voxel <- function(x, template, bounds = c("midpoint", "top")) {
   if (nrow(f) == 0L) {
     .abort_voxel_input("`x` has no polygons to put on the voxel's levels.")
   }
-  .inform_time_dropped(x)
-
   depths <- depths(template)
   edges <- depth_bounds(template)
+  # With a raster surface every polygon shares that end, so the polygons over
+  # a cell cover one unbroken depth range there and the envelope route is
+  # exact: no gap between them can be lost.
+  if (length(x@surfaces)) {
+    return(.promote_to_voxel(vector3d_to_envelope(x, template), depths,
+                             bounds, edges))
+  }
+  .inform_time_dropped(x)
+
   slab <- .depth_slabs(depths, bounds, edges)
   # Only the grid is used; the class tag would reach the depth-aware methods.
   grid <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
-  polygons <- .outlines_on_grid(x, grid)
+  polygons <- .outlines_on_grid(f, grid)
 
   # The polygons covering each level, by the rule envelope_to_voxel() uses,
   # so one polygon lands on the same levels as its range as an envelope. A

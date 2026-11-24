@@ -13,6 +13,11 @@
 #' depth range per cell, so polygons from 0 to 50 m and from 200 to 300 m
 #' over the same cell give 0 to 300 m there.
 #'
+#' Where an end is a raster surface (see [as_vector3d()]), each cell takes
+#' its depth from the surface, resampled onto `template` with bilinear
+#' interpolation when the grids differ, and cells where the surface has no
+#' value are `NA`.
+#'
 #' An envelope has no time, so the polygons' time intervals are dropped, with
 #' a message when any polygon has one. To make an envelope for one period,
 #' keep only the polygons for that period first.
@@ -59,7 +64,7 @@ vector3d_to_envelope <- function(x, template) {
   if (nrow(f) == 0L) {
     .abort_envelope_input("`x` has no polygons to put on the grid.")
   }
-  if (all(f$depth_min == f$depth_max)) {
+  if (!length(x@surfaces) && all(f$depth_min == f$depth_max)) {
     .abort_envelope_empty(paste0(
       "Every polygon has `depth_min` equal to `depth_max`, so the envelope ",
       "would be empty. Give them a depth range, for example a ",
@@ -71,7 +76,7 @@ vector3d_to_envelope <- function(x, template) {
   # Only the grid is used. Dropping the class tag keeps a voxel template's
   # layers away from the depth-aware methods in R/intersect.R.
   grid <- methods::as(template[[1]], "SpatRaster")  # remove the 3D class
-  polygons <- .outlines_on_grid(x, grid, c("depth_min", "depth_max"))
+  polygons <- .outlines_on_grid(f, grid, c("depth_min", "depth_max"))
   # Each cell's shallowest top and deepest bottom over the polygons touching
   # it, picked as terra::mask() picks cells in vect_to_envelope(). terra
   # rasterizes polygon values as 4-byte floats (since 1.9-60 whatever the
@@ -88,8 +93,19 @@ vector3d_to_envelope <- function(x, template) {
                              touches = TRUE)
     terra::setValues(rank, levels[terra::values(rank)[, 1]])
   }
-  top <- extreme("depth_min", "min")
-  bottom <- extreme("depth_max", "max")
+  # An end given as a raster surface is read in each cell instead, from the
+  # surface itself on the same grid, else resampled onto it.
+  surfaces <- lapply(x@surfaces, terra::unwrap)
+  end <- function(field, fun) {
+    surface <- surfaces[[field]]
+    if (is.null(surface)) return(extreme(field, fun))
+    same <- terra::compareGeom(surface, grid, stopOnError = FALSE,
+                               messages = FALSE)
+    if (isTRUE(same)) surface else
+      terra::project(surface, grid, method = "bilinear")
+  }
+  top <- end("depth_min", "min")
+  bottom <- end("depth_max", "max")
   # vect_to_envelope() keeps the cells the polygons touch, drops cells with
   # no thickness, and stops if none are left.
   vect_to_envelope(polygons, grid, depth_min = top, depth_max = bottom)

@@ -210,6 +210,14 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
+* `as_vector3d()` takes a raster surface for a polygon's `depth_min` or
+  `depth_max` (#117), such as the seafloor (`depth_max = seafloor`) or a
+  layer above it (`depth_min = seafloor - 20`). `vector3d_to_envelope()`,
+  `vector3d_to_voxel()`, and the queries on a grid read the depth from the
+  surface in each cell. `volume()` adds up thickness times area over the
+  surface's cells, an estimate at its resolution. Two sets of polygons with
+  a surface can't be compared directly; put them on a grid first.
+
 * `as_voxel()` on a `SpatProxy` reads several time steps at once (#115):
   `time` can be a window of two dates or date-times, giving a list of
   voxels, one per step inside it, or a `SpatVector3D` with one feature,

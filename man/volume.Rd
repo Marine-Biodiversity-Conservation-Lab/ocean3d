@@ -101,9 +101,12 @@ The time interval doesn't change the volume. The total adds up the
 polygons, so where they overlap the shared space is counted once for
 each; the overlap between two sets is \code{volume(intersect_3d(x, y))}.
 \code{per_cell = TRUE} is an error, since polygons have no cells; put them
-on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} first. Points and lines have
-no volume, so they are an error; \code{\link[=buffer_3d]{buffer_3d()}} turns them into
-polygons.}
+on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} first. Polygons with a raster
+depth surface (see \code{\link[=as_vector3d]{as_vector3d()}}) are measured cell by cell on the
+surface's grid instead: each cell's thickness times its area inside
+the polygon, an estimate at the surface's resolution. Points and
+lines have no volume, so they are an error; \code{\link[=buffer_3d]{buffer_3d()}} turns them
+into polygons.}
 }
 
 A voxel volume is quantized to the levels the voxel was sampled at, and a

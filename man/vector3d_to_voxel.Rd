@@ -44,6 +44,10 @@ when the next step works on a voxel's levels, for example to compare the
 polygons with a \link[=SpatVoxel-class]{SpatVoxel} of data; \code{\link[=intersect_3d]{intersect_3d()}},
 \code{\link[=intersects_3d]{intersects_3d()}} and \code{\link[terra:mask]{mask()}} use it for polygons and a voxel.
 
+With a raster surface at either end (see \code{\link[=as_vector3d]{as_vector3d()}}), the polygons
+over a cell share that end, so they cover one unbroken range there; it is
+read from the surface in each cell, as in \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}.
+
 Polygons with \code{depth_min} equal to \code{depth_max} have no thickness and cover
 nothing. A voxel has no time, so the polygons' time intervals are dropped,
 with a message when any polygon has one.

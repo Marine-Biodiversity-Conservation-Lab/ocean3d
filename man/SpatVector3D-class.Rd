@@ -76,7 +76,9 @@ sf object or \code{terra::SpatVector}.
 \details{
 Points and lines have a depth and optional time at each vertex. Polygons
 have one depth range (\code{depth_min} to \code{depth_max}) and an optional time
-interval for the whole shape.
+interval for the whole shape. Either end can also be a raster surface,
+such as the seafloor, that gives the depth at each position (see
+\code{\link[=as_vector3d]{as_vector3d()}}).
 
 It is the vector counterpart of \link[=SpatVoxel-class]{SpatVoxel} and \link[=SpatEnvelope-class]{SpatEnvelope}.
 Points and lines are not stored as \code{terra::SpatVector} or sf objects:
@@ -105,6 +107,13 @@ columns from the input. Empty for points and lines.}
 
 \item{\code{time_resolution}}{\code{"daily"} or \code{"datetime"} for the precision of the
 times, as for \code{\link[=extract_to_point]{extract_to_point()}}, or \code{NA} when there is no time.}
+
+\item{\code{surfaces}}{Polygons: a list with an element \code{depth_min} or
+\code{depth_max}, or both, for each end given as a raster surface, stored with
+\code{\link[terra:wrap]{terra::wrap()}} so the object can be saved. Empty when both ends are
+numbers. With a surface, that end's column in \code{features} holds its
+shallowest (\code{depth_min}) or deepest (\code{depth_max}) value over the cells
+the polygon touches.}
 }}
 
 \examples{

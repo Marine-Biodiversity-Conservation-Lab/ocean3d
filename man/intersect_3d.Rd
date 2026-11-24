@@ -162,7 +162,9 @@ result's feature IDs are numbers; columns \code{feature_id_x} and
 \code{feature_id_y} say which polygons each came from, and the inputs'
 other columns are dropped. Pairs that share nothing give no polygon,
 so the result can have none. To measure the overlap, use
-\code{volume(intersect_3d(x, y))}.}
+\code{volume(intersect_3d(x, y))}.
+Polygons with a raster depth surface can't be compared this way, or
+with points; put them on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} first.}
 }
 
 The order of \code{x} and \code{y} does not matter.

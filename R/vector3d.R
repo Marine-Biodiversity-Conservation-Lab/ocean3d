@@ -34,8 +34,23 @@
 #' @param lon,lat Longitude and latitude columns of a table.
 #' @param depth_min,depth_max Polygons only, and required for them: the top
 #'   and bottom of each polygon, in positive metres downward. Each is a
-#'   single number for all polygons (e.g. `depth_min = 0, depth_max = 200`)
-#'   or the name of a column of `x`.
+#'   single number for all polygons (e.g. `depth_min = 0, depth_max = 200`),
+#'   the name of a column of `x`, or a single-layer `SpatRaster` surface that
+#'   gives the depth at each position, such as the seafloor
+#'   (`depth_max = seafloor`) or a layer above it
+#'   (`depth_min = seafloor - 20`). A surface applies to every polygon; when
+#'   both ends are surfaces they must be on one grid. In each cell a polygon
+#'   touches, `depth_min` must not be deeper than `depth_max`, and the
+#'   surface must have a value in at least one of its cells.
+#'
+#'   With a surface, [vector3d_to_envelope()] and [vector3d_to_voxel()] read
+#'   its depth in each cell of their grid (resampled with bilinear
+#'   interpolation when the grids differ), so every query on a grid uses it.
+#'   [volume()] adds up thickness times area over the surface's cells inside
+#'   each polygon, an estimate at the surface's resolution. Two sets of
+#'   polygons, or points and polygons, can't be compared directly when one
+#'   has a surface: put the polygons on a grid with [vector3d_to_envelope()]
+#'   first.
 #'
 #' @return A [SpatVector3D-class]. Columns other than the coordinates, depth,
 #'   time and ID are kept with each vertex (points and lines) or polygon.
@@ -58,6 +73,14 @@
 #'   ))), crs = 4326)
 #' )
 #' as_vector3d(mpa, depth_min = 0, depth_max = 200)
+#'
+#' # The bottom 20 m of the water column over a seafloor raster.
+#' seafloor <- terra::rast(nrows = 2, ncols = 2, xmin = 150, xmax = 151,
+#'                         ymin = -21, ymax = -20, vals = c(100, 120, 150, 200))
+#' near_bed <- as_vector3d(mpa, depth_min = seafloor - 20,
+#'                         depth_max = seafloor)
+#' as.data.frame(near_bed)[c("depth_min", "depth_max")]
+#' volume(near_bed)
 #' @export
 as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
                         time = NULL, id = NULL, lon = "lon", lat = "lat",
@@ -178,13 +201,22 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
       "and end of each polygon's interval)."
     ))
   }
+  is_surface <- function(value) methods::is(value, "SpatRaster")
   for (value in list(depth_min, depth_max)) {
-    if (length(value) != 1L || !(is.numeric(value) || is.character(value))) {
+    ok <- if (is_surface(value)) {
+      terra::nlyr(value) == 1L
+    } else {
+      length(value) == 1L && (is.numeric(value) || is.character(value))
+    }
+    if (!ok) {
       .abort_vector3d(paste0(
-        "`depth_min` and `depth_max` must each be one number or the name ",
-        "of a column of `x`."
+        "`depth_min` and `depth_max` must each be one number, the name of a ",
+        "column of `x`, or a single-layer SpatRaster surface."
       ))
     }
+  }
+  if (is_surface(depth_min) && is_surface(depth_max)) {
+    .check_same_grid(depth_max, depth_min, "`depth_max`", "`depth_min`")
   }
   x <- .check_sf_input(x)
   table <- sf::st_drop_geometry(x)
@@ -216,19 +248,78 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     end <- prepared[[length(prepared)]]$values
   }
 
+  # Each end as one number per polygon; a surface's column is filled below.
+  per_polygon <- function(value) {
+    if (is.character(value)) table[[value]] else if (is.numeric(value))
+      rep(value, n) else rep(NA_real_, n)
+  }
   features <- data.frame(
     feature_id = if (is.null(id)) seq_len(n) else table[[id]],
-    depth_min = if (is.character(depth_min)) table[[depth_min]] else depth_min,
-    depth_max = if (is.character(depth_max)) table[[depth_max]] else depth_max,
+    depth_min = per_polygon(depth_min),
+    depth_max = per_polygon(depth_max),
     time_start = start,
     time_end = end,
     stringsAsFactors = FALSE
   )
   features$feature_id <- as.character(features$feature_id)
   features$geometry <- sf::st_geometry(x)
+
+  surfaces <- Filter(is_surface, list(depth_min = depth_min,
+                                      depth_max = depth_max))
+  if (length(surfaces)) {
+    # The depths in the cells each polygon touches: each must have one, and
+    # its top must not be below its bottom anywhere inside.
+    cells <- .surface_cells(features, surfaces)
+    cells <- cells[is.finite(cells$top) & is.finite(cells$bottom), ,
+                   drop = FALSE]
+    outside <- setdiff(seq_len(n), cells$row)
+    if (length(outside)) {
+      .abort_vector3d(glue::glue(
+        "The depth surface has no values over polygon ",
+        "{toString(features$feature_id[outside])}. Give a surface that ",
+        "covers every polygon, in the same longitudes."
+      ))
+    }
+    inverted <- unique(cells$row[cells$top > cells$bottom])
+    if (length(inverted)) {
+      .abort_vector3d(glue::glue(
+        "`depth_min` is deeper than `depth_max` in some cells of polygon ",
+        "{toString(features$feature_id[inverted])}."
+      ))
+    }
+    rows <- factor(cells$row, levels = seq_len(n))
+    features$depth_min <- as.vector(tapply(cells$top, rows, min))
+    features$depth_max <- as.vector(tapply(cells$bottom, rows, max))
+  }
   extra <- table[setdiff(names(table), c(id, time, depth_columns))]
   .new_vector3d("polygons", resolution,
-                features = .add_attributes(features, extra))
+                features = .add_attributes(features, extra),
+                surfaces = lapply(surfaces, terra::wrap))
+}
+
+# Internal: the depth interval in each cell of a surface that SpatVector3D
+# polygons cover, for as_vector3d() (the cells each polygon touches, to check
+# and summarise the surface) and volume() (`exact = TRUE`: the share of each
+# cell inside, with cell areas). `surfaces` holds the raster ends (unpacked);
+# the other end is the polygon's number in `features`. Returns one row per
+# polygon and cell: `row` (the polygon's row of `features`), `top`,
+# `bottom`, and with `exact`, `area_km2` and `fraction`.
+.surface_cells <- function(features, surfaces, exact = FALSE) {
+  grid <- surfaces[[1L]]
+  outlines <- .outlines_on_grid(features, grid)
+  layers <- c(surfaces, if (exact) list(area_km2 = .cell_area_km2(grid)))
+  stack <- terra::rast(unname(layers))
+  names(stack) <- names(layers)
+  cells <- terra::extract(stack, outlines, touches = !exact, exact = exact,
+                          ID = TRUE)
+  cells$row <- outlines$row[cells$ID]
+  end <- function(name) {
+    if (is.null(cells[[name]])) features[[name]][cells$row] else
+      cells[[name]]
+  }
+  cells$top <- end("depth_min")
+  cells$bottom <- end("depth_max")
+  cells
 }
 
 # sf lines and polygons: transform any CRS other than WGS84, geographic or
@@ -284,12 +375,13 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 # The class's validity rules are the only checks; this reports a failure as
 # an ocean3d error.
 .new_vector3d <- function(type, resolution, vertices = data.frame(),
-                          features = data.frame()) {
+                          features = data.frame(), surfaces = list()) {
   rownames(vertices) <- NULL
   rownames(features) <- NULL
   tryCatch(
     methods::new("SpatVector3D", type = type, vertices = vertices,
-                 features = features, time_resolution = resolution),
+                 features = features, time_resolution = resolution,
+                 surfaces = surfaces),
     error = function(e) {
       .abort_vector3d(
         sub("^invalid class .*? object: ", "", conditionMessage(e))
@@ -315,10 +407,11 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
   invisible(x)
 }
 
-# Internal: the outlines of SpatVector3D polygons as a SpatVector in the CRS
-# of `grid`, ready to rasterize onto it, for vector3d_to_envelope() and
-# vector3d_to_voxel(). Column `row` gives each outline's polygon (its row of
-# `x@features`) and `fields` names other feature columns to carry. Grids and
+# Internal: the outlines of SpatVector3D polygons (`features`, the polygon
+# table) as a SpatVector in the CRS of `grid`, ready to rasterize onto it,
+# for vector3d_to_envelope(), vector3d_to_voxel() and a depth surface
+# (.surface_cells()). Column `row` gives each outline's polygon (its row of
+# `features`) and `fields` names other feature columns to carry. Grids and
 # outlines can each use longitudes from -180 to 180 or from 0 to 360 (an sf
 # polygon from 178 to 182 is kept as given), so on a lon/lat grid copies
 # shifted by 360 degrees either way put every outline, and both halves of
@@ -326,14 +419,13 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 # touch no cell. The outlines are projected here rather than left to
 # terra's rasterizing, because the shift has to happen in the grid's
 # longitudes. A grid without a CRS can't take them, so it stops.
-.outlines_on_grid <- function(x, grid, fields = NULL) {
+.outlines_on_grid <- function(f, grid, fields = NULL) {
   if (terra::crs(grid) == "") {
     .abort_envelope_input(paste0(
       "`template` has no CRS, so the polygons can't be placed on it. Set one ",
       "with terra::crs()."
     ))
   }
-  f <- x@features
   polygons <- terra::vect(sf::st_sf(row = seq_len(nrow(f)), f[fields],
                                     geometry = f$geometry))
   if (!terra::same.crs(polygons, grid)) {
@@ -477,7 +569,8 @@ setMethod("[", "SpatVector3D", function(x, i, j, ..., drop = TRUE) {
   }
   if (x@type == "polygons") {
     return(.new_vector3d(x@type, x@time_resolution,
-                         features = x@features[chosen, , drop = FALSE]))
+                         features = x@features[chosen, , drop = FALSE],
+                         surfaces = x@surfaces))
   }
   # Features in the order asked, vertices in order along each line.
   v <- x@vertices[x@vertices$feature_id %in% ids[chosen], , drop = FALSE]

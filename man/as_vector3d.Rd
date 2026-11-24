@@ -47,8 +47,23 @@ numbers.}
 
 \item{depth_min, depth_max}{Polygons only, and required for them: the top
 and bottom of each polygon, in positive metres downward. Each is a
-single number for all polygons (e.g. \verb{depth_min = 0, depth_max = 200})
-or the name of a column of \code{x}.}
+single number for all polygons (e.g. \verb{depth_min = 0, depth_max = 200}),
+the name of a column of \code{x}, or a single-layer \code{SpatRaster} surface that
+gives the depth at each position, such as the seafloor
+(\code{depth_max = seafloor}) or a layer above it
+(\code{depth_min = seafloor - 20}). A surface applies to every polygon; when
+both ends are surfaces they must be on one grid. In each cell a polygon
+touches, \code{depth_min} must not be deeper than \code{depth_max}, and the
+surface must have a value in at least one of its cells.
+
+With a surface, \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}} and \code{\link[=vector3d_to_voxel]{vector3d_to_voxel()}} read
+its depth in each cell of their grid (resampled with bilinear
+interpolation when the grids differ), so every query on a grid uses it.
+\code{\link[=volume]{volume()}} adds up thickness times area over the surface's cells inside
+each polygon, an estimate at the surface's resolution. Two sets of
+polygons, or points and polygons, can't be compared directly when one
+has a surface: put the polygons on a grid with \code{\link[=vector3d_to_envelope]{vector3d_to_envelope()}}
+first.}
 }
 \value{
 A \link[=SpatVector3D-class]{SpatVector3D}. Columns other than the coordinates, depth,
@@ -77,6 +92,14 @@ mpa <- sf::st_sf(
   ))), crs = 4326)
 )
 as_vector3d(mpa, depth_min = 0, depth_max = 200)
+
+# The bottom 20 m of the water column over a seafloor raster.
+seafloor <- terra::rast(nrows = 2, ncols = 2, xmin = 150, xmax = 151,
+                        ymin = -21, ymax = -20, vals = c(100, 120, 150, 200))
+near_bed <- as_vector3d(mpa, depth_min = seafloor - 20,
+                        depth_max = seafloor)
+as.data.frame(near_bed)[c("depth_min", "depth_max")]
+volume(near_bed)
 }
 \seealso{
 \code{\link[terra:geomtype]{geomtype()}}

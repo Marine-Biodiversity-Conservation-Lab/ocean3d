@@ -153,7 +153,9 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #'
 #' Points and lines have a depth and optional time at each vertex. Polygons
 #' have one depth range (`depth_min` to `depth_max`) and an optional time
-#' interval for the whole shape.
+#' interval for the whole shape. Either end can also be a raster surface,
+#' such as the seafloor, that gives the depth at each position (see
+#' [as_vector3d()]).
 #'
 #' It is the vector counterpart of [SpatVoxel-class] and [SpatEnvelope-class].
 #' Points and lines are not stored as `terra::SpatVector` or sf objects:
@@ -176,6 +178,12 @@ setClass("SpatEnvelope", contains = "SpatRaster")
 #'   columns from the input. Empty for points and lines.
 #' @slot time_resolution `"daily"` or `"datetime"` for the precision of the
 #'   times, as for [extract_to_point()], or `NA` when there is no time.
+#' @slot surfaces Polygons: a list with an element `depth_min` or
+#'   `depth_max`, or both, for each end given as a raster surface, stored with
+#'   [terra::wrap()] so the object can be saved. Empty when both ends are
+#'   numbers. With a surface, that end's column in `features` holds its
+#'   shallowest (`depth_min`) or deepest (`depth_max`) value over the cells
+#'   the polygon touches.
 #'
 #' @seealso [as_vector3d()], [buffer_3d()], [vector3d_to_envelope()],
 #'   [geomtype()]
@@ -198,8 +206,9 @@ setClass("SpatVector3D", slots = c(
   type = "character",
   vertices = "data.frame",
   features = "data.frame",
-  time_resolution = "character"
-))
+  time_resolution = "character",
+  surfaces = "list"
+), prototype = list(surfaces = list()))
 
 setValidity("SpatVector3D", function(object) {
   types <- c("points", "lines", "polygons")
@@ -248,6 +257,12 @@ setValidity("SpatVector3D", function(object) {
     }
     if (any(f$time_start > f$time_end, na.rm = TRUE)) {
       return("time_start must not be after time_end")
+    }
+    s <- object@surfaces
+    if (!all(names(s) %in% c("depth_min", "depth_max")) ||
+          !all(vapply(s, inherits, logical(1), "PackedSpatRaster"))) {
+      return(paste("surfaces must hold depth_min or depth_max rasters,",
+                   "packed with terra::wrap()"))
     }
     return(TRUE)
   }
