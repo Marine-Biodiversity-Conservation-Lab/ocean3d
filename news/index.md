@@ -305,7 +305,26 @@ does
 It used to drop the repeats silently. Pass each depth once, for example
 with `unique(depths)`.
 
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+on a `SpatProxy` now reads the step nearest to a date or date-time in
+`time`, as
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+does
+([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)).
+It used to require an exact match and stop otherwise. For the old
+behaviour, pass `time_match = "exact"`; to cap the gap of a nearest
+match, pass `max_time_diff` in days (no cap by default).
+
 ### New features
+
+- [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  on a `SpatProxy` reads several time steps at once
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)):
+  `time` can be a window of two dates or date-times, giving a list of
+  voxels, one per step inside it, or a `SpatVector3D` with one feature,
+  read at the feature’s time (a point) or over its time interval (a
+  polygon), always as a list. On a one-step source, such as a World
+  Ocean Atlas climatology, a shape reads that step whatever time it has.
 
 - New
   [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)

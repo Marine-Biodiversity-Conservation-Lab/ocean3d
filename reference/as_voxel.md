@@ -15,7 +15,15 @@ and may change without notice while the core object is built.
 ## Usage
 
 ``` r
-as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL, time = NULL)
+as_voxel(
+  x,
+  depths = NULL,
+  varname = "value",
+  depth_bounds = NULL,
+  time = NULL,
+  time_match = c("nearest", "exact"),
+  max_time_diff = NULL
+)
 ```
 
 ## Arguments
@@ -32,8 +40,8 @@ as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL, time = NULL)
   This is how gridded data enter the `SpatVoxel` model: describe a
   netCDF file with
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
-  and pass the proxy here, which reads one time step. Crop the proxy
-  first with
+  and pass the proxy here, which reads the time steps you choose with
+  `time`. Crop the proxy first with
   [`terra::crop()`](https://rspatial.github.io/terra/reference/crop.html)
   to read only part of the grid. netCDF paths aren't accepted directly.
 
@@ -74,17 +82,73 @@ as_voxel(x, depths = NULL, varname = "value", depth_bounds = NULL, time = NULL)
 
   For a
   [SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
-  only: the time step to read, as a step number, or a date or date-time
-  that matches one step exactly. A date such as `"2020-01-02"` matches
-  the step on that day; with several steps a day, give a date-time.
-  `NULL` (the default) reads the only step of a proxy that has one; a
-  proxy with more needs `time`.
+  only: which time steps to read.
+
+  - `NULL` (the default) reads the only step of a proxy that has one; a
+    proxy with more needs `time`.
+
+  - A step number reads that step.
+
+  - One date or date-time (a `Date`, `POSIXct`, or text such as
+    `"2020-01-02"` or `"2020-01-02 06:00"`, read as
+    [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+    reads observation times) reads one step: the nearest, or an exact
+    match, as set by `time_match`. A date is compared by UTC day, so it
+    matches the step on that day; with several steps a day, give a
+    date-time.
+
+  - A window of two dates or date-times (start, end) reads every step
+    inside it, as a list. The window includes both ends; with dates, it
+    covers whole UTC days including the end day, as a polygon's interval
+    does in
+    [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md).
+    A window with no step inside it is an error.
+
+  - A
+    [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+    with one feature reads the steps for that feature, always as a list,
+    so a loop over shapes gets one kind of result: a point's time picks
+    one step as a date-time does (a list of one), and a polygon's time
+    interval is a window. On a source with one time step, such as a
+    World Ocean Atlas climatology, that step is read whatever time the
+    feature has, or none, so dated observations can be read against a
+    climatology. On a source with several steps a feature without a time
+    is an error. Lines are an error;
+    [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
+    turns them into polygons.
+
+- time_match:
+
+  For a
+  [SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+  with one date or date-time in `time`. `"nearest"` (default) reads the
+  closest step; when `time` is exactly halfway between two steps, the
+  step on the same UTC day wins, and otherwise the earlier one.
+  `"exact"` reads the step on the same UTC day (for a date) or at the
+  same instant (for a date-time), and is an error when there is none.
+  The same rule as in
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
+  Not used for a window.
+
+- max_time_diff:
+
+  For `time_match = "nearest"`: the largest allowed gap, in days,
+  between `time` and the step read. `NULL` (the default) sets no limit.
+  A gap beyond it is an error. As in
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
 
 ## Value
 
 A
 [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
-whose layers are ordered shallow to deep.
+whose layers are ordered shallow to deep. For a
+[SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+with a time window or a
+[SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+in `time`, an unnamed list of such voxels in time order, one per step,
+each with its step's date in
+[`terra::time()`](https://rspatial.github.io/terra/reference/time.html),
+even when that is one step.
 
 ## Details
 

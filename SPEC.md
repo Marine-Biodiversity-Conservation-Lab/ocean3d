@@ -1043,13 +1043,15 @@ of 23 November 2026.
     [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md),
     which puts polygons on a voxel’s levels without filling depth gaps,
     and makes the intersect functions use it for polygons with a voxel.
-    Next: `x[i]` for a `SpatVector3D`, `ext()` and `crs()` for a
-    `SpatVector3D` so that `crop()` of a `SpatProxy` takes one, time
-    matching in
+    Time matching in
     [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-    for a `SpatProxy`, and a vignette with the per-shape loop. The
-    coverage function planned here was dropped on 23 November 2026 (see
-    [Extraction on the three steps](#extraction-on-the-three-steps)).
+    for a `SpatProxy` (the nearest or exact rule for a date, and a list
+    of voxels for a time window or a shape) is done (#169). Next: `x[i]`
+    for a `SpatVector3D`, `ext()` and `crs()` for a `SpatVector3D` so
+    that `crop()` of a `SpatProxy` takes one, and a vignette with the
+    per-shape loop. The coverage function planned here was dropped on 23
+    November 2026 (see [Extraction on the three
+    steps](#extraction-on-the-three-steps)).
 8.  **Add
     [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
     on voxels, per-level cell volume (`volume(per_level = TRUE)`) and
