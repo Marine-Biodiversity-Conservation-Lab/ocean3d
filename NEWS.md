@@ -210,11 +210,9 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
-* New article, `vignette("workflow-values-in-shapes")` (#115, #116),
-  on environmental values inside points, buffers and areas: build the
-  shapes with `as_vector3d()` and `buffer_3d()`, read each one with
-  `crop()`, `as_voxel()` and `mask()`, and summarise it with
-  `summarise_3d()`.
+* New article, `vignette("workflow-values-in-shapes")` (#115, #116), on
+  getting environmental values inside points, buffers and areas with the
+  build, intersect and summarise steps.
 
 * `as_voxel()` on a `SpatProxy` reads several time steps at once (#115):
   `time` can be a window of two dates or date-times, giving a list of

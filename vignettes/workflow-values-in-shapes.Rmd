@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
 
 This article shows how to get environmental values inside 3D shapes, such as
 tag detections, buffers around them, or a protected area down to a set depth.
-Every case uses the same three steps:
+Each example uses the same three steps:
 
 1. **Build** the shapes with `as_vector3d()` or `buffer_3d()`.
 2. **Intersect** each shape with the data: `crop()` the dataset to the shape,
@@ -26,7 +26,8 @@ Every case uses the same three steps:
 3. **Summarise** the values with `summarise_3d()`.
 
 You loop over the shapes yourself, so you can stop after any step and look at
-the result.
+the result. Each example ends with a table of values per shape, which you can
+join back to your observations. Volumes are in km³ throughout.
 
 ## Example data
 
@@ -61,7 +62,7 @@ ncdf4::nc_close(nc)
 ```
 
 `as_proxy()` describes the file without reading its values. Each later step
-reads only the cells, depths and time steps it needs.
+reads only the cells and time steps it needs, at every depth level.
 
 ```{r proxy}
 proxy <- as_proxy(path)
@@ -104,10 +105,15 @@ extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
                  method = "nearest")$temp
 ```
 
-The two rules differ in one case. `extract_to_point()` skips depth levels
-with no value when it looks for the nearest one. `mask()` uses the nearest
-level whatever its value, so a detection whose nearest level has no value
-gets `NA`.
+Both pick the nearest time step: on this data they give the same values for
+all three detections, for a time halfway between two steps, and for a date
+after the last step. `extract_to_point()` warns when the step it picks is on
+another day; `as_voxel()` doesn't, so set `max_time_diff` in `as_voxel()` to
+limit how far away the step may be.
+
+The two differ when the nearest depth level has no value. `extract_to_point()`
+skips depth levels with no value when it looks for the nearest one. `mask()`
+uses the nearest level whatever its value, so such a detection gets `NA`.
 
 ## Buffers: the water around each detection
 
@@ -121,30 +127,30 @@ as.data.frame(buffers)[c("feature_id", "depth_min", "depth_max",
                          "time_start", "time_end")]
 ```
 
-The loop is the same as for points. `as_voxel()` returns one voxel for each
-time step inside a buffer's window: three for B and C, and two for A, whose
-window starts before the first day of data. `summarise_3d()` gives one row
-for each. By default the mean is weighted by the volume of water each value
+The steps are the same as for one detection, run for each buffer in turn.
+`as_voxel()` returns one voxel for each time step inside a buffer's window:
+three for B and C, and two for A, whose window starts before the first day of
+data. Given that list of voxels, `summarise_3d()` gives one row per time
+step. By default the mean is weighted by the volume of water each value
 stands for, and `n` counts the values used.
 
 `mask()` uses only a buffer's outline and depth range, because `as_voxel()`
-has already used its time. It says so in a message each time, which
+has already used its time. It prints a message saying so each time, which
 `suppressMessages()` hides inside the loop.
 
 ```{r buffer-loop}
 buffer_rows <- lapply(seq_along(buffers), function(i) {
   b <- buffers[i]
   voxels <- as_voxel(crop(proxy, b), time = b)
-  rows <- lapply(voxels, function(v) {
-    summarise_3d(suppressMessages(mask(v, b)), statistic = c("mean", "sd"))
-  })
-  cbind(feature_id = as.data.frame(b)$feature_id, do.call(rbind, rows))
+  inside <- lapply(voxels, function(v) suppressMessages(mask(v, b)))
+  rows <- summarise_3d(inside, statistic = c("mean", "sd"))
+  cbind(feature_id = as.data.frame(b)$feature_id, rows)
 })
 do.call(rbind, buffer_rows)
 ```
 
-`summarise_3d()` keeps each time step in its own row. For one row per
-buffer, average its rows, for example with `aggregate()`.
+Each row summarises one time step; `summarise_3d()` doesn't pool values
+across steps.
 
 ## Areas: a protected area down to 50 m
 
@@ -160,7 +166,7 @@ mpa <- sf::st_sf(
   ))), crs = 4326)
 )
 reef <- as_vector3d(mpa, depth_min = 0, depth_max = 50)
-volume(reef)
+volume(reef) # km³
 ```
 
 The area has no time, so pick the time step with a date. `by = "depth"` gives
@@ -172,33 +178,42 @@ summarise_3d(mask(v, reef), statistic = c("mean", "min", "max"),
              by = "depth")
 ```
 
-The 50 m level counts because its slab, from 37.5 m to 75 m, shares water
-with the area's depth range; `vignette("depth-levels")` describes this rule.
+The 50 m level counts because the water it stands for, from 37.5 m to 75 m,
+overlaps the area's depth range; `vignette("depth-levels")` describes this
+rule.
 The 100 m and 200 m levels are outside the area, so their rows have `NA` and
 `n = 0`.
 
 ## Through time: habitat volume per day
 
-`volume()` on the proxy measures each time step in turn. `fun` sets which
-values count as habitat, here water between 24 and 26 °C:
+`volume()` on the proxy measures each time step in turn, in km³. Pass `fun`
+to count only some values as habitat, here water between 24 and 26 °C:
 
 ```{r volume-time}
 volume(proxy, fun = function(x) x >= 24 & x <= 26)
 ```
 
+The habitat shrinks from day to day because the synthetic water warms each
+day.
+
 For the habitat inside the area only, keep the habitat in one day's voxel
-with `occupied()`, then mask it by the area:
+with `occupied()`. Masking it by the area would keep whole depth levels, so
+the 50 m level would count water down to 75 m, below the area's floor.
+Instead, turn the habitat into a depth range per cell with
+`voxel_to_envelope()` and intersect it with the area, which cuts it at 50 m:
 
 ```{r volume-area}
 habitat <- occupied(v, function(x) x >= 24 & x <= 26)
-volume(mask(habitat, reef))
+inside <- intersect_3d(voxel_to_envelope(habitat), reef)
+volume(inside) # km³
 ```
 
 ## Putting the rows together
 
-Each loop above ends with a list of data frames, one per shape, each starting
-with the shape's `feature_id`. `do.call(rbind, ...)` joins them into one
-table, which you can then join back to the observations by ID:
+The buffer loop ends with a list of data frames, one per buffer, each starting
+with the buffer's `feature_id`. `do.call(rbind, ...)` joins them into one
+table, which you can then join back to the observations by ID. In the result,
+`date` is the detection date and `time` is the time step the values come from:
 
 ```{r join}
 results <- do.call(rbind, buffer_rows)

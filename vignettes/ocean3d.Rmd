@@ -1216,8 +1216,9 @@ a geographical area and selected depth range.
 
 The article
 `vignette("workflow-values-in-shapes")`
-shows the same work one step at a time,
-for points, buffers and areas.
+shows how to do this with the build,
+intersect and summarise steps, for points,
+buffers and areas.
 
 **3. Investigate three-dimensional spatial overlap**
 
