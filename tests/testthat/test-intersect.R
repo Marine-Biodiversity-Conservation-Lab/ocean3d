@@ -910,7 +910,7 @@ test_that("mask(voxel, points) picks each point's level with `method`", {
                     function() {
                       mask(envelope, points_at(2.5, 2.5, 50), method = "bottom")
                     })) {
-    expect_error(call(), "`method` applies only",
+    expect_error(call(), "applies only to a variable with depth",
                  class = "ocean3d_error_unused_argument")
   }
   expect_error(mask(voxel, points_at(2.5, 2.5, 0), method = "deepest"),
@@ -923,7 +923,7 @@ test_that("mask(voxel, points) picks each point's level with `method`", {
                     function() {
                       intersects_3d(point, voxel, method = "bottom")
                     })) {
-    expect_error(call(), "`method` applies only when mask\\(\\)",
+    expect_error(call(), "mask\\(\\) of a SpatVoxel by points",
                  class = "ocean3d_error_unused_argument")
   }
 })

@@ -22,29 +22,38 @@ of files, or a voxel in memory.}
 
 \item{method}{For a variable with depth, the depth level each point
 takes: \code{"nearest"} (default), \code{"nearest_level"}, \code{"bottom"} or
-\code{"surface"}, as in \link[=mask-3d]{mask()}.}
+\code{"surface"}, as in \link[=mask-3d]{mask()}. \code{method} sets the depth level;
+\code{time_match} sets the time step.}
 
 \item{time_match, max_time_diff}{How a point's time is matched to a time
-step: \code{"nearest"} (default) or \code{"exact"}, and for nearest matching, the
-largest gap in days, as in \code{\link[=as_voxel]{as_voxel()}}. \code{NULL} (default) sets no
-limit.}
+step, as in \code{\link[=as_voxel]{as_voxel()}}: \code{"nearest"} (default), the step nearest in
+time, or \code{"exact"}; and for nearest matching, the largest gap in days.
+\code{NULL} (default) sets no limit. These set the time step; \code{method} sets
+the depth level.}
 
 \item{...}{Not used.}
 }
 \value{
 A data frame with one row per point, in the order of \code{y}:
-\code{feature_id}; \code{value}; \code{time}, the date-time of the time step used
-(\code{NA} for a source without dated steps); and \code{depth}, the depth of the
-level used in metres (\code{NA} for a variable without depth). A point off
-the grid, without a matching time step or with no level its \code{method}
-can take has \code{NA} for \code{value}.
+\itemize{
+\item \code{feature_id}, the point's ID;
+\item \code{value}, \code{NA} for a point off the grid, without a matching time step,
+or with no level its \code{method} can take;
+\item \code{time}, the date-time of the time step used, \code{NA} for a source
+without dated steps or a point with no matching step. A point off the
+grid keeps its step's time;
+\item \code{depth}, the depth of the level used in metres, \code{NA} for a variable
+without depth or when \code{value} is \code{NA}.
+}
 }
 \description{
 \code{extract()} reads the value of a gridded variable at each point of a
-\link[=SpatVector3D-class]{SpatVector3D}, for many points at once. It gives the values the
-per-shape loop gives, \code{mask(as_voxel(crop(proxy, p), time = p), p)} for
-each point \code{p}, much faster: the points are matched to time steps
-together, and each time step is read once, cropped to its points.
+\link[=SpatVector3D-class]{SpatVector3D}, for many points at once. It gives the same values
+as calling \code{mask(as_voxel(crop(proxy, p), time = p), p)} for each point
+\code{p}, much faster: the points are matched to time steps together, and
+each time step is read once, cropped to its points. The article
+\code{vignette("workflow-values-in-shapes")} shows it in "Many points at
+once".
 }
 \details{
 Each point takes the time step nearest its time, or the step equal to it
@@ -55,18 +64,25 @@ its time. On a source with several steps, a point without a time gets
 \code{NA}, with a warning.
 
 Each point takes the cell that holds it and, for a variable with depth,
-one depth level, chosen with \code{method} as \link[=mask-3d]{mask()} chooses it for
-points: \code{"nearest"}, the nearest level that has a value, as
-\code{extract_to_point(method = "nearest")} picks it; \code{"nearest_level"}, the
-level nearest the point's depth whatever its value; \code{"bottom"}, the
-deepest level with a value; or \code{"surface"}, the shallowest level. For a
-variable without depth, each point takes the value in its cell, and
+one depth level, chosen with \code{method} as \link[=mask-3d]{mask()} does for points:
+\itemize{
+\item \code{"nearest"} (default): the level nearest the point's depth, skipping
+levels without a value, as \code{extract_to_point(method = "nearest")} does.
+\item \code{"nearest_level"}: the level nearest the point's depth, even if it has
+no value.
+\item \code{"bottom"}: the deepest level with a value.
+\item \code{"surface"}: the shallowest level.
+}
+
+For a variable without depth, each point takes the value in its cell, and
 \code{method} doesn't apply.
 
-A time step whose points spread over more cells than the read budget
-allows (the option \code{ocean3d.max_read_mb}, 1024 MB by default) is read in
-smaller groups of nearby points, so memory follows the budget; the
-values don't change.
+A time step's points are read together while they are close enough. A
+group of points is read in smaller groups of nearby points when one read
+would exceed the read budget (the option \code{ocean3d.max_read_mb}, 1024 MB
+by default), or would hold more than 10,000 cells and depth levels for
+each point, so that points far apart aren't read with the water between
+them. The values are the same.
 }
 \section{Experimental}{
 

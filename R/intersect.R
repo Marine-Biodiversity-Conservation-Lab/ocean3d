@@ -323,12 +323,12 @@ setMethod(
 #'   edges (see [SpatVoxel-class]).
 #' @param method Only when `x` is a voxel and `mask` [SpatVector3D-class]
 #'   points: which depth level each point keeps.
-#'   * `"nearest"` (default): the nearest level that has a value in the
-#'     point's cell, as `extract_to_point(method = "nearest")` picks it.
-#'     Levels without a value are skipped.
-#'   * `"nearest_level"`: the level nearest the point's depth, whatever the
-#'     voxel holds there, as [intersect_3d()] places points. A point whose
-#'     nearest level has no value keeps nothing.
+#'   * `"nearest"` (default): the level nearest the point's depth, skipping
+#'     levels without a value in the point's cell, as
+#'     `extract_to_point(method = "nearest")` picks it.
+#'   * `"nearest_level"`: the level nearest the point's depth, even if it has
+#'     no value, as [intersect_3d()] places points. If that level has no
+#'     value, the point keeps nothing.
 #'   * `"bottom"`: the deepest level that has a value in the point's cell,
 #'     whatever the point's depth, as `extract_to_point(method = "bottom")`.
 #'   * `"surface"`: the shallowest level, whatever the point's depth and

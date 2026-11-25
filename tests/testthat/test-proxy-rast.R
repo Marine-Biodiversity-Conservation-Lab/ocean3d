@@ -65,7 +65,7 @@ test_that("a 2D step works with mask() and summarise_3d()", {
   expect_equal(which(!is.na(kept)), terra::cellFromXY(r, cbind(1.5, 10.5)))
   # A 2D layer has one value per cell, so there is no depth level to choose.
   expect_error(mask(r, pt, method = "bottom"),
-               "`method` applies only when mask\\(\\) keeps a SpatVoxel",
+               "applies only to a variable with depth",
                class = "ocean3d_error_unused_argument")
 
   # A polygon keeps the cells it touches, with no message about depth.

@@ -125,16 +125,17 @@ result.}
 and one depth level: the cell that holds it and the level whose depth
 is nearest the point's depth (a tie goes to the shallower level, as in
 \code{\link[=extract_to_point]{extract_to_point()}}), as \link[=mask-3d]{mask()} picks it with
-\code{method = "nearest_level"}. The level is chosen by depth alone, so a
-point whose nearest level has no value in the voxel shares nothing
-there.
+\code{method = "nearest_level"}. The level is chosen by depth alone, so if
+the level nearest a point's depth has no value in the voxel, the point
+shares nothing there.
 When the voxel's depth edges give uneven slabs, the slab that contains
-a point can belong to another level; the nearest level is used. The
-result is a presence voxel on the voxel's levels, and \code{bounds} doesn't
-apply. Points off the grid share nothing. Points' times aren't
-compared, since a voxel shows one time step. \code{intersect_3d()} doesn't
-read the voxel's values; to keep the values at the nearest level that
-has one, at the bottom or at the surface, use \link[=mask-3d]{mask()} with
+a point can belong to another level; the level nearest the point's
+depth is used. The result is a presence voxel on the voxel's levels,
+and \code{bounds} doesn't apply. Points off the grid share nothing. Points'
+times aren't compared, since a voxel shows one time step.
+\code{intersect_3d()} doesn't read the voxel's values; to keep the values
+at the level nearest the point's depth, skipping levels without a
+value, or at the bottom or the surface, use \link[=mask-3d]{mask()} with
 \code{method}.}
 \item{An envelope and \link[=SpatVector3D-class]{SpatVector3D} points}{In each cell where a
 point's depth lies within the envelope's interval (both ends

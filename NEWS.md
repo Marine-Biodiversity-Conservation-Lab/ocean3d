@@ -243,14 +243,12 @@ an exact match and stop otherwise. For the old behaviour, pass
 ## New features
 
 * `terra::extract()` on a `SpatProxy` reads the values at many
-  `SpatVector3D` points at once (#163). It matches every point to a time
-  step, reads each step once for its points, and picks each point's cell and
-  depth level with `method` as `mask()` does, so the values are those of the
-  per-shape loop. The result has one row per point: `feature_id`, `value`,
-  and the `time` and `depth` used. On 10,000 points over 20 daily steps it
-  takes about 3 seconds, against about 40 minutes for the loop and 7 seconds
-  for `extract_to_point()`. Reads that would exceed `ocean3d.max_read_mb`
-  are split into groups of nearby points.
+  `SpatVector3D` points at once (#163). It gives the same values as calling
+  `crop()`, `as_voxel()` and `mask()` for each point, and takes `method` for
+  the depth level as `mask()` does. The result has one row per point:
+  `feature_id`, `value`, and the `time` and `depth` used. Points far apart,
+  or more than `ocean3d.max_read_mb` would allow, are read in groups of
+  nearby points.
 
 * `terra::rast()` reads time steps of a `SpatProxy` as plain `SpatRaster`s
   (#116), for variables without depth such as sea-surface temperature. Each
@@ -263,18 +261,18 @@ an exact match and stop otherwise. For the old behaviour, pass
   and weights each cell by its area (#116).
 
 * `mask()` of a `SpatVoxel` by `SpatVector3D` points takes a `method` that
-  sets the depth level each point keeps, with the names and meanings of
-  `extract_to_point()`'s (#116):
-  * `"nearest"` (default): the nearest level that has a value, as
-    `extract_to_point(method = "nearest")` picks it.
-  * `"nearest_level"`: the level nearest the point's depth, whatever its
-    value.
-  * `"bottom"`: the deepest level that has a value, as
-    `extract_to_point(method = "bottom")`.
-  * `"surface"`: the shallowest level, as `extract_to_point(method = "surface")`.
+  sets the depth level each point keeps (#116). `"nearest"`, `"bottom"` and
+  `"surface"` mean what they mean in `extract_to_point()`:
+  * `"nearest"` (default): the level nearest the point's depth, skipping
+    levels without a value in the point's cell.
+  * `"nearest_level"`: the level nearest the point's depth, even if it has
+    no value.
+  * `"bottom"`: the deepest level that has a value.
+  * `"surface"`: the shallowest level.
 
   `intersect_3d()` and `intersects_3d()` don't read values, so points there
-  always take the nearest level, as `method = "nearest_level"` does.
+  take the level nearest their depth even if it has no value, as
+  `method = "nearest_level"` does.
 
 * New article, `vignette("workflow-values-in-shapes")` (#105, #115, #116), on
   getting environmental values inside points, buffers, tracks and areas with

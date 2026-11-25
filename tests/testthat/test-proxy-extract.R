@@ -5,7 +5,8 @@
 # The value the per-shape loop gives each point: crop, read its time step,
 # mask with `method`, and take the one value kept (or NA).
 loop_values <- function(p, pts, method = "nearest") {
-  vapply(seq_len(length(pts)), function(i) {
+  n <- length(pts)
+  vapply(seq_len(n), function(i) {
     s <- pts[i]
     v <- tryCatch(as_voxel(crop(p, s), time = s)[[1L]],
                   ocean3d_error_proxy_crop = function(e) NULL)
@@ -85,7 +86,8 @@ test_that("extract() matches a series of files and a 2D variable", {
   flat <- grid_proxy(lon = seq(0.5, 4.5, 1), lat = c(10.5, 11.5),
                      depth = NULL, time = 0:3)
   out <- extract(flat, pts)
-  by_rast <- vapply(seq_len(length(pts)), function(i) {
+  n <- length(pts)
+  by_rast <- vapply(seq_len(n), function(i) {
     r <- terra::rast(crop(flat, pts[i]), time = pts[i])[[1L]]
     kept <- terra::values(mask(r, pts[i]))
     kept[!is.na(kept)]
@@ -105,6 +107,15 @@ test_that("extract() reads points either side of the antimeridian", {
     t = as.POSIXct(c("2020-01-01", "2020-01-02", "2020-01-02"), tz = "UTC")
   ), time = "t")
   expect_identical(extract(p, pts)$value, loop_values(p, pts))
+
+  # A 0 to 360 grid with points given from -180 to 180.
+  east <- grid_proxy(lon = seq(0.5, 359.5, 1), lat = c(-0.5, 0.5),
+                     depth = c(0, 50), time = 0:1)
+  west <- as_vector3d(data.frame(
+    lon = c(-170.3, 10.4, -0.6), lat = c(0.2, -0.2, 0.4), depth = 10,
+    t = as.POSIXct(c("2020-01-01", "2020-01-02", "2020-01-02"), tz = "UTC")
+  ), time = "t")
+  expect_identical(extract(east, west)$value, loop_values(east, west))
 })
 
 test_that("points off the grid or the time axis give NA", {
@@ -127,6 +138,13 @@ test_that("points off the grid or the time axis give NA", {
   expect_warning(out <- extract(p, untimed), "1 of 1 point has no time",
                  class = "ocean3d_warning_point_time")
   expect_true(is.na(out$value))
+  half_timed <- as_vector3d(data.frame(
+    lon = c(1.2, 2.2), lat = 10.6, depth = 5,
+    t = as.POSIXct(c("2020-01-01", NA), tz = "UTC")
+  ), time = "t")
+  expect_warning(out <- extract(p, half_timed), "1 of 2 points has no time",
+                 class = "ocean3d_warning_point_time")
+  expect_identical(is.na(out$value), c(FALSE, TRUE))
   # A source with one step reads it for every point, whatever its time.
   one <- grid_proxy(lon = seq(0.5, 4.5, 1), lat = c(10.5, 11.5),
                     depth = c(0, 50), time = 0)
@@ -140,6 +158,47 @@ test_that("a small read budget splits the reads without changing values", {
   whole <- extract(p, pts)
   rlang::local_options(ocean3d.max_read_mb = 1e-5)
   expect_identical(extract(p, pts), whole)
+})
+
+test_that("a point on a cell edge takes the cell its own crop gives", {
+  # On a 1 degree grid, (1, 11) lies on the edge between cells. Alone or
+  # with a point far to the north-east, it takes the same cell as in the
+  # per-shape loop.
+  p <- grid_proxy(lon = seq(0.5, 4.5, 1), lat = seq(10.5, 12.5, 1),
+                  depth = 0, time = NULL,
+                  values = seq_len(5 * 3))
+  alone <- as_vector3d(data.frame(lon = 1, lat = 11, depth = 0))
+  paired <- as_vector3d(data.frame(lon = c(1, 4.5), lat = c(11, 12.5),
+                                   depth = 0))
+  expect_identical(extract(p, alone)$value, loop_values(p, alone))
+  expect_identical(extract(p, paired)$value[1L], extract(p, alone)$value)
+
+  # Points on whole degrees, at the normal and a tiny budget.
+  grid <- expand.grid(lon = 0:5, lat = 10:13)
+  on_edges <- as_vector3d(cbind(grid, depth = 0))
+  want <- loop_values(p, on_edges)
+  expect_identical(extract(p, on_edges)$value, want)
+  rlang::local_options(ocean3d.max_read_mb = 1e-5)
+  expect_identical(extract(p, on_edges)$value, want)
+})
+
+test_that("points far apart are read as small windows, not the box between", {
+  p <- grid_proxy(lon = seq(0.5, 199.5, 1), lat = seq(-59.5, 59.5, 1),
+                  depth = c(0, 50), time = NULL)
+  far <- as_vector3d(data.frame(lon = c(5.2, 190.7), lat = c(-50.3, 52.6),
+                                depth = 10))
+  read_cells <- integer(0)
+  reader <- .read_proxy_window
+  testthat::local_mocked_bindings(.read_proxy_window = function(x, ...) {
+    sizes <- x@variable$dim_lengths
+    read_cells <<- c(read_cells, prod(sizes[c("lon", "lat")]))
+    reader(x, ...)
+  })
+  out <- extract(p, far)
+  # Two reads of a few cells each, not one read of the 186 x 104 box.
+  expect_length(read_cells, 2L)
+  expect_true(all(read_cells <= 9L))
+  expect_identical(out$value, loop_values(p, far))
 })
 
 test_that("extract() rejects input it can't use", {

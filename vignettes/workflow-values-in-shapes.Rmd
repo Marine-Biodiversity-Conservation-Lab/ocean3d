@@ -90,7 +90,7 @@ detections
 For one detection, `crop()` keeps the grid cell it falls in, and `as_voxel()`
 reads the time step nearest its date. With a shape as `time`, `as_voxel()`
 always returns a list, here with one voxel. `mask()` then keeps the value at
-the depth level nearest the detection's depth that has a value:
+the depth level nearest the detection's depth, skipping levels without a value:
 
 ```{r one-point}
 a <- detections[1]
@@ -112,12 +112,15 @@ after the last step. `extract_to_point()` warns when the step it picks is on
 another day; `as_voxel()` doesn't, so set `max_time_diff` in `as_voxel()` to
 limit how far away the step may be.
 
-The depth rules of `mask()` have the names and meanings of
-`extract_to_point()`'s. By default (`method = "nearest"`) both skip depth
-levels with no value and take the nearest level that has one. `"bottom"`
-takes the deepest level with a value and `"surface"` the shallowest level.
-`method = "nearest_level"` takes the nearest level whatever its value, so a
-detection whose nearest level is empty gets `NA`.
+`mask()` has two rules for the nearest depth level:
+
+- `method = "nearest"` (default, as in `extract_to_point()`) takes the level
+  nearest the detection's depth, skipping levels without a value.
+- `method = "nearest_level"` takes the level nearest the detection's depth
+  even if it has no value, so the detection gets `NA` there.
+
+`"bottom"` takes the deepest level with a value and `"surface"` the
+shallowest level, as in `extract_to_point()`.
 
 This file has a value at every level, so the next chunk removes the 10 m
 level from a copy of the voxel. Detection A at 12 m then takes the 0 m
@@ -137,12 +140,10 @@ extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
 
 ### Many points at once
 
-For thousands of detections, the loop above reads one window per point.
-`terra::extract()` on the proxy gives the same values for all the points in
-one call: it matches every detection to a time step, reads each step once
-for the detections on it, and picks each detection's level with the same
-`method`. The result has one row per detection, with the time step and depth
-level used:
+Repeating these steps for thousands of detections reads one window per
+detection. `terra::extract()` on the proxy gives the same values for all of
+them in one call, and takes the same `method`. It returns one row per
+detection, with the time step and depth level used:
 
 ```{r extract-many}
 terra::extract(proxy, detections)

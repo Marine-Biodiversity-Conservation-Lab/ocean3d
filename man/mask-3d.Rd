@@ -53,12 +53,12 @@ keeps the values \emph{outside} the domain instead.}
 \item{method}{Only when \code{x} is a voxel and \code{mask} \link[=SpatVector3D-class]{SpatVector3D}
 points: which depth level each point keeps.
 \itemize{
-\item \code{"nearest"} (default): the nearest level that has a value in the
-point's cell, as \code{extract_to_point(method = "nearest")} picks it.
-Levels without a value are skipped.
-\item \code{"nearest_level"}: the level nearest the point's depth, whatever the
-voxel holds there, as \code{\link[=intersect_3d]{intersect_3d()}} places points. A point whose
-nearest level has no value keeps nothing.
+\item \code{"nearest"} (default): the level nearest the point's depth, skipping
+levels without a value in the point's cell, as
+\code{extract_to_point(method = "nearest")} picks it.
+\item \code{"nearest_level"}: the level nearest the point's depth, even if it has
+no value, as \code{\link[=intersect_3d]{intersect_3d()}} places points. If that level has no
+value, the point keeps nothing.
 \item \code{"bottom"}: the deepest level that has a value in the point's cell,
 whatever the point's depth, as \code{extract_to_point(method = "bottom")}.
 \item \code{"surface"}: the shallowest level, whatever the point's depth and

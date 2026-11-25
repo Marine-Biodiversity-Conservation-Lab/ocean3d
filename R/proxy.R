@@ -818,6 +818,59 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   invisible(max_time_diff)
 }
 
+# The one producer of `ocean3d_error_proxy_time`: a `time` that selects no
+# step of a SpatProxy, from .proxy_time_step() and .match_proxy_steps().
+.abort_proxy_time <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_proxy_time", call = NULL)
+}
+
+# The time step of a SpatProxy's dated time axis that each of `times`
+# (prepared date-times, as .prepare_time_input() gives) matches, with the
+# nearest or exact rule (`time_match`, `max_time_diff`) at `resolution`:
+# dates compare by UTC day, date-times exactly. Several steps on the day of
+# a date can't be told apart, which stops. A time that matches no step
+# stops with `on_missing = "abort"`, as for the `time` of as_voxel(); with
+# `"na"`, as for the points of extract(), its step is NA; the messages name
+# `time` or the points to match. The one matcher for as_voxel(), rast() and
+# extract() on a proxy, so their rules agree.
+.match_proxy_steps <- function(x, times, resolution, time_match,
+                               max_time_diff, on_missing = c("abort", "na")) {
+  on_missing <- match.arg(on_missing)
+  dates <- x@axes$time$cftime$as_timestamp(asPOSIX = TRUE)
+  shown <- function(values) toString(unique(format(values)))
+  steps <- tryCatch(
+    .match_time_indices(dates, times, time_match, max_time_diff, resolution),
+    ocean3d_error_repeated_time = function(e) {
+      .abort_proxy_time(if (on_missing == "abort") {
+        glue::glue(
+          "Several time steps fall on the day of `time` ",
+          "({shown(times[!is.na(times)])}). Give a date-time to read one ",
+          "of them, or a window of two dates to read them all."
+        )
+      } else {
+        paste("Several time steps fall on the day of some points' dates.",
+              "Give the points date-times (with hours) in as_vector3d().")
+      })
+    }
+  )
+  missed <- is.na(steps) & !is.na(times)
+  if (on_missing == "abort" && any(missed)) {
+    how <- if (time_match == "exact" || is.null(max_time_diff)) {
+      "matches"
+    } else {
+      glue::glue("is within {max_time_diff} days of")
+    }
+    range_shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
+                         collapse = " to ")
+    .abort_proxy_time(glue::glue(
+      "No time step {how} `time` ({shown(times[missed])}). The steps run ",
+      "from {range_shown} UTC; give a step number, a date or date-time, or ",
+      "a window of two."
+    ))
+  }
+  steps
+}
+
 # The time steps `time` selects: `steps` (their indices, or NULL when the
 # proxy has no time axis), `dates` (their date-times, or NULL when the axis
 # has none: a climatology or no time axis) and `list` (whether as_voxel()
@@ -830,9 +883,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # and one with more is an error.
 .proxy_time_step <- function(x, time, time_match = "nearest",
                              max_time_diff = NULL) {
-  stop_time <- function(message) {
-    rlang::abort(message, class = "ocean3d_error_proxy_time", call = NULL)
-  }
+  stop_time <- .abort_proxy_time
   axis <- x@axes$time
   n <- if (is.null(axis)) 1L else x@variable$dim_lengths[[axis$dim]]
   dated <- !is.null(axis) && !isTRUE(axis$climatology)
@@ -932,30 +983,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
                  collapse = " to ")
   if (length(time) == 1L) {
-    # Several steps on the day of a date tie; a date-time tells them apart.
-    step <- tryCatch(
-      .match_time_indices(dates, prepared$values, time_match, max_time_diff,
-                          resolution),
-      ocean3d_error_repeated_time = function(e) {
-        stop_time(glue::glue(
-          "Several time steps fall on the day of `time` ",
-          "({format(prepared$values)}). Give a date-time to read one of ",
-          "them, or a window of two dates to read them all."
-        ))
-      }
-    )
-    if (is.na(step)) {
-      how <- if (time_match == "exact" || is.null(max_time_diff)) {
-        "matches"
-      } else {
-        glue::glue("is within {max_time_diff} days of")
-      }
-      stop_time(glue::glue(
-        "No time step {how} `time` ({format(prepared$values)}). The steps ",
-        "run from {shown} UTC; give a step number, a date or date-time, or ",
-        "a window of two."
-      ))
-    }
+    step <- .match_proxy_steps(x, prepared$values, resolution, time_match,
+                               max_time_diff)
     return(selected(step, as_list))
   }
   # A window: every step from the start to the end. With dates, the whole
