@@ -323,12 +323,12 @@ setMethod(
 #'   edges (see [SpatVoxel-class]).
 #' @param method Only when `x` is a voxel and `mask` [SpatVector3D-class]
 #'   points: which depth level each point keeps.
-#'   * `"nearest"` (default): the level nearest the point's depth, whatever
-#'     the voxel holds there, as [intersect_3d()] places points. A point
-#'     whose nearest level has no value keeps nothing.
-#'   * `"nearest_value"`: the nearest level that has a value in the point's
-#'     cell, as `extract_to_point(method = "nearest")` picks it. Levels
-#'     without a value are skipped.
+#'   * `"nearest"` (default): the nearest level that has a value in the
+#'     point's cell, as `extract_to_point(method = "nearest")` picks it.
+#'     Levels without a value are skipped.
+#'   * `"nearest_level"`: the level nearest the point's depth, whatever the
+#'     voxel holds there, as [intersect_3d()] places points. A point whose
+#'     nearest level has no value keeps nothing.
 #'   * `"bottom"`: the deepest level that has a value in the point's cell,
 #'     whatever the point's depth, as `extract_to_point(method = "bottom")`.
 #'   * `"surface"`: the shallowest level, whatever the point's depth and
@@ -337,8 +337,9 @@ setMethod(
 #'
 #'   For the two nearest rules, a point halfway between two levels takes the
 #'   shallower one. A point whose cell has no value at any level keeps
-#'   nothing under `"nearest_value"` and `"bottom"`. These rules match
-#'   [extract_to_point()]'s for the depth level. The cell is the one that
+#'   nothing under `"nearest"` and `"bottom"`. `"nearest"`, `"bottom"` and
+#'   `"surface"` match [extract_to_point()]'s rules of the same name for the
+#'   depth level. The cell is the one that
 #'   holds the point; for a point exactly on the edge between two cells it
 #'   can differ from the cell [extract_to_point()] picks.
 #' @param ... Passed on to [terra::mask()]. For example, `inverse = TRUE`
@@ -477,14 +478,14 @@ setMethod(
 #
 # A point covers one cell and one depth level (#115). On a voxel, the points
 # become a presence voxel on its levels: 1 at each point's cell and one
-# level, NA elsewhere. `.level_rule` picks the level, through
-# .summarise_depth_profile(), the rule extract_to_point() uses: "nearest"
-# (the default, and the only rule intersect_3d() and intersects_3d() use)
-# takes the level whose depth is nearest the point's depth, a tie going to
-# the shallower level, whatever the voxel holds there. mask() can also pass
-# "nearest_value", "bottom" or "surface", which read the cell's values. The
-# argument has a dotted name so the generics' `...`, which reaches here,
-# can't set it: `method` given to intersect_3d() stays an unused argument.
+# level, NA elsewhere. `.level_rule` picks the level (.point_levels()):
+# "nearest_level" (the default, and the only rule intersect_3d() and
+# intersects_3d() use) takes the level whose depth is nearest the point's
+# depth, a tie going to the shallower level, whatever the voxel holds there.
+# mask() passes its `method`: "nearest", "bottom" or "surface", which read
+# the cell's values, or "nearest_level". The argument has a dotted name so
+# the generics' `...`, which reaches here, can't set it: `method` given to
+# intersect_3d() stays an unused argument.
 # On an envelope, the result
 # is the envelope's part the points reach: in each cell holding a point whose
 # depth lies within the cell's interval (both ends included), the shallowest
@@ -493,7 +494,7 @@ setMethod(
 # before passing it on: an error raised while S4 evaluates an argument for
 # dispatch loses its class.
 .vector3d_on_grid <- function(x, template, ...,
-                              .level_rule = "nearest") {
+                              .level_rule = "nearest_level") {
   .check_geomtype(x, c("polygons", "points"))
   # remove the 3D class
   grid <- methods::as(template[[1]], "SpatRaster")
@@ -549,7 +550,7 @@ setMethod(
 # rules .point_levels() knows. The one producer of
 # `ocean3d_error_mask_method`, for mask() and extract() on a SpatProxy.
 .check_level_rule <- function(method) {
-  rules <- c("nearest", "nearest_value", "bottom", "surface")
+  rules <- c("nearest", "nearest_level", "bottom", "surface")
   if (!rlang::is_string(method) || !method %in% rules) {
     rlang::abort(glue::glue(
       "`method` must be one of {toString(dQuote(rules, FALSE))}."
@@ -559,14 +560,15 @@ setMethod(
 }
 
 # Internal: the cell of voxel `template` holding each point of SpatVector3D
-# points `x`, and the depth level the point takes under `rule`: "nearest"
-# takes the level whose depth is nearest the point's depth, a tie going to
-# the shallower level, whatever the voxel holds there; "nearest_value",
-# "bottom" and "surface" read the cell's values, with the rules
-# extract_to_point() uses (.summarise_depth_profile()). NA for a point off
-# the grid, or with no level its rule can take. "nearest" reads no values,
-# so one profile in which every level has a value serves every point; the
-# other rules read one column of values per distinct cell. Each distinct
+# points `x`, and the depth level the point takes under `rule`:
+# "nearest_level" takes the level whose depth is nearest the point's depth,
+# a tie going to the shallower level, whatever the voxel holds there;
+# "nearest", "bottom" and "surface" read the cell's values, with the rules
+# of the same name in extract_to_point() (.summarise_depth_profile()). NA for
+# a point off the grid, or with no level its rule can take.
+# "nearest_level" reads no values, so one profile in which every level has
+# a value serves every point; the other rules read one column of values per
+# distinct cell. Each distinct
 # profile and depth goes through .summarise_depth_profile() once, so memory
 # and time follow the cells and depths, not the number of points. With
 # uneven slabs (stored depth edges), the slab that contains a point can
@@ -578,11 +580,11 @@ setMethod(
   cells <- .point_cells(x, methods::as(template[[1]], "SpatRaster"))
   on <- !is.na(cells)
   d <- depths(template)
-  kind <- c(nearest = "nearest", nearest_value = "nearest",
+  kind <- c(nearest = "nearest", nearest_level = "nearest",
             bottom = "seabottom", surface = "surface")[[rule]]
   level <- rep(NA_integer_, length(cells))
   if (any(on)) {
-    if (rule == "nearest") {
+    if (rule == "nearest_level") {
       profiles <- matrix(1, 1L, length(d))
       row <- rep(1L, sum(on))
     } else {
@@ -814,7 +816,7 @@ setMethod(
 #' @export
 setMethod("mask", c("SpatRaster", "SpatVector3D"),
           function(x, mask, bounds = c("midpoint", "top"),
-                   method = c("nearest", "nearest_value", "bottom",
+                   method = c("nearest", "nearest_level", "bottom",
                               "surface"),
                    ...) {
             # Checked first: below, an error raised while S4 evaluates

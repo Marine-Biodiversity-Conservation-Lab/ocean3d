@@ -124,8 +124,10 @@ result.}
 \item{A voxel and \link[=SpatVector3D-class]{SpatVector3D} points}{A point covers one cell
 and one depth level: the cell that holds it and the level whose depth
 is nearest the point's depth (a tie goes to the shallower level, as in
-\code{\link[=extract_to_point]{extract_to_point()}}). The level is chosen by depth alone, so a point
-whose nearest level has no value in the voxel shares nothing there.
+\code{\link[=extract_to_point]{extract_to_point()}}), as \link[=mask-3d]{mask()} picks it with
+\code{method = "nearest_level"}. The level is chosen by depth alone, so a
+point whose nearest level has no value in the voxel shares nothing
+there.
 When the voxel's depth edges give uneven slabs, the slab that contains
 a point can belong to another level; the nearest level is used. The
 result is a presence voxel on the voxel's levels, and \code{bounds} doesn't

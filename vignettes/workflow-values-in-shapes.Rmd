@@ -90,7 +90,7 @@ detections
 For one detection, `crop()` keeps the grid cell it falls in, and `as_voxel()`
 reads the time step nearest its date. With a shape as `time`, `as_voxel()`
 always returns a list, here with one voxel. `mask()` then keeps the value at
-the depth level nearest the detection's depth:
+the depth level nearest the detection's depth that has a value:
 
 ```{r one-point}
 a <- detections[1]
@@ -112,24 +112,24 @@ after the last step. `extract_to_point()` warns when the step it picks is on
 another day; `as_voxel()` doesn't, so set `max_time_diff` in `as_voxel()` to
 limit how far away the step may be.
 
-The two differ when the nearest depth level has no value.
-`extract_to_point()` skips such levels and takes the nearest level with a
-value. By default, `mask()` takes the nearest level whatever its value, so
-such a detection gets `NA`. Pass `method = "nearest_value"` to skip empty
-levels as `extract_to_point()` does, or `method = "bottom"` for the deepest
-level with a value, as `extract_to_point(method = "bottom")` gives.
+The depth rules of `mask()` have the names and meanings of
+`extract_to_point()`'s. By default (`method = "nearest"`) both skip depth
+levels with no value and take the nearest level that has one. `"bottom"`
+takes the deepest level with a value and `"surface"` the shallowest level.
+`method = "nearest_level"` takes the nearest level whatever its value, so a
+detection whose nearest level is empty gets `NA`.
 
 This file has a value at every level, so the next chunk removes the 10 m
-level from a copy of the voxel. Detection A at 12 m then gets `NA` by
-default. With `"nearest_value"` it takes the 0 m level, 12 m away, which is
-nearer than the 25 m level. `"bottom"` takes the 200 m level, the same value
-`extract_to_point()` gives:
+level from a copy of the voxel. Detection A at 12 m then takes the 0 m
+level by default, 12 m away, which is nearer than the 25 m level. With
+`"nearest_level"` it gets `NA`. `"bottom"` takes the 200 m level, the same
+value `extract_to_point()` gives:
 
 ```{r point-methods}
 gappy <- v
 gappy[[2]] <- NA_real_   # the 10 m level
 summarise_3d(mask(gappy, a), statistic = "mean")
-summarise_3d(mask(gappy, a, method = "nearest_value"), statistic = "mean")
+summarise_3d(mask(gappy, a, method = "nearest_level"), statistic = "mean")
 summarise_3d(mask(v, a, method = "bottom"), statistic = "mean")
 extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
                  method = "bottom")$temp
@@ -145,7 +145,7 @@ for the detections on it, and picks each detection's level with the same
 level used:
 
 ```{r extract-many}
-terra::extract(proxy, detections, method = "nearest_value")
+terra::extract(proxy, detections)
 ```
 
 ## Surface data: a variable without depth

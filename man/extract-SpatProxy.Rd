@@ -8,7 +8,7 @@
 \S4method{extract}{SpatProxy,SpatVector3D}(
   x,
   y,
-  method = c("nearest", "nearest_value", "bottom", "surface"),
+  method = c("nearest", "nearest_level", "bottom", "surface"),
   time_match = c("nearest", "exact"),
   max_time_diff = NULL,
   ...
@@ -21,8 +21,8 @@ of files, or a voxel in memory.}
 \item{y}{\link[=SpatVector3D-class]{SpatVector3D} points, from \code{\link[=as_vector3d]{as_vector3d()}}.}
 
 \item{method}{For a variable with depth, the depth level each point
-takes: \code{"nearest"} (default), \code{"nearest_value"}, \code{"bottom"} or
-\code{"surface"}, as in \code{\link[terra:mask]{mask()}}.}
+takes: \code{"nearest"} (default), \code{"nearest_level"}, \code{"bottom"} or
+\code{"surface"}, as in \link[=mask-3d]{mask()}.}
 
 \item{time_match, max_time_diff}{How a point's time is matched to a time
 step: \code{"nearest"} (default) or \code{"exact"}, and for nearest matching, the
@@ -55,9 +55,10 @@ its time. On a source with several steps, a point without a time gets
 \code{NA}, with a warning.
 
 Each point takes the cell that holds it and, for a variable with depth,
-one depth level, chosen with \code{method} as \code{\link[terra:mask]{mask()}} chooses it for points:
-\code{"nearest"}, the level nearest the point's depth whatever its value;
-\code{"nearest_value"}, the nearest level that has a value; \code{"bottom"}, the
+one depth level, chosen with \code{method} as \link[=mask-3d]{mask()} chooses it for
+points: \code{"nearest"}, the nearest level that has a value, as
+\code{extract_to_point(method = "nearest")} picks it; \code{"nearest_level"}, the
+level nearest the point's depth whatever its value; \code{"bottom"}, the
 deepest level with a value; or \code{"surface"}, the shallowest level. For a
 variable without depth, each point takes the value in its cell, and
 \code{method} doesn't apply.
@@ -85,6 +86,6 @@ terra::extract(p, pts)
 terra::extract(p, pts, method = "bottom")
 }
 \seealso{
-\code{\link[terra:mask]{mask()}} and \code{\link[=as_voxel]{as_voxel()}} for one shape at a time;
+\link[=mask-3d]{mask()} and \code{\link[=as_voxel]{as_voxel()}} for one shape at a time;
 \code{\link[=extract_to_point]{extract_to_point()}}.
 }

@@ -20,9 +20,10 @@
 #' `NA`, with a warning.
 #'
 #' Each point takes the cell that holds it and, for a variable with depth,
-#' one depth level, chosen with `method` as [mask()] chooses it for points:
-#' `"nearest"`, the level nearest the point's depth whatever its value;
-#' `"nearest_value"`, the nearest level that has a value; `"bottom"`, the
+#' one depth level, chosen with `method` as [mask()][mask-3d] chooses it for
+#' points: `"nearest"`, the nearest level that has a value, as
+#' `extract_to_point(method = "nearest")` picks it; `"nearest_level"`, the
+#' level nearest the point's depth whatever its value; `"bottom"`, the
 #' deepest level with a value; or `"surface"`, the shallowest level. For a
 #' variable without depth, each point takes the value in its cell, and
 #' `method` doesn't apply.
@@ -38,8 +39,8 @@
 #'   of files, or a voxel in memory.
 #' @param y [SpatVector3D-class] points, from [as_vector3d()].
 #' @param method For a variable with depth, the depth level each point
-#'   takes: `"nearest"` (default), `"nearest_value"`, `"bottom"` or
-#'   `"surface"`, as in [mask()].
+#'   takes: `"nearest"` (default), `"nearest_level"`, `"bottom"` or
+#'   `"surface"`, as in [mask()][mask-3d].
 #' @param time_match,max_time_diff How a point's time is matched to a time
 #'   step: `"nearest"` (default) or `"exact"`, and for nearest matching, the
 #'   largest gap in days, as in [as_voxel()]. `NULL` (default) sets no
@@ -53,7 +54,7 @@
 #'   the grid, without a matching time step or with no level its `method`
 #'   can take has `NA` for `value`.
 #'
-#' @seealso [mask()] and [as_voxel()] for one shape at a time;
+#' @seealso [mask()][mask-3d] and [as_voxel()] for one shape at a time;
 #'   [extract_to_point()].
 #' @examples
 #' p <- as_proxy(system.file("extdata", "example_3d.nc", package = "ocean3d"))
@@ -70,7 +71,7 @@
 #' @export
 setMethod(
   "extract", c("SpatProxy", "SpatVector3D"),
-  function(x, y, method = c("nearest", "nearest_value", "bottom", "surface"),
+  function(x, y, method = c("nearest", "nearest_level", "bottom", "surface"),
            time_match = c("nearest", "exact"), max_time_diff = NULL, ...) {
     .no_extra_args(...)
     .check_geomtype(y, "points")

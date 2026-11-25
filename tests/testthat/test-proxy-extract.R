@@ -42,7 +42,7 @@ test_that("extract() gives the per-shape loop's values for every method", {
   p <- grid_proxy(lon = seq(0.5, 9.5, 1), lat = seq(10.5, 14.5, 1),
                   depth = c(0, 10, 50, 100), time = 0:4)
   pts <- timed_points(40, c(0, 10), c(10, 15))
-  for (method in c("nearest", "nearest_value", "bottom", "surface")) {
+  for (method in c("nearest", "nearest_level", "bottom", "surface")) {
     out <- extract(p, pts, method = method)
     expect_identical(out$value, loop_values(p, pts, method), label = method)
   }
@@ -64,8 +64,10 @@ test_that("extract() reads levels with no value as `method` says", {
                   depth = c(0, 10, 50, 100), time = NULL,
                   values = rep(values, 2))
   pts <- as_vector3d(data.frame(lon = 2.2, lat = 12.2, depth = 12))
-  expect_true(is.na(extract(p, pts)$value))
-  expect_identical(extract(p, pts, method = "nearest_value")$depth, 0)
+  # By default, the nearest level with a value, as extract_to_point() picks
+  # it; "nearest_level" takes the empty 10 m level.
+  expect_identical(extract(p, pts)$depth, 0)
+  expect_true(is.na(extract(p, pts, method = "nearest_level")$value))
   expect_identical(extract(p, pts, method = "bottom")$depth, 50)
 })
 
@@ -135,9 +137,9 @@ test_that("a small read budget splits the reads without changing values", {
   p <- grid_proxy(lon = seq(0.5, 9.5, 1), lat = seq(10.5, 14.5, 1),
                   depth = c(0, 10, 50, 100), time = 0:4)
   pts <- timed_points(40, c(0, 10), c(10, 15))
-  whole <- extract(p, pts, method = "nearest_value")
+  whole <- extract(p, pts)
   rlang::local_options(ocean3d.max_read_mb = 1e-5)
-  expect_identical(extract(p, pts, method = "nearest_value"), whole)
+  expect_identical(extract(p, pts), whole)
 })
 
 test_that("extract() rejects input it can't use", {

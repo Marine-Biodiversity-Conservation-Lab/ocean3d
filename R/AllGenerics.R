@@ -203,8 +203,10 @@ setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
 #'   \item{A voxel and [SpatVector3D-class] points}{A point covers one cell
 #'     and one depth level: the cell that holds it and the level whose depth
 #'     is nearest the point's depth (a tie goes to the shallower level, as in
-#'     [extract_to_point()]). The level is chosen by depth alone, so a point
-#'     whose nearest level has no value in the voxel shares nothing there.
+#'     [extract_to_point()]), as [mask()][mask-3d] picks it with
+#'     `method = "nearest_level"`. The level is chosen by depth alone, so a
+#'     point whose nearest level has no value in the voxel shares nothing
+#'     there.
 #'     When the voxel's depth edges give uneven slabs, the slab that contains
 #'     a point can belong to another level; the nearest level is used. The
 #'     result is a presence voxel on the voxel's levels, and `bounds` doesn't
@@ -368,9 +370,10 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' as [intersect_3d()] compares them, after being put on the 3D object's
 #' grid. A cell is `TRUE` where the voxel has a value at the level nearest a
 #' point's depth, or where a point's depth lies within the envelope's
-#' interval. Points always take the level nearest their depth here; the
-#' other depth rules (the nearest level with a value, the bottom and the
-#' surface) are in the `method` of [mask()][mask-3d].
+#' interval. Points always take the level nearest their depth here, as
+#' `method = "nearest_level"` does in [mask()][mask-3d]; the other depth
+#' rules (the nearest level with a value, the bottom and the surface) are in
+#' the `method` of [mask()][mask-3d].
 #'
 #' Two [SpatVector3D-class] sets (polygons with polygons, or points with
 #' polygons) have no grid to answer on, so the answer is a list instead, as

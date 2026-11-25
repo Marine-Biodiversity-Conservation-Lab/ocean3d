@@ -263,17 +263,18 @@ an exact match and stop otherwise. For the old behaviour, pass
   and weights each cell by its area (#116).
 
 * `mask()` of a `SpatVoxel` by `SpatVector3D` points takes a `method` that
-  sets the depth level each point keeps (#116):
-  * `"nearest"` (default, as before): the level nearest the point's depth,
-    whatever its value.
-  * `"nearest_value"`: the nearest level that has a value, as
+  sets the depth level each point keeps, with the names and meanings of
+  `extract_to_point()`'s (#116):
+  * `"nearest"` (default): the nearest level that has a value, as
     `extract_to_point(method = "nearest")` picks it.
+  * `"nearest_level"`: the level nearest the point's depth, whatever its
+    value.
   * `"bottom"`: the deepest level that has a value, as
     `extract_to_point(method = "bottom")`.
   * `"surface"`: the shallowest level, as `extract_to_point(method = "surface")`.
 
   `intersect_3d()` and `intersects_3d()` don't read values, so points there
-  always take the nearest level.
+  always take the nearest level, as `method = "nearest_level"` does.
 
 * New article, `vignette("workflow-values-in-shapes")` (#105, #115, #116), on
   getting environmental values inside points, buffers, tracks and areas with
