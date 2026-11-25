@@ -525,22 +525,35 @@ setMethod(
     d <- depths(template)
     kind <- c(nearest = "nearest", nearest_value = "nearest",
               bottom = "seabottom", surface = "surface")[[.level_rule]]
-    # "nearest" reads no values: every level counts as having one. The other
-    # rules read each point's column of values. With uneven slabs (stored
-    # depth edges), the slab that contains the point can belong to another
-    # level; the nearest level is still used.
-    profiles <- matrix(1, length(cells), length(d))
-    if (.level_rule != "nearest" && any(on)) {
-      # remove the 3D class
-      profiles[on, ] <- as.matrix(terra::extract(
-        methods::as(template, "SpatRaster"), cells[on]
-      ))
+    # "nearest" reads no values, so one profile in which every level has a
+    # value serves every point. The other rules read one column of values
+    # per distinct cell. Each distinct profile and depth goes through
+    # .summarise_depth_profile() once, so memory and time follow the cells
+    # and depths, not the number of points. With uneven slabs (stored depth
+    # edges), the slab that contains a point can belong to another level;
+    # the nearest level is still used.
+    level <- rep(NA_integer_, length(cells))
+    if (any(on)) {
+      if (.level_rule == "nearest") {
+        profiles <- matrix(1, 1L, length(d))
+        row <- rep(1L, sum(on))
+      } else {
+        cell_ids <- unique(cells[on])
+        # remove the 3D class
+        profiles <- as.matrix(terra::extract(
+          methods::as(template, "SpatRaster"), cell_ids
+        ))
+        row <- match(cells[on], cell_ids)
+      }
+      target <- if (kind == "nearest") v$depth[on] else rep(NA_real_, sum(on))
+      key <- paste(row, target)
+      first <- !duplicated(key)
+      picked <- vapply(which(first), function(k) {
+        profile <- profiles[row[k], ]
+        .summarise_depth_profile(profile, d, target[k])$index[[kind]]
+      }, integer(1))
+      level[on] <- picked[match(key, key[first])]
     }
-    level <- vapply(seq_along(cells), function(i) {
-      if (!on[i]) return(NA_integer_)
-      target <- if (kind == "nearest") v$depth[i] else NA_real_
-      .summarise_depth_profile(profiles[i, ], d, target)$index[[kind]]
-    }, integer(1))
     on <- on & !is.na(level)
     occ <- matrix(0, terra::ncell(grid), length(d))
     occ[cbind(cells[on], level[on])] <- 1

@@ -921,6 +921,36 @@ test_that("mask(voxel, points) picks each point's level with `method`", {
   }
 })
 
+test_that("many points pick their levels once per cell and depth", {
+  vals <- matrix(NA_real_, 25, 4)
+  vals[13, ] <- c(10, NA, 30, NA)
+  voxel <- make_voxel(vals, c(0, 100, 200, 300), varname = "temp",
+                      grid = make_template())
+  # 1e5 points at three depths in two cells.
+  n <- 1e5
+  many <- points_at(lon = rep(c(2.5, 0.5), length.out = n), lat = 2.5,
+                    depth = rep(c(0, 110, 290), length.out = n))
+  calls <- 0L
+  helper <- .summarise_depth_profile
+  testthat::local_mocked_bindings(.summarise_depth_profile = function(...) {
+    calls <<- calls + 1L
+    helper(...)
+  })
+  for (method in c("nearest", "nearest_value", "bottom")) {
+    calls <- 0L
+    out <- terra::values(mask(voxel, many, method = method))
+    # One call per distinct profile and depth, not one per point.
+    expect_lte(calls, 6L)
+    # The same levels as three single points in cell 13.
+    one <- vapply(c(0, 110, 290), function(z) {
+      v <- terra::values(mask(voxel, points_at(2.5, 2.5, z), method = method))
+      sum((!is.na(v[13, ])) * seq_len(4))
+    }, numeric(1))
+    expect_equal(sort(unique(which(!is.na(out[13, ])))),
+                 sort(unique(one[one > 0])), info = method)
+  }
+})
+
 test_that("mask(voxel, points, method) reads a voxel from a netCDF file", {
   # Two cells, four levels, with empty levels in each column, as near the
   # seafloor. The expected values are the levels extract_to_point() picks
