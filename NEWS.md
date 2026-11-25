@@ -242,9 +242,13 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
-* New article, `vignette("workflow-values-in-shapes")` (#115, #116), on
-  getting environmental values inside points, buffers and areas with the
-  build, intersect and summarise steps.
+* New article, `vignette("workflow-values-in-shapes")` (#105, #115, #116), on
+  getting environmental values inside points, buffers, tracks and areas with
+  the build, intersect and summarise steps. Its track section samples a route
+  with `sample_3d()`, buffers each sample, and weights the per-buffer results
+  by the length of route each sample stands for. Its area section shows a
+  depth range bounded by the seafloor, built with `vect_to_envelope()` from a
+  bathymetry raster.
 
 * `as_voxel()` on a `SpatProxy` reads several time steps at once (#115):
   `time` can be a window of two dates or date-times, giving a list of

@@ -1,8 +1,8 @@
 ---
-title: "Environmental values inside points, buffers and areas"
+title: "Environmental values inside points, buffers, tracks and areas"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Environmental values inside points, buffers and areas}
+  %\VignetteIndexEntry{Environmental values inside points, buffers, tracks and areas}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -16,10 +16,11 @@ knitr::opts_chunk$set(
 ```
 
 This article shows how to get environmental values inside 3D shapes, such as
-tag detections, buffers around them, or a protected area down to a set depth.
+tag detections, buffers around them, a tag's track, or a protected area down to
+a set depth.
 Each example uses the same three steps:
 
-1. **Build** the shapes with `as_vector3d()` or `buffer_3d()`.
+1. **Build** the shapes with `as_vector3d()`, `buffer_3d()` or `sample_3d()`.
 2. **Intersect** each shape with the data: `crop()` the dataset to the shape,
    read its time steps with `as_voxel()`, and keep the values inside the shape
    with `mask()`.
@@ -150,8 +151,81 @@ do.call(rbind, buffer_rows)
 ```
 
 Each row summarises one time step; `summarise_3d()` doesn't pool values
-across steps. A track works the same way: `sample_3d()` turns the line into
-points along it, which you can buffer and loop over as above.
+across steps.
+
+## Tracks: buffers along a route
+
+A track is a line with a depth and a time at each vertex. This tag records
+three positions over 30 hours:
+
+```{r track}
+route <- data.frame(
+  tag = "D",
+  lon = c(150.15, 150.45, 150.85),
+  lat = c(-20.85, -20.50, -20.40),
+  depth = c(5, 60, 20),
+  time = as.POSIXct(c("2020-03-02 00:00", "2020-03-02 12:00",
+                      "2020-03-03 06:00"), tz = "UTC")
+)
+track <- as_vector3d(route, type = "lines", id = "tag", time = "time")
+```
+
+A single buffer around the line would span its full depth and time range,
+from 5 m to 60 m over two days. To follow the route more closely,
+`sample_3d()` places points along it, here at most 10 km apart. Each point
+gets the depth and time interpolated between the vertices either side, and
+`support_km`, the length of route it stands for: half the distance to the
+points either side.
+
+```{r samples}
+samples <- sample_3d(track, spacing_km = 10)
+as.data.frame(samples)[c("feature_id", "distance_km", "depth", "time",
+                         "support_km")]
+```
+
+You then buffer each point and loop over the buffers as above. Here each
+buffer is a circle of 3 km radius, from 10 m above to 10 m below its point.
+The loop passes the point, not the buffer, to `as_voxel()`, which then reads
+the time step nearest the point's time. A buffer would need a time window
+wide enough to contain a step; with daily data and a window of a few hours,
+`as_voxel()` stops because the window holds no step. Each row also keeps its
+point's `support_km`, so the weights stay with their rows:
+
+```{r track-loop}
+sample_buffers <- buffer_3d(samples, radius_km = 3, depth_window = 10)
+local <- do.call(rbind, lapply(seq_along(sample_buffers), function(i) {
+  b <- sample_buffers[i]
+  v <- as_voxel(crop(proxy, b), time = samples[i])[[1]]
+  cbind(feature_id = as.data.frame(b)$feature_id,
+        support_km = as.data.frame(b)$support_km,
+        summarise_3d(suppressMessages(mask(v, b)), statistic = "mean"))
+}))
+local
+```
+
+Each row is a local summary: the conditions inside one buffer. `n` varies
+from buffer to buffer, here from 3 to 8 values, because the buffers are
+smaller than the grid cells and the depth window catches one or two levels. A
+buffer with no water, for example on land near a coast, has a `NA` mean and
+`n = 0`.
+
+To summarise the whole track, average the local means weighted by
+`support_km`. This estimates the mean along the distance travelled, from the
+water the buffers cover, so a stretch of route sampled more densely doesn't
+count for more. To weight by time spent instead, use the `support_seconds`
+column. `na.rm = TRUE` leaves out buffers with no water:
+
+```{r track-summary}
+stats::weighted.mean(local$mean, local$support_km, na.rm = TRUE)
+```
+
+The weights ignore `n`, so a buffer with 3 values counts as much as one with
+8. This is a mean of the local means, not a mean over all the water the
+buffers cover. These buffers don't overlap, but neighbouring ones can use the
+same grid cells, so the local summaries aren't independent.
+
+`sample_3d()` doesn't yet check that each segment stays in water, so check
+that your samples aren't on land before summarising them (#105).
 
 ## Areas: a protected area down to 50 m
 
@@ -184,6 +258,40 @@ overlaps the area's depth range; `vignette("depth-levels")` describes this
 rule.
 The 100 m and 200 m levels are outside the area, so their rows have `NA` and
 `n = 0`.
+
+`extract_to_area(mpa, proxy, min_depth = 0, max_depth = 50, time =
+"2020-03-03")` runs the same `crop()`, `as_voxel()` and `mask()` steps in one
+call, and returns the same voxel.
+
+### Down to the seafloor
+
+A depth range that follows the seafloor, such as a species found from the
+surface down to 200 m or the bed, whichever is shallower, or a layer within
+20 m of the bed, varies from cell to cell. `vect_to_envelope()` builds it on
+the data's grid, taking each depth limit as a number or a raster. Here a
+synthetic bathymetry deepens from 20 m in the west to 320 m in the east.
+Bathymetry such as GEBCO is elevation, negative below sea level, so flip its
+sign and set land to 0 before use, then resample it onto the voxel's grid:
+
+```{r seafloor}
+elevation <- terra::rast(nrows = 10, ncols = 10, xmin = 150, xmax = 151,
+                         ymin = -21, ymax = -20, crs = "EPSG:4326")
+elevation <- -(20 + 300 * (terra::init(elevation, "x") - 150))
+seafloor <- terra::resample(terra::clamp(-elevation, lower = 0), v)
+
+to_bed <- vect_to_envelope(mpa, v, depth_min = 0,
+                           depth_max = list(200, seafloor))
+volume(to_bed) # km³
+summarise_3d(mask(v, to_bed), statistic = c("mean", "min", "max"))
+
+near_bed <- vect_to_envelope(mpa, v, depth_min = list(seafloor - 20),
+                             depth_max = seafloor)
+summarise_3d(mask(v, near_bed), statistic = c("mean", "min", "max"))
+```
+
+In each cell, the deepest `depth_min` and the shallowest `depth_max` given
+apply. Use this instead of `as_vector3d()` when the range's top or bottom
+depends on the seafloor or another surface.
 
 ## Through time: habitat volume per day
 
