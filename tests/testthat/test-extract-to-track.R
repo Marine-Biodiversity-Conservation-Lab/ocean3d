@@ -1190,11 +1190,11 @@ test_that(
       time_unit = "months",
       quiet = TRUE
     )
-    # Each step shifts the previous, clamped date, so the month end drifts
-    # (02-29, then 03-29). This pins current behaviour; the drift is known.
+    # Each break is k months after the start, so the month end doesn't
+    # drift after the clamp to 29 February (#146).
     expect_equal(
       format(out$samples$date, "%Y-%m-%d", tz = "UTC"),
-      c("2020-01-31", "2020-02-29", "2020-03-29", "2020-04-01")
+      c("2020-01-31", "2020-02-29", "2020-03-31", "2020-04-01")
     )
     expect_error(
       extract_to_track(
