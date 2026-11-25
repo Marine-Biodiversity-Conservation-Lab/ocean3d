@@ -49,12 +49,22 @@
   nms <- names(extra)
   nms <- if (is.null(nms)) rep("", length(extra)) else nms
   nms[nms == ""] <- "<unnamed>"
+  # Each explanation only for an argument the caller gave.
+  why <- c(
+    bounds = paste0(
+      "`bounds` applies only when an envelope or polygons meet a SpatVoxel; ",
+      "envelopes and polygons carry their own depth intervals, and points ",
+      "take a depth level of their own."
+    ),
+    method = paste0(
+      "`method` applies only when mask() keeps a SpatVoxel's values at ",
+      "SpatVector3D points."
+    )
+  )
+  why <- why[intersect(names(why), nms)]
   rlang::abort(glue::glue(
-    "unused argument(s): {toString(nms)}. `bounds` applies only when an ",
-    "envelope or polygons meet a SpatVoxel; envelopes and polygons carry ",
-    "their own depth intervals, and a point takes the level nearest its ",
-    "depth. `method` applies only when mask() keeps a SpatVoxel's values ",
-    "at points."
+    "unused argument(s): {toString(nms)}.",
+    if (length(why)) " {paste(why, collapse = ' ')}" else ""
   ), class = "ocean3d_error_unused_argument", call = NULL)
 }
 

@@ -68,7 +68,10 @@ whether or not it has a value, as
 
 For the two nearest rules, a point halfway between two levels takes the
 shallower one. A point whose cell has no value at any level keeps
-nothing under \code{"nearest_value"} and \code{"bottom"}.}
+nothing under \code{"nearest_value"} and \code{"bottom"}. These rules match
+\code{\link[=extract_to_point]{extract_to_point()}}'s for the depth level. The cell is the one that
+holds the point; for a point exactly on the edge between two cells it
+can differ from the cell \code{\link[=extract_to_point]{extract_to_point()}} picks.}
 }
 \value{
 \code{x}, with the same class and layers, with every value outside the

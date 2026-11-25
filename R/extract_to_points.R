@@ -1121,7 +1121,9 @@
 
 
 # Select layers by physical depth, independently of storage order. Returns
-# the selected values and the physical depth (m) of each selected layer.
+# the selected values, the physical depth (m) of each selected layer and its
+# index in `profile`. Shared by extract_to_point() and mask() of a voxel by
+# points.
 .summarise_depth_profile <- function(profile, depth_m, target_depth) {
   index <- c(nearest = NA_integer_, surface = which.min(depth_m),
              seabottom = NA_integer_)
@@ -1136,7 +1138,8 @@
   }
   list(
     value = stats::setNames(profile[index], names(index)),
-    depth_m = stats::setNames(depth_m[index], names(index))
+    depth_m = stats::setNames(depth_m[index], names(index)),
+    index = index
   )
 }
 

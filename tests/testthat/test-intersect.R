@@ -841,7 +841,7 @@ test_that("mask(voxel, points) keeps the value at each point's level only", {
   # Points take the nearest level, so `bounds` is an error, not ignored.
   for (call in list(function() intersect_3d(points, voxel, bounds = "top"),
                     function() mask(voxel, points, bounds = "top"))) {
-    expect_error(call(), "a point takes the level nearest its depth",
+    expect_error(call(), "points take a depth level of their own",
                  class = "ocean3d_error_unused_argument")
   }
   # A grid without a CRS can't place them.
@@ -907,11 +907,25 @@ test_that("mask(voxel, points) picks each point's level with `method`", {
                  class = "ocean3d_error_unused_argument")
   }
   expect_error(mask(voxel, points_at(2.5, 2.5, 0), method = "deepest"),
-               "should be one of")
+               "must be one of", class = "ocean3d_error_mask_method")
+
+  # intersect_3d() and intersects_3d() read no values, so `method` stays an
+  # unused argument there.
+  point <- points_at(2.5, 2.5, 0)
+  for (call in list(function() intersect_3d(point, voxel, method = "bottom"),
+                    function() {
+                      intersects_3d(point, voxel, method = "bottom")
+                    })) {
+    expect_error(call(), "`method` applies only when mask\\(\\)",
+                 class = "ocean3d_error_unused_argument")
+  }
 })
 
-test_that("mask(voxel, points, method) gives extract_to_point()'s values", {
-  # Two cells, four levels; NA levels in each column, as near the seafloor.
+test_that("mask(voxel, points, method) reads a voxel from a netCDF file", {
+  # Two cells, four levels, with empty levels in each column, as near the
+  # seafloor. The expected values are the levels extract_to_point() picks
+  # with the same names: the nearest level with a value, the deepest level
+  # with a value, and the shallowest level.
   values <- array(NA_real_, c(2, 2, 4))
   values[1, 1, ] <- c(1, 2, NA, 4)
   values[2, 1, ] <- c(5, NA, 7, NA)
@@ -922,18 +936,15 @@ test_that("mask(voxel, points, method) gives extract_to_point()'s values", {
   voxel <- as_voxel(as_proxy(path))
   obs <- data.frame(lon = c(0.5, 0.5, 1.5, 1.5), lat = 10.5,
                     depth = c(12, 30, 0, 16))
-  for (method in c("nearest", "bottom", "surface")) {
-    want <- extract_to_point(obs, path, method = method, depth_col = "depth",
-                             output_col = "value", depth_report = FALSE,
-                             spatial_report = FALSE,
-                             time_report = FALSE)$value
-    rule <- if (method == "nearest") "nearest_value" else method
+  expected <- list(nearest_value = c(2, 4, 5, 7), bottom = c(4, 4, 7, 7),
+                   surface = c(1, 1, 5, 5))
+  for (method in names(expected)) {
     got <- vapply(seq_len(nrow(obs)), function(i) {
-      v <- terra::values(mask(voxel, as_vector3d(obs[i, ]), method = rule))
+      v <- terra::values(mask(voxel, as_vector3d(obs[i, ]), method = method))
       v <- v[!is.na(v)]
       if (length(v)) v else NA_real_
     }, numeric(1))
-    expect_equal(got, want, info = method)
+    expect_equal(got, expected[[method]], info = method)
   }
 })
 
