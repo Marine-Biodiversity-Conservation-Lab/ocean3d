@@ -166,7 +166,7 @@
 <h2 id="raster-representations-in-3d-space">Raster Representations in 3D space<a class="anchor" aria-label="anchor" href="#raster-representations-in-3d-space"></a></h2>
 <div class="section level3">
 <h3 id="id_2d-raster">2D (Raster)<a class="anchor" aria-label="anchor" href="#id_2d-raster"></a></h3>
-<p>A 2D raster is a grid over the study area with a value in each cell.</p>
+<p>A 2D raster is a grid over the study area with a value in each cell. A variable without depth in a netCDF file, such as sea-surface temperature, stays a plain <code>SpatRaster</code>: <code><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">terra::rast()</a></code> on its <code>SpatProxy</code> reads each time step with the proxy’s decoded time, and a variable with depth is read with <code><a href="reference/as_voxel.html">as_voxel()</a></code> instead, so each kind of variable has one reader (decided by Jay Matsushiba, 25 November 2026). <code>mask()</code> takes it, and <code><a href="reference/summarise_3d.html">summarise_3d()</a></code> weights its cells by area.</p>
 </div>
 <div class="section level3">
 <h3 id="id_3d-voxel">3D (Voxel)<a class="anchor" aria-label="anchor" href="#id_3d-voxel"></a></h3>
@@ -266,7 +266,7 @@
 <li>
 <strong>Remote Zarr</strong> (#151, not started): an optional source read with <code>stars::read_mdim()</code> (Suggests); ncdf4 couldn’t open the Copernicus Zarr store with the netCDF-C library used in the trial (Zarr needs a build with NCZarr and S3 support). The package corrects what <code>read_mdim()</code> returns: coordinates shifted by half a cell, time as <code>Date</code> (or not decoded without a <code>calendar</code> attribute), and Copernicus’ <code>elevation</code> axis (<code>positive = "up"</code>) turned into depth.</li>
 <li>
-<strong>terra:</strong> works only on 2D grids already in memory: cell areas, masks, crop, rasterising polygons and sums, so <code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code>mask()</code> and <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> keep their terra code. It still reads files that have no depth or time, such as GEBCO bathymetry and GFW effort.</li>
+<strong>terra:</strong> works only on 2D grids already in memory: cell areas, masks, crop, rasterising polygons and sums, so <code><a href="reference/volume.html">volume()</a></code>, <code><a href="reference/intersect_3d.html">intersect_3d()</a></code>, <code>mask()</code> and <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code> keep their terra code. It still reads files that have no depth or time, such as GEBCO bathymetry and GFW effort. A file with time but no depth is read by ocean3d’s <code>rast()</code> method for <code>SpatProxy</code>, not by terra, so its time is decoded with CFtime.</li>
 <li>
 <strong>ncdfCF:</strong> not a dependency for now: its API changed in 4 of its last 8 releases. Its results are a reference for the reader’s tests. Revisit at its 1.0 release, or if native model grids come into scope.</li>
 <li>

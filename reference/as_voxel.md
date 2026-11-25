@@ -10,7 +10,11 @@ Given a
 `as_voxel()` reads one time step of it into memory instead. Reading a
 `SpatProxy` is experimental, like the class itself (see
 [SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)),
-and may change without notice while the core object is built.
+and may change without notice while the core object is built. A variable
+without depth, such as sea-surface temperature, isn't a voxel: read it
+as a plain `SpatRaster` with
+[rast()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/rast-SpatProxy.md)
+on the proxy.
 
 ## Usage
 

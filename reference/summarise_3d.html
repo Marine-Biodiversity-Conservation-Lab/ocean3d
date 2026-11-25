@@ -83,9 +83,12 @@ summarises each layer, here each depth level, on its own.</p>
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
 <dd><p>A <a href="SpatVoxel-class.html">SpatVoxel</a>, typically <code>mask(v, shape)</code> for the values
 inside a shape, or a list of voxels, one per time step, as <code><a href="as_voxel.html">as_voxel()</a></code>
-gives for a time window. Envelopes have no values, so they aren't
-accepted; a netCDF file isn't either: describe it with <code><a href="as_proxy.html">as_proxy()</a></code> and
-read one time step with <code><a href="as_voxel.html">as_voxel()</a></code>.</p></dd>
+gives for a time window. <code>x</code> can also be a one-layer <code>SpatRaster</code> of a
+variable without depth, as <a href="rast-SpatProxy.html">rast()</a> reads from a
+<a href="SpatProxy-class.html">SpatProxy</a>, or a list of them, one per time step. Envelopes have
+no values, so they aren't accepted; a netCDF file isn't either: describe
+it with <code><a href="as_proxy.html">as_proxy()</a></code> and read one time step with <code><a href="as_voxel.html">as_voxel()</a></code> or
+<code>rast()</code>.</p></dd>
 
 
 <dt id="arg-statistic">statistic<a class="anchor" aria-label="anchor" href="#arg-statistic"></a></dt>
@@ -95,7 +98,8 @@ read one time step with <code><a href="as_voxel.html">as_voxel()</a></code>.</p>
 
 <dt id="arg-weighting">weighting<a class="anchor" aria-label="anchor" href="#arg-weighting"></a></dt>
 <dd><p><code>"volume"</code> (default) weights each value by the volume of
-its cell and depth level; <code>"equal"</code> counts each value once. A row whose
+its cell and depth level, and each value of a one-layer <code>SpatRaster</code> by
+its cell's area; <code>"equal"</code> counts each value once. A row whose
 values all have zero volume, such as a voxel with a single level and no
 depth edges, or the deepest level under <code>bounds = "top"</code>, uses equal
 weights.</p></dd>
@@ -106,7 +110,9 @@ weights.</p></dd>
 for a list; <code>"depth"</code> one row per depth level of each voxel, with a
 <code>depth</code> column. Values from different time steps aren't combined, so a
 list shows the change from step to step. <code>"time"</code> means the same as
-<code>NULL</code>, and says in a call on a list that the rows are per time step.</p></dd>
+<code>NULL</code>, and says in a call on a list that the rows are per time step.
+A one-layer <code>SpatRaster</code> has a single level, so <code>"depth"</code> is an error
+for it.</p></dd>
 
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>

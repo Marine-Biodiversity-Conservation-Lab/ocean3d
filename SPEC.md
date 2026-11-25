@@ -218,7 +218,17 @@ scope. They may be needed later for 3D models from photogrammetry.
 
 ### 2D (Raster)
 
-A 2D raster is a grid over the study area with a value in each cell.
+A 2D raster is a grid over the study area with a value in each cell. A
+variable without depth in a netCDF file, such as sea-surface
+temperature, stays a plain `SpatRaster`:
+[`terra::rast()`](https://rspatial.github.io/terra/reference/rast.html)
+on its `SpatProxy` reads each time step with the proxy’s decoded time,
+and a variable with depth is read with
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+instead, so each kind of variable has one reader (decided by Jay
+Matsushiba, 25 November 2026). `mask()` takes it, and
+[`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+weights its cells by area.
 
 ### 3D (Voxel)
 
@@ -440,7 +450,9 @@ Jay Matsushiba on 2 November 2026 (#112).
   `mask()` and
   [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
   keep their terra code. It still reads files that have no depth or
-  time, such as GEBCO bathymetry and GFW effort.
+  time, such as GEBCO bathymetry and GFW effort. A file with time but no
+  depth is read by ocean3d’s `rast()` method for `SpatProxy`, not by
+  terra, so its time is decoded with CFtime.
 - **ncdfCF:** not a dependency for now: its API changed in 4 of its last
   8 releases. Its results are a reference for the reader’s tests.
   Revisit at its 1.0 release, or if native model grids come into scope.

@@ -381,7 +381,7 @@
       </dl></div><div class="section level2">
       <h2 id="core-data-object-experimental-">Core data object (experimental)<a class="anchor" aria-label="anchor" href="#core-data-object-experimental-"></a></h2>
 
-      <div class="section-desc"><p>Describe a gridded netCDF variable without reading its values. Not yet accepted by other functions.</p></div>
+      <div class="section-desc"><p>Describe a gridded netCDF variable without reading its values, then read time steps of it with <code><a href="../reference/as_voxel.html">as_voxel()</a></code> or, for a variable without depth, <code><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">terra::rast()</a></code>.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -401,6 +401,13 @@
 
         </dt>
         <dd>Describe gridded data without reading its values (experimental)</dd>
+
+        <dt>
+
+          <code><a href="rast-SpatProxy.html">rast(<i>&lt;SpatProxy&gt;</i>)</a></code>
+
+        </dt>
+        <dd>Read a variable without depth from a SpatProxy</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

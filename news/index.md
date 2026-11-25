@@ -359,6 +359,24 @@ match, pass `max_time_diff` in days (no cap by default).
 
 ### New features
 
+- [`terra::rast()`](https://rspatial.github.io/terra/reference/rast.html)
+  reads time steps of a `SpatProxy` as plain `SpatRaster`s
+  ([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)),
+  for variables without depth such as sea-surface temperature. Each step
+  is one layer named after the variable, with its date in
+  [`terra::time()`](https://rspatial.github.io/terra/reference/time.html).
+  `time` works as in
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md);
+  a window or a shape gives a list. A variable with depth stops with an
+  error that points to
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
+  so each kind of variable has one reader.
+
+- [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+  also takes a one-layer `SpatRaster`, or a list of them, and weights
+  each cell by its area
+  ([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)).
+
 - [`mask()`](https://rspatial.github.io/terra/reference/mask.html) of a
   `SpatVoxel` by `SpatVector3D` points takes a `method` that sets the
   depth level each point keeps

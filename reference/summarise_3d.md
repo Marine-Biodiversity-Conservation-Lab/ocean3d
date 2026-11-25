@@ -31,11 +31,17 @@ summarise_3d(
   typically `mask(v, shape)` for the values inside a shape, or a list of
   voxels, one per time step, as
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-  gives for a time window. Envelopes have no values, so they aren't
-  accepted; a netCDF file isn't either: describe it with
+  gives for a time window. `x` can also be a one-layer `SpatRaster` of a
+  variable without depth, as
+  [rast()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/rast-SpatProxy.md)
+  reads from a
+  [SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md),
+  or a list of them, one per time step. Envelopes have no values, so
+  they aren't accepted; a netCDF file isn't either: describe it with
   [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
   and read one time step with
-  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md).
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  or `rast()`.
 
 - statistic:
 
@@ -45,10 +51,10 @@ summarise_3d(
 - weighting:
 
   `"volume"` (default) weights each value by the volume of its cell and
-  depth level; `"equal"` counts each value once. A row whose values all
-  have zero volume, such as a voxel with a single level and no depth
-  edges, or the deepest level under `bounds = "top"`, uses equal
-  weights.
+  depth level, and each value of a one-layer `SpatRaster` by its cell's
+  area; `"equal"` counts each value once. A row whose values all have
+  zero volume, such as a voxel with a single level and no depth edges,
+  or the deepest level under `bounds = "top"`, uses equal weights.
 
 - by:
 
@@ -56,7 +62,9 @@ summarise_3d(
   list; `"depth"` one row per depth level of each voxel, with a `depth`
   column. Values from different time steps aren't combined, so a list
   shows the change from step to step. `"time"` means the same as `NULL`,
-  and says in a call on a list that the rows are per time step.
+  and says in a call on a list that the rows are per time step. A
+  one-layer `SpatRaster` has a single level, so `"depth"` is an error
+  for it.
 
 - bounds:
 

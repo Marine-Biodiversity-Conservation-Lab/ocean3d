@@ -66,7 +66,7 @@ only the cells and time steps it needs, at every depth level.
 proxy <- as_proxy(path)
 proxy
 #> class      : SpatProxy (experimental)
-#> source     : file22c456be7d96.nc
+#> source     : file2306e43bbc1.nc
 #> variable   : temp (degC)
 #> dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)
 #> lon        : 150.025 to 150.975, 20 cells, edges inferred
@@ -175,6 +175,40 @@ extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
                  method = "bottom")$temp
 #> [1] 16.35
 ```
+
+## Surface data: a variable without depth
+
+Sea-surface temperature, chlorophyll and many satellite products have no
+depth. Read them with
+[`terra::rast()`](https://rspatial.github.io/terra/reference/rast.html)
+on the proxy, which gives a plain one-layer raster with the step’s date.
+The other steps are the same as for a voxel, except that
+[`mask()`](https://rspatial.github.io/terra/reference/mask.html) uses
+only the detection’s position, not its depth, and
+[`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+weights each cell by its area. Here the surface file holds the top depth
+level of the example temperature.
+
+``` r
+
+sst <- ncdf4::ncvar_def("sst", "degC", dims[c(1, 2, 4)], missval = -9999,
+                        prec = "double")
+sst_path <- tempfile(fileext = ".nc")
+nc <- ncdf4::nc_create(sst_path, sst)
+surface <- array(temp, lengths(lapply(dims, `[[`, "vals")))[, , 1, ]
+ncdf4::ncvar_put(nc, sst, surface)
+ncdf4::nc_close(nc)
+
+sst_proxy <- as_proxy(sst_path)
+r <- terra::rast(crop(sst_proxy, a), time = a)[[1]]
+summarise_3d(mask(r, a), statistic = "mean")
+#>         time  mean n
+#> 1 2020-03-01 28.35 1
+```
+
+The result is the surface temperature in the cell of detection A on its
+day, from one value (`n = 1`). It is warmer than the 10 m value above,
+because the example water cools with depth.
 
 ## Buffers: the water around each detection
 

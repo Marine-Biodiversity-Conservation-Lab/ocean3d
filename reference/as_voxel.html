@@ -4,12 +4,16 @@ throughout the package, with one layer per standard depth. Each layer's
 depth is stored in terra::depth(). Given a SpatProxy,
 as_voxel() reads one time step of it into memory instead. Reading a
 SpatProxy is experimental, like the class itself (see SpatProxy),
-and may change without notice while the core object is built."><meta property="og:description" content="Wrap a multi-depth raster as a SpatVoxel: the validated 3D form used
+and may change without notice while the core object is built. A variable
+without depth, such as sea-surface temperature, isn't a voxel: read it as
+a plain SpatRaster with rast() on the proxy."><meta property="og:description" content="Wrap a multi-depth raster as a SpatVoxel: the validated 3D form used
 throughout the package, with one layer per standard depth. Each layer's
 depth is stored in terra::depth(). Given a SpatProxy,
 as_voxel() reads one time step of it into memory instead. Reading a
 SpatProxy is experimental, like the class itself (see SpatProxy),
-and may change without notice while the core object is built."></head><body>
+and may change without notice while the core object is built. A variable
+without depth, such as sea-surface temperature, isn't a voxel: read it as
+a plain SpatRaster with rast() on the proxy."></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -62,7 +66,9 @@ throughout the package, with one layer per standard depth. Each layer's
 depth is stored in <code><a href="https://rspatial.github.io/terra/reference/depth.html" class="external-link">terra::depth()</a></code>. Given a <a href="SpatProxy-class.html">SpatProxy</a>,
 <code>as_voxel()</code> reads one time step of it into memory instead. Reading a
 <code>SpatProxy</code> is experimental, like the class itself (see <a href="SpatProxy-class.html">SpatProxy</a>),
-and may change without notice while the core object is built.</p>
+and may change without notice while the core object is built. A variable
+without depth, such as sea-surface temperature, isn't a voxel: read it as
+a plain <code>SpatRaster</code> with <a href="rast-SpatProxy.html">rast()</a> on the proxy.</p>
     </div>
 
     <div class="section level2">
