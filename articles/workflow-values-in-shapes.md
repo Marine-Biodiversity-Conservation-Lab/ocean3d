@@ -66,7 +66,7 @@ only the cells and time steps it needs, at every depth level.
 proxy <- as_proxy(path)
 proxy
 #> class      : SpatProxy (experimental)
-#> source     : file22af88a205e.nc
+#> source     : file22c456be7d96.nc
 #> variable   : temp (degC)
 #> dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)
 #> lon        : 150.025 to 150.975, 20 cells, edges inferred
@@ -142,9 +142,39 @@ to limit how far away the step may be.
 
 The two differ when the nearest depth level has no value.
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-skips depth levels with no value when it looks for the nearest one.
-[`mask()`](https://rspatial.github.io/terra/reference/mask.html) uses
+skips such levels and takes the nearest level with a value. By default,
+[`mask()`](https://rspatial.github.io/terra/reference/mask.html) takes
 the nearest level whatever its value, so such a detection gets `NA`.
+Pass `method = "nearest_value"` to skip empty levels as
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+does, or `method = "bottom"` for the deepest level with a value, as
+`extract_to_point(method = "bottom")` gives.
+
+This file has a value at every level, so the next chunk removes the 10 m
+level from a copy of the voxel. Detection A at 12 m then gets `NA` by
+default. With `"nearest_value"` it takes the 0 m level, 12 m away, which
+is nearer than the 25 m level. `"bottom"` takes the 200 m level, the
+same value
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+gives:
+
+``` r
+
+gappy <- v
+gappy[[2]] <- NA_real_   # the 10 m level
+summarise_3d(mask(gappy, a), statistic = "mean")
+#>         time mean n
+#> 1 2020-03-01   NA 0
+summarise_3d(mask(gappy, a, method = "nearest_value"), statistic = "mean")
+#>         time  mean n
+#> 1 2020-03-01 28.35 1
+summarise_3d(mask(v, a, method = "bottom"), statistic = "mean")
+#>         time  mean n
+#> 1 2020-03-01 16.35 1
+extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
+                 method = "bottom")$temp
+#> [1] 16.35
+```
 
 ## Buffers: the water around each detection
 

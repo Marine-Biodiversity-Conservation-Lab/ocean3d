@@ -181,7 +181,11 @@ horizontally and leaves its depths alone.
   another level; the nearest level is used. The result is a presence
   voxel on the voxel's levels, and `bounds` doesn't apply. Points off
   the grid share nothing. Points' times aren't compared, since a voxel
-  shows one time step.
+  shows one time step. `intersect_3d()` doesn't read the voxel's values;
+  to keep the values at the nearest level that has one, at the bottom or
+  at the surface, use
+  [mask()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
+  with `method`.
 
 - An envelope and
   [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)

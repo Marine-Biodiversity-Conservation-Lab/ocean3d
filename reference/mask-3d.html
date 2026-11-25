@@ -83,7 +83,13 @@ where the mask domain reaches that cell at that depth.</p>
 <span><span class="fu">mask</span><span class="op">(</span><span class="va">x</span>, <span class="va">mask</span>, <span class="va">...</span><span class="op">)</span></span>
 <span></span>
 <span><span class="co"># S4 method for class 'SpatRaster,SpatVector3D'</span></span>
-<span><span class="fu">mask</span><span class="op">(</span><span class="va">x</span>, <span class="va">mask</span>, bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">mask</span><span class="op">(</span></span>
+<span>  <span class="va">x</span>,</span>
+<span>  <span class="va">mask</span>,</span>
+<span>  bounds <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"midpoint"</span>, <span class="st">"top"</span><span class="op">)</span>,</span>
+<span>  method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"nearest"</span>, <span class="st">"nearest_value"</span>, <span class="st">"bottom"</span>, <span class="st">"surface"</span><span class="op">)</span>,</span>
+<span>  <span class="va">...</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -114,6 +120,27 @@ edges (see <a href="SpatVoxel-class.html">SpatVoxel</a>).</p></dd>
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Passed on to <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">terra::mask()</a></code>. For example, <code>inverse = TRUE</code>
 keeps the values <em>outside</em> the domain instead.</p></dd>
+
+
+<dt id="arg-method">method<a class="anchor" aria-label="anchor" href="#arg-method"></a></dt>
+<dd><p>Only when <code>x</code> is a voxel and <code>mask</code> <a href="SpatVector3D-class.html">SpatVector3D</a>
+points: which depth level each point keeps.</p><ul><li><p><code>"nearest"</code> (default): the level nearest the point's depth, whatever
+the voxel holds there, as <code><a href="intersect_3d.html">intersect_3d()</a></code> places points. A point
+whose nearest level has no value keeps nothing.</p></li>
+<li><p><code>"nearest_value"</code>: the nearest level that has a value in the point's
+cell, as <code>extract_to_point(method = "nearest")</code> picks it. Levels
+without a value are skipped.</p></li>
+<li><p><code>"bottom"</code>: the deepest level that has a value in the point's cell,
+whatever the point's depth, as <code>extract_to_point(method = "bottom")</code>.</p></li>
+<li><p><code>"surface"</code>: the shallowest level, whatever the point's depth and
+whether or not it has a value, as
+<code>extract_to_point(method = "surface")</code>.</p></li>
+</ul><p>For the two nearest rules, a point halfway between two levels takes the
+shallower one. A point whose cell has no value at any level keeps
+nothing under <code>"nearest_value"</code> and <code>"bottom"</code>. These rules match
+<code><a href="extract_to_point.html">extract_to_point()</a></code>'s for the depth level. The cell is the one that
+holds the point; for a point exactly on the edge between two cells it
+can differ from the cell <code><a href="extract_to_point.html">extract_to_point()</a></code> picks.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -166,9 +193,8 @@ dropped, with a message.</p></dd>
 <dt>anything masked by <a href="SpatVector3D-class.html">SpatVector3D</a> points</dt>
 <dd><p>A point covers
 one cell and one depth level, as in <code><a href="intersect_3d.html">intersect_3d()</a></code>. A voxel keeps
-its value in each point's cell at the level nearest the point's depth
-(chosen by depth, not by where the voxel has values), so <code>bounds</code> is
-an error with points. An envelope
+its value in each point's cell at one level, which <code>method</code> sets;
+<code>bounds</code> is an error with points. An envelope
 keeps its interval whole in the cells where a point lies within it. A
 plain <code>SpatRaster</code> keeps the cells that hold a point. Lines aren't
 supported; <code><a href="buffer_3d.html">buffer_3d()</a></code> turns them into polygons.</p></dd>

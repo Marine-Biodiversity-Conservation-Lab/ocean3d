@@ -32,7 +32,13 @@ mask(x, mask, ...)
 mask(x, mask, ...)
 
 # S4 method for class 'SpatRaster,SpatVector3D'
-mask(x, mask, bounds = c("midpoint", "top"), ...)
+mask(
+  x,
+  mask,
+  bounds = c("midpoint", "top"),
+  method = c("nearest", "nearest_value", "bottom", "surface"),
+  ...
+)
 ```
 
 ## Arguments
@@ -75,6 +81,40 @@ mask(x, mask, bounds = c("midpoint", "top"), ...)
   [`terra::mask()`](https://rspatial.github.io/terra/reference/mask.html).
   For example, `inverse = TRUE` keeps the values *outside* the domain
   instead.
+
+- method:
+
+  Only when `x` is a voxel and `mask`
+  [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
+  points: which depth level each point keeps.
+
+  - `"nearest"` (default): the level nearest the point's depth, whatever
+    the voxel holds there, as
+    [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+    places points. A point whose nearest level has no value keeps
+    nothing.
+
+  - `"nearest_value"`: the nearest level that has a value in the point's
+    cell, as `extract_to_point(method = "nearest")` picks it. Levels
+    without a value are skipped.
+
+  - `"bottom"`: the deepest level that has a value in the point's cell,
+    whatever the point's depth, as
+    `extract_to_point(method = "bottom")`.
+
+  - `"surface"`: the shallowest level, whatever the point's depth and
+    whether or not it has a value, as
+    `extract_to_point(method = "surface")`.
+
+  For the two nearest rules, a point halfway between two levels takes
+  the shallower one. A point whose cell has no value at any level keeps
+  nothing under `"nearest_value"` and `"bottom"`. These rules match
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)'s
+  for the depth level. The cell is the one that holds the point; for a
+  point exactly on the edge between two cells it can differ from the
+  cell
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+  picks.
 
 ## Value
 
@@ -142,11 +182,11 @@ What each pairing does:
 
   A point covers one cell and one depth level, as in
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md).
-  A voxel keeps its value in each point's cell at the level nearest the
-  point's depth (chosen by depth, not by where the voxel has values), so
-  `bounds` is an error with points. An envelope keeps its interval whole
-  in the cells where a point lies within it. A plain `SpatRaster` keeps
-  the cells that hold a point. Lines aren't supported;
+  A voxel keeps its value in each point's cell at one level, which
+  `method` sets; `bounds` is an error with points. An envelope keeps its
+  interval whole in the cells where a point lies within it. A plain
+  `SpatRaster` keeps the cells that hold a point. Lines aren't
+  supported;
   [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
   turns them into polygons.
 

@@ -643,6 +643,13 @@ Jay Matsushiba on 2 November 2026 (#112).
     by Jay Matsushiba on 24 November 2026 (#166), replacing the 23
     November 2026 decision in \#115 to document this as a known
     limitation.
+- **Nearest depth with missing layers:** the rebuilt
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+  (#116) can keep skipping levels without a value, through
+  `mask(method = "nearest_value")` (#177). The default, `"nearest"`, and
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+  keep the nearest level whatever its value (see [Intersect: spatial
+  query](#intersect-spatial-query)).
 - **Extraction:**
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
   [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
@@ -673,12 +680,6 @@ Jay Matsushiba on 2 November 2026 (#112).
 
 #### Open questions
 
-- **Nearest depth with missing layers:** whether
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-  keeps skipping missing layers when choosing the nearest depth, once it
-  is rebuilt on the three steps (#116). The point methods of
-  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
-  and `mask()` don’t skip them (#168).
 - **Zarr layouts:** Copernicus Marine serves each product chunked by
   time step (for maps) and by location (for time series). How the core
   object records both and which one each step reads (#151).
@@ -889,9 +890,9 @@ build step.
   voxel’s depth edges or else from the `bounds` rule (`"midpoint"` or
   `"top"`).
 - A point covers one cell and one depth level: the cell it falls in and
-  the nearest depth level, as
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-  does with `method = "nearest"` (#168).
+  the nearest depth level (#168). `mask(method = "nearest_value")` skips
+  levels without a value, as `extract_to_point(method = "nearest")` does
+  (#177).
 - Lines aren’t supported:
   [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
   turns them into polygons, and
@@ -1207,12 +1208,13 @@ holds one range per cell. With a voxel, polygons are put on its levels
 one level at a time
 ([`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md),
 \#170), so the gap stays empty. A point covers one cell and one depth
-level (#168): on a voxel, the cell that holds it and the level nearest
-its depth (ties go shallower; the level is chosen by depth, not by where
-the voxel has values); on an envelope, the cell where its depth lies
-within the interval. `mask(voxel, x)` keeps the voxel values in the
-cells and levels `x` reaches. - **Vector with a data source**: no
-separate function. *(planned)*
+level (#168). On a voxel, that is the cell that holds it and the level
+nearest its depth, whatever the voxel holds there (ties go shallower);
+with `method`, `mask()` can keep the nearest level with a value, the
+bottom or the surface instead (#177). On an envelope, it is the cell
+where the point’s depth lies within the interval. `mask(voxel, x)` keeps
+the voxel values in the cells and levels `x` reaches. - **Vector with a
+data source**: no separate function. *(planned)*
 `as_voxel(crop(proxy, shape), time = shape)` reads the data around a
 shape, and `mask()` keeps the values inside it; users loop over shapes
 (see [Extraction on the three steps](#extraction-on-the-three-steps)).

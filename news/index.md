@@ -359,6 +359,25 @@ match, pass `max_time_diff` in days (no cap by default).
 
 ### New features
 
+- [`mask()`](https://rspatial.github.io/terra/reference/mask.html) of a
+  `SpatVoxel` by `SpatVector3D` points takes a `method` that sets the
+  depth level each point keeps
+  ([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)):
+
+  - `"nearest"` (default, as before): the level nearest the point’s
+    depth, whatever its value.
+  - `"nearest_value"`: the nearest level that has a value, as
+    `extract_to_point(method = "nearest")` picks it.
+  - `"bottom"`: the deepest level that has a value, as
+    `extract_to_point(method = "bottom")`.
+  - `"surface"`: the shallowest level, as
+    `extract_to_point(method = "surface")`.
+
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+  and
+  [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
+  don’t read values, so points there always take the nearest level.
+
 - New article,
   [`vignette("workflow-values-in-shapes")`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md)
   ([\#105](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/105),

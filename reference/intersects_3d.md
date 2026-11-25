@@ -90,7 +90,11 @@ polygons and points have depths, so they are compared as
 [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
 compares them, after being put on the 3D object's grid. A cell is `TRUE`
 where the voxel has a value at the level nearest a point's depth, or
-where a point's depth lies within the envelope's interval.
+where a point's depth lies within the envelope's interval. Points always
+take the level nearest their depth here; the other depth rules (the
+nearest level with a value, the bottom and the surface) are in the
+`method` of
+[mask()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md).
 
 Two
 [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)

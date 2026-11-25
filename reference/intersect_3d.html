@@ -199,7 +199,10 @@ When the voxel's depth edges give uneven slabs, the slab that contains
 a point can belong to another level; the nearest level is used. The
 result is a presence voxel on the voxel's levels, and <code>bounds</code> doesn't
 apply. Points off the grid share nothing. Points' times aren't
-compared, since a voxel shows one time step.</p></dd>
+compared, since a voxel shows one time step. <code>intersect_3d()</code> doesn't
+read the voxel's values; to keep the values at the nearest level that
+has one, at the bottom or at the surface, use <a href="mask-3d.html">mask()</a> with
+<code>method</code>.</p></dd>
 
 <dt>An envelope and <a href="SpatVector3D-class.html">SpatVector3D</a> points</dt>
 <dd><p>In each cell where a
