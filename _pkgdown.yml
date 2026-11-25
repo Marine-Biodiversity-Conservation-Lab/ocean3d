@@ -70,11 +70,13 @@ reference:
   - fill_missing_depths
 - title: Core data object (experimental)
   desc: >
-    Describe a gridded netCDF variable without reading its values. Not yet
-    accepted by other functions.
+    Describe a gridded netCDF variable without reading its values, then read
+    time steps of it with `as_voxel()` or, for a variable without depth,
+    `terra::rast()`.
   contents:
   - SpatProxy-class
   - as_proxy
+  - rast-SpatProxy
 
 articles:
 - title: Environmental data extraction
