@@ -958,7 +958,7 @@ results <- do.call(rbind, results)
 #### Order of work
 
 Each step has its own issue, and each PR branches off `main`. Status as
-of 23 November 2026.
+of 24 November 2026.
 
 1.  **Document the current split:** which functions take netCDF and
     which take `SpatVoxel` (README function overview and each function’s
@@ -1051,17 +1051,19 @@ of 23 November 2026.
     [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md),
     [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
     and `mask()`, with a voxel, an envelope or polygons. The third
-    (#170, in review) adds
+    (#170) adds
     [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md),
     which puts polygons on a voxel’s levels without filling depth gaps,
     and makes the intersect functions use it for polygons with a voxel.
     Time matching in
     [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
     for a `SpatProxy` (the nearest or exact rule for a date, and a list
-    of voxels for a time window or a shape) is done (#169). Next: `x[i]`
-    for a `SpatVector3D`, `ext()` and `crs()` for a `SpatVector3D` so
-    that `crop()` of a `SpatProxy` takes one, and a vignette with the
-    per-shape loop. The coverage function planned here was dropped on 23
+    of voxels for a time window or a shape) is done (#169). `x[i]`,
+    `ext()` and `crs()` for a `SpatVector3D` are done (#166), so
+    `crop()` of a `SpatProxy` takes one. The article with the per-shape
+    loop,
+    [`vignette("workflow-values-in-shapes")`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md),
+    is done too. The coverage function planned here was dropped on 23
     November 2026 (see [Extraction on the three
     steps](#extraction-on-the-three-steps)).
 8.  **Add
@@ -1072,8 +1074,9 @@ of 23 November 2026.
     convenience wrapper over the exported step functions, adding no new
     functions or helpers (#116). *In progress:*
     [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
-    and per-level cell volume are done (#167); the vignettes and the
-    wrappers aren’t started.
+    and per-level cell volume are done (#167), and the workflow article
+    from step 7 covers points, buffers and areas. Tracks join it after
+    track sampling (#105); the wrappers aren’t started.
 9.  **Add track sampling** as a build step and buffered tracks (#105);
     then named shapes, raster and function surfaces for polygons (#117).
     *Not started.*

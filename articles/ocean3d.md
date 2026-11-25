@@ -1171,6 +1171,11 @@ Alternatively,
 allows you to extract environmental data within a geographical area and
 selected depth range.
 
+The article
+[`vignette("workflow-values-in-shapes")`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md)
+shows how to do this with the build, intersect and summarise steps, for
+points, buffers and areas.
+
 **3. Investigate three-dimensional spatial overlap**
 
 Another important application of `ocean3d` is investigating how

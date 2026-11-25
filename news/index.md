@@ -317,6 +317,13 @@ match, pass `max_time_diff` in days (no cap by default).
 
 ### New features
 
+- New article,
+  [`vignette("workflow-values-in-shapes")`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md)
+  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115),
+  [\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)),
+  on getting environmental values inside points, buffers and areas with
+  the build, intersect and summarise steps.
+
 - [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   on a `SpatProxy` reads several time steps at once
   ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115)):

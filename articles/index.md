@@ -8,6 +8,8 @@
   points](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-and-weighting-buffer-data.md):
 - [Extracting environmental data along
   tracks](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-environmental-data-along-tracks.md):
+- [Environmental values inside points, buffers and
+  areas](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md):
 
 ### Other articles
 
