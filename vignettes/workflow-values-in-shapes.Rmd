@@ -1,8 +1,8 @@
 ---
-title: "Environmental values inside points, buffers and areas"
+title: "Environmental values inside points, buffers, tracks and areas"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Environmental values inside points, buffers and areas}
+  %\VignetteIndexEntry{Environmental values inside points, buffers, tracks and areas}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -16,7 +16,8 @@ knitr::opts_chunk$set(
 ```
 
 This article shows how to get environmental values inside 3D shapes, such as
-tag detections, buffers around them, or a protected area down to a set depth.
+tag detections, buffers around them, a tag's track, or a protected area down to
+a set depth.
 Each example uses the same three steps:
 
 1. **Build** the shapes with `as_vector3d()` or `buffer_3d()`.
@@ -150,8 +151,71 @@ do.call(rbind, buffer_rows)
 ```
 
 Each row summarises one time step; `summarise_3d()` doesn't pool values
-across steps. A track works the same way: `sample_3d()` turns the line into
-points along it, which you can buffer and loop over as above.
+across steps.
+
+## Tracks: buffers along a route
+
+A track is a line with a depth and a time at each vertex. This tag records
+three positions over a day and a quarter:
+
+```{r track}
+route <- data.frame(
+  tag = "D",
+  lon = c(150.15, 150.45, 150.85),
+  lat = c(-20.85, -20.50, -20.40),
+  depth = c(5, 60, 20),
+  time = as.POSIXct(c("2020-03-02 00:00", "2020-03-02 12:00",
+                      "2020-03-03 06:00"), tz = "UTC")
+)
+track <- as_vector3d(route, type = "lines", id = "tag", time = "time")
+```
+
+One buffer around the whole line would cover its whole depth and time range,
+from 5 m to 60 m and over both days. To follow the route more closely,
+`sample_3d()` places points along it, here at most 10 km apart. Each point
+gets the depth and time interpolated between the vertices either side, and
+`support_km`, the length of route it stands for: half the distance to the
+points either side.
+
+```{r samples}
+samples <- sample_3d(track, spacing_km = 10)
+as.data.frame(samples)[c("feature_id", "distance_km", "depth", "time",
+                         "support_km")]
+```
+
+Each point is then buffered and looped over as above. Here each buffer is a
+circle of 3 km radius, from 10 m above to 10 m below its point. Its values
+come from the time step nearest the point's time, which `as_voxel()` picks
+when given the point:
+
+```{r track-loop}
+sample_buffers <- buffer_3d(samples, radius_km = 3, depth_window = 10)
+local <- do.call(rbind, lapply(seq_along(sample_buffers), function(i) {
+  b <- sample_buffers[i]
+  v <- as_voxel(crop(proxy, b), time = samples[i])[[1]]
+  cbind(feature_id = as.data.frame(b)$feature_id,
+        summarise_3d(suppressMessages(mask(v, b)), statistic = "mean"))
+}))
+local
+```
+
+Each row is a local summary: the conditions inside one buffer. A track
+summary describes the sequence of those local summaries. Weighting each one
+by `support_km` gives the mean along the distance travelled, so a stretch of
+route sampled more densely doesn't count for more. `support_seconds` weights
+by the time spent instead.
+
+```{r track-summary}
+stats::weighted.mean(local$mean, as.data.frame(samples)$support_km)
+```
+
+This is the mean of the local means along the route, not a mean over all
+the water the buffers cover. Neighbouring buffers can overlap and use the
+same cells, so the local summaries aren't independent of each other.
+
+`sample_3d()` doesn't yet check that each segment stays in water, and the
+package has no "most similar value" summary or interpolated targets along a
+track (#105).
 
 ## Areas: a protected area down to 50 m
 
