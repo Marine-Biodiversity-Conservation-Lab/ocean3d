@@ -479,6 +479,21 @@ match, pass `max_time_diff` in days (no cap by default).
   ([\#114](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/114)).
 
 - New
+  [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+  turns `SpatVector3D` lines, such as a dive track or a vessel route,
+  into points: the vertices, plus points in between when you give
+  `spacing_km`, `depth_step_m` or `time_step`. Points in between follow
+  the WGS84 geodesic, with depth and time interpolated along each
+  segment. The sampling and argument names are those of
+  [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md).
+  You can buffer the points with
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
+  or compare them with a grid with
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+  and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+  ([\#105](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/105)).
+
+- New
   [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
   puts `SpatVector3D` polygons onto a grid as a `SpatEnvelope`, as
   [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
@@ -574,6 +589,17 @@ match, pass `max_time_diff` in days (no cap by default).
 
 ### Bug fixes
 
+- With a `time_step` in months or years,
+  [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
+  placed each sample one step after the previous one, so a segment
+  starting on 31 January got 29 February, then 29 March, and kept the
+  29th. Samples now count whole steps from the segment’s start: 29
+  February, 31 March, 30 April. Callers of
+  [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
+  with monthly or yearly steps see sample dates that no longer drift
+  after a short month, so their samples and track summaries can change
+  ([\#146](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/146),
+  [\#105](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/105)).
 - [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
   [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)

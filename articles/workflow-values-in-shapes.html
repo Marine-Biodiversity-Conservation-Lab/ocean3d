@@ -130,7 +130,7 @@ every depth level.</p>
 <code class="sourceCode R"><span><span class="va">proxy</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_proxy.html">as_proxy</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="va">proxy</span></span>
 <span><span class="co">#&gt; class      : SpatProxy (experimental)</span></span>
-<span><span class="co">#&gt; source     : file22a9108c62f.nc</span></span>
+<span><span class="co">#&gt; source     : file22ab7f832d1c.nc</span></span>
 <span><span class="co">#&gt; variable   : temp (degC)</span></span>
 <span><span class="co">#&gt; dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)</span></span>
 <span><span class="co">#&gt; lon        : 150.025 to 150.975, 20 cells, edges inferred</span></span>
@@ -233,7 +233,9 @@ inside the loop.</p>
 <span><span class="co">#&gt; 7          C 2020-03-04 18.52145 3.1053138 12</span></span>
 <span><span class="co">#&gt; 8          C 2020-03-05 18.72145 3.1053138 12</span></span></code></pre></div>
 <p>Each row summarises one time step; <code><a href="../reference/summarise_3d.html">summarise_3d()</a></code>
-doesn’t pool values across steps.</p>
+doesn’t pool values across steps. A track works the same way:
+<code><a href="../reference/sample_3d.html">sample_3d()</a></code> turns the line into points along it, which you
+can buffer and loop over as above.</p>
 </div>
 <div class="section level2">
 <h2 id="areas-a-protected-area-down-to-50-m">Areas: a protected area down to 50 m<a class="anchor" aria-label="anchor" href="#areas-a-protected-area-down-to-50-m"></a>

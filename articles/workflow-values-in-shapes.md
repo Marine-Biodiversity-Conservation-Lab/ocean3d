@@ -64,7 +64,7 @@ only the cells and time steps it needs, at every depth level.
 proxy <- as_proxy(path)
 proxy
 #> class      : SpatProxy (experimental)
-#> source     : file22a9108c62f.nc
+#> source     : file22ab7f832d1c.nc
 #> variable   : temp (degC)
 #> dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)
 #> lon        : 150.025 to 150.975, 20 cells, edges inferred
@@ -202,7 +202,10 @@ do.call(rbind, buffer_rows)
 
 Each row summarises one time step;
 [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
-doesn’t pool values across steps.
+doesn’t pool values across steps. A track works the same way:
+[`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+turns the line into points along it, which you can buffer and loop over
+as above.
 
 ## Areas: a protected area down to 50 m
 

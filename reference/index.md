@@ -41,6 +41,8 @@ Turn inputs into 3D objects, and convert between them.
   : Build 3D points, lines or polygons
 - [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
   : Buffer 3D points or lines into polygons
+- [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+  : Sample 3D lines into points
 - [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md)
   : Convert 3D polygons to an envelope on a grid
 - [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md)

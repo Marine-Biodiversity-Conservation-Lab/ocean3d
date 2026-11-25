@@ -69,8 +69,8 @@ on its own.
 
 | Step | Question | Exists now | Planned additions |
 |----|----|----|----|
-| Build | What is the 3D shape or grid? | [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md), [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md), [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md), [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md), [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md), [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md), [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md), [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md), [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md), data loaders ([`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)) | track sampling; picking out features of a `SpatVector3D` (`x[i]`); `crop()` of a `SpatProxy` by a `SpatVector3D`; time matching in [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md) for a `SpatProxy` (one voxel for one time, or a list of voxels, one per time step, for a time window) |
-| Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D` (polygons with envelopes, voxels and other polygons done; points with envelopes, voxels and polygons done; lines go through [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md) or track sampling) |
+| Build | What is the 3D shape or grid? | [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md), [`envelope_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/envelope_to_voxel.md), [`voxel_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/voxel_to_envelope.md), [`occupied()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/occupied.md), [`create_study_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/create_study_raster.md), [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md), [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md), [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md), [`vector3d_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_envelope.md), [`vector3d_to_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vector3d_to_voxel.md), picking out features of a `SpatVector3D` (`x[i]`), `crop()` of a `SpatProxy` by a `SpatVector3D`, time matching in [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md) for a `SpatProxy`, data loaders ([`woa_download()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/woa_download.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md)) | for tracks: checking whether segments cross land, one sample per grid cell, and buffered tracks (#105); named shapes and raster surfaces for polygons (#117) |
+| Intersect | Where do they meet? | [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()` | the same functions for `SpatVector3D` (polygons with envelopes, voxels and other polygons done; points with envelopes, voxels and polygons done; lines go through [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md) or [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)) |
 | Summarise | How much, and what values? | [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md) (total, per cell, or per cell and depth level with `volume(x, per_cell = TRUE, per_level = TRUE)`; total only for `SpatVector3D` polygons), [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md) for statistics on the values in a voxel, such as one masked to a shape |  |
 
 The planned functions are added alongside the existing ones: every
@@ -896,8 +896,10 @@ build step.
   does with `method = "nearest"` (#168).
 - Lines aren’t supported:
   [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
-  turns them into polygons, and track sampling turns them into points
-  (#105).
+  turns them into polygons, and
+  [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+  turns them into points along the track, with depth and time
+  interpolated between vertices (#105).
 - `mask(v, shape)` keeps the voxel’s values in the cells and levels the
   shape covers. Overlapping shapes masked onto one grid together are
   merged, so users loop over shapes one at a time to keep each shape’s
@@ -947,8 +949,11 @@ results <- do.call(rbind, results)
   `min_valid_fraction`, the smallest share of a shape that must have
   data. After `mask()`, cells without data look the same as cells
   outside the shape, so that share can’t be measured from a masked
-  voxel. Summaries across the samples of a track are planned with track
-  sampling (#105).
+  voxel.
+  [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+  gives each track sample its share of the track’s length and duration
+  (`support_km`, `support_seconds`). Summaries across a track’s samples
+  weighted by these shares are planned with the track wrapper (#116).
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
   measures shapes rather than values. Its existing results don’t change:
   the voxel method computes the volume per cell and depth level first,
@@ -1079,7 +1084,11 @@ of 24 November 2026.
     track sampling (#105); the wrappers aren’t started.
 9.  **Add track sampling** as a build step and buffered tracks (#105);
     then named shapes, raster and function surfaces for polygons (#117).
-    *Not started.*
+    *In progress:*
+    [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+    samples lines into points (#173). Next are checking whether track
+    segments cross land, one sample per grid cell, and the
+    buffered-track article, then \#117.
 
 The existing tests for both models, including the buffer and track
 tests, define the expected behaviour. They keep passing for the
