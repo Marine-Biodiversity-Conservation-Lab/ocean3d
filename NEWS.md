@@ -210,6 +210,10 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
+* New article, `vignette("workflow-values-in-shapes")` (#115, #116), on
+  getting environmental values inside points, buffers and areas with the
+  build, intersect and summarise steps.
+
 * `as_voxel()` on a `SpatProxy` reads several time steps at once (#115):
   `time` can be a window of two dates or date-times, giving a list of
   voxels, one per step inside it, or a `SpatVector3D` with one feature,
