@@ -3,7 +3,7 @@
 \name{rast-SpatProxy}
 \alias{rast-SpatProxy}
 \alias{rast,SpatProxy-method}
-\title{Read a SpatProxy as a plain SpatRaster}
+\title{Read a variable without depth from a SpatProxy}
 \usage{
 \S4method{rast}{SpatProxy}(
   x,
@@ -24,27 +24,27 @@ date-times, or a \link[=SpatVector3D-class]{SpatVector3D} with one feature.}
 \item{...}{Not used.}
 }
 \value{
-A \link[terra:SpatRaster]{terra::SpatRaster}, or a list of them, one per step, for a
-time window or a shape.
+A one-layer \link[terra:SpatRaster]{terra::SpatRaster}, or a list of them, one per
+step, for a time window or a shape.
 }
 \description{
 \code{rast()} reads time steps of a \link[=SpatProxy-class]{SpatProxy} into memory as plain
-\link[terra:SpatRaster]{terra::SpatRaster}s, the terra way. Use it for a variable without depth,
-such as sea-surface temperature or chlorophyll, which isn't a voxel: it
-gives one layer named after the variable. For a variable with depth it
-gives the layers with \code{\link[terra:depth]{terra::depth()}} set, but not the
-\link[=SpatVoxel-class]{SpatVoxel} class or depth edges that \code{\link[=as_voxel]{as_voxel()}} adds.
+one-layer \link[terra:SpatRaster]{terra::SpatRaster}s. Use it for a variable without depth, such
+as sea-surface temperature or chlorophyll: each step is one layer named
+after the variable. A variable with depth stops with an error: read it
+with \code{\link[=as_voxel]{as_voxel()}}, which keeps its depth levels and their edges. So each
+kind of variable has one reader.
 }
 \details{
-The proxy is read as \code{\link[=as_voxel]{as_voxel()}} reads it: the time axis is decoded with
-CFtime, which terra gets wrong for some files, the date of each step is
-set in \code{\link[terra:time]{terra::time()}}, and a proxy cut down with \code{crop()} reads only its
-cells. A voxel in memory (\code{as_proxy(v)}) gives its layers.
+The proxy is read as \code{\link[=as_voxel]{as_voxel()}} reads it. The time axis is decoded with
+CFtime rather than by terra, which misreads the time of some files, and
+the date of each step is set in \code{\link[terra:time]{terra::time()}}. A proxy cut down with
+\code{crop()} reads only its cells.
 
-A plain raster works with \code{\link[terra:mask]{mask()}} by \link[=SpatVector3D-class]{SpatVector3D} polygons or
-points, which uses only their outlines or positions, since a 2D raster
-has no depth to compare; and with \code{\link[=summarise_3d]{summarise_3d()}}, which weights its
-cells by area.
+\code{\link[terra:mask]{mask()}} by \link[=SpatVector3D-class]{SpatVector3D} polygons or points works on the result.
+It uses only their outlines or positions, not their depths.
+\code{\link[=summarise_3d]{summarise_3d()}} also takes the one-layer raster and weights each cell by
+its area.
 }
 \section{Experimental}{
 
@@ -62,9 +62,9 @@ terra::time(r)
 # A window gives one raster per step inside it.
 length(terra::rast(p, time = c("2020-01-01", "2020-01-03")))
 
-# Summarised by cell area, since a 2D layer has no depth.
+# Summarised with each cell weighted by its area.
 summarise_3d(r, statistic = c("mean", "sd"))
 }
 \seealso{
-\code{\link[=as_voxel]{as_voxel()}} for a \link[=SpatVoxel-class]{SpatVoxel} with depth edges.
+\code{\link[=as_voxel]{as_voxel()}} for a variable with depth.
 }

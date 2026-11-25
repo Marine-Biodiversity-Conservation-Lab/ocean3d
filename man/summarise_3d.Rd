@@ -15,11 +15,12 @@ summarise_3d(
 \arguments{
 \item{x}{A \link[=SpatVoxel-class]{SpatVoxel}, typically \code{mask(v, shape)} for the values
 inside a shape, or a list of voxels, one per time step, as \code{\link[=as_voxel]{as_voxel()}}
-gives for a time window. A one-layer \code{SpatRaster} of a variable without
-depth, as \link[=rast-SpatProxy]{rast()} reads one from a \link[=SpatProxy-class]{SpatProxy},
-or a list of them, works too. Envelopes have no values, so they aren't
-accepted; a netCDF file isn't either: describe it with \code{\link[=as_proxy]{as_proxy()}} and
-read one time step with \code{\link[=as_voxel]{as_voxel()}} or \code{rast()}.}
+gives for a time window. \code{x} can also be a one-layer \code{SpatRaster} of a
+variable without depth, as \link[=rast-SpatProxy]{rast()} reads from a
+\link[=SpatProxy-class]{SpatProxy}, or a list of them, one per time step. Envelopes have
+no values, so they aren't accepted; a netCDF file isn't either: describe
+it with \code{\link[=as_proxy]{as_proxy()}} and read one time step with \code{\link[=as_voxel]{as_voxel()}} or
+\code{rast()}.}
 
 \item{statistic}{One or more of \code{"mean"}, \code{"sd"}, \code{"min"}, \code{"max"} and
 \code{"median"}. Each becomes a column of the result, in this order.}
@@ -36,7 +37,7 @@ for a list; \code{"depth"} one row per depth level of each voxel, with a
 \code{depth} column. Values from different time steps aren't combined, so a
 list shows the change from step to step. \code{"time"} means the same as
 \code{NULL}, and says in a call on a list that the rows are per time step.
-A one-layer \code{SpatRaster} has no depth levels, so \code{"depth"} is an error
+A one-layer \code{SpatRaster} has a single level, so \code{"depth"} is an error
 for it.}
 
 \item{bounds}{As in \code{\link[=volume]{volume()}}: where the slab edges fall for a voxel that

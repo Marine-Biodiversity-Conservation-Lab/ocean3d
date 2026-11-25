@@ -33,11 +33,12 @@
 #'
 #' @param x A [SpatVoxel-class], typically `mask(v, shape)` for the values
 #'   inside a shape, or a list of voxels, one per time step, as [as_voxel()]
-#'   gives for a time window. A one-layer `SpatRaster` of a variable without
-#'   depth, as [rast()][rast-SpatProxy] reads one from a [SpatProxy-class],
-#'   or a list of them, works too. Envelopes have no values, so they aren't
-#'   accepted; a netCDF file isn't either: describe it with [as_proxy()] and
-#'   read one time step with [as_voxel()] or `rast()`.
+#'   gives for a time window. `x` can also be a one-layer `SpatRaster` of a
+#'   variable without depth, as [rast()][rast-SpatProxy] reads from a
+#'   [SpatProxy-class], or a list of them, one per time step. Envelopes have
+#'   no values, so they aren't accepted; a netCDF file isn't either: describe
+#'   it with [as_proxy()] and read one time step with [as_voxel()] or
+#'   `rast()`.
 #' @param statistic One or more of `"mean"`, `"sd"`, `"min"`, `"max"` and
 #'   `"median"`. Each becomes a column of the result, in this order.
 #' @param weighting `"volume"` (default) weights each value by the volume of
@@ -51,7 +52,7 @@
 #'   `depth` column. Values from different time steps aren't combined, so a
 #'   list shows the change from step to step. `"time"` means the same as
 #'   `NULL`, and says in a call on a list that the rows are per time step.
-#'   A one-layer `SpatRaster` has no depth levels, so `"depth"` is an error
+#'   A one-layer `SpatRaster` has a single level, so `"depth"` is an error
 #'   for it.
 #' @param bounds As in [volume()]: where the slab edges fall for a voxel that
 #'   carries no depth edges; used with `weighting = "volume"` only. Voxels
@@ -130,7 +131,7 @@ summarise_3d <- function(x, statistic = "mean",
     if (!two_d) .check_3d(v, "x", "SpatVoxel")
     if (two_d && identical(by, "depth")) {
       .abort_summarise_input(paste(
-        "A one-layer SpatRaster has no depth levels, so `by = \"depth\"`",
+        "A one-layer SpatRaster has a single level, so `by = \"depth\"`",
         "doesn't apply."
       ))
     }

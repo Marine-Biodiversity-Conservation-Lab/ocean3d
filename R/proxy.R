@@ -708,21 +708,35 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   values
 }
 
-# The step builder (SPEC.md, "SpatVoxel / SpatEnvelope", Builder): the time
-# steps `time` selects from a SpatProxy, read into memory, for as_voxel() and
-# rast(). Each raster's extent comes from the cell edges and its CRS from the
-# proxy, and the date of the step goes in terra::time(). With `voxel = TRUE`
-# (as_voxel()) each step is a SpatVoxel with the proxy's depths and depth
-# edges; with `voxel = FALSE` (rast()) it stays a plain SpatRaster, with
-# terra::depth() set when the variable has depth and one layer named after
-# the variable when it has none. One raster when `time` names one step, a
-# list for a time window or a shape. `depth`, a first and last index in
-# storage order, reads only those levels, so volume() can measure a large
-# step in groups of layers; NULL reads them all. Every source, a voxel in
-# memory too, reads a span through the same per-step path, so each group
-# carries the proxy's depth edges.
-.proxy_to_voxel <- function(x, time, varname, time_match, max_time_diff,
-                            depth = NULL, voxel = TRUE) {
+# The step reader (SPEC.md, "SpatVoxel / SpatEnvelope", Builder): the time
+# steps `time` selects from a SpatProxy, read into memory. Each raster's
+# extent comes from the cell edges and its CRS from the proxy, and the date
+# of the step goes in terra::time(). Each kind of variable has one reader:
+# with `voxel = TRUE` (as_voxel()) a variable with depth becomes SpatVoxels
+# with the proxy's depths and depth edges; with `voxel = FALSE` (rast()) a
+# variable without depth becomes plain one-layer SpatRasters named after the
+# variable. One raster when `time` names one step, a list for a time window
+# or a shape. `depth`, a first and last index in storage order, reads only
+# those levels, so volume() can measure a large step in groups of layers;
+# NULL reads them all. Every source, a voxel in memory too, reads a span
+# through the same per-step path, so each group carries the proxy's depth
+# edges.
+.proxy_steps <- function(x, time, varname, time_match, max_time_diff,
+                         depth = NULL, voxel = TRUE) {
+  axes <- x@axes
+  if (voxel && is.null(axes$depth)) {
+    rlang::abort(glue::glue(
+      "Variable `{x@variable$name}` has no depth axis, so it isn't a voxel. ",
+      "Read it as a plain SpatRaster with terra::rast() on the proxy."
+    ), class = "ocean3d_error_proxy_no_depth", call = NULL)
+  }
+  if (!voxel && !is.null(axes$depth)) {
+    rlang::abort(glue::glue(
+      "Variable `{x@variable$name}` has a depth axis. Read it with ",
+      "as_voxel(), which keeps the depth levels and their edges; ",
+      "terra::rast() on a proxy reads variables without depth."
+    ), class = "ocean3d_error_proxy_has_depth", call = NULL)
+  }
   if (!is.null(max_time_diff) && (!is.numeric(max_time_diff) ||
                                     length(max_time_diff) != 1L ||
                                     is.na(max_time_diff) ||
@@ -730,19 +744,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     .abort_voxel_input("`max_time_diff` must be one number of days, 0 or more.")
   }
   selected <- .proxy_time_step(x, time, time_match, max_time_diff)
-  axes <- x@axes
   if (identical(x@source$type, "voxel") && is.null(depth)) {
     # A voxel already in memory is its own only time step.
-    v <- x@source$voxel
-    # remove the 3D class
-    out <- list(if (voxel) v else methods::as(v, "SpatRaster"))
+    out <- list(x@source$voxel)
   } else {
-    if (voxel && is.null(axes$depth)) {
-      rlang::abort(glue::glue(
-        "Variable `{x@variable$name}` has no depth axis, so it isn't a voxel. ",
-        "Read it as a plain SpatRaster with terra::rast() on the proxy."
-      ), class = "ocean3d_error_proxy_no_depth", call = NULL)
-    }
     if (!is.null(depth)) {
       axes$depth[c("centres", "lower", "upper")] <- lapply(
         axes$depth[c("centres", "lower", "upper")], `[`,
@@ -777,10 +782,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
         r <- as_voxel(r, depths = axes$depth$centres, varname = varname,
                       depth_bounds = depth_bounds)
       } else {
-        names(r) <- if (is.null(axes$depth)) varname else
-          paste0(varname, "_depth=", axes$depth$centres)
+        names(r) <- varname
         terra::varnames(r) <- varname
-        if (!is.null(axes$depth)) terra::depth(r) <- axes$depth$centres
       }
       if (!is.null(x@variable$units)) terra::units(r) <- x@variable$units
       if (!is.null(selected$dates)) {
@@ -985,24 +988,24 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   list(min = lower, max = upper)
 }
 
-#' Read a SpatProxy as a plain SpatRaster
+#' Read a variable without depth from a SpatProxy
 #'
 #' `rast()` reads time steps of a [SpatProxy-class] into memory as plain
-#' [terra::SpatRaster]s, the terra way. Use it for a variable without depth,
-#' such as sea-surface temperature or chlorophyll, which isn't a voxel: it
-#' gives one layer named after the variable. For a variable with depth it
-#' gives the layers with [terra::depth()] set, but not the
-#' [SpatVoxel-class] class or depth edges that [as_voxel()] adds.
+#' one-layer [terra::SpatRaster]s. Use it for a variable without depth, such
+#' as sea-surface temperature or chlorophyll: each step is one layer named
+#' after the variable. A variable with depth stops with an error: read it
+#' with [as_voxel()], which keeps its depth levels and their edges. So each
+#' kind of variable has one reader.
 #'
-#' The proxy is read as [as_voxel()] reads it: the time axis is decoded with
-#' CFtime, which terra gets wrong for some files, the date of each step is
-#' set in [terra::time()], and a proxy cut down with `crop()` reads only its
-#' cells. A voxel in memory (`as_proxy(v)`) gives its layers.
+#' The proxy is read as [as_voxel()] reads it. The time axis is decoded with
+#' CFtime rather than by terra, which misreads the time of some files, and
+#' the date of each step is set in [terra::time()]. A proxy cut down with
+#' `crop()` reads only its cells.
 #'
-#' A plain raster works with [mask()] by [SpatVector3D-class] polygons or
-#' points, which uses only their outlines or positions, since a 2D raster
-#' has no depth to compare; and with [summarise_3d()], which weights its
-#' cells by area.
+#' [mask()] by [SpatVector3D-class] polygons or points works on the result.
+#' It uses only their outlines or positions, not their depths.
+#' [summarise_3d()] also takes the one-layer raster and weights each cell by
+#' its area.
 #'
 #' @inheritSection SpatProxy-class Experimental
 #'
@@ -1013,9 +1016,9 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 #'   date-times, or a [SpatVector3D-class] with one feature.
 #' @param ... Not used.
 #'
-#' @returns A [terra::SpatRaster], or a list of them, one per step, for a
-#'   time window or a shape.
-#' @seealso [as_voxel()] for a [SpatVoxel-class] with depth edges.
+#' @returns A one-layer [terra::SpatRaster], or a list of them, one per
+#'   step, for a time window or a shape.
+#' @seealso [as_voxel()] for a variable with depth.
 #' @examples
 #' # A 2D temperature field on 1, 3 and 6 January 2020.
 #' p <- as_proxy(system.file("extdata", "example_2d.nc", package = "ocean3d"))
@@ -1026,7 +1029,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 #' # A window gives one raster per step inside it.
 #' length(terra::rast(p, time = c("2020-01-01", "2020-01-03")))
 #'
-#' # Summarised by cell area, since a 2D layer has no depth.
+#' # Summarised with each cell weighted by its area.
 #' summarise_3d(r, statistic = c("mean", "sd"))
 #' @name rast-SpatProxy
 #' @aliases rast,SpatProxy-method
@@ -1041,8 +1044,8 @@ setMethod("rast", "SpatProxy", function(x, time = NULL,
     ))
   }
   time_match <- match.arg(time_match)
-  .proxy_to_voxel(x, time, x@variable$name, time_match, max_time_diff,
-                  voxel = FALSE)
+  .proxy_steps(x, time, x@variable$name, time_match, max_time_diff,
+               voxel = FALSE)
 })
 
 #' @rdname SpatProxy-class

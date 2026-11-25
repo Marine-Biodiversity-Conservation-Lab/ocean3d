@@ -298,7 +298,7 @@ as_voxel <- function(x, depths = NULL, varname = "value",
   if (proxy) {
     if (missing(varname)) varname <- x@variable$name
     time_match <- match.arg(time_match)
-    return(.proxy_to_voxel(x, time, varname, time_match, max_time_diff))
+    return(.proxy_steps(x, time, varname, time_match, max_time_diff))
   }
   # Idempotent: a valid SpatVoxel comes back as it is, so re-wrapping is cheap
   # and callers can do it defensively. terra propagates the class tag through

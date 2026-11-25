@@ -1,12 +1,14 @@
-# rast() on a SpatProxy (#116): time steps read as plain SpatRasters, so
-# variables without depth stay 2D. Synthetic files from make_grid_file()
+# rast() on a SpatProxy (#116): time steps of a variable without depth read
+# as plain one-layer SpatRasters. Synthetic files from make_grid_file()
 # (helper-netcdf-grid.R); its values are 1, 2, 3, ... in lon, lat, depth,
 # time storage order.
 
 test_that("a 2D variable reads as one plain layer per step", {
   g <- proxy_and_file(depth = NULL, time = c(0, 1, 2))
   on.exit(unlink(g$file), add = TRUE)
-  stored <- ncdf4::ncvar_get(ncdf4::nc_open(g$file), "temp")
+  nc <- ncdf4::nc_open(g$file)
+  stored <- ncdf4::ncvar_get(nc, "temp")
+  ncdf4::nc_close(nc)
 
   r <- terra::rast(g$proxy, time = 2)
   expect_false(methods::is(r, "SpatVoxel"))
@@ -30,18 +32,15 @@ test_that("a 2D variable reads as one plain layer per step", {
                as.POSIXct(c("2020-01-01", "2020-01-02"), tz = "UTC"))
 })
 
-test_that("a 3D variable and a voxel source read as plain layers", {
+test_that("a variable with depth is read with as_voxel(), not rast()", {
   g <- proxy_and_file()
   on.exit(unlink(g$file), add = TRUE)
-  r <- terra::rast(g$proxy, time = 1)
+  expect_error(terra::rast(g$proxy, time = 1), "Read it with\\s+as_voxel\\(\\)",
+               class = "ocean3d_error_proxy_has_depth")
+  # A voxel in memory has depth too.
   v <- as_voxel(g$proxy, time = 1)
-  expect_false(methods::is(r, "SpatVoxel"))
-  expect_identical(terra::depth(r), c(5, 15))
-  expect_identical(terra::values(r), terra::values(v))
-
-  from_voxel <- terra::rast(as_proxy(v))
-  expect_false(methods::is(from_voxel, "SpatVoxel"))
-  expect_identical(terra::values(from_voxel), terra::values(v))
+  expect_error(terra::rast(as_proxy(v)), "has a depth axis",
+               class = "ocean3d_error_proxy_has_depth")
 })
 
 test_that("a cropped proxy reads only its cells", {
@@ -83,7 +82,7 @@ test_that("a 2D step works with mask() and summarise_3d()", {
   expect_equal(summarise_3d(r, weighting = "equal")$mean, mean(vals))
   expect_identical(nrow(summarise_3d(list(r, r + 1))), 2L)
 
-  expect_error(summarise_3d(r, by = "depth"), "no depth levels",
+  expect_error(summarise_3d(r, by = "depth"), "has a single level",
                class = "ocean3d_error_summarise_input")
 })
 
