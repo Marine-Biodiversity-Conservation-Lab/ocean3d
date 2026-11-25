@@ -2,6 +2,38 @@
 
 ## Breaking changes
 
+`extract_to_area()` is now a shortcut for `as_proxy()`, `crop()`,
+`as_voxel()`, `as_vector3d()` and `mask()` (#116). It used to return only the
+layers between the levels nearest to `min_depth` and `max_depth`. Now it
+returns every layer, with values outside the area and the depth band set to
+`NA`, as `mask()` does. A level has values when the band overlaps the depth
+range of water the level represents by more than an edge. Those ranges come
+from the voxel's depth edges when it has them (see `?depth_bounds`), and
+otherwise from the new `bounds` argument. On levels 0, 50, 100, 500 and
+1000 m:
+
+* A 40-600 m band has values on the 50, 100 and 500 m levels, as before, but
+  returns all five layers, with the 0 and 1000 m layers `NA`.
+* A 25-75 m band has values on 50 m only; before, the 0 and 50 m layers were
+  returned.
+* A band that overlaps no level, such as 50-50 m or one below the deepest
+  level, gives a warning and no values; before, it returned the nearest
+  layer.
+* A band whose top is deeper than its bottom is now an error.
+* Every cell the area touches is kept, also at its edges; before, cells cut
+  by the area's edge could be lost.
+
+Without `min_depth` and `max_depth`, every level of the area's cells has
+values, as before. Code that counted or named the returned layers should
+select the levels with values, for example
+`out[[terra::global(out, "notNA")[, 1] > 0]]`. An `area` without a CRS is now
+an error; set its CRS first.
+
+`extract_to_area()` now also takes a `SpatProxy`, and reads only the cells
+under the area for the time step given in the new `time` argument; a time
+window returns a list of voxels. It also works on voxels whose longitudes
+run from 0 to 360.
+
 `intersect_3d()`, `intersects_3d()` and `mask()` between `SpatVector3D`
 polygons and a `SpatVoxel` now put the polygons on the voxel's levels with
 `vector3d_to_voxel()`, one level at a time, instead of as an envelope that
@@ -220,9 +252,26 @@ an exact match and stop otherwise. For the old behaviour, pass
 * `summarise_3d()` also takes a one-layer `SpatRaster`, or a list of them,
   and weights each cell by its area (#116).
 
-* New article, `vignette("workflow-values-in-shapes")` (#115, #116), on
-  getting environmental values inside points, buffers and areas with the
-  build, intersect and summarise steps.
+* `mask()` of a `SpatVoxel` by `SpatVector3D` points takes a `method` that
+  sets the depth level each point keeps (#116):
+  * `"nearest"` (default, as before): the level nearest the point's depth,
+    whatever its value.
+  * `"nearest_value"`: the nearest level that has a value, as
+    `extract_to_point(method = "nearest")` picks it.
+  * `"bottom"`: the deepest level that has a value, as
+    `extract_to_point(method = "bottom")`.
+  * `"surface"`: the shallowest level, as `extract_to_point(method = "surface")`.
+
+  `intersect_3d()` and `intersects_3d()` don't read values, so points there
+  always take the nearest level.
+
+* New article, `vignette("workflow-values-in-shapes")` (#105, #115, #116), on
+  getting environmental values inside points, buffers, tracks and areas with
+  the build, intersect and summarise steps. Its track section samples a route
+  with `sample_3d()`, buffers each sample, and weights the per-buffer results
+  by the length of route each sample stands for. Its area section shows a
+  depth range bounded by the seafloor, built with `vect_to_envelope()` from a
+  bathymetry raster.
 
 * `as_voxel()` on a `SpatProxy` reads several time steps at once (#115):
   `time` can be a window of two dates or date-times, giving a list of

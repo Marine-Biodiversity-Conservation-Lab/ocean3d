@@ -63,6 +63,10 @@ test_that("a 2D step works with mask() and summarise_3d()", {
   pt <- as_vector3d(data.frame(lon = 1.5, lat = 10.5, depth = 300))
   kept <- terra::values(mask(r, pt))[, 1]
   expect_equal(which(!is.na(kept)), terra::cellFromXY(r, cbind(1.5, 10.5)))
+  # A 2D layer has one value per cell, so there is no depth level to choose.
+  expect_error(mask(r, pt, method = "bottom"),
+               "`method` applies only when mask\\(\\) keeps a SpatVoxel",
+               class = "ocean3d_error_unused_argument")
 
   # A polygon keeps the cells it touches, with no message about depth.
   square <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(rbind(

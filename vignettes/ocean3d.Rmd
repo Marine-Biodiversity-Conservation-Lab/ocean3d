@@ -1218,7 +1218,7 @@ The article
 `vignette("workflow-values-in-shapes")`
 shows how to do this with the build,
 intersect and summarise steps, for points,
-buffers and areas.
+buffers, tracks and areas.
 
 **3. Investigate three-dimensional spatial overlap**
 
