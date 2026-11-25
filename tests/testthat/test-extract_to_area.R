@@ -1,3 +1,9 @@
+# extract_to_area() is a wrapper over as_proxy(), crop(), as_voxel(),
+# as_vector3d() and mask(), which have their own tests (test-proxy-crop.R,
+# test-vector3d.R, test-intersect.R). These tests cover only what the
+# wrapper adds: the band's defaults, the warning, the inputs it accepts and
+# that voxels and proxies give the same result.
+
 # Helper: synthetic multi-depth voxel with standard layer naming. Covers a 4x4
 # grid in lon/lat with values that make each cell / layer distinguishable.
 # Kept here: no shared helper (helper-example_objects.R) has this extent,
@@ -28,7 +34,7 @@ make_area_polygon <- function() {
   )
 }
 
-test_that("extract_to_area() keeps the levels whose slabs the band reaches", {
+test_that("extract_to_area() fills in the ends of a band left out", {
   v <- make_area_voxel()
   a <- sf::st_sf(geometry = make_area_polygon())
 
@@ -39,24 +45,17 @@ test_that("extract_to_area() keeps the levels whose slabs the band reaches", {
     list(label = "no bounds", min = NULL, max = NULL,
          kept = c(0, 50, 100, 500, 1000)),
     list(label = "min only", min = 90, max = NULL, kept = c(100, 500, 1000)),
-    list(label = "max only", min = NULL, max = 90, kept = c(0, 50, 100)),
-    # A band that only touches slab edges keeps only the slab it fills.
-    list(label = "25 to 75 m", min = 25, max = 75, kept = 50)
+    list(label = "max only", min = NULL, max = 90, kept = c(0, 50, 100))
   )
   for (case in cases) {
     out <- extract_to_area(a, v, min_depth = case$min, max_depth = case$max)
 
+    expect_s4_class(out, "SpatVoxel")
     # Every layer comes back, with its depth; levels outside the band are NA.
     expect_identical(depths(out), depths(v), label = case$label)
     present <- terra::global(out, "notNA")[, 1] > 0
     expect_identical(depths(out)[present], case$kept, label = case$label)
   }
-
-  # Under bounds = "top" the 40 m top falls in the 0-50 m slab of the 0 m
-  # level, and the band ends inside the 500-1000 m slab.
-  top <- extract_to_area(a, v, min_depth = 40, max_depth = 600, bounds = "top")
-  present <- terra::global(top, "notNA")[, 1] > 0
-  expect_identical(depths(top)[present], c(0, 50, 100, 500))
 })
 
 test_that("extract_to_area() without a band keeps every level", {
@@ -74,16 +73,6 @@ test_that("extract_to_area() without a band keeps every level", {
   expect_identical(terra::global(top, "notNA")[, 1], c(4, 4, 4, 4, 0))
 })
 
-test_that("extract_to_area() keeps the values inside the area", {
-  v <- make_area_voxel()
-  a <- sf::st_sf(geometry = make_area_polygon())
-  out <- extract_to_area(a, v, min_depth = 40, max_depth = 600)
-  # The same values as masking by hand.
-  shape <- as_vector3d(a, depth_min = 40, depth_max = 600)
-  expect_identical(terra::values(out),
-                   terra::values(mask(terra::crop(v, shape), shape)))
-})
-
 test_that("extract_to_area() gives a voxel and its proxy the same cells", {
   v <- make_area_voxel()
   # A square whose edges fall inside cells: every cell it touches counts.
@@ -95,17 +84,6 @@ test_that("extract_to_area() gives a voxel and its proxy the same cells", {
   expect_identical(terra::values(from_voxel), terra::values(from_proxy))
   expect_identical(terra::global(from_voxel, "notNA")[, 1],
                    c(0, 16, 16, 16, 0))
-})
-
-test_that("extract_to_area() finds an area on a 0-360 voxel", {
-  r <- terra::rast(nrows = 2, ncols = 4, xmin = 170, xmax = 190, ymin = -5,
-                   ymax = 5, nlyrs = 2, crs = "EPSG:4326", vals = 1)
-  v <- as_voxel(r, depths = c(0, 100))
-  area <- sf::st_sf(geometry = sf::st_sfc(sf::st_polygon(list(rbind(
-    c(-179, -4), c(-176, -4), c(-176, -1), c(-179, -1), c(-179, -4)
-  ))), crs = 4326))
-  out <- extract_to_area(area, v)
-  expect_identical(terra::global(out, "notNA")[, 1], c(1, 1))
 })
 
 test_that("extract_to_area() warns about a band that reaches no level", {
@@ -148,46 +126,13 @@ test_that("extract_to_area() uses only the area's outline", {
   )
 })
 
-test_that("extract_to_area() reads a SpatProxy", {
-  v <- make_area_voxel()
-  a <- sf::st_sf(geometry = make_area_polygon())
-  out <- extract_to_area(a, as_proxy(v), min_depth = 40, max_depth = 600)
-  expect_identical(terra::values(out),
-                   terra::values(extract_to_area(a, v, 40, 600)))
-})
-
-test_that("extract_to_area() returns a SpatVoxel", {
-  out <- extract_to_area(sf::st_sf(geometry = make_area_polygon()),
-                         make_area_voxel())
-  expect_s4_class(out, "SpatVoxel")
-  expect_true(methods::validObject(out))
-})
-
-test_that("extract_to_area() crops to sf, sfc and SpatVector areas", {
+test_that("extract_to_area() takes sf, sfc and SpatVector areas alike", {
   v <- make_area_voxel()
   poly <- make_area_polygon()
   from_sfc <- extract_to_area(poly, v, min_depth = 0, max_depth = 100)
-
-  # Rows with `same_extent` give the same extent as the sfc polygon. An area
-  # in another CRS is reprojected onto the voxel's.
-  cases <- list(
-    list(label = "sfc", area = poly, same_extent = TRUE),
-    list(label = "sf", area = sf::st_sf(geometry = poly), same_extent = TRUE),
-    list(label = "SpatVector", area = terra::vect(poly), same_extent = TRUE),
-    list(label = "sfc in EPSG:3857",
-         area = sf::st_transform(poly, "EPSG:3857"), same_extent = FALSE)
-  )
-  for (case in cases) {
-    out <- extract_to_area(case$area, v, min_depth = 0, max_depth = 100)
-
-    expect_true(terra::same.crs(out, v), label = case$label)
-    # The extent shrinks from -10..10 to roughly -5..5.
-    e <- terra::ext(out)
-    expect_lt(e[2] - e[1], 20, label = case$label)
-    if (case$same_extent) {
-      expect_identical(as.vector(e), as.vector(terra::ext(from_sfc)),
-                       label = case$label)
-    }
+  for (area in list(sf::st_sf(geometry = poly), terra::vect(poly))) {
+    expect_identical(terra::values(extract_to_area(area, v, 0, 100)),
+                     terra::values(from_sfc))
   }
 })
 
@@ -208,11 +153,4 @@ test_that("extract_to_area() rejects input it can't use", {
     expect_error(extract_to_area(case$area, case$rast_3d), case$pattern,
                  class = "ocean3d_error_area_input", label = case$label)
   }
-  # A band whose top is deeper than its bottom.
-  expect_error(
-    extract_to_area(sf::st_sf(geometry = make_area_polygon()),
-                    make_area_voxel(), min_depth = 600, max_depth = 40),
-    "depth_min must not be deeper than depth_max",
-    class = "ocean3d_error_vector3d"
-  )
 })
