@@ -151,7 +151,9 @@ as_envelope <- function(x, depth_min, depth_max) {
 #' depth is stored in [terra::depth()]. Given a [SpatProxy-class],
 #' `as_voxel()` reads one time step of it into memory instead. Reading a
 #' `SpatProxy` is experimental, like the class itself (see [SpatProxy-class]),
-#' and may change without notice while the core object is built.
+#' and may change without notice while the core object is built. A variable
+#' without depth, such as sea-surface temperature, isn't a voxel: read it as
+#' a plain `SpatRaster` with [rast()][rast-SpatProxy] on the proxy.
 #'
 #' A voxel read from a proxy carries the proxy's depth edges (see
 #' [depth_bounds()]): the file's depth bounds, or, for a file without them
@@ -296,14 +298,6 @@ as_voxel <- function(x, depths = NULL, varname = "value",
   if (proxy) {
     if (missing(varname)) varname <- x@variable$name
     time_match <- match.arg(time_match)
-    if (!is.null(max_time_diff) && (!is.numeric(max_time_diff) ||
-                                      length(max_time_diff) != 1L ||
-                                      is.na(max_time_diff) ||
-                                      max_time_diff < 0)) {
-      .abort_voxel_input(
-        "`max_time_diff` must be one number of days, 0 or more."
-      )
-    }
     return(.proxy_to_voxel(x, time, varname, time_match, max_time_diff))
   }
   # Idempotent: a valid SpatVoxel comes back as it is, so re-wrapping is cheap
