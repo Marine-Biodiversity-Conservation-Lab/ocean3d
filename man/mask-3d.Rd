@@ -23,7 +23,13 @@
 
 \S4method{mask}{SpatRaster,SpatVoxel}(x, mask, ...)
 
-\S4method{mask}{SpatRaster,SpatVector3D}(x, mask, bounds = c("midpoint", "top"), ...)
+\S4method{mask}{SpatRaster,SpatVector3D}(
+  x,
+  mask,
+  bounds = c("midpoint", "top"),
+  method = c("nearest", "nearest_value", "bottom", "surface"),
+  ...
+)
 }
 \arguments{
 \item{x}{The raster whose values are kept: a \link[=SpatVoxel-class]{SpatVoxel}, a
@@ -43,6 +49,26 @@ edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 
 \item{...}{Passed on to \code{\link[terra:mask]{terra::mask()}}. For example, \code{inverse = TRUE}
 keeps the values \emph{outside} the domain instead.}
+
+\item{method}{Only when \code{x} is a voxel and \code{mask} \link[=SpatVector3D-class]{SpatVector3D}
+points: which depth level each point keeps.
+\itemize{
+\item \code{"nearest"} (default): the level nearest the point's depth, whatever
+the voxel holds there, as \code{\link[=intersect_3d]{intersect_3d()}} places points. A point
+whose nearest level has no value keeps nothing.
+\item \code{"nearest_value"}: the nearest level that has a value in the point's
+cell, as \code{extract_to_point(method = "nearest")} picks it. Levels
+without a value are skipped.
+\item \code{"bottom"}: the deepest level that has a value in the point's cell,
+whatever the point's depth, as \code{extract_to_point(method = "bottom")}.
+\item \code{"surface"}: the shallowest level, whatever the point's depth and
+whether or not it has a value, as
+\code{extract_to_point(method = "surface")}.
+}
+
+For the two nearest rules, a point halfway between two levels takes the
+shallower one. A point whose cell has no value at any level keeps
+nothing under \code{"nearest_value"} and \code{"bottom"}.}
 }
 \value{
 \code{x}, with the same class and layers, with every value outside the
@@ -88,9 +114,8 @@ bottom, so a depth gap between them is filled. The time intervals are
 dropped, with a message.}
 \item{anything masked by \link[=SpatVector3D-class]{SpatVector3D} points}{A point covers
 one cell and one depth level, as in \code{\link[=intersect_3d]{intersect_3d()}}. A voxel keeps
-its value in each point's cell at the level nearest the point's depth
-(chosen by depth, not by where the voxel has values), so \code{bounds} is
-an error with points. An envelope
+its value in each point's cell at one level, which \code{method} sets;
+\code{bounds} is an error with points. An envelope
 keeps its interval whole in the cells where a point lies within it. A
 plain \code{SpatRaster} keeps the cells that hold a point. Lines aren't
 supported; \code{\link[=buffer_3d]{buffer_3d()}} turns them into polygons.}

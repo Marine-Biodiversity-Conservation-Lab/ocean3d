@@ -130,7 +130,9 @@ When the voxel's depth edges give uneven slabs, the slab that contains
 a point can belong to another level; the nearest level is used. The
 result is a presence voxel on the voxel's levels, and \code{bounds} doesn't
 apply. Points off the grid share nothing. Points' times aren't
-compared, since a voxel shows one time step.}
+compared, since a voxel shows one time step. This test is geometric
+and reads no values; to keep a voxel's values at the nearest level
+with a value, or at the bottom, use \code{\link[terra:mask]{mask()}} with its \code{method}.}
 \item{An envelope and \link[=SpatVector3D-class]{SpatVector3D} points}{In each cell where a
 point's depth lies within the envelope's interval (both ends
 included), the result holds an interval from the shallowest such point

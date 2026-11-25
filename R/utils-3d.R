@@ -53,7 +53,8 @@
     "unused argument(s): {toString(nms)}. `bounds` applies only when an ",
     "envelope or polygons meet a SpatVoxel; envelopes and polygons carry ",
     "their own depth intervals, and a point takes the level nearest its ",
-    "depth."
+    "depth. `method` applies only when mask() keeps a SpatVoxel's values ",
+    "at points."
   ), class = "ocean3d_error_unused_argument", call = NULL)
 }
 

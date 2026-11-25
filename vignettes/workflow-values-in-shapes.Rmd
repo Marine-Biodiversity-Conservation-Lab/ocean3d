@@ -111,9 +111,19 @@ after the last step. `extract_to_point()` warns when the step it picks is on
 another day; `as_voxel()` doesn't, so set `max_time_diff` in `as_voxel()` to
 limit how far away the step may be.
 
-The two differ when the nearest depth level has no value. `extract_to_point()`
-skips depth levels with no value when it looks for the nearest one. `mask()`
-uses the nearest level whatever its value, so such a detection gets `NA`.
+By default the two differ when the nearest depth level has no value.
+`extract_to_point()` skips depth levels with no value when it looks for the
+nearest one. `mask()` uses the nearest level whatever its value, so such a
+detection gets `NA`. To skip empty levels as `extract_to_point()` does, give
+`mask()` the method `"nearest_value"`. `"bottom"` keeps the deepest level that
+has a value, as `extract_to_point(method = "bottom")` does:
+
+```{r point-methods}
+summarise_3d(mask(v, a, method = "nearest_value"), statistic = "mean")
+summarise_3d(mask(v, a, method = "bottom"), statistic = "mean")
+extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
+                 method = "bottom")$temp
+```
 
 ## Buffers: the water around each detection
 

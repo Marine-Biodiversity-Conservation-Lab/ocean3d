@@ -209,7 +209,9 @@ setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
 #'     a point can belong to another level; the nearest level is used. The
 #'     result is a presence voxel on the voxel's levels, and `bounds` doesn't
 #'     apply. Points off the grid share nothing. Points' times aren't
-#'     compared, since a voxel shows one time step.}
+#'     compared, since a voxel shows one time step. This test is geometric
+#'     and reads no values; to keep a voxel's values at the nearest level
+#'     with a value, or at the bottom, use [mask()] with its `method`.}
 #'   \item{An envelope and [SpatVector3D-class] points}{In each cell where a
 #'     point's depth lies within the envelope's interval (both ends
 #'     included), the result holds an interval from the shallowest such point
@@ -365,7 +367,8 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' as [intersect_3d()] compares them, after being put on the 3D object's
 #' grid. A cell is `TRUE` where the voxel has a value at the level nearest a
 #' point's depth, or where a point's depth lies within the envelope's
-#' interval.
+#' interval. Points always take the level nearest their depth here; the
+#' other depth rules are in [mask()]'s `method`.
 #'
 #' Two [SpatVector3D-class] sets (polygons with polygons, or points with
 #' polygons) have no grid to answer on, so the answer is a list instead, as

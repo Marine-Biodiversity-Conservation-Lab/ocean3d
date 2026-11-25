@@ -857,6 +857,86 @@ test_that("mask(voxel, points) keeps the value at each point's level only", {
   expect_false(any(terra::values(intersects_3d(far, voxel))))
 })
 
+test_that("mask(voxel, points) picks each point's level with `method`", {
+  # One column of values at 0, 100, 200 and 300 m in cell 13: NA at 100 m
+  # and 300 m, so the nearest level and the bottom read the values.
+  vals <- matrix(NA_real_, 25, 4)
+  vals[13, ] <- c(10, NA, 30, NA)
+  voxel <- make_voxel(vals, c(0, 100, 200, 300), varname = "temp",
+                      grid = make_template())
+  kept <- function(depth, method) {
+    out <- terra::values(mask(voxel, points_at(2.5, 2.5, depth),
+                              method = method))
+    out[!is.na(out)]
+  }
+  cases <- list(
+    # The nearest level is NA here, so it keeps nothing.
+    list(depth = 110, method = "nearest", want = numeric(0)),
+    # The nearest level with a value: 200 m is nearer than 0 m.
+    list(depth = 110, method = "nearest_value", want = 30),
+    # Halfway between two levels with values, the shallower wins.
+    list(depth = 100, method = "nearest_value", want = 10),
+    # The deepest level with a value, whatever the point's depth.
+    list(depth = 0, method = "bottom", want = 30),
+    # The shallowest level, whatever the point's depth.
+    list(depth = 290, method = "surface", want = 10)
+  )
+  for (case in cases) {
+    expect_equal(kept(case$depth, case$method), case$want,
+                 info = paste(case$method, case$depth))
+  }
+  # Only the chosen cell and level keep a value.
+  out <- terra::values(mask(voxel, points_at(2.5, 2.5, 0), method = "bottom"))
+  expect_equal(which(!is.na(out)), 13 + 25 * 2)
+
+  # A cell with no value at any level, and a point off the grid, keep nothing.
+  for (method in c("nearest_value", "bottom", "surface")) {
+    empty <- mask(voxel, points_at(c(0.5, 20), c(0.5, 20), c(0, 0)),
+                  method = method)
+    expect_true(all(is.na(terra::values(empty))), info = method)
+  }
+
+  # `method` applies only to points on a voxel.
+  band <- as_vector3d(make_polygon(), depth_min = 0, depth_max = 100)
+  envelope <- as_envelope(make_template(1), depth_min = 0, depth_max = 100)
+  for (call in list(function() mask(voxel, band, method = "bottom"),
+                    function() {
+                      mask(envelope, points_at(2.5, 2.5, 50), method = "bottom")
+                    })) {
+    expect_error(call(), "`method` applies only",
+                 class = "ocean3d_error_unused_argument")
+  }
+  expect_error(mask(voxel, points_at(2.5, 2.5, 0), method = "deepest"),
+               "should be one of")
+})
+
+test_that("mask(voxel, points, method) gives extract_to_point()'s values", {
+  # Two cells, four levels; NA levels in each column, as near the seafloor.
+  values <- array(NA_real_, c(2, 2, 4))
+  values[1, 1, ] <- c(1, 2, NA, 4)
+  values[2, 1, ] <- c(5, NA, 7, NA)
+  path <- make_grid_file(lon = c(0.5, 1.5), lat = c(10.5, 11.5),
+                         depth = c(0, 10, 20, 30), time = NULL,
+                         values = values)
+  on.exit(unlink(path), add = TRUE)
+  voxel <- as_voxel(as_proxy(path))
+  obs <- data.frame(lon = c(0.5, 0.5, 1.5, 1.5), lat = 10.5,
+                    depth = c(12, 30, 0, 16))
+  for (method in c("nearest", "bottom", "surface")) {
+    want <- extract_to_point(obs, path, method = method, depth_col = "depth",
+                             output_col = "value", depth_report = FALSE,
+                             spatial_report = FALSE,
+                             time_report = FALSE)$value
+    rule <- if (method == "nearest") "nearest_value" else method
+    got <- vapply(seq_len(nrow(obs)), function(i) {
+      v <- terra::values(mask(voxel, as_vector3d(obs[i, ]), method = rule))
+      v <- v[!is.na(v)]
+      if (length(v)) v else NA_real_
+    }, numeric(1))
+    expect_equal(got, want, info = method)
+  }
+})
+
 test_that("points land on a grid in the other longitude convention", {
   east <- terra::rast(nrows = 2, ncols = 2, xmin = 178, xmax = 182,
                       ymin = 0, ymax = 2, crs = "EPSG:4326")

@@ -68,7 +68,8 @@ axis to compare, so the test is only whether both are present.
 as \code{\link[=intersect_3d]{intersect_3d()}} compares them, after being put on the 3D object's
 grid. A cell is \code{TRUE} where the voxel has a value at the level nearest a
 point's depth, or where a point's depth lies within the envelope's
-interval.
+interval. Points always take the level nearest their depth here; the
+other depth rules are in \code{\link[terra:mask]{mask()}}'s \code{method}.
 
 Two \link[=SpatVector3D-class]{SpatVector3D} sets (polygons with polygons, or points with
 polygons) have no grid to answer on, so the answer is a list instead, as
