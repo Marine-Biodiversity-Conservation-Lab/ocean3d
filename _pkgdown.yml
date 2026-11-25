@@ -26,6 +26,7 @@ reference:
   - as_envelope
   - as_vector3d
   - buffer_3d
+  - sample_3d
   - vector3d_to_envelope
   - vector3d_to_voxel
   - vect_to_envelope
@@ -82,6 +83,7 @@ articles:
   - articles/extracting-environmental-data-at-points
   - articles/extracting-and-weighting-buffer-data
   - articles/extracting-environmental-data-along-tracks
+  - workflow-values-in-shapes
 - title: Other articles
   navbar: ~
   contents:
