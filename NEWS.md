@@ -2,6 +2,38 @@
 
 ## Breaking changes
 
+`extract_to_area()` is now a shortcut for `as_proxy()`, `crop()`,
+`as_voxel()`, `as_vector3d()` and `mask()` (#116). It used to return only the
+layers between the levels nearest to `min_depth` and `max_depth`. Now it
+returns every layer, with values outside the area and the depth band set to
+`NA`, as `mask()` does. A level has values when the band overlaps the depth
+range of water the level represents by more than an edge. Those ranges come
+from the voxel's depth edges when it has them (see `?depth_bounds`), and
+otherwise from the new `bounds` argument. On levels 0, 50, 100, 500 and
+1000 m:
+
+* A 40-600 m band has values on the 50, 100 and 500 m levels, as before, but
+  returns all five layers, with the 0 and 1000 m layers `NA`.
+* A 25-75 m band has values on 50 m only; before, the 0 and 50 m layers were
+  returned.
+* A band that overlaps no level, such as 50-50 m or one below the deepest
+  level, gives a warning and no values; before, it returned the nearest
+  layer.
+* A band whose top is deeper than its bottom is now an error.
+* Every cell the area touches is kept, also at its edges; before, cells cut
+  by the area's edge could be lost.
+
+Without `min_depth` and `max_depth`, every level of the area's cells has
+values, as before. Code that counted or named the returned layers should
+select the levels with values, for example
+`out[[terra::global(out, "notNA")[, 1] > 0]]`. An `area` without a CRS is now
+an error; set its CRS first.
+
+`extract_to_area()` now also takes a `SpatProxy`, and reads only the cells
+under the area for the time step given in the new `time` argument; a time
+window returns a list of voxels. It also works on voxels whose longitudes
+run from 0 to 360.
+
 `intersect_3d()`, `intersects_3d()` and `mask()` between `SpatVector3D`
 polygons and a `SpatVoxel` now put the polygons on the voxel's levels with
 `vector3d_to_voxel()`, one level at a time, instead of as an envelope that
