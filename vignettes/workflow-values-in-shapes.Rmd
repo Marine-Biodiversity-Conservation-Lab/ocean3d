@@ -259,6 +259,10 @@ rule.
 The 100 m and 200 m levels are outside the area, so their rows have `NA` and
 `n = 0`.
 
+`extract_to_area(mpa, proxy, min_depth = 0, max_depth = 50, time =
+"2020-03-03")` runs the same `crop()`, `as_voxel()` and `mask()` steps in one
+call, and returns the same voxel.
+
 ### Down to the seafloor
 
 A depth range that follows the seafloor, such as a species found from the

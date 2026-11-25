@@ -119,11 +119,11 @@ takes one of them:
 | Input | Functions | Reads with |
 |---|---|---|
 | netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_buffer()`, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
-| `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions, `mask()` and `extract_to_area()` | terra; no time dimension |
+| `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions and `mask()` | terra; one time step per voxel |
 
-A function takes only its own model: a voxel can't be passed to
-`extract_to_point()`, and a netCDF file can't be passed to `extract_to_area()`
-or `volume()`. Merging the two into one model with time is planned in
+A voxel can't be passed to `extract_to_point()`. `extract_to_area()` and
+`volume()` take a voxel or a netCDF file described with `as_proxy()`.
+Merging the two into one model with time is planned in
 [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
 Its first, experimental part is `as_proxy()`, which describes a netCDF file
 (such as a World Ocean Atlas file from `woa_download()`), a series of files
@@ -200,8 +200,8 @@ its depth range, measured from the outline rather than a grid.
 
 Input: a `SpatVoxel` already loaded with terra.
 
-- `extract_to_area()` — crop a `SpatVoxel` to an area polygon and select
-  layers within a depth range.
+- `extract_to_area()` — keep the values of a `SpatVoxel`, or of a netCDF
+  file described with `as_proxy()`, inside an area polygon and a depth band.
 - `mask()` (above) — keep a `SpatVoxel`'s values inside a 3D volume, such as
   a species' range from `vect_to_envelope()`.
 
