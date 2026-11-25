@@ -150,7 +150,8 @@ do.call(rbind, buffer_rows)
 ```
 
 Each row summarises one time step; `summarise_3d()` doesn't pool values
-across steps.
+across steps. A track works the same way: `sample_3d()` turns the line into
+points along it, which you can buffer and loop over as above.
 
 ## Areas: a protected area down to 50 m
 
