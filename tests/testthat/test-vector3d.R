@@ -568,7 +568,8 @@ test_that("buffer_3d() rejects inputs it can't buffer", {
            args = list(data.frame(lon = 1, lat = 1, depth = 1), 1, 1),
            pattern = "must be SpatVector3D points or lines"),
       list(label = "polygons", args = list(buffer_3d(pts, 1, 1), 1, 1),
-           pattern = "already have a depth range")
+           pattern = "already have a depth range",
+           class = "ocean3d_error_vector3d_type")
     ),
     lapply(list(0, -1, 10000, c(1, 2), "5", NA_real_), function(radius) {
       list(label = paste("radius_km", deparse(radius)),
@@ -608,8 +609,8 @@ test_that("buffer_3d() rejects inputs it can't buffer", {
   )
   for (case in cases) {
     expect_error(do.call(buffer_3d, case$args), case$pattern,
-                 class = "ocean3d_error_vector3d", fixed = isTRUE(case$fixed),
-                 label = case$label)
+                 class = case$class %||% "ocean3d_error_vector3d",
+                 fixed = isTRUE(case$fixed), label = case$label)
   }
 
   # A window computed in floating point that is a whole day to within

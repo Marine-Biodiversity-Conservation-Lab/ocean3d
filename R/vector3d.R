@@ -302,14 +302,17 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
 # geometry type a function doesn't take, such as points where
 # vector3d_to_envelope() needs polygons, or lines in the 3D queries in
 # R/intersect.R, which take polygons and points. `types` are the types the
-# caller accepts. The message names no argument, because the object can be
-# `x`, `y` or `mask`.
-.check_geomtype <- function(x, types = "polygons") {
+# caller accepts, and `hint` says what to do instead (by default, buffer
+# them into polygons). The message names no argument, because the object
+# can be `x`, `y` or `mask`.
+.check_geomtype <- function(x, types = "polygons", hint = NULL) {
   if (!x@type %in% types) {
     wanted <- glue::glue_collapse(types, sep = ", ", last = " or ")
+    if (is.null(hint)) {
+      hint <- glue::glue("buffer_3d() turns {x@type} into polygons.")
+    }
     rlang::abort(glue::glue(
-      "This needs {wanted}, but these are {x@type}. buffer_3d() turns ",
-      "{x@type} into polygons."
+      "This needs {wanted}, but these are {x@type}. {hint}"
     ), class = "ocean3d_error_vector3d_type", call = NULL)
   }
   invisible(x)

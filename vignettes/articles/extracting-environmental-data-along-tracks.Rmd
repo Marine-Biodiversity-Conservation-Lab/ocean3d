@@ -542,9 +542,10 @@ par(old_par)
 
 Seconds, minutes, hours and days are elapsed-time units; one day is 24 hours
 in UTC. Months and years have variable lengths and must be whole numbers.
-For these units, the function retains calendar anchors, advancing from the
-preceding anchor and clamping to the destination month's last day. For example,
-31 January 2020 leads to 29 February, then 29 March.
+For these units, the function counts whole steps from the start of each
+segment, and a date that doesn't exist in a shorter month falls on its last
+day. For example, from 31 January 2020, monthly steps give 29 February,
+31 March and 30 April.
 
 Balanced sampling divides each calendar span into equal parts only if required
 by distance or depth. It does not add a second global set of spatial cuts.
