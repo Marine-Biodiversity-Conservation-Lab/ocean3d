@@ -242,6 +242,16 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
+* `terra::extract()` on a `SpatProxy` reads the values at many
+  `SpatVector3D` points at once (#163). It matches every point to a time
+  step, reads each step once for its points, and picks each point's cell and
+  depth level with `method` as `mask()` does, so the values are those of the
+  per-shape loop. The result has one row per point: `feature_id`, `value`,
+  and the `time` and `depth` used. On 10,000 points over 20 daily steps it
+  takes about 3 seconds, against about 40 minutes for the loop and 7 seconds
+  for `extract_to_point()`. Reads that would exceed `ocean3d.max_read_mb`
+  are split into groups of nearby points.
+
 * `terra::rast()` reads time steps of a `SpatProxy` as plain `SpatRaster`s
   (#116), for variables without depth such as sea-surface temperature. Each
   step is one layer named after the variable, with its date in

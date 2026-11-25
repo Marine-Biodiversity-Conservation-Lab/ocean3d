@@ -180,14 +180,7 @@ setMethod("volume", "SpatProxy", function(x, per_cell = FALSE,
     rlang::abort("`fun` must be NULL or a function of a layer's values.",
                  class = "ocean3d_error_volume_fun", call = NULL)
   }
-  budget <- getOption("ocean3d.max_read_mb", 1024)
-  if (!is.numeric(budget) || length(budget) != 1L || !is.finite(budget) ||
-        budget <= 0) {
-    rlang::abort(glue::glue(
-      "The option `ocean3d.max_read_mb` must be one positive number of ",
-      "megabytes; got {format(budget)}."
-    ), class = "ocean3d_error_read_budget", call = NULL)
-  }
+  budget <- .read_budget_mb()
   variable <- x@variable
   axis <- x@axes$time
   n_steps <- if (is.null(axis)) 1L else variable$dim_lengths[[axis$dim]]

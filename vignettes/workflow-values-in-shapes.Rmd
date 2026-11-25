@@ -135,6 +135,19 @@ extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
                  method = "bottom")$temp
 ```
 
+### Many points at once
+
+For thousands of detections, the loop above reads one window per point.
+`terra::extract()` on the proxy gives the same values for all the points in
+one call: it matches every detection to a time step, reads each step once
+for the detections on it, and picks each detection's level with the same
+`method`. The result has one row per detection, with the time step and depth
+level used:
+
+```{r extract-many}
+terra::extract(proxy, detections, method = "nearest_value")
+```
+
 ## Surface data: a variable without depth
 
 Sea-surface temperature, chlorophyll and many satellite products have no

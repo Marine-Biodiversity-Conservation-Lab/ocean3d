@@ -737,12 +737,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       "terra::rast() on a proxy reads variables without depth."
     ), class = "ocean3d_error_proxy_has_depth", call = NULL)
   }
-  if (!is.null(max_time_diff) && (!is.numeric(max_time_diff) ||
-                                    length(max_time_diff) != 1L ||
-                                    is.na(max_time_diff) ||
-                                    max_time_diff < 0)) {
-    .abort_voxel_input("`max_time_diff` must be one number of days, 0 or more.")
-  }
+  .check_max_time_diff(max_time_diff)
   selected <- .proxy_time_step(x, time, time_match, max_time_diff)
   if (identical(x@source$type, "voxel") && is.null(depth)) {
     # A voxel already in memory is its own only time step.
@@ -793,6 +788,34 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     })
   }
   if (selected$list) out else out[[1L]]
+}
+
+# The read budget, in MB: the option `ocean3d.max_read_mb`, 1024 by default,
+# which caps how much one read of a SpatProxy holds in memory. Read by
+# volume() on a proxy and extract() on a proxy, which split their reads to
+# fit it.
+.read_budget_mb <- function() {
+  budget <- getOption("ocean3d.max_read_mb", 1024)
+  if (!is.numeric(budget) || length(budget) != 1L || !is.finite(budget) ||
+        budget <= 0) {
+    rlang::abort(glue::glue(
+      "The option `ocean3d.max_read_mb` must be one positive number of ",
+      "megabytes; got {format(budget)}."
+    ), class = "ocean3d_error_read_budget", call = NULL)
+  }
+  budget
+}
+
+# `max_time_diff` is NULL or one number of days, 0 or more. Checked before
+# any data are read, by the step reader and by extract() on a SpatProxy.
+.check_max_time_diff <- function(max_time_diff) {
+  if (!is.null(max_time_diff) && (!is.numeric(max_time_diff) ||
+                                    length(max_time_diff) != 1L ||
+                                    is.na(max_time_diff) ||
+                                    max_time_diff < 0)) {
+    .abort_voxel_input("`max_time_diff` must be one number of days, 0 or more.")
+  }
+  invisible(max_time_diff)
 }
 
 # The time steps `time` selects: `steps` (their indices, or NULL when the

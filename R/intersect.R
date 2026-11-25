@@ -518,48 +518,18 @@ setMethod(
                       as_envelope(out)
                     }))
   }
-  v <- x@vertices
-  cells <- .point_cells(x, grid)
-  on <- !is.na(cells)
   if (voxel) {
     d <- depths(template)
-    kind <- c(nearest = "nearest", nearest_value = "nearest",
-              bottom = "seabottom", surface = "surface")[[.level_rule]]
-    # "nearest" reads no values, so one profile in which every level has a
-    # value serves every point. The other rules read one column of values
-    # per distinct cell. Each distinct profile and depth goes through
-    # .summarise_depth_profile() once, so memory and time follow the cells
-    # and depths, not the number of points. With uneven slabs (stored depth
-    # edges), the slab that contains a point can belong to another level;
-    # the nearest level is still used.
-    level <- rep(NA_integer_, length(cells))
-    if (any(on)) {
-      if (.level_rule == "nearest") {
-        profiles <- matrix(1, 1L, length(d))
-        row <- rep(1L, sum(on))
-      } else {
-        cell_ids <- unique(cells[on])
-        # remove the 3D class
-        profiles <- as.matrix(terra::extract(
-          methods::as(template, "SpatRaster"), cell_ids
-        ))
-        row <- match(cells[on], cell_ids)
-      }
-      target <- if (kind == "nearest") v$depth[on] else rep(NA_real_, sum(on))
-      key <- paste(row, target)
-      first <- !duplicated(key)
-      picked <- vapply(which(first), function(k) {
-        profile <- profiles[row[k], ]
-        .summarise_depth_profile(profile, d, target[k])$index[[kind]]
-      }, integer(1))
-      level[on] <- picked[match(key, key[first])]
-    }
-    on <- on & !is.na(level)
+    picked <- .point_levels(x, template, .level_rule)
+    on <- !is.na(picked$level)
     occ <- matrix(0, terra::ncell(grid), length(d))
-    occ[cbind(cells[on], level[on])] <- 1
+    occ[cbind(picked$cell[on], picked$level[on])] <- 1
     occ <- terra::setValues(terra::rast(grid, nlyrs = length(d)), occ)
     return(.presence_voxel(occ, d, depth_bounds(template)))
   }
+  v <- x@vertices
+  cells <- .point_cells(x, grid)
+  on <- !is.na(cells)
   limits <- terra::values(template, mat = TRUE)[cells[on], , drop = FALSE]
   depth <- v$depth[on]
   inside <- !is.na(limits[, "depth_min"]) & limits[, "depth_min"] <= depth &
@@ -573,6 +543,69 @@ setMethod(
   )
   out[reached$cell] <- as.matrix(reached[c("depth_min", "depth_max")])
   as_envelope(out)
+}
+
+# Internal: `method`, the depth-level rule for points, checked as one of the
+# rules .point_levels() knows. The one producer of
+# `ocean3d_error_mask_method`, for mask() and extract() on a SpatProxy.
+.check_level_rule <- function(method) {
+  rules <- c("nearest", "nearest_value", "bottom", "surface")
+  if (!rlang::is_string(method) || !method %in% rules) {
+    rlang::abort(glue::glue(
+      "`method` must be one of {toString(dQuote(rules, FALSE))}."
+    ), class = "ocean3d_error_mask_method", call = NULL)
+  }
+  method
+}
+
+# Internal: the cell of voxel `template` holding each point of SpatVector3D
+# points `x`, and the depth level the point takes under `rule`: "nearest"
+# takes the level whose depth is nearest the point's depth, a tie going to
+# the shallower level, whatever the voxel holds there; "nearest_value",
+# "bottom" and "surface" read the cell's values, with the rules
+# extract_to_point() uses (.summarise_depth_profile()). NA for a point off
+# the grid, or with no level its rule can take. "nearest" reads no values,
+# so one profile in which every level has a value serves every point; the
+# other rules read one column of values per distinct cell. Each distinct
+# profile and depth goes through .summarise_depth_profile() once, so memory
+# and time follow the cells and depths, not the number of points. With
+# uneven slabs (stored depth edges), the slab that contains a point can
+# belong to another level; the nearest level is still used. Shared by the
+# point queries above and extract() on a SpatProxy, so both pick the same
+# values.
+.point_levels <- function(x, template, rule = "nearest") {
+  # remove the 3D class
+  cells <- .point_cells(x, methods::as(template[[1]], "SpatRaster"))
+  on <- !is.na(cells)
+  d <- depths(template)
+  kind <- c(nearest = "nearest", nearest_value = "nearest",
+            bottom = "seabottom", surface = "surface")[[rule]]
+  level <- rep(NA_integer_, length(cells))
+  if (any(on)) {
+    if (rule == "nearest") {
+      profiles <- matrix(1, 1L, length(d))
+      row <- rep(1L, sum(on))
+    } else {
+      cell_ids <- unique(cells[on])
+      # remove the 3D class
+      profiles <- as.matrix(terra::extract(
+        methods::as(template, "SpatRaster"), cell_ids
+      ))
+      row <- match(cells[on], cell_ids)
+    }
+    target <- if (kind == "nearest") {
+      x@vertices$depth[on]
+    } else {
+      rep(NA_real_, sum(on))
+    }
+    key <- paste(row, target)
+    first <- !duplicated(key)
+    picked <- vapply(which(first), function(k) {
+      .summarise_depth_profile(profiles[row[k], ], d, target[k])$index[[kind]]
+    }, integer(1))
+    level[on] <- picked[match(key, key[first])]
+  }
+  list(cell = cells, level = level)
 }
 
 # Internal: whether a SpatVector3D goes on a grid object's grid before the
@@ -789,14 +822,7 @@ setMethod("mask", c("SpatRaster", "SpatVector3D"),
             .check_geomtype(mask, c("polygons", "points"))
             # `method` applies only to points on a voxel, so it goes on only
             # when given; elsewhere it is the unused-argument error.
-            rules <- c("nearest", "nearest_value", "bottom", "surface")
-            if (missing(method)) {
-              method <- NULL
-            } else if (!rlang::is_string(method) || !method %in% rules) {
-              rlang::abort(glue::glue(
-                "`method` must be one of {toString(dQuote(rules, FALSE))}."
-              ), class = "ocean3d_error_mask_method", call = NULL)
-            }
+            method <- if (missing(method)) NULL else .check_level_rule(method)
             # `bounds` goes on only when given, so wherever there are no
             # levels to place it is the unused-argument error, as elsewhere.
             if (!missing(bounds) && !.placed_on_grid(mask, x)) {
