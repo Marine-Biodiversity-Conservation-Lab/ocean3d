@@ -149,14 +149,15 @@ function takes one of them:
 | Input | Functions | Reads with |
 |----|----|----|
 | netCDF files (paths, open `ncdf4` connections or a file table) | [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md) and its [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md) / `extract3d_*()` wrappers, [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md), [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | ncdf4, only the cells each observation needs; keeps the time dimension |
-| `SpatVoxel` / `SpatEnvelope` (3D classes built on [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html)) | the build, intersect and volume functions, `mask()` and [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md) | terra; no time dimension |
+| `SpatVoxel` / `SpatEnvelope` (3D classes built on [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html)) | the build, intersect and volume functions and `mask()` | terra; one time step per voxel |
 
-A function takes only its own model: a voxel can’t be passed to
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-and a netCDF file can’t be passed to
+A voxel can’t be passed to
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
 [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
-or
-[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md).
+and
+[`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
+take a voxel or a netCDF file described with
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
 Merging the two into one model with time is planned in
 [\#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
 Its first, experimental part is
@@ -268,8 +269,9 @@ grid.
 Input: a `SpatVoxel` already loaded with terra.
 
 - [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
-  — crop a `SpatVoxel` to an area polygon and select layers within a
-  depth range.
+  — keep the values of a `SpatVoxel`, or of a netCDF file described with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+  inside an area polygon and a depth band.
 - `mask()` (above) — keep a `SpatVoxel`‘s values inside a 3D volume,
   such as a species’ range from
   [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md).

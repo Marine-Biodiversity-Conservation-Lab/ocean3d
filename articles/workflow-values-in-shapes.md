@@ -64,7 +64,7 @@ only the cells and time steps it needs, at every depth level.
 proxy <- as_proxy(path)
 proxy
 #> class      : SpatProxy (experimental)
-#> source     : file22ab7f832d1c.nc
+#> source     : file234c388d30ee.nc
 #> variable   : temp (degC)
 #> dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)
 #> lon        : 150.025 to 150.975, 20 cells, edges inferred

@@ -191,13 +191,13 @@
 <tr>
 <td>
 <code>SpatVoxel</code> / <code>SpatEnvelope</code> (3D classes built on <code><a href="https://rspatial.github.io/terra/reference/SpatRaster-class.html" class="external-link">terra::SpatRaster</a></code>)</td>
-<td>the build, intersect and volume functions, <code>mask()</code> and <code><a href="reference/extract_to_area.html">extract_to_area()</a></code>
+<td>the build, intersect and volume functions and <code>mask()</code>
 </td>
-<td>terra; no time dimension</td>
+<td>terra; one time step per voxel</td>
 </tr>
 </tbody>
 </table>
-<p>A function takes only its own model: a voxel can’t be passed to <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, and a netCDF file can’t be passed to <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> or <code><a href="reference/volume.html">volume()</a></code>. Merging the two into one model with time is planned in <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99" class="external-link">#99</a>. Its first, experimental part is <code><a href="reference/as_proxy.html">as_proxy()</a></code>, which describes a netCDF file (such as a World Ocean Atlas file from <code><a href="reference/woa_download.html">woa_download()</a></code>), a series of files or a voxel in memory as a <code>SpatProxy</code> without reading its values. To use a netCDF file with the voxel functions, describe it with <code><a href="reference/as_proxy.html">as_proxy()</a></code>, crop it to your area with <code><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">terra::crop()</a></code>, and read one time step with <code><a href="reference/as_voxel.html">as_voxel()</a></code>; only the cropped cells are read.</p>
+<p>A voxel can’t be passed to <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>. <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> and <code><a href="reference/volume.html">volume()</a></code> take a voxel or a netCDF file described with <code><a href="reference/as_proxy.html">as_proxy()</a></code>. Merging the two into one model with time is planned in <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99" class="external-link">#99</a>. Its first, experimental part is <code><a href="reference/as_proxy.html">as_proxy()</a></code>, which describes a netCDF file (such as a World Ocean Atlas file from <code><a href="reference/woa_download.html">woa_download()</a></code>), a series of files or a voxel in memory as a <code>SpatProxy</code> without reading its values. To use a netCDF file with the voxel functions, describe it with <code><a href="reference/as_proxy.html">as_proxy()</a></code>, crop it to your area with <code><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">terra::crop()</a></code>, and read one time step with <code><a href="reference/as_voxel.html">as_voxel()</a></code>; only the cropped cells are read.</p>
 </div>
 <div class="section level3">
 <h3 id="build-3d-objects">Build: 3D objects<a class="anchor" aria-label="anchor" href="#build-3d-objects"></a>
@@ -254,7 +254,7 @@
 <p>Input: a <code>SpatVoxel</code> already loaded with terra.</p>
 <ul>
 <li>
-<code><a href="reference/extract_to_area.html">extract_to_area()</a></code> — crop a <code>SpatVoxel</code> to an area polygon and select layers within a depth range.</li>
+<code><a href="reference/extract_to_area.html">extract_to_area()</a></code> — keep the values of a <code>SpatVoxel</code>, or of a netCDF file described with <code><a href="reference/as_proxy.html">as_proxy()</a></code>, inside an area polygon and a depth band.</li>
 <li>
 <code>mask()</code> (above) — keep a <code>SpatVoxel</code>‘s values inside a 3D volume, such as a species’ range from <code><a href="reference/vect_to_envelope.html">vect_to_envelope()</a></code>.</li>
 </ul>

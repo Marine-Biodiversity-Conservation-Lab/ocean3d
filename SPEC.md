@@ -261,9 +261,7 @@ or a species’ probability of occurrence, at each coordinate and depth.
 [`depths()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/depths.md)
 reads the depths from
 [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html),
-e.g. so
-[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
-can select layers in a depth range.
+e.g. to label a per-layer summary.
 
 ### 3D (Min-max 2.5D)
 
@@ -1081,7 +1079,13 @@ of 24 November 2026.
     [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
     and per-level cell volume are done (#167), and the workflow article
     from step 7 covers points, buffers and areas. Tracks join it after
-    track sampling (#105); the wrappers aren’t started.
+    track sampling (#105). The first wrapper,
+    [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
+    on
+    [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+    `crop()`,
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+    and `mask()`, is done (#175); the other three aren’t started.
 9.  **Add track sampling** as a build step and buffered tracks (#105);
     then named shapes, raster and function surfaces for polygons (#117).
     *In progress:*
@@ -1249,8 +1253,13 @@ design](#package-design-build-intersect-summarise). Items marked
   netCDF values at them, and can summarise per track.
 - **Area extraction**.
   [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
-  crops a `SpatVoxel` (e.g. environmental data) to an input polygon and
-  depth band.
+  keeps the values of a `SpatVoxel` or `SpatProxy` (e.g. environmental
+  data) inside an input polygon and depth band, with
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+  `crop()`,
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
+  [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
+  and `mask()`.
 - **Volume extraction**. `mask(voxel, shape)` keeps a `SpatVoxel`‘s
   values (e.g. environmental data) inside a 3D volume and sets the rest
   to `NA`. The volume is a `SpatEnvelope` (2.5D, e.g. a species range
