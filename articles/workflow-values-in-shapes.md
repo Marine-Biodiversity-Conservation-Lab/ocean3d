@@ -1,13 +1,15 @@
-# Environmental values inside points, buffers and areas
+# Environmental values inside points, buffers, tracks and areas
 
 This article shows how to get environmental values inside 3D shapes,
-such as tag detections, buffers around them, or a protected area down to
-a set depth. Each example uses the same three steps:
+such as tag detections, buffers around them, a tag’s track, or a
+protected area down to a set depth. Each example uses the same three
+steps:
 
 1.  **Build** the shapes with
-    [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
+    [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md),
+    [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
     or
-    [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md).
+    [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md).
 2.  **Intersect** each shape with the data:
     [`crop()`](https://rspatial.github.io/terra/reference/crop.html) the
     dataset to the shape, read its time steps with
@@ -64,7 +66,7 @@ only the cells and time steps it needs, at every depth level.
 proxy <- as_proxy(path)
 proxy
 #> class      : SpatProxy (experimental)
-#> source     : file234c388d30ee.nc
+#> source     : file22af88a205e.nc
 #> variable   : temp (degC)
 #> dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)
 #> lon        : 150.025 to 150.975, 20 cells, edges inferred
@@ -202,10 +204,116 @@ do.call(rbind, buffer_rows)
 
 Each row summarises one time step;
 [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
-doesn’t pool values across steps. A track works the same way:
+doesn’t pool values across steps.
+
+## Tracks: buffers along a route
+
+A track is a line with a depth and a time at each vertex. This tag
+records three positions over 30 hours:
+
+``` r
+
+route <- data.frame(
+  tag = "D",
+  lon = c(150.15, 150.45, 150.85),
+  lat = c(-20.85, -20.50, -20.40),
+  depth = c(5, 60, 20),
+  time = as.POSIXct(c("2020-03-02 00:00", "2020-03-02 12:00",
+                      "2020-03-03 06:00"), tz = "UTC")
+)
+track <- as_vector3d(route, type = "lines", id = "tag", time = "time")
+```
+
+A single buffer around the line would span its full depth and time
+range, from 5 m to 60 m over two days. To follow the route more closely,
 [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
-turns the line into points along it, which you can buffer and loop over
-as above.
+places points along it, here at most 10 km apart. Each point gets the
+depth and time interpolated between the vertices either side, and
+`support_km`, the length of route it stands for: half the distance to
+the points either side.
+
+``` r
+
+samples <- sample_3d(track, spacing_km = 10)
+as.data.frame(samples)[c("feature_id", "distance_km", "depth", "time",
+                         "support_km")]
+#>    feature_id distance_km depth                time support_km
+#> 1         D_1    0.000000     5 2020-03-02 00:00:00   4.978544
+#> 2         D_2    9.957087    16 2020-03-02 02:24:00   9.957087
+#> 3         D_3   19.914175    27 2020-03-02 04:48:00   9.957087
+#> 4         D_4   29.871262    38 2020-03-02 07:12:00   9.957087
+#> 5         D_5   39.828350    49 2020-03-02 09:36:00   9.957087
+#> 6         D_6   49.785437    60 2020-03-02 12:00:00   9.296733
+#> 7         D_7   58.421816    52 2020-03-02 15:36:00   8.636379
+#> 8         D_8   67.058195    44 2020-03-02 19:12:00   8.636379
+#> 9         D_9   75.694574    36 2020-03-02 22:48:00   8.636379
+#> 10       D_10   84.330953    28 2020-03-03 02:24:00   8.636379
+#> 11       D_11   92.967333    20 2020-03-03 06:00:00   4.318190
+```
+
+You then buffer each point and loop over the buffers as above. Here each
+buffer is a circle of 3 km radius, from 10 m above to 10 m below its
+point. The loop passes the point, not the buffer, to
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
+which then reads the time step nearest the point’s time. A buffer would
+need a time window wide enough to contain a step; with daily data and a
+window of a few hours,
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+stops because the window holds no step. Each row also keeps its point’s
+`support_km`, so the weights stay with their rows:
+
+``` r
+
+sample_buffers <- buffer_3d(samples, radius_km = 3, depth_window = 10)
+local <- do.call(rbind, lapply(seq_along(sample_buffers), function(i) {
+  b <- sample_buffers[i]
+  v <- as_voxel(crop(proxy, b), time = samples[i])[[1]]
+  cbind(feature_id = as.data.frame(b)$feature_id,
+        support_km = as.data.frame(b)$support_km,
+        summarise_3d(suppressMessages(mask(v, b)), statistic = "mean"))
+}))
+local
+#>    feature_id support_km       time     mean n
+#> 1         D_1   4.978544 2020-03-02 27.07144 8
+#> 2         D_2   9.957087 2020-03-02 26.44616 8
+#> 3         D_3   9.957087 2020-03-02 26.64616 8
+#> 4         D_4   9.957087 2020-03-02 25.42175 8
+#> 5         D_5   9.957087 2020-03-02 25.10001 4
+#> 6         D_6   9.296733 2020-03-02 25.20001 4
+#> 7         D_7   8.636379 2020-03-03 25.41667 3
+#> 8         D_8   8.636379 2020-03-03 26.02175 8
+#> 9         D_9   8.636379 2020-03-03 26.02175 8
+#> 10       D_10   8.636379 2020-03-03 26.10508 6
+#> 11       D_11   4.318190 2020-03-03 27.44616 8
+```
+
+Each row is a local summary: the conditions inside one buffer. `n`
+varies from buffer to buffer, here from 3 to 8 values, because the
+buffers are smaller than the grid cells and the depth window catches one
+or two levels. A buffer with no water, for example on land near a coast,
+has a `NA` mean and `n = 0`.
+
+To summarise the whole track, average the local means weighted by
+`support_km`. This estimates the mean along the distance travelled, from
+the water the buffers cover, so a stretch of route sampled more densely
+doesn’t count for more. To weight by time spent instead, use the
+`support_seconds` column. `na.rm = TRUE` leaves out buffers with no
+water:
+
+``` r
+
+stats::weighted.mean(local$mean, local$support_km, na.rm = TRUE)
+#> [1] 25.96283
+```
+
+The weights ignore `n`, so a buffer with 3 values counts as much as one
+with 8. This is a mean of the local means, not a mean over all the water
+the buffers cover. These buffers don’t overlap, but neighbouring ones
+can use the same grid cells, so the local summaries aren’t independent.
+
+[`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+doesn’t yet check that each segment stays in water, so check that your
+samples aren’t on land before summarising them (#105).
 
 ## Areas: a protected area down to 50 m
 
@@ -248,6 +356,53 @@ m, overlaps the area’s depth range;
 [`vignette("depth-levels")`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/depth-levels.md)
 describes this rule. The 100 m and 200 m levels are outside the area, so
 their rows have `NA` and `n = 0`.
+
+`extract_to_area(mpa, proxy, min_depth = 0, max_depth = 50, time = "2020-03-03")`
+runs the same
+[`crop()`](https://rspatial.github.io/terra/reference/crop.html),
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+steps in one call, and returns the same voxel.
+
+### Down to the seafloor
+
+A depth range that follows the seafloor, such as a species found from
+the surface down to 200 m or the bed, whichever is shallower, or a layer
+within 20 m of the bed, varies from cell to cell.
+[`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
+builds it on the data’s grid, taking each depth limit as a number or a
+raster. Here a synthetic bathymetry deepens from 20 m in the west to 320
+m in the east. Bathymetry such as GEBCO is elevation, negative below sea
+level, so flip its sign and set land to 0 before use, then resample it
+onto the voxel’s grid:
+
+``` r
+
+elevation <- terra::rast(nrows = 10, ncols = 10, xmin = 150, xmax = 151,
+                         ymin = -21, ymax = -20, crs = "EPSG:4326")
+elevation <- -(20 + 300 * (terra::init(elevation, "x") - 150))
+seafloor <- terra::resample(terra::clamp(-elevation, lower = 0), v)
+
+to_bed <- vect_to_envelope(mpa, v, depth_min = 0,
+                           depth_max = list(200, seafloor))
+volume(to_bed) # km³
+#> [1] 307.1901
+summarise_3d(mask(v, to_bed), statistic = c("mean", "min", "max"))
+#>         time     mean   min   max   n
+#> 1 2020-03-03 22.04723 16.05 28.75 360
+
+near_bed <- vect_to_envelope(mpa, v, depth_min = list(seafloor - 20),
+                             depth_max = seafloor)
+summarise_3d(mask(v, near_bed), statistic = c("mean", "min", "max"))
+#>         time     mean   min   max  n
+#> 1 2020-03-03 18.65017 16.05 22.75 72
+```
+
+In each cell, the deepest `depth_min` and the shallowest `depth_max`
+given apply. Use this instead of
+[`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
+when the range’s top or bottom depends on the seafloor or another
+surface.
 
 ## Through time: habitat volume per day
 

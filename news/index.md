@@ -361,10 +361,18 @@ match, pass `max_time_diff` in days (no cap by default).
 
 - New article,
   [`vignette("workflow-values-in-shapes")`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md)
-  ([\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115),
+  ([\#105](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/105),
+  [\#115](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/115),
   [\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)),
-  on getting environmental values inside points, buffers and areas with
-  the build, intersect and summarise steps.
+  on getting environmental values inside points, buffers, tracks and
+  areas with the build, intersect and summarise steps. Its track section
+  samples a route with
+  [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md),
+  buffers each sample, and weights the per-buffer results by the length
+  of route each sample stands for. Its area section shows a depth range
+  bounded by the seafloor, built with
+  [`vect_to_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/vect_to_envelope.md)
+  from a bathymetry raster.
 
 - [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
   on a `SpatProxy` reads several time steps at once
