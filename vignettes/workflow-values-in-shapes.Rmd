@@ -115,6 +115,28 @@ The two differ when the nearest depth level has no value. `extract_to_point()`
 skips depth levels with no value when it looks for the nearest one. `mask()`
 uses the nearest level whatever its value, so such a detection gets `NA`.
 
+## Surface data: a variable without depth
+
+Sea-surface temperature, chlorophyll and many satellite products have no
+depth. They aren't voxels, so read them with `terra::rast()` on the proxy,
+which gives a plain one-layer raster with the step's date. The rest of the
+loop is the same; `mask()` uses only the detection's position, and
+`summarise_3d()` weights each cell by its area.
+
+```{r surface}
+sst <- ncdf4::ncvar_def("sst", "degC", dims[c(1, 2, 4)], missval = -9999,
+                        prec = "double")
+sst_path <- tempfile(fileext = ".nc")
+nc <- ncdf4::nc_create(sst_path, sst)
+surface <- array(temp, lengths(lapply(dims, `[[`, "vals")))[, , 1, ]
+ncdf4::ncvar_put(nc, sst, surface)
+ncdf4::nc_close(nc)
+
+sst_proxy <- as_proxy(sst_path)
+r <- terra::rast(crop(sst_proxy, a), time = a)[[1]]
+summarise_3d(mask(r, a), statistic = "mean")
+```
+
 ## Buffers: the water around each detection
 
 `buffer_3d()` turns each detection into a polygon: here a circle of 5 km

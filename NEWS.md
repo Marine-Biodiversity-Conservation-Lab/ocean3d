@@ -210,6 +210,15 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
+* `terra::rast()` reads time steps of a `SpatProxy` as plain `SpatRaster`s
+  (#116). Use it for a variable without depth, such as sea-surface
+  temperature, which isn't a voxel: it gives one layer named after the
+  variable, with its date in `terra::time()`. It takes the same `time` as
+  `as_voxel()`, including a window or a shape, which give a list. For a
+  variable with depth it gives the layers with `terra::depth()` set, but no
+  `SpatVoxel` class or depth edges. `summarise_3d()` now also takes such a
+  one-layer raster, or a list of them, and weights its cells by area.
+
 * New article, `vignette("workflow-values-in-shapes")` (#115, #116), on
   getting environmental values inside points, buffers and areas with the
   build, intersect and summarise steps.
