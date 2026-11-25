@@ -39,7 +39,8 @@ one per step.}
 \value{
 A \link[=SpatVoxel-class]{SpatVoxel} cropped to \code{area}, with the voxel's layers,
 \code{NA} outside the area and the depth band. A list of them for a time
-window.
+window. A band that reaches levels with no data in the area, such as
+water below the seafloor, gives a voxel with no values and no warning.
 }
 \description{
 Keeps the values of a \link[=SpatVoxel-class]{SpatVoxel} or \link[=SpatProxy-class]{SpatProxy} inside an

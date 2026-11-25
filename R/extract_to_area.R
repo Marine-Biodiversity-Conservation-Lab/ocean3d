@@ -44,7 +44,8 @@
 #'
 #' @returns A [SpatVoxel-class] cropped to `area`, with the voxel's layers,
 #'   `NA` outside the area and the depth band. A list of them for a time
-#'   window.
+#'   window. A band that reaches levels with no data in the area, such as
+#'   water below the seafloor, gives a voxel with no values and no warning.
 #'
 #' @seealso [mask-3d], [summarise_3d()], [volume()];
 #'   `vignette("workflow-values-in-shapes")` for the steps written out.
@@ -115,18 +116,22 @@ extract_to_area <- function(area, rast_3d, min_depth = NULL, max_depth = NULL,
     if (is.null(min_depth)) min_depth <- 0
     if (is.null(max_depth)) max_depth <- max(deepest, min_depth)
     shape <- as_vector3d(outline, depth_min = min_depth, depth_max = max_depth)
-  }
-  out <- lapply(voxels, function(v) {
-    kept <- mask(v, shape, bounds = bounds)
-    no_values <- function(x) all(terra::global(x, "notNA")[, 1] == 0)
-    if (band && no_values(kept) &&
-          !no_values(mask(v, whole, bounds = bounds))) {
+    # Whether the band overlaps a level is a question about depths, not
+    # values: a copy filled with 1s, on the same levels and depth edges,
+    # keeps values only on the levels the band reaches. A band that reaches
+    # a level with no data gives an empty result without a warning.
+    first <- voxels[[1L]]
+    filled <- terra::setValues(methods::as(first, "SpatRaster"), 1)
+    filled <- as_voxel(filled, depths = depths(first),
+                       depth_bounds = depth_bounds(first))
+    reached <- terra::global(mask(filled, shape, bounds = bounds), "notNA")
+    if (all(reached[, 1] == 0)) {
       rlang::warn(glue::glue(
         "The band from {min_depth} to {max_depth} m overlaps none of the ",
         "voxel's depth levels, so no values are kept. Widen the band."
       ), class = "ocean3d_warning_area_band")
     }
-    kept
-  })
+  }
+  out <- lapply(voxels, mask, shape, bounds = bounds)
   if (window) out else out[[1L]]
 }

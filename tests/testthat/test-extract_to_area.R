@@ -122,6 +122,21 @@ test_that("extract_to_area() warns about a band that reaches no level", {
   }
 })
 
+test_that("extract_to_area() doesn't warn when the band reaches empty levels", {
+  # Levels 0, 50 and 100 m with no data at 50 m: a 30-70 m band reaches only
+  # that level, so the answer is a voxel with no values, without a warning.
+  r <- terra::rast(nrows = 4, ncols = 4, xmin = -10, xmax = 10, ymin = -10,
+                   ymax = 10, nlyrs = 3, crs = "EPSG:4326")
+  terra::values(r) <- cbind(rep(1, 16), NA, rep(1, 16))
+  v <- as_voxel(r, depths = c(0, 50, 100))
+  a <- sf::st_sf(geometry = make_area_polygon())
+  expect_no_warning(out <- extract_to_area(a, v, 30, 70))
+  expect_true(all(terra::global(out, "notNA")[, 1] == 0))
+  # A band below the voxel still overlaps no level, so it warns.
+  expect_warning(extract_to_area(a, v, 200, 300),
+                 class = "ocean3d_warning_area_band")
+})
+
 test_that("extract_to_area() uses only the area's outline", {
   v <- make_area_voxel()
   poly <- make_area_polygon()
