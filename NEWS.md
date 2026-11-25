@@ -242,6 +242,16 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
+* `terra::rast()` reads time steps of a `SpatProxy` as plain `SpatRaster`s
+  (#116), for variables without depth such as sea-surface temperature. Each
+  step is one layer named after the variable, with its date in
+  `terra::time()`. `time` works as in `as_voxel()`; a window or a shape gives
+  a list. A variable with depth stops with an error that points to
+  `as_voxel()`, so each kind of variable has one reader.
+
+* `summarise_3d()` also takes a one-layer `SpatRaster`, or a list of them,
+  and weights each cell by its area (#116).
+
 * `mask()` of a `SpatVoxel` by `SpatVector3D` points takes a `method` that
   sets the depth level each point keeps (#116):
   * `"nearest"` (default, as before): the level nearest the point's depth,

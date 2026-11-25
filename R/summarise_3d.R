@@ -33,13 +33,17 @@
 #'
 #' @param x A [SpatVoxel-class], typically `mask(v, shape)` for the values
 #'   inside a shape, or a list of voxels, one per time step, as [as_voxel()]
-#'   gives for a time window. Envelopes have no values, so they aren't
-#'   accepted; a netCDF file isn't either: describe it with [as_proxy()] and
-#'   read one time step with [as_voxel()].
+#'   gives for a time window. `x` can also be a one-layer `SpatRaster` of a
+#'   variable without depth, as [rast()][rast-SpatProxy] reads from a
+#'   [SpatProxy-class], or a list of them, one per time step. Envelopes have
+#'   no values, so they aren't accepted; a netCDF file isn't either: describe
+#'   it with [as_proxy()] and read one time step with [as_voxel()] or
+#'   `rast()`.
 #' @param statistic One or more of `"mean"`, `"sd"`, `"min"`, `"max"` and
 #'   `"median"`. Each becomes a column of the result, in this order.
 #' @param weighting `"volume"` (default) weights each value by the volume of
-#'   its cell and depth level; `"equal"` counts each value once. A row whose
+#'   its cell and depth level, and each value of a one-layer `SpatRaster` by
+#'   its cell's area; `"equal"` counts each value once. A row whose
 #'   values all have zero volume, such as a voxel with a single level and no
 #'   depth edges, or the deepest level under `bounds = "top"`, uses equal
 #'   weights.
@@ -48,6 +52,8 @@
 #'   `depth` column. Values from different time steps aren't combined, so a
 #'   list shows the change from step to step. `"time"` means the same as
 #'   `NULL`, and says in a call on a list that the rows are per time step.
+#'   A one-layer `SpatRaster` has a single level, so `"depth"` is an error
+#'   for it.
 #' @param bounds As in [volume()]: where the slab edges fall for a voxel that
 #'   carries no depth edges; used with `weighting = "volume"` only. Voxels
 #'   read with [as_voxel()] from a [SpatProxy-class] carry their edges, so
@@ -96,32 +102,50 @@ summarise_3d <- function(x, statistic = "mean",
       "`by` must be NULL (one row per voxel), \"depth\" or \"time\"."
     )
   }
-  # One voxel is checked as every 3D input is; a list must hold only voxels.
+  # A 2D layer, as rast() reads a variable without depth: a plain one-layer
+  # SpatRaster, not one of the 3D classes.
+  flat <- function(r) {
+    methods::is(r, "SpatRaster") && !methods::is(r, "SpatVoxel") &&
+      !methods::is(r, "SpatEnvelope") && terra::nlyr(r) == 1L
+  }
+  # One voxel is checked as every 3D input is; a list must hold only voxels
+  # or 2D layers.
   if (is.list(x)) {
-    is_voxel <- vapply(x, methods::is, logical(1), "SpatVoxel")
-    if (!length(x) || !all(is_voxel)) {
+    usable <- vapply(x, function(r) methods::is(r, "SpatVoxel") || flat(r),
+                     logical(1))
+    if (!length(x) || !all(usable)) {
       .abort_summarise_input(paste(
-        "A list `x` must hold one or more SpatVoxels, one per time step,",
-        "and nothing else. Build each with as_voxel(), and keep the values",
-        "inside a shape with mask()."
+        "A list `x` must hold one or more SpatVoxels or one-layer",
+        "SpatRasters, one per time step, and nothing else. Read each with",
+        "as_voxel() or rast(), and keep the values inside a shape with mask()."
       ))
     }
     voxels <- x
   } else {
-    .check_3d(x, "x", "SpatVoxel")
+    if (!flat(x)) .check_3d(x, "x", "SpatVoxel")
     voxels <- list(x)
   }
 
   rows <- lapply(voxels, function(v) {
-    .check_3d(v, "x", "SpatVoxel")
+    two_d <- flat(v)
+    if (!two_d) .check_3d(v, "x", "SpatVoxel")
+    if (two_d && identical(by, "depth")) {
+      .abort_summarise_input(paste(
+        "A one-layer SpatRaster has a single level, so `by = \"depth\"`",
+        "doesn't apply."
+      ))
+    }
     # Cells x depth levels. The per-level volume is NA exactly where the
-    # voxel is, so the weights line up with the values.
+    # voxel is, so the weights line up with the values; a 2D layer is
+    # weighted by cell area.
     values <- terra::values(v, mat = TRUE)
-    weights <- if (weighting == "volume") {
+    weights <- if (weighting == "equal") {
+      array(1, dim(values))
+    } else if (two_d) {
+      terra::values(.cell_area_km2(v), mat = TRUE)
+    } else {
       terra::values(volume(v, per_cell = TRUE, per_level = TRUE,
                            bounds = bounds), mat = TRUE)
-    } else {
-      array(1, dim(values))
     }
     time <- .voxel_time(v)
     groups <- if (identical(by, "depth")) {

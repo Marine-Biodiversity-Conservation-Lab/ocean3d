@@ -15,15 +15,19 @@ summarise_3d(
 \arguments{
 \item{x}{A \link[=SpatVoxel-class]{SpatVoxel}, typically \code{mask(v, shape)} for the values
 inside a shape, or a list of voxels, one per time step, as \code{\link[=as_voxel]{as_voxel()}}
-gives for a time window. Envelopes have no values, so they aren't
-accepted; a netCDF file isn't either: describe it with \code{\link[=as_proxy]{as_proxy()}} and
-read one time step with \code{\link[=as_voxel]{as_voxel()}}.}
+gives for a time window. \code{x} can also be a one-layer \code{SpatRaster} of a
+variable without depth, as \link[=rast-SpatProxy]{rast()} reads from a
+\link[=SpatProxy-class]{SpatProxy}, or a list of them, one per time step. Envelopes have
+no values, so they aren't accepted; a netCDF file isn't either: describe
+it with \code{\link[=as_proxy]{as_proxy()}} and read one time step with \code{\link[=as_voxel]{as_voxel()}} or
+\code{rast()}.}
 
 \item{statistic}{One or more of \code{"mean"}, \code{"sd"}, \code{"min"}, \code{"max"} and
 \code{"median"}. Each becomes a column of the result, in this order.}
 
 \item{weighting}{\code{"volume"} (default) weights each value by the volume of
-its cell and depth level; \code{"equal"} counts each value once. A row whose
+its cell and depth level, and each value of a one-layer \code{SpatRaster} by
+its cell's area; \code{"equal"} counts each value once. A row whose
 values all have zero volume, such as a voxel with a single level and no
 depth edges, or the deepest level under \code{bounds = "top"}, uses equal
 weights.}
@@ -32,7 +36,9 @@ weights.}
 for a list; \code{"depth"} one row per depth level of each voxel, with a
 \code{depth} column. Values from different time steps aren't combined, so a
 list shows the change from step to step. \code{"time"} means the same as
-\code{NULL}, and says in a call on a list that the rows are per time step.}
+\code{NULL}, and says in a call on a list that the rows are per time step.
+A one-layer \code{SpatRaster} has a single level, so \code{"depth"} is an error
+for it.}
 
 \item{bounds}{As in \code{\link[=volume]{volume()}}: where the slab edges fall for a voxel that
 carries no depth edges; used with \code{weighting = "volume"} only. Voxels

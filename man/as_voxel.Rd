@@ -96,7 +96,9 @@ throughout the package, with one layer per standard depth. Each layer's
 depth is stored in \code{\link[terra:depth]{terra::depth()}}. Given a \link[=SpatProxy-class]{SpatProxy},
 \code{as_voxel()} reads one time step of it into memory instead. Reading a
 \code{SpatProxy} is experimental, like the class itself (see \link[=SpatProxy-class]{SpatProxy}),
-and may change without notice while the core object is built.
+and may change without notice while the core object is built. A variable
+without depth, such as sea-surface temperature, isn't a voxel: read it as
+a plain \code{SpatRaster} with \link[=rast-SpatProxy]{rast()} on the proxy.
 }
 \details{
 A voxel read from a proxy carries the proxy's depth edges (see
