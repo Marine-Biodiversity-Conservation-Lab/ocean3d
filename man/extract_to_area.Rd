@@ -4,41 +4,61 @@
 \alias{extract_to_area}
 \title{Extract a 3D raster to an area and a depth band}
 \usage{
-extract_to_area(area, rast_3d, min_depth = NULL, max_depth = NULL)
+extract_to_area(
+  area,
+  rast_3d,
+  min_depth = NULL,
+  max_depth = NULL,
+  bounds = c("midpoint", "top"),
+  time = NULL
+)
 }
 \arguments{
-\item{area}{sf, sfc, or SpatVector. Area polygon to crop the voxel to.
-Reprojected to the voxel's CRS when the two differ.}
+\item{area}{sf, sfc, or SpatVector polygons. Projected to WGS84 by
+\code{\link[=as_vector3d]{as_vector3d()}}, then placed on the voxel's grid.}
 
-\item{rast_3d}{\link[=SpatVoxel-class]{SpatVoxel}. Multi-depth raster, e.g. from \code{\link[=as_voxel]{as_voxel()}}
-or \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. A netCDF file isn't accepted: describe it with
-\code{\link[=as_proxy]{as_proxy()}} and read one time step with \code{\link[=as_voxel]{as_voxel()}}.}
+\item{rast_3d}{A \link[=SpatVoxel-class]{SpatVoxel}, e.g. from \code{\link[=as_voxel]{as_voxel()}} or
+\code{\link[=envelope_to_voxel]{envelope_to_voxel()}}, or a \link[=SpatProxy-class]{SpatProxy} from \code{\link[=as_proxy]{as_proxy()}}.}
 
-\item{min_depth}{Numeric. Shallowest depth in metres. \code{NULL} (the default)
-starts at the voxel's shallowest layer.}
+\item{min_depth, max_depth}{The top and bottom of the depth band, in metres
+positive down. \code{NULL} (the default) runs to that end of the voxel: the
+surface for \code{min_depth}, and the bottom of the deepest slab for
+\code{max_depth}.}
 
-\item{max_depth}{Numeric. Deepest depth in metres. \code{NULL} (the default) runs
-to the voxel's deepest layer.}
+\item{bounds}{How a voxel without depth edges places each level's slab:
+\code{"midpoint"} (default) or \code{"top"}, as in \code{\link[terra:mask]{mask()}}. Not used when the
+voxel has depth edges.}
+
+\item{time}{For a \link[=SpatProxy-class]{SpatProxy} only: the time step to read, as in
+\code{\link[=as_voxel]{as_voxel()}}. A time window gives a list of voxels, one per step.}
 }
 \value{
-A \link[=SpatVoxel-class]{SpatVoxel} cropped to \code{area} and filtered to the depth
-range.
+A \link[=SpatVoxel-class]{SpatVoxel} cropped to \code{area}, with the voxel's layers,
+\code{NA} outside the area and the depth band. A list of them for a
+\link[=SpatProxy-class]{SpatProxy} read over a time window.
 }
 \description{
-Crop a \link[=SpatVoxel-class]{SpatVoxel} to an area polygon and select the depth layers
-within a given depth range. The nearest available depth layers to
-\code{min_depth} and \code{max_depth} are used as the inclusive bounds, so the result
-always has at least one layer; omit either to run to that end of the voxel.
+Keeps the values of a \link[=SpatVoxel-class]{SpatVoxel} inside an area polygon and a depth
+band, and crops the voxel to the area. It is a shortcut for the build and
+intersect steps: the area becomes \link[=SpatVector3D-class]{SpatVector3D} polygons from
+\code{min_depth} to \code{max_depth} with \code{\link[=as_vector3d]{as_vector3d()}}, the voxel is cropped to
+them with \code{\link[terra:crop]{terra::crop()}}, and \code{\link[terra:mask]{mask()}} keeps the values inside. To
+summarise the result, pass it to \code{\link[=summarise_3d]{summarise_3d()}}.
 }
 \details{
-Unlike \code{\link[=extract_to_point]{extract_to_point()}}, \code{\link[=extract_to_buffer]{extract_to_buffer()}} and \code{\link[=extract_to_track]{extract_to_track()}},
-which read netCDF files, this function takes a \link[=SpatVoxel-class]{SpatVoxel} already
-loaded with terra. It has no time dimension and computes no statistic; it
-only crops the voxel and selects depth layers.
+A depth level is kept where the band shares some thickness with the slab
+of water the level stands for: the voxel's own depth edges when it has
+them (see \code{\link[=depth_bounds]{depth_bounds()}}), otherwise the slabs \code{bounds} gives. A band
+that only touches a slab's edge doesn't keep that level. Every layer of
+the voxel is returned; levels outside the band, and cells outside the
+area, are \code{NA}. A cell is inside the area when the polygon touches it.
 
-To restrict a voxel to a species' \emph{per-cell} depth window rather than one
-depth band across the whole area, build a \link[=SpatEnvelope-class]{SpatEnvelope} and mask with
-it instead: \code{mask(rast_3d, range_rast)}. See \link{mask-3d}.
+\code{rast_3d} can also be a \link[=SpatProxy-class]{SpatProxy}. Only the cells under the area
+are then read, for the time step chosen with \code{time} (see \code{\link[=as_voxel]{as_voxel()}}).
+
+To keep a voxel inside a depth window that changes from cell to cell, such
+as a species range bounded by the seafloor, build a \link[=SpatEnvelope-class]{SpatEnvelope}
+and mask with it instead: \code{mask(rast_3d, range_env)}. See \link{mask-3d}.
 }
 \examples{
 # A 4x4 voxel over five standard depths.
@@ -50,16 +70,15 @@ v <- as_voxel(r, depths = c(0, 50, 100, 500, 1000), varname = "t_an")
 area <- terra::vect("POLYGON ((-5 -5, 5 -5, 5 5, -5 5, -5 -5))",
                     crs = "EPSG:4326")
 
-# 40-600 m snaps to the 50, 100 and 500 m layers.
+# 40-600 m shares water with the slabs of the 50, 100 and 500 m levels.
 out <- extract_to_area(area, v, min_depth = 40, max_depth = 600)
-names(out)
+terra::global(out, "notNA")
 terra::ext(out)   # cropped to the polygon
 
-# Omit the bounds to keep every layer.
-names(extract_to_area(area, v))
+# The mean temperature in the area and band, weighted by volume.
+summarise_3d(out)
 }
 \seealso{
-\code{\link[=extract_to_point]{extract_to_point()}} to extract from netCDF files at points;
-\code{\link[=depths]{depths()}} for the
-layer depths the bounds snap to.
+\link{mask-3d}, \code{\link[=summarise_3d]{summarise_3d()}}, \code{\link[=volume]{volume()}};
+\code{vignette("workflow-values-in-shapes")} for the steps written out.
 }

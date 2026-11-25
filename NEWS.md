@@ -2,6 +2,25 @@
 
 ## Breaking changes
 
+`extract_to_area()` is now a shortcut for `as_vector3d()`, `crop()` and
+`mask()` (#116). It used to keep only the layers between the levels nearest
+to `min_depth` and `max_depth`. Now it keeps every layer and sets values
+outside the area and the depth band to `NA`, as `mask()` does. A level is
+kept where the band shares water with the slab it stands for, from the
+voxel's depth edges or the new `bounds` argument:
+
+* On levels 0, 50, 100, 500 and 1000 m, 40-600 m keeps 50, 100 and 500 m, as
+  before, but returns all five layers, with the 0 and 1000 m layers `NA`.
+* A band that only touches a slab's edge no longer keeps that level: 25-75 m
+  keeps 50 m only, where the nearest-level rule kept 0 and 50 m.
+* A voxel with depth edges, such as one read from a World Ocean Atlas file,
+  uses those edges instead of the nearest level.
+
+Code that counted or named the returned layers should select the levels
+with values, for example `out[[terra::global(out, "notNA")[, 1] > 0]]`.
+`extract_to_area()` also takes a `SpatProxy` now, reading only the cells
+under the area for the step chosen with `time`.
+
 `intersect_3d()`, `intersects_3d()` and `mask()` between `SpatVector3D`
 polygons and a `SpatVoxel` now put the polygons on the voxel's levels with
 `vector3d_to_voxel()`, one level at a time, instead of as an envelope that

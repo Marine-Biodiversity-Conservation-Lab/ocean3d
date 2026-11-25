@@ -1,35 +1,46 @@
 #' Extract a 3D raster to an area and a depth band
 #'
-#' Crop a [SpatVoxel-class] to an area polygon and select the depth layers
-#' within a given depth range. The nearest available depth layers to
-#' `min_depth` and `max_depth` are used as the inclusive bounds, so the result
-#' always has at least one layer; omit either to run to that end of the voxel.
+#' Keeps the values of a [SpatVoxel-class] inside an area polygon and a depth
+#' band, and crops the voxel to the area. It is a shortcut for the build and
+#' intersect steps: the area becomes [SpatVector3D-class] polygons from
+#' `min_depth` to `max_depth` with [as_vector3d()], the voxel is cropped to
+#' them with [terra::crop()], and [mask()] keeps the values inside. To
+#' summarise the result, pass it to [summarise_3d()].
 #'
-#' Unlike [extract_to_point()], [extract_to_buffer()] and [extract_to_track()],
-#' which read netCDF files, this function takes a [SpatVoxel-class] already
-#' loaded with terra. It has no time dimension and computes no statistic; it
-#' only crops the voxel and selects depth layers.
+#' A depth level is kept where the band shares some thickness with the slab
+#' of water the level stands for: the voxel's own depth edges when it has
+#' them (see [depth_bounds()]), otherwise the slabs `bounds` gives. A band
+#' that only touches a slab's edge doesn't keep that level. Every layer of
+#' the voxel is returned; levels outside the band, and cells outside the
+#' area, are `NA`. A cell is inside the area when the polygon touches it.
 #'
-#' To restrict a voxel to a species' *per-cell* depth window rather than one
-#' depth band across the whole area, build a [SpatEnvelope-class] and mask with
-#' it instead: `mask(rast_3d, range_rast)`. See [mask-3d].
+#' `rast_3d` can also be a [SpatProxy-class]. Only the cells under the area
+#' are then read, for the time step chosen with `time` (see [as_voxel()]).
 #'
-#' @param area sf, sfc, or SpatVector. Area polygon to crop the voxel to.
-#'   Reprojected to the voxel's CRS when the two differ.
-#' @param rast_3d [SpatVoxel-class]. Multi-depth raster, e.g. from [as_voxel()]
-#'   or [envelope_to_voxel()]. A netCDF file isn't accepted: describe it with
-#'   [as_proxy()] and read one time step with [as_voxel()].
-#' @param min_depth Numeric. Shallowest depth in metres. `NULL` (the default)
-#'   starts at the voxel's shallowest layer.
-#' @param max_depth Numeric. Deepest depth in metres. `NULL` (the default) runs
-#'   to the voxel's deepest layer.
+#' To keep a voxel inside a depth window that changes from cell to cell, such
+#' as a species range bounded by the seafloor, build a [SpatEnvelope-class]
+#' and mask with it instead: `mask(rast_3d, range_env)`. See [mask-3d].
 #'
-#' @returns A [SpatVoxel-class] cropped to `area` and filtered to the depth
-#'   range.
+#' @param area sf, sfc, or SpatVector polygons. Projected to WGS84 by
+#'   [as_vector3d()], then placed on the voxel's grid.
+#' @param rast_3d A [SpatVoxel-class], e.g. from [as_voxel()] or
+#'   [envelope_to_voxel()], or a [SpatProxy-class] from [as_proxy()].
+#' @param min_depth,max_depth The top and bottom of the depth band, in metres
+#'   positive down. `NULL` (the default) runs to that end of the voxel: the
+#'   surface for `min_depth`, and the bottom of the deepest slab for
+#'   `max_depth`.
+#' @param bounds How a voxel without depth edges places each level's slab:
+#'   `"midpoint"` (default) or `"top"`, as in [mask()]. Not used when the
+#'   voxel has depth edges.
+#' @param time For a [SpatProxy-class] only: the time step to read, as in
+#'   [as_voxel()]. A time window gives a list of voxels, one per step.
 #'
-#' @seealso [extract_to_point()] to extract from netCDF files at points;
-#'   [depths()] for the
-#'   layer depths the bounds snap to.
+#' @returns A [SpatVoxel-class] cropped to `area`, with the voxel's layers,
+#'   `NA` outside the area and the depth band. A list of them for a
+#'   [SpatProxy-class] read over a time window.
+#'
+#' @seealso [mask-3d], [summarise_3d()], [volume()];
+#'   `vignette("workflow-values-in-shapes")` for the steps written out.
 #'
 #' @examples
 #' # A 4x4 voxel over five standard depths.
@@ -41,47 +52,48 @@
 #' area <- terra::vect("POLYGON ((-5 -5, 5 -5, 5 5, -5 5, -5 -5))",
 #'                     crs = "EPSG:4326")
 #'
-#' # 40-600 m snaps to the 50, 100 and 500 m layers.
+#' # 40-600 m shares water with the slabs of the 50, 100 and 500 m levels.
 #' out <- extract_to_area(area, v, min_depth = 40, max_depth = 600)
-#' names(out)
+#' terra::global(out, "notNA")
 #' terra::ext(out)   # cropped to the polygon
 #'
-#' # Omit the bounds to keep every layer.
-#' names(extract_to_area(area, v))
+#' # The mean temperature in the area and band, weighted by volume.
+#' summarise_3d(out)
 #' @export
-extract_to_area <- function(area, rast_3d, min_depth = NULL, max_depth = NULL) {
-  # The voxel is checked before `area` is touched, so a malformed depth axis
-  # is reported as such rather than as a downstream geometry error.
-  if (!methods::is(rast_3d, "SpatVoxel")) {
-    stop("Input error for extract_to_area(): `rast_3d` needs to be of ",
-         "`SpatVoxel` class. Wrap a multi-depth SpatRaster with as_voxel().",
-         call. = FALSE)
-  }
+extract_to_area <- function(area, rast_3d, min_depth = NULL, max_depth = NULL,
+                            bounds = c("midpoint", "top"), time = NULL) {
+  bounds <- match.arg(bounds)
   if (!inherits(area, c("sf", "sfc", "SpatVector"))) {
-    stop("Input error for extract_to_area(): `area` needs to be of class ",
-         "sf, sfc, or SpatVector; got ", paste(class(area), collapse = "/"),
-         ".", call. = FALSE)
+    rlang::abort(glue::glue(
+      "`area` must be sf, sfc, or SpatVector polygons; got ",
+      "{paste(class(area), collapse = '/')}."
+    ), class = "ocean3d_error_area_input", call = NULL)
   }
-
-  d <- depths(rast_3d)
-
-  # NULL means "run to that end of the voxel", so each bound falls back to the
-  # depth that already sits there and the nearest-layer snap is unchanged.
-  idx_min <- if (is.null(min_depth)) 1L else which.min(abs(d - min_depth))
-  idx_max <- if (is.null(max_depth)) {
-    length(d)
-  } else {
-    which.min(abs(d - max_depth))
+  if (!methods::is(rast_3d, "SpatVoxel") &&
+        !methods::is(rast_3d, "SpatProxy")) {
+    rlang::abort(glue::glue(
+      "`rast_3d` must be a SpatVoxel or a SpatProxy; got ",
+      "{paste(class(rast_3d), collapse = '/')}. Wrap a multi-depth SpatRaster ",
+      "with as_voxel()."
+    ), class = "ocean3d_error_area_input", call = NULL)
   }
-  idx <- sort(c(idx_min, idx_max))
-  selected <- rast_3d[[seq.int(idx[1], idx[2])]]
-
-  if (inherits(area, "sf") || inherits(area, "sfc")) {
-    area <- terra::vect(area)
+  # Only the cells under the area are kept, or read from a proxy, which
+  # projects the area itself; a voxel in another CRS needs the area projected.
+  target <- if (inherits(area, "SpatVector")) area else terra::vect(area)
+  if (methods::is(rast_3d, "SpatVoxel") && !terra::same.crs(target, rast_3d)) {
+    target <- terra::project(target, terra::crs(rast_3d))
   }
-  if (terra::crs(area) != "" && !terra::same.crs(area, selected)) {
-    area <- terra::project(area, terra::crs(selected))
-  }
+  voxels <- as_voxel(crop(rast_3d, target), time = time)
 
-  as_voxel(terra::crop(selected, area, mask = TRUE, touches = TRUE))
+  # By default the band runs from the surface to the deepest water the voxel
+  # stands for; every voxel of a time window has the same levels.
+  first <- if (is.list(voxels)) voxels[[1L]] else voxels
+  if (is.null(min_depth)) min_depth <- 0
+  if (is.null(max_depth)) {
+    max_depth <- max(depths(first), depth_bounds(first)$upper)
+  }
+  if (inherits(area, "sfc")) area <- sf::st_sf(geometry = area)
+  shape <- as_vector3d(area, depth_min = min_depth, depth_max = max_depth)
+  if (is.list(voxels)) return(lapply(voxels, mask, shape, bounds = bounds))
+  mask(voxels, shape, bounds = bounds)
 }
