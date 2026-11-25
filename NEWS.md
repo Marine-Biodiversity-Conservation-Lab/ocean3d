@@ -242,6 +242,19 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
+* `mask()` of a `SpatVoxel` by `SpatVector3D` points takes a `method` that
+  sets the depth level each point keeps (#116):
+  * `"nearest"` (default, as before): the level nearest the point's depth,
+    whatever its value.
+  * `"nearest_value"`: the nearest level that has a value, as
+    `extract_to_point(method = "nearest")` picks it.
+  * `"bottom"`: the deepest level that has a value, as
+    `extract_to_point(method = "bottom")`.
+  * `"surface"`: the shallowest level, as `extract_to_point(method = "surface")`.
+
+  `intersect_3d()` and `intersects_3d()` don't read values, so points there
+  always take the nearest level.
+
 * New article, `vignette("workflow-values-in-shapes")` (#105, #115, #116), on
   getting environmental values inside points, buffers, tracks and areas with
   the build, intersect and summarise steps. Its track section samples a route

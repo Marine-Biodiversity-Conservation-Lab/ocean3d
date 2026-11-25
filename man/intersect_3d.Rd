@@ -130,7 +130,10 @@ When the voxel's depth edges give uneven slabs, the slab that contains
 a point can belong to another level; the nearest level is used. The
 result is a presence voxel on the voxel's levels, and \code{bounds} doesn't
 apply. Points off the grid share nothing. Points' times aren't
-compared, since a voxel shows one time step.}
+compared, since a voxel shows one time step. \code{intersect_3d()} doesn't
+read the voxel's values; to keep the values at the nearest level that
+has one, at the bottom or at the surface, use \link[=mask-3d]{mask()} with
+\code{method}.}
 \item{An envelope and \link[=SpatVector3D-class]{SpatVector3D} points}{In each cell where a
 point's depth lies within the envelope's interval (both ends
 included), the result holds an interval from the shallowest such point
