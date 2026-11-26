@@ -1130,13 +1130,14 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
       # Points along the box's edges, so the projected extent also reaches
       # where a curved projection (a polar one, say) bends an edge beyond
       # its corners.
+      # An area with no width or height, such as a single point, has no
+      # edge to add points along.
       e <- as.vector(terra::ext(y))
-      box <- terra::densify(
-        terra::as.polygons(terra::ext(y), crs = crs),
-        interval = max(e[["xmax"]] - e[["xmin"]], e[["ymax"]] - e[["ymin"]]) /
-          100,
-        flat = TRUE
-      )
+      span <- max(e[["xmax"]] - e[["xmin"]], e[["ymax"]] - e[["ymin"]])
+      box <- terra::as.polygons(terra::ext(y), crs = crs)
+      if (span > 0) {
+        box <- terra::densify(box, interval = span / 100, flat = TRUE)
+      }
       projected <- terra::project(box, x@crs)
       y <- terra::ext(projected)
       # A box across the antimeridian: going round its edge, the projected

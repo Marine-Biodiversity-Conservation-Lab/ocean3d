@@ -152,14 +152,28 @@ setMethod(
     half <- vapply(x@axes[c("lon", "lat")], function(a) {
       max(abs(a$upper - a$lower)) / 2
     }, numeric(1))
-    # Longitudes in the grid's own frame (0 to 360, -180 to 180, or a
-    # regional span): each moved by whole turns to the first value at or
-    # east of the grid's western edge. A group's box is built from these,
-    # so it never wraps round the globe onto a grid that doesn't (two points
-    # far apart on a regional grid), and a cluster across the antimeridian
-    # on a global grid is a wide box, which the split below separates.
-    west <- min(x@axes$lon$lower, x@axes$lon$upper)
-    lon_grid <- v$lon + 360 * ceiling((west - v$lon) / 360)
+    # The points in the grid's own coordinates, used both to build each
+    # group's box and to find each point's cell, so a point's cell can't
+    # depend on its group. On a projected grid, the points are projected to
+    # its CRS. On a longitude-latitude grid, each longitude is moved by
+    # whole turns to the first value at or east of the grid's western edge
+    # (0 to 360, -180 to 180, or a regional span): a box then never wraps
+    # round the globe onto a grid that doesn't (two points far apart on a
+    # regional grid), a cluster across the antimeridian on a global grid is
+    # a wide box, which the split below separates, and a point at 180 on a
+    # -180 to 180 grid is at -180, as when it is read alone.
+    lonlat <- terra::is.lonlat(x@crs)
+    if (lonlat) {
+      west <- min(x@axes$lon$lower, x@axes$lon$upper)
+      x_grid <- v$lon + 360 * ceiling((west - v$lon) / 360)
+      y_grid <- v$lat
+    } else {
+      xy <- terra::crds(terra::project(
+        terra::vect(cbind(v$lon, v$lat), crs = "EPSG:4326"), x@crs
+      ))
+      x_grid <- xy[, 1L]
+      y_grid <- xy[, 2L]
+    }
     # Groups of points read together: those on one time step, split into
     # nearby halves while a group's read would exceed the budget or hold
     # more than `cells_per_point` cells and levels for each point, so points
@@ -174,8 +188,11 @@ setMethod(
       idx <- groups[[1L]]
       groups <- groups[-1L]
       points <- y[idx]
-      lon <- lon_grid[idx]
-      lat <- v$lat[idx]
+      lon <- x_grid[idx]
+      lat <- y_grid[idx]
+      # On a longitude-latitude grid the cell lookup reads the grid-frame
+      # longitudes too; a projected grid's lookup projects the points itself.
+      if (lonlat) points@vertices$lon <- lon
       box <- terra::ext(min(lon) - half[["lon"]], max(lon) + half[["lon"]],
                         min(lat) - half[["lat"]], max(lat) + half[["lat"]])
       cropped <- tryCatch(crop(x, box),

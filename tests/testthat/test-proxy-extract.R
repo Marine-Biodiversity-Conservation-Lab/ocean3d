@@ -182,6 +182,41 @@ test_that("a point on a cell edge takes the cell its own crop gives", {
   expect_identical(extract(p, on_edges)$value, want)
 })
 
+test_that("extract() finds points on a projected grid", {
+  # A voxel on 1 km LAEA cells near (0, 0), and points given in lon/lat.
+  r <- terra::rast(nrows = 4, ncols = 5, xmin = 0, xmax = 5000, ymin = 0,
+                   ymax = 4000, nlyrs = 2,
+                   crs = "+proj=laea +lat_0=0 +lon_0=0 +datum=WGS84 +units=m")
+  terra::values(r) <- seq_len(40)
+  p <- as_proxy(as_voxel(r, depths = c(0, 50)))
+  metres <- cbind(c(1200, 3700, 4400, 600), c(500, 2600, 3900, 3100))
+  ll <- terra::crds(terra::project(terra::vect(metres, crs = terra::crs(r)),
+                                   "EPSG:4326"))
+  pts <- as_vector3d(data.frame(lon = ll[, 1], lat = ll[, 2],
+                                depth = c(5, 45, 5, 30)))
+  want <- loop_values(p, pts)
+  expect_false(anyNA(want))
+  expect_identical(extract(p, pts)$value, want)
+  rlang::local_options(ocean3d.max_read_mb = 1e-5)
+  expect_identical(extract(p, pts)$value, want)
+})
+
+test_that("a point at 180 takes the same cell alone and grouped", {
+  # On a -180 to 180 grid, 180 is the grid's eastern edge; alone, a point
+  # there is read across the seam and takes the westernmost column.
+  p <- grid_proxy(lon = seq(-179.5, 179.5, 1), lat = c(-0.5, 0.5),
+                  depth = 0, time = NULL,
+                  values = seq_len(360 * 2))
+  alone <- as_vector3d(data.frame(lon = 180, lat = 0.2, depth = 0))
+  paired <- as_vector3d(data.frame(lon = c(180, 179.7), lat = c(0.2, 0.3),
+                                   depth = 0))
+  want <- loop_values(p, alone)
+  expect_identical(extract(p, alone)$value, want)
+  expect_identical(extract(p, paired)$value[1L], want)
+  rlang::local_options(ocean3d.max_read_mb = 1e-5)
+  expect_identical(extract(p, paired)$value[1L], want)
+})
+
 test_that("points far apart are read as small windows, not the box between", {
   p <- grid_proxy(lon = seq(0.5, 199.5, 1), lat = seq(-59.5, 59.5, 1),
                   depth = c(0, 50), time = NULL)
