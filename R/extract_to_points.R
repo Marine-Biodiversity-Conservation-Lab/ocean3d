@@ -1785,41 +1785,41 @@ extract_to_point <- function(data = NULL, nc, lon = NULL, lat = NULL,
 # It goes when extract_to_track() is rebuilt on sample_3d() and extract()
 # (#116); nothing else may call it.
 .extract_points_legacy <- function(data = NULL,
-                             nc,
-                             lon = NULL,
-                             lat = NULL,
-                             depth = NULL,
-                             date = NULL,
-                             var = NULL,
-                             method = c(
-                               "2d", "surface", "bottom", "nearest", "all"
-                             ),
-                             lon_col = "lon",
-                             lat_col = "lat",
-                             date_col = "date",
-                             depth_col = "depth",
-                             id_col = NULL,
-                             file_col = "file",
-                             lon_dim = NULL,
-                             lat_dim = NULL,
-                             depth_dim = NULL,
-                             time_dim = NULL,
-                             time_match = c("nearest", "exact"),
-                             max_time_diff = NULL,
-                             output_prefix = NULL,
-                             output_col = NULL,
-                             verbose = FALSE,
-                             time_resolution = c(
-                               "auto", "datetime", "daily",
-                               "monthly", "yearly", "custom"
-                             ),
-                             custom_time_interval = NULL,
-                             time_report = TRUE,
-                             spatial_match = c("within", "nearest"),
-                             max_distance_km = NULL,
-                             spatial_report = NULL,
-                             depth_report = NULL,
-                             return_match_info = FALSE) {
+                                   nc,
+                                   lon = NULL,
+                                   lat = NULL,
+                                   depth = NULL,
+                                   date = NULL,
+                                   var = NULL,
+                                   method = c(
+                                     "2d", "surface", "bottom", "nearest", "all"
+                                   ),
+                                   lon_col = "lon",
+                                   lat_col = "lat",
+                                   date_col = "date",
+                                   depth_col = "depth",
+                                   id_col = NULL,
+                                   file_col = "file",
+                                   lon_dim = NULL,
+                                   lat_dim = NULL,
+                                   depth_dim = NULL,
+                                   time_dim = NULL,
+                                   time_match = c("nearest", "exact"),
+                                   max_time_diff = NULL,
+                                   output_prefix = NULL,
+                                   output_col = NULL,
+                                   verbose = FALSE,
+                                   time_resolution = c(
+                                     "auto", "datetime", "daily",
+                                     "monthly", "yearly", "custom"
+                                   ),
+                                   custom_time_interval = NULL,
+                                   time_report = TRUE,
+                                   spatial_match = c("within", "nearest"),
+                                   max_distance_km = NULL,
+                                   spatial_report = NULL,
+                                   depth_report = NULL,
+                                   return_match_info = FALSE) {
   if (!is.logical(return_match_info) || length(return_match_info) != 1L ||
         is.na(return_match_info)) {
     stop("return_match_info must be TRUE or FALSE.", call. = FALSE)

@@ -20,8 +20,10 @@ point_grid_file <- function(depth = c(5, 15, 40, 80), ...) {
   vals <- point_grid_values()
   if (identical(depth, c(80, 40, 15, 5))) vals <- vals[, , 4:1, ]
   if (is.null(depth)) vals <- vals[, , 1, ]
-  make_grid_file(c(0.5, 1.5, 2.5), c(10.5, 11.5), depth = depth, time = 0:4,
-                 values = vals, ...)
+  make_grid_file( # nolint: object_usage_linter.
+    c(0.5, 1.5, 2.5), c(10.5, 11.5), depth = depth, time = 0:4,
+    values = vals, ...
+  )
 }
 point_obs <- function() {
   data.frame(lon = c(0.2, 1.7, 2.9, 0.6, 1.1, 3.4),
@@ -541,8 +543,9 @@ test_that("formula-based and pressure axes require explicit conversion", {
     standard_name = "sea_water_pressure"
   )
   for (path in paths) {
-    expect_error(extract_to_point(method = "surface", 
-      data.frame(lon = 0, lat = 40), path, var = "temp", date_col = NULL
+    expect_error(extract_to_point(
+      data.frame(lon = 0, lat = 40), path, var = "temp", method = "surface",
+      date_col = NULL
     ), "physical transformation")
   }
 })
@@ -558,8 +561,9 @@ test_that("invalid file depth metadata fail before vertical extraction", {
   make_depth_axis_test_nc(paths[4], c(0, 50, 50), c(11, 22, 33))
   patterns <- c("ambiguous", "reference surface", "units", "duplicate")
   for (i in seq_along(paths)) {
-    expect_error(extract_to_point(method = "surface", 
-      data.frame(lon = 0, lat = 40), paths[i], var = "temp", date_col = NULL
+    expect_error(extract_to_point(
+      data.frame(lon = 0, lat = 40), paths[i], var = "temp",
+      method = "surface", date_col = NULL
     ), patterns[i])
   }
 })
@@ -712,8 +716,9 @@ test_that("height axes without a positive attribute are not depths", {
   make_depth_axis_test_nc(path, c(2, 10, 20), c(11, 22, 33),
                           standard_name = "height")
   expect_error(
-    extract_to_point(method = "surface", data.frame(lon = 0, lat = 40), path, var = "temp",
-                      date_col = NULL, depth_dim = "depth"),
+    extract_to_point(data.frame(lon = 0, lat = 40), path, var = "temp",
+                     method = "surface", date_col = NULL,
+                     depth_dim = "depth"),
     "reference surface"
   )
 })
@@ -730,8 +735,8 @@ test_that("a depth dimension without coordinate variable fails clearly", {
   ncdf4::ncvar_put(nc, "temp", array(c(11, 22, 33), c(1, 1, 3)))
   ncdf4::nc_close(nc)
   printed <- capture.output(error <- tryCatch(
-    extract_to_point(method = "surface", data.frame(lon = 0, lat = 40), path, var = "temp",
-                      date_col = NULL),
+    extract_to_point(data.frame(lon = 0, lat = 40), path, var = "temp",
+                     method = "surface", date_col = NULL),
     error = identity
   ))
   expect_match(conditionMessage(error), "has no coordinate variable")
@@ -810,4 +815,3 @@ test_that("bounds names inside a netCDF-4 group are relative to the group", {
   )
   expect_identical(as_proxy(f, var = "grp/temp")@axes$lon$edges, "bounds")
 })
-
