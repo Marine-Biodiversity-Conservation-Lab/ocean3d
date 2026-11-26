@@ -246,7 +246,7 @@ an exact match and stop otherwise. For the old behaviour, pass
   `SpatVector3D` points at once (#163). It gives the same values as calling
   `crop()`, `as_voxel()` and `mask()` for each point, and takes `method` for
   the depth level as `mask()` does. The result has one row per point:
-  `feature_id`, `value`, and the `time` and `depth` used. With
+  `feature_id`, `value`, and the `time_step` and `depth_level` used. With
   `bind = TRUE`, as in terra, it returns the points themselves with
   `value`, `time_step` and `depth_level` added to their columns. Points far
   apart, or more than `ocean3d.max_read_mb` would allow, are read in groups

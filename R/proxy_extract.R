@@ -64,18 +64,18 @@
 #'   * `feature_id`, the point's ID;
 #'   * `value`, `NA` for a point off the grid, without a matching time step,
 #'     or with no level its `method` can take;
-#'   * `time`, the date-time of the time step used, `NA` for a source
+#'   * `time_step`, the date-time of the time step used, `NA` for a source
 #'     without dated steps or a point with no matching step. A point off the
 #'     grid keeps its step's time;
-#'   * `depth`, the depth of the level used in metres, `NA` for a variable
-#'     without depth or when `value` is `NA`.
+#'   * `depth_level`, the depth of the level used in metres, `NA` for a
+#'     variable without depth or when `value` is `NA`.
 #'
 #'   With `bind = TRUE`, `y` itself, a [SpatVector3D-class] with the same
 #'   features in the same order and all their columns, plus `value`,
-#'   `time_step` and `depth_level`: the `value`, `time` and `depth` above,
-#'   renamed because a point already has its own `time` and `depth`. Points
-#'   with a column named `value`, `time_step` or `depth_level` stop with an
-#'   error; rename the column first.
+#'   `time_step` and `depth_level` as above. They aren't named `time` and
+#'   `depth` in either form, because a point already has its own `time` and
+#'   `depth`. Points with a column named `value`, `time_step` or
+#'   `depth_level` stop with an error; rename the column first.
 #'
 #' @seealso [mask()][mask-3d] and [as_voxel()] for one shape at a time;
 #'   [extract_to_point()].
@@ -220,18 +220,17 @@ setMethod(
     } else {
       dates[as.integer(step)]
     }
+    # Both forms name the step and level used `time_step` and `depth_level`,
+    # since a point already has its own `time` and `depth`.
+    values <- data.frame(value = value, time_step = time_used,
+                         depth_level = level_depth)
     if (!bind) {
-      return(data.frame(feature_id = v$feature_id, value = value,
-                        time = time_used, depth = level_depth,
-                        stringsAsFactors = FALSE))
+      return(cbind(data.frame(feature_id = v$feature_id,
+                              stringsAsFactors = FALSE), values))
     }
-    # The points with their values: a point already has its own `time` and
-    # `depth`, so the step and level used are `time_step` and `depth_level`.
-    # A column of the points named like one of these stops, as in
-    # as_vector3d().
-    vertices <- .add_attributes(v, data.frame(
-      value = value, time_step = time_used, depth_level = level_depth
-    ))
+    # The points with their values. A column of the points named like one
+    # of the added ones stops, as in as_vector3d().
+    vertices <- .add_attributes(v, values)
     .new_vector3d("points", y@time_resolution, vertices = vertices)
   }
 )

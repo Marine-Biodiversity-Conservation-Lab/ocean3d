@@ -143,15 +143,16 @@ extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
 Repeating these steps for thousands of detections reads one window per
 detection. `terra::extract()` on the proxy gives the same values for all of
 them in one call, and takes the same `method`. It returns one row per
-detection, with the time step and depth level used:
+detection, with the time step used in `time_step` and the depth level used
+in `depth_level`:
 
 ```{r extract-many}
 terra::extract(proxy, detections)
 ```
 
 With `bind = TRUE`, as in terra, it returns the detections themselves with
-the value, the time step and the depth level added to their columns, ready
-to keep working with as shapes.
+`value`, `time_step` and `depth_level` added to their columns, ready to
+keep working with as shapes.
 
 ## Surface data: a variable without depth
 

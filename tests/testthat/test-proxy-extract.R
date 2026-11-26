@@ -48,13 +48,13 @@ test_that("extract() gives the per-shape loop's values for every method", {
     expect_identical(out$value, loop_values(p, pts, method), label = method)
   }
   out <- extract(p, pts)
-  expect_named(out, c("feature_id", "value", "time", "depth"))
+  expect_named(out, c("feature_id", "value", "time_step", "depth_level"))
   expect_identical(out$feature_id, as.data.frame(pts)$feature_id)
   # Each point's step and level, as the loop reads them.
   i <- 3L
   v <- as_voxel(crop(p, pts[i]), time = pts[i])[[1L]]
-  expect_identical(out$time[i], terra::time(v)[1L])
-  expect_true(out$depth[i] %in% depths(v))
+  expect_identical(out$time_step[i], terra::time(v)[1L])
+  expect_true(out$depth_level[i] %in% depths(v))
 })
 
 test_that("extract() reads levels with no value as `method` says", {
@@ -67,9 +67,9 @@ test_that("extract() reads levels with no value as `method` says", {
   pts <- as_vector3d(data.frame(lon = 2.2, lat = 12.2, depth = 12))
   # By default, the nearest level with a value, as extract_to_point() picks
   # it; "nearest_level" takes the empty 10 m level.
-  expect_identical(extract(p, pts)$depth, 0)
+  expect_identical(extract(p, pts)$depth_level, 0)
   expect_true(is.na(extract(p, pts, method = "nearest_level")$value))
-  expect_identical(extract(p, pts, method = "bottom")$depth, 50)
+  expect_identical(extract(p, pts, method = "bottom")$depth_level, 50)
 })
 
 test_that("extract() matches a series of files and a 2D variable", {
@@ -93,7 +93,7 @@ test_that("extract() matches a series of files and a 2D variable", {
     kept[!is.na(kept)]
   }, numeric(1))
   expect_identical(out$value, by_rast)
-  expect_true(all(is.na(out$depth)))
+  expect_true(all(is.na(out$depth_level)))
   # A cell of a 2D variable holds one value, so `method` doesn't apply.
   expect_error(extract(flat, pts, method = "bottom"),
                "method", class = "ocean3d_error_unused_argument")
@@ -131,7 +131,7 @@ test_that("points off the grid or the time axis give NA", {
   out <- extract(p, pts, max_time_diff = 2)
   expect_false(is.na(out$value[1L]))
   expect_true(all(is.na(out$value[2:4])))
-  expect_true(is.na(out$time[4L]))
+  expect_true(is.na(out$time_step[4L]))
 
   # A point without a time on a source with several steps.
   untimed <- as_vector3d(data.frame(lon = 1.2, lat = 10.6, depth = 5))
@@ -220,8 +220,8 @@ test_that("bind = TRUE returns the points with their values added", {
   expect_identical(table$time, as.data.frame(pts)$time)
   # The values, the step used and the level used, as the short form gives.
   expect_identical(table$value, short$value)
-  expect_identical(table$time_step, short$time)
-  expect_identical(table$depth_level, short$depth)
+  expect_identical(table$time_step, short$time_step)
+  expect_identical(table$depth_level, short$depth_level)
 
   # A column named like an added one stops.
   clash <- as_vector3d(data.frame(lon = 1.4, lat = 10.6, depth = 5,

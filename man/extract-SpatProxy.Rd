@@ -45,19 +45,19 @@ order of \code{y}:
 \item \code{feature_id}, the point's ID;
 \item \code{value}, \code{NA} for a point off the grid, without a matching time step,
 or with no level its \code{method} can take;
-\item \code{time}, the date-time of the time step used, \code{NA} for a source
+\item \code{time_step}, the date-time of the time step used, \code{NA} for a source
 without dated steps or a point with no matching step. A point off the
 grid keeps its step's time;
-\item \code{depth}, the depth of the level used in metres, \code{NA} for a variable
-without depth or when \code{value} is \code{NA}.
+\item \code{depth_level}, the depth of the level used in metres, \code{NA} for a
+variable without depth or when \code{value} is \code{NA}.
 }
 
 With \code{bind = TRUE}, \code{y} itself, a \link[=SpatVector3D-class]{SpatVector3D} with the same
 features in the same order and all their columns, plus \code{value},
-\code{time_step} and \code{depth_level}: the \code{value}, \code{time} and \code{depth} above,
-renamed because a point already has its own \code{time} and \code{depth}. Points
-with a column named \code{value}, \code{time_step} or \code{depth_level} stop with an
-error; rename the column first.
+\code{time_step} and \code{depth_level} as above. They aren't named \code{time} and
+\code{depth} in either form, because a point already has its own \code{time} and
+\code{depth}. Points with a column named \code{value}, \code{time_step} or
+\code{depth_level} stop with an error; rename the column first.
 }
 \description{
 \code{extract()} reads the value of a gridded variable at each point of a
