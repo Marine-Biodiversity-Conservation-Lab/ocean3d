@@ -1757,8 +1757,13 @@ extract_to_point <- function(data = NULL, nc, lon = NULL, lat = NULL,
     points <- data.frame(lon = table[[lon_col]][usable],
                          lat = table[[lat_col]][usable],
                          depth = point_depth[usable])
-    if (timed) points$time <- table[[date_col]][usable]
-    points <- as_vector3d(points, time = if (timed) "time")
+    # The date column keeps its own name, so an unreadable date is reported
+    # by the name the caller gave it.
+    time_col <- if (timed) {
+      if (date_col %in% names(points)) "time" else date_col
+    }
+    if (timed) points[[time_col]] <- table[[date_col]][usable]
+    points <- as_vector3d(points, time = time_col)
     rule <- if (method != "2d") {
       list(method = method)
     } else if (has_depth) {
