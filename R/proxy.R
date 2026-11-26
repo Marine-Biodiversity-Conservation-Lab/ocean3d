@@ -721,8 +721,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # NULL reads them all. Every source, a voxel in memory too, reads a span
 # through the same per-step path, so each group carries the proxy's depth
 # edges.
-.proxy_steps <- function(x, time, varname, time_match, max_time_diff,
-                         depth = NULL, voxel = TRUE) {
+.read_time_steps <- function(x, time, varname, time_match, max_time_diff,
+                             depth = NULL, voxel = TRUE) {
   axes <- x@axes
   if (voxel && is.null(axes$depth)) {
     rlang::abort(glue::glue(
@@ -738,7 +738,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     ), class = "ocean3d_error_proxy_has_depth", call = NULL)
   }
   .check_max_time_diff(max_time_diff)
-  selected <- .proxy_time_step(x, time, time_match, max_time_diff)
+  selected <- .select_time_steps(x, time, time_match, max_time_diff)
   if (identical(x@source$type, "voxel") && is.null(depth)) {
     # A voxel already in memory is its own only time step.
     out <- list(x@source$voxel)
@@ -819,7 +819,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 }
 
 # The one producer of `ocean3d_error_proxy_time`: a `time` that selects no
-# step of a SpatProxy, from .proxy_time_step() and .match_proxy_steps().
+# step of a SpatProxy, from .select_time_steps() and .match_time_steps().
 .abort_proxy_time <- function(message) {
   rlang::abort(message, class = "ocean3d_error_proxy_time", call = NULL)
 }
@@ -833,8 +833,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # `"na"`, as for the points of extract(), its step is NA; the messages name
 # `time` or the points to match. The one matcher for as_voxel(), rast() and
 # extract() on a proxy, so their rules agree.
-.match_proxy_steps <- function(x, times, resolution, time_match,
-                               max_time_diff, on_missing = c("abort", "na")) {
+.match_time_steps <- function(x, times, resolution, time_match,
+                              max_time_diff, on_missing = c("abort", "na")) {
   on_missing <- match.arg(on_missing)
   dates <- x@axes$time$cftime$as_timestamp(asPOSIX = TRUE)
   shown <- function(values) toString(unique(format(values)))
@@ -881,8 +881,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # interval (a polygon) is used the same way and always gives a list. Without
 # `time`, a proxy with one step (or a one-step climatology) gives that step,
 # and one with more is an error.
-.proxy_time_step <- function(x, time, time_match = "nearest",
-                             max_time_diff = NULL) {
+.select_time_steps <- function(x, time, time_match = "nearest",
+                               max_time_diff = NULL) {
   stop_time <- .abort_proxy_time
   axis <- x@axes$time
   n <- if (is.null(axis)) 1L else x@variable$dim_lengths[[axis$dim]]
@@ -983,8 +983,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
                  collapse = " to ")
   if (length(time) == 1L) {
-    step <- .match_proxy_steps(x, prepared$values, resolution, time_match,
-                               max_time_diff)
+    step <- .match_time_steps(x, prepared$values, resolution, time_match,
+                              max_time_diff)
     return(selected(step, as_list))
   }
   # A window: every step from the start to the end. With dates, the whole
@@ -1096,8 +1096,8 @@ setMethod("rast", "SpatProxy", function(x, time = NULL,
     ))
   }
   time_match <- match.arg(time_match)
-  .proxy_steps(x, time, x@variable$name, time_match, max_time_diff,
-               voxel = FALSE)
+  .read_time_steps(x, time, x@variable$name, time_match, max_time_diff,
+                   voxel = FALSE)
 })
 
 #' @rdname SpatProxy-class

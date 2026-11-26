@@ -1,6 +1,6 @@
 # Values at many points from a SpatProxy at once (#163): the fast path the
 # per-shape loop (#115) lacks. Points are matched to time steps together
-# (.match_proxy_steps(), as as_voxel() matches them), each step is read once
+# (.match_time_steps(), as as_voxel() matches them), each step is read once
 # for its points, and each point's cell and level are picked with the point
 # queries' rules (.point_levels()), so the values are those the loop gives.
 
@@ -123,8 +123,8 @@ setMethod(
       }
       resolution <- if (is.na(y@time_resolution)) "datetime" else
         y@time_resolution
-      .match_proxy_steps(x, v$time, resolution, time_match, max_time_diff,
-                         on_missing = "na")
+      .match_time_steps(x, v$time, resolution, time_match, max_time_diff,
+                        on_missing = "na")
     }
 
     # Half a cell each way: a group's crop then holds every cell a point on
@@ -179,8 +179,8 @@ setMethod(
         next
       }
       s <- step[idx[1L]]
-      r <- .proxy_steps(cropped, if (s == 0L) NULL else s, x@variable$name,
-                        "nearest", NULL, voxel = has_depth)
+      r <- .read_time_steps(cropped, if (s == 0L) NULL else s, x@variable$name,
+                            "nearest", NULL, voxel = has_depth)
       if (has_depth) {
         picked <- .point_levels(points, r, rule)
         on <- which(!is.na(picked$level))

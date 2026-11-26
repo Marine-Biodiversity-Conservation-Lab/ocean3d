@@ -142,7 +142,7 @@ setMethod("volume", "SpatRaster",
           })
 
 # A SpatProxy is measured one time step at a time, reading each step through
-# .proxy_steps(); a step larger than the read budget is read in groups of
+# .read_time_steps(); a step larger than the read budget is read in groups of
 # depth layers. Every group is read with the proxy's depth edges, so each
 # layer stands for the same slab whichever layers are read with it, and the
 # groups' volumes add up to the whole step's. Only the per-cell result keeps
@@ -187,7 +187,7 @@ setMethod("volume", "SpatProxy", function(x, per_cell = FALSE,
 
   # Groups of depth layers (first and last index, storage order) that fit
   # the read budget, at least one layer each; a proxy without a depth axis
-  # gets one group of nothing, and .proxy_steps() stops for it.
+  # gets one group of nothing, and .read_time_steps() stops for it.
   depth_dim <- variable$axis_dims$depth
   n_depth <- if (is.null(depth_dim)) 1L else variable$dim_lengths[[depth_dim]]
   n_cells <- prod(variable$dim_lengths[unlist(variable$axis_dims[c("lon",
@@ -207,8 +207,8 @@ setMethod("volume", "SpatProxy", function(x, per_cell = FALSE,
   results <- lapply(seq_len(n_steps), function(step) {
     total <- NULL
     for (span in groups) {
-      v <- .proxy_steps(x, if (is.null(axis)) NULL else step,
-                        variable$name, "nearest", NULL, depth = span)
+      v <- .read_time_steps(x, if (is.null(axis)) NULL else step,
+                            variable$name, "nearest", NULL, depth = span)
       times[step] <<- as.numeric(.voxel_time(v))
       if (!is.null(fun)) v <- occupied(v, fun)
       part <- volume(v, per_cell = per_cell)
