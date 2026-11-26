@@ -118,11 +118,12 @@ takes one of them:
 
 | Input | Functions | Reads with |
 |---|---|---|
-| netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_buffer()`, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
+| netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
 | `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions and `mask()` | terra; one time step per voxel |
 
-A voxel can't be passed to `extract_to_point()`. `extract_to_area()` and
-`volume()` take a voxel or a netCDF file described with `as_proxy()`.
+A voxel can't be passed to `extract_to_point()`. `extract_to_area()`,
+`extract_to_buffer()` and `volume()` take a voxel or a netCDF file described
+with `as_proxy()`; `extract_to_buffer()` also takes the file's path.
 Merging the two into one model with time is planned in
 [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
 Its first, experimental part is `as_proxy()`, which describes a netCDF file
@@ -231,8 +232,9 @@ take a `SpatVoxel`.
 - `extract3d_all()` — nearest, surface and bottom in one pass, as three
   columns.
 - `extract_to_buffer()` — summarise values within a geodesic circle ×
-  depth window × time window around each observation, weighted by cell
-  coverage, layer thickness and time, or pick the value closest to a target.
+  depth window × time window around each observation, weighted by the
+  volume of each cell and depth level; a shortcut for `buffer_3d()`,
+  `mask()` and `summarise_3d()`.
 - `extract_to_track()` — sample points along ordered tracks (e.g. tagging
   data), extract values at them, and optionally summarise per track.
 

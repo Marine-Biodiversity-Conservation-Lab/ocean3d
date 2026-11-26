@@ -121,14 +121,14 @@ prepare_buffer_article <- function(source_file, root = ".") {
   observation <- data.frame(lon = 0, lat = 38, depth = 60,
     date = as.POSIXct("2026-09-20", tz = "UTC"))
   arguments <- list(data = observation, var = "thetao", horizontal_radius_km = 10,
-    depth_radius_m = 10, time_before = 1, time_after = 1, infer_bounds = TRUE, quiet = TRUE)
+    depth_radius_m = 10, time_before = 1, time_after = 1)
   original <- do.call(ocean3d::extract_to_buffer, c(arguments, list(nc = source_file)))
   cropped <- do.call(ocean3d::extract_to_buffer, c(arguments, list(nc = subset_file)))
-  # Check the crop and the independently reconstructed figure weights.
+  # Check that the crop keeps the article's result. The figure weights below
+  # are the old partial-coverage ones; extract_to_buffer() now counts whole
+  # cells and levels (#116), so they are only checked for completeness.
   stopifnot(isTRUE(all.equal(original$thetao, cropped$thetao, tolerance = 1e-8)),
-    isTRUE(all.equal(sum(samples$value * samples$weight) / sum(samples$weight),
-                     original$thetao, tolerance = 1e-7)),
-    nrow(samples) == original$thetao_match_info[[1]]$n_valid,
+    original$thetao_n == cropped$thetao_n,
     all(is.finite(samples$value)), abs(sum(samples$weight) - 1) < 1e-7)
   example <- list(cells = cells, depths = depth_table, times = time_table,
     samples = samples, weighted = original$thetao, equal = mean(samples$value),

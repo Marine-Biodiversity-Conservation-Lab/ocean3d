@@ -2,6 +2,44 @@
 
 ## Breaking changes
 
+`extract_to_buffer()` is now a shortcut for `as_vector3d()`, `buffer_3d()`,
+`crop()`, `as_voxel()` (or `rast()` for a variable without depth), `mask()`
+and `summarise_3d()` (#116). It returns `data` with the statistic, named
+after the variable or `output_col`, and a new `<output>_n` column with the
+number of values it is built on. What changes:
+
+* **Whole cells, levels and steps.** A cell the circle touches, a level
+  whose slab of water overlaps the depth window, and a time step inside the
+  window count in full, weighted by the volume of the cell and level (its
+  area for a variable without depth). Before, each counted with the share of
+  it inside the buffer, so means near the buffer's edges shift.
+* **Time windows pool their steps.** Every value of every step inside the
+  window goes into one statistic, each with its own weight; before, each
+  step was weighted by the share of its time interval inside the window.
+  Windows are in days, hours, minutes or seconds; `"months"` and `"years"`
+  are gone.
+* **No depth window.** `method` picks one level per cell with the point
+  rules of `mask()`: `"nearest"` (the default, the level nearest the
+  observation's depth that has a value), `"nearest_level"`, `"bottom"` or
+  `"surface"`. Each cell then counts by its area.
+* **Arguments removed.** `statistic = "se"` and `"most_similar"` with
+  `target_col`, `max_target_difference` and `target_ties`;
+  `min_valid_fraction` (use `<output>_n` to drop summaries built on too few
+  values); `lon_cell_radius`, `lat_cell_radius` and `depth_layer_radius`
+  (give a radius in km and a depth window in m); `infer_bounds` (cell and
+  depth edges are always taken or inferred as `as_proxy()` does);
+  `spatial_match` and `max_distance_km` (an observation off the grid gets
+  `NA`); `time_resolution` (a date compares by day, a date-time exactly);
+  `file_col`, `id_col`, `return_match_info` and `quiet`.
+* **One variable on one grid.** `var` is one name, and `nc` one file, a
+  series of files on one grid, an open connection or a `SpatProxy`. For
+  several variables, call it once per variable; files on different grids,
+  or a table of files, are no longer read together.
+* Observations it can't place (off the grid, no date on data with several
+  time steps, no depth where one is needed, or no time step in the window)
+  get `NA` with `n = 0`, and one warning counts those without a usable
+  position, depth or date.
+
 `extract_to_area()` is now a shortcut for `as_proxy()`, `crop()`,
 `as_voxel()`, `as_vector3d()` and `mask()` (#116). It used to return only the
 layers between the levels nearest to `min_depth` and `max_depth`. Now it
@@ -241,6 +279,10 @@ an exact match and stop otherwise. For the old behaviour, pass
 `max_time_diff` in days (no cap by default).
 
 ## New features
+
+* `summarise_3d(x, by = "all")` gives one row for every value of every voxel
+  in a list together, such as all the time steps of a time window, each
+  value keeping its own weight (#116).
 
 * `terra::extract()` on a `SpatProxy` reads the values at many
   `SpatVector3D` points at once (#163). It gives the same values as calling
