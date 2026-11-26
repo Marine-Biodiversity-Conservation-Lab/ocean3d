@@ -54,9 +54,13 @@
 #'   time, or `"exact"`; and for nearest matching, the largest gap in days.
 #'   `NULL` (default) sets no limit. These set the time step; `method` sets
 #'   the depth level.
+#' @param bind `FALSE` (default) for a data frame of the values; `TRUE` for
+#'   the points themselves with the values added, as terra's
+#'   `extract(raster, vector, bind = TRUE)` returns the vector.
 #' @param ... Not used.
 #'
-#' @returns A data frame with one row per point, in the order of `y`:
+#' @returns With `bind = FALSE`, a data frame with one row per point, in the
+#'   order of `y`:
 #'   * `feature_id`, the point's ID;
 #'   * `value`, `NA` for a point off the grid, without a matching time step,
 #'     or with no level its `method` can take;
@@ -65,6 +69,13 @@
 #'     grid keeps its step's time;
 #'   * `depth`, the depth of the level used in metres, `NA` for a variable
 #'     without depth or when `value` is `NA`.
+#'
+#'   With `bind = TRUE`, `y` itself, a [SpatVector3D-class] with the same
+#'   features in the same order and all their columns, plus `value`,
+#'   `time_step` and `depth_level`: the `value`, `time` and `depth` above,
+#'   renamed because a point already has its own `time` and `depth`. Points
+#'   with a column named `value`, `time_step` or `depth_level` stop with an
+#'   error; rename the column first.
 #'
 #' @seealso [mask()][mask-3d] and [as_voxel()] for one shape at a time;
 #'   [extract_to_point()].
@@ -78,15 +89,23 @@
 #'
 #' # The deepest level with a value at each point instead.
 #' terra::extract(p, pts, method = "bottom")
+#'
+#' # The points themselves, with the values added to their columns.
+#' as.data.frame(terra::extract(p, pts, bind = TRUE))
 #' @name extract-SpatProxy
 #' @aliases extract,SpatProxy,SpatVector3D-method
 #' @export
 setMethod(
   "extract", c("SpatProxy", "SpatVector3D"),
   function(x, y, method = c("nearest", "nearest_level", "bottom", "surface"),
-           time_match = c("nearest", "exact"), max_time_diff = NULL, ...) {
+           time_match = c("nearest", "exact"), max_time_diff = NULL,
+           bind = FALSE, ...) {
     .no_extra_args(...)
     .check_geomtype(y, "points")
+    if (!rlang::is_bool(bind)) {
+      rlang::abort("`bind` must be TRUE or FALSE.",
+                   class = "ocean3d_error_extract_bind", call = NULL)
+    }
     has_depth <- !is.null(x@axes$depth)
     rule <- if (missing(method)) "nearest" else .check_level_rule(method)
     # A cell holds one value of a variable without depth, so there is no
@@ -196,13 +215,23 @@ setMethod(
         value[idx[on]] <- terra::extract(r, at[on])[, 1L]
       }
     }
-    data.frame(
-      feature_id = v$feature_id,
-      value = value,
-      time = if (is.null(dates)) .POSIXct(rep(NA_real_, n), tz = "UTC") else
-        dates[as.integer(step)],
-      depth = level_depth,
-      stringsAsFactors = FALSE
-    )
+    time_used <- if (is.null(dates)) {
+      .POSIXct(rep(NA_real_, n), tz = "UTC")
+    } else {
+      dates[as.integer(step)]
+    }
+    if (!bind) {
+      return(data.frame(feature_id = v$feature_id, value = value,
+                        time = time_used, depth = level_depth,
+                        stringsAsFactors = FALSE))
+    }
+    # The points with their values: a point already has its own `time` and
+    # `depth`, so the step and level used are `time_step` and `depth_level`.
+    # A column of the points named like one of these stops, as in
+    # as_vector3d().
+    vertices <- .add_attributes(v, data.frame(
+      value = value, time_step = time_used, depth_level = level_depth
+    ))
+    .new_vector3d("points", y@time_resolution, vertices = vertices)
   }
 )

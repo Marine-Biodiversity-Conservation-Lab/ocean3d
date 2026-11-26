@@ -201,6 +201,39 @@ test_that("points far apart are read as small windows, not the box between", {
   expect_identical(out$value, loop_values(p, far))
 })
 
+test_that("bind = TRUE returns the points with their values added", {
+  p <- grid_proxy(lon = seq(0.5, 4.5, 1), lat = c(10.5, 11.5),
+                  depth = c(0, 50), time = 0:2)
+  pts <- as_vector3d(data.frame(
+    id = c("c", "a", "b"), tag = c("T1", "T2", "T3"),
+    lon = c(3.2, 1.4, 40), lat = c(11.2, 10.6, 30), depth = c(40, 5, 5),
+    t = as.POSIXct(c("2020-01-02", "2020-01-01", "2020-01-03"), tz = "UTC")
+  ), time = "t", id = "id")
+  short <- extract(p, pts)
+  bound <- extract(p, pts, bind = TRUE)
+  expect_s4_class(bound, "SpatVector3D")
+  table <- as.data.frame(bound)
+  # The same features in the same order, with their own columns.
+  expect_identical(table$feature_id, c("c", "a", "b"))
+  expect_identical(table$tag, c("T1", "T2", "T3"))
+  expect_identical(table$depth, c(40, 5, 5))
+  expect_identical(table$time, as.data.frame(pts)$time)
+  # The values, the step used and the level used, as the short form gives.
+  expect_identical(table$value, short$value)
+  expect_identical(table$time_step, short$time)
+  expect_identical(table$depth_level, short$depth)
+
+  # A column named like an added one stops.
+  clash <- as_vector3d(data.frame(lon = 1.4, lat = 10.6, depth = 5,
+                                  value = 9, t = as.POSIXct("2020-01-01",
+                                                            tz = "UTC")),
+                       time = "t")
+  expect_error(extract(p, clash, bind = TRUE), "value",
+               class = "ocean3d_error_vector3d")
+  expect_error(extract(p, pts, bind = NA), "`bind` must be TRUE or FALSE",
+               class = "ocean3d_error_extract_bind")
+})
+
 test_that("extract() rejects input it can't use", {
   p <- grid_proxy(lon = seq(0.5, 4.5, 1), lat = c(10.5, 11.5),
                   depth = c(0, 50), time = NULL)

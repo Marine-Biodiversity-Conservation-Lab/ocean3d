@@ -11,6 +11,7 @@
   method = c("nearest", "nearest_level", "bottom", "surface"),
   time_match = c("nearest", "exact"),
   max_time_diff = NULL,
+  bind = FALSE,
   ...
 )
 }
@@ -31,10 +32,15 @@ time, or \code{"exact"}; and for nearest matching, the largest gap in days.
 \code{NULL} (default) sets no limit. These set the time step; \code{method} sets
 the depth level.}
 
+\item{bind}{\code{FALSE} (default) for a data frame of the values; \code{TRUE} for
+the points themselves with the values added, as terra's
+\code{extract(raster, vector, bind = TRUE)} returns the vector.}
+
 \item{...}{Not used.}
 }
 \value{
-A data frame with one row per point, in the order of \code{y}:
+With \code{bind = FALSE}, a data frame with one row per point, in the
+order of \code{y}:
 \itemize{
 \item \code{feature_id}, the point's ID;
 \item \code{value}, \code{NA} for a point off the grid, without a matching time step,
@@ -45,6 +51,13 @@ grid keeps its step's time;
 \item \code{depth}, the depth of the level used in metres, \code{NA} for a variable
 without depth or when \code{value} is \code{NA}.
 }
+
+With \code{bind = TRUE}, \code{y} itself, a \link[=SpatVector3D-class]{SpatVector3D} with the same
+features in the same order and all their columns, plus \code{value},
+\code{time_step} and \code{depth_level}: the \code{value}, \code{time} and \code{depth} above,
+renamed because a point already has its own \code{time} and \code{depth}. Points
+with a column named \code{value}, \code{time_step} or \code{depth_level} stop with an
+error; rename the column first.
 }
 \description{
 \code{extract()} reads the value of a gridded variable at each point of a
@@ -100,6 +113,9 @@ terra::extract(p, pts)
 
 # The deepest level with a value at each point instead.
 terra::extract(p, pts, method = "bottom")
+
+# The points themselves, with the values added to their columns.
+as.data.frame(terra::extract(p, pts, bind = TRUE))
 }
 \seealso{
 \link[=mask-3d]{mask()} and \code{\link[=as_voxel]{as_voxel()}} for one shape at a time;

@@ -149,6 +149,10 @@ detection, with the time step and depth level used:
 terra::extract(proxy, detections)
 ```
 
+With `bind = TRUE`, as in terra, it returns the detections themselves with
+the value, the time step and the depth level added to their columns, ready
+to keep working with as shapes.
+
 ## Surface data: a variable without depth
 
 Sea-surface temperature, chlorophyll and many satellite products have no
