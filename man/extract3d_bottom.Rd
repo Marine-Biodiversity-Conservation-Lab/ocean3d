@@ -11,16 +11,12 @@ extract3d_bottom(data, nc, var = NULL, ...)
 tibble, \code{sf} object with POINT geometries, matrix with column names, or
 named list.}
 
-\item{nc}{netCDF source. Can be a file path, vector of file paths, list of
-file paths, opened \code{ncdf4} object, list of opened objects, or a data frame
-with a file column.
-Files are read directly with ncdf4, only the cells each observation
-needs. A \link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't accepted; for
-those, see \code{\link[=extract_to_area]{extract_to_area()}} and \code{\link[terra:mask]{mask()}}.}
+\item{nc}{The netCDF data: a file path, several paths for a series of
+files on one grid, or a connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}}, as
+for \code{\link[=extract_to_point]{extract_to_point()}}.}
 
-\item{var}{Name of the variable to extract from the netCDF file. If \code{NULL},
-the function tries to detect the variable automatically from each file.
-This only works when each netCDF file contains one single variable.}
+\item{var}{Name of the variable. \code{NULL} detects it when the file holds
+one data variable.}
 
 \item{...}{Additional arguments passed to \code{\link[=extract_to_point]{extract_to_point()}}.}
 }
@@ -30,12 +26,10 @@ tibbles and \code{sf} objects retain their structure; matrices and named lists
 are returned as data frames.
 }
 \description{
-For each observation, this function reads the vertical profile at the cell
-and timestamp selected under spatial_match and time_match. Spatial matching
-defaults to "within", requiring the point to lie inside a cell; "nearest"
-requires an explicit max_distance_km limit. The deepest layer with a valid
-value is returned. This layer does not establish the actual seabed depth.
-See \code{\link[=extract_to_point]{extract_to_point()}} for matching rules and report options.
+For each observation, the deepest layer with a value in the cell that
+contains it, at the matched time step. This layer is the deepest the data
+cover, which isn't necessarily the seabed. See \code{\link[=extract_to_point]{extract_to_point()}} for the
+matching rules.
 }
 \examples{
 nc_file <- system.file(

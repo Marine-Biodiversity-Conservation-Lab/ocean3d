@@ -1182,7 +1182,7 @@ extract_to_track <- function(
       arguments$spatial_report <- FALSE
       arguments$depth_report <- FALSE
     }
-    samples <- do.call(extract_to_point, arguments)
+    samples <- do.call(.extract_points_legacy, arguments)
     output_columns <- c(output_columns, columns)
   }
   if (!is.null(prepared)) {

@@ -11,16 +11,12 @@ extract3d_nearest(data, nc, var = NULL, ...)
 tibble, \code{sf} object with POINT geometries, matrix with column names, or
 named list.}
 
-\item{nc}{netCDF source. Can be a file path, vector of file paths, list of
-file paths, opened \code{ncdf4} object, list of opened objects, or a data frame
-with a file column.
-Files are read directly with ncdf4, only the cells each observation
-needs. A \link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't accepted; for
-those, see \code{\link[=extract_to_area]{extract_to_area()}} and \code{\link[terra:mask]{mask()}}.}
+\item{nc}{The netCDF data: a file path, several paths for a series of
+files on one grid, or a connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}}, as
+for \code{\link[=extract_to_point]{extract_to_point()}}.}
 
-\item{var}{Name of the variable to extract from the netCDF file. If \code{NULL},
-the function tries to detect the variable automatically from each file.
-This only works when each netCDF file contains one single variable.}
+\item{var}{Name of the variable. \code{NULL} detects it when the file holds
+one data variable.}
 
 \item{...}{Additional arguments passed to \code{\link[=extract_to_point]{extract_to_point()}}.}
 }
