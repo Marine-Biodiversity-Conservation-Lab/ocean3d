@@ -9,190 +9,144 @@ extract_to_buffer(
   nc,
   var = NULL,
   horizontal_radius_km = 0,
-  lon_cell_radius = NULL,
-  lat_cell_radius = NULL,
   depth_radius_m = 0,
-  depth_layer_radius = NULL,
   time_before = 0,
   time_after = 0,
-  time_unit = c("days", "hours", "minutes", "seconds", "months", "years"),
-  statistic = "mean",
+  time_unit = c("days", "hours", "minutes", "seconds"),
+  statistic = c("mean", "sd", "min", "max"),
   weighting = c("weighted", "equal"),
-  min_valid_fraction = NULL,
-  infer_bounds = FALSE,
   method = NULL,
   lon_col = "lon",
   lat_col = "lat",
   depth_col = "depth",
   date_col = "date",
-  id_col = NULL,
-  file_col = "file",
   lon_dim = NULL,
   lat_dim = NULL,
   depth_dim = NULL,
   time_dim = NULL,
   time_match = c("nearest", "exact"),
-  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly"),
   max_time_diff = NULL,
-  spatial_match = c("within", "nearest"),
-  max_distance_km = NULL,
-  output_col = NULL,
-  return_match_info = TRUE,
-  quiet = FALSE,
-  target_col = NULL,
-  max_target_difference = NULL,
-  target_ties = c("NA", "lower", "higher")
+  output_col = NULL
 )
 }
 \arguments{
 \item{data}{Observation table, matrix, named list or sf POINT object.}
 
-\item{nc}{netCDF path, paths, opened ncdf4 connection, list, or file table.
-Files are read directly with ncdf4, only the cells each observation
-needs. A \link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't accepted; for
-those, see \code{\link[=extract_to_area]{extract_to_area()}} and \code{\link[terra:mask]{mask()}}.}
+\item{nc}{The data: a netCDF file path, several paths for a series of
+files on one grid, an open \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} connection, or a
+\link[=SpatProxy-class]{SpatProxy} from \code{\link[=as_proxy]{as_proxy()}}.}
 
-\item{var}{Variable name or vector of names. NULL detects one data variable
-per file, excluding referenced bounds and coordinate variables.}
+\item{var}{Name of the variable, for a netCDF source. \code{NULL} detects the
+only data variable of the file.}
 
-\item{horizontal_radius_km}{Horizontal geodesic radius in kilometres.
-Positive radii below 10000 km are supported.}
+\item{horizontal_radius_km}{Radius of the circle around each observation,
+in kilometres, measured on the WGS84 ellipsoid. \code{0} (default) uses the
+observation's own cell.}
 
-\item{lon_cell_radius, lat_cell_radius}{Optional integer radii in grid cells.
-A radius of one on both axes requests a 3 by 3 neighbourhood. Mutually
-exclusive with a positive horizontal_radius_km.}
+\item{depth_radius_m}{Depth in metres above and below the observation.
+\code{0} (default) picks one level per cell with \code{method}.}
 
-\item{depth_radius_m}{Symmetric depth radius in metres, positive downward.}
+\item{time_before, time_after}{Time before and after the observation, in
+\code{time_unit}. Both \code{0} (default) read the one time step \code{time_match}
+matches. For observations with dates and no hours, the window covers
+whole UTC days, including the last.}
 
-\item{depth_layer_radius}{Optional integer radius in physical depth order.
-Mutually exclusive with a positive depth_radius_m.}
+\item{time_unit}{\code{"days"} (default), \code{"hours"}, \code{"minutes"} or
+\code{"seconds"}.}
 
-\item{time_before, time_after}{Non-negative temporal distances before and
-after the observation. Both use time_unit.}
+\item{statistic}{One of \code{"mean"} (default), \code{"sd"}, \code{"min"} and \code{"max"}.}
 
-\item{time_unit}{One of days, hours, minutes, seconds, months or years.
-Days are 24 elapsed hours. Months and years require whole numbers and
-shift the UTC calendar, clamping to the destination month's last day.}
+\item{weighting}{\code{"weighted"} (default) weights each value by the volume of
+its cell and level, or by its cell's area; \code{"equal"} counts each value
+once.}
 
-\item{statistic}{One of "mean", "sd", "se", "min", "max" or "most_similar".
-SD uses the sample variance correction. SE is SD divided by the square
-root of the effective sample size. Min and max ignore weight magnitudes.}
+\item{method}{Without a depth window, the level each cell takes: one of
+the rules of \code{\link[terra:mask]{mask()}} for points, \code{"nearest"} (default; the level
+nearest the observation's depth that has a value), \code{"nearest_level"},
+\code{"bottom"} or \code{"surface"}. Leave \code{NULL} with a depth window, and for a
+variable without depth, where \code{"2d"} is accepted too.}
 
-\item{weighting}{"weighted" uses intersecting area, thickness and duration;
-"equal" gives equal weight to valid samples. Coverage uses physical
-support in both modes. A point-selected axis contributes a factor of one.}
+\item{lon_col, lat_col, depth_col, date_col}{Observation columns. The depth is
+needed with a depth window or a \code{"nearest"} rule, and the date for data
+with several time steps. Dates and date-times are read as in
+\code{\link[=as_vector3d]{as_vector3d()}}.}
 
-\item{min_valid_fraction}{Minimum valid fraction of the entire requested
-support, between zero and one. NULL uses 0.8 for summaries and zero for
-most_similar (any valid support). Empty/all-missing buffers remain NA.}
+\item{lon_dim, lat_dim, depth_dim, time_dim}{Dimension names for a netCDF
+source, as in \code{\link[=as_proxy]{as_proxy()}}.}
 
-\item{infer_bounds}{Allow missing bounds to be estimated using neighbouring
-coordinate midpoints, with half-gap extrapolation at outer edges. Inferred
-depth support is clipped at zero metres. A singleton needs explicit bounds.}
+\item{time_match, max_time_diff}{Without a time window, how the time step is
+matched, as in \code{\link[=as_voxel]{as_voxel()}}: the nearest step (default) or an exact one,
+and the largest gap in days for a nearest match.}
 
-\item{method}{Depth selection on an unbuffered vertical axis: nearest,
-surface, bottom or 2d. NULL uses 2d without a depth axis and nearest with
-one. Leave NULL when requesting a depth interval or layer neighbourhood.}
-
-\item{lon_col, lat_col, depth_col, date_col}{Observation coordinate columns.
-Dates are required only for temporal variables. Date and ISO date-only
-text centre time buffers at midnight UTC; POSIXt preserves instants.}
-
-\item{id_col}{Optional observation identifier column used in diagnostics.}
-
-\item{file_col}{File-path column when nc is a table.}
-
-\item{lon_dim, lat_dim, depth_dim, time_dim}{Optional netCDF dimension
-overrides.}
-
-\item{time_match, time_resolution, max_time_diff}{Point-time selection options
-on an unbuffered time axis; see \code{\link[=extract_to_point]{extract_to_point()}}. max_time_diff is in
-days and cannot be combined with a temporal window.}
-
-\item{spatial_match, max_distance_km}{Point-cell or index-seed selection
-options; see \code{\link[=extract_to_point]{extract_to_point()}}. They do not expand a kilometre buffer.}
-
-\item{output_col}{Output name for one variable, or a named character vector
-mapping multiple variable names to distinct output columns.}
-
-\item{return_match_info}{Add a list column named \if{html}{\out{<output>}}_match_info per
-variable, containing coverage, source, bounds and selection diagnostics.}
-
-\item{quiet}{Hide explanatory summaries. Time-zone and ambiguous-location
-warnings remain active.}
-
-\item{target_col}{Column containing the numeric target for most_similar.
-For several variables, a named variable-to-column mapping. Targets must
-use the environmental variable's units. Original NA targets return NA.}
-
-\item{max_target_difference}{Optional non-negative maximum absolute
-difference from the target, in the environmental variable's units.}
-
-\item{target_ties}{How to resolve equally similar different values: NA
-(default), lower or higher. Repeated identical winning values retain all
-their locations in match_info; no file is chosen by input order.
-This rule does not choose locations among repeated identical values.}
+\item{output_col}{Name of the output column. \code{NULL} uses the variable's
+name.}
 }
 \value{
-The normalised observation table with one numeric summary column
-per variable and, optionally, a diagnostic list column per output. sf
-inputs retain their geometry. Existing columns are never overwritten.
-most_similar always adds \if{html}{\out{<output>}}_match_lon, _match_lat, _match_depth and
-_match_time (UTC). They describe winning model coordinates, not corrected
-observations. Ambiguous or unavailable fields are NA. Longitude/latitude
-are returned together only for a unique horizontal location. All winning
-records remain in match_info when requested. Unresolved value or location
-ties emit one bounded warning per output with affected rows and guidance.
+\code{data} with two columns added: the statistic, named \code{output_col}
+or after the variable, and \verb{<output>_n}, the number of values it is
+built on. sf input keeps its geometry. Existing columns are never
+overwritten.
 }
 \description{
-Calculate one summary per observation and variable within horizontal, depth
-and/or temporal windows. Combine complementary netCDF sources before
-assessing coverage. Observations and input order are retained.
+Calculates one statistic per observation from the values in a buffer
+around it: a circle of \code{horizontal_radius_km}, a depth window of
+\code{depth_radius_m} above and below the observation, and a time window from
+\code{time_before} to \code{time_after}. It is a convenience wrapper over the three
+steps of an analysis, and the \href{../articles/workflow-values-in-shapes.html}{workflow article} shows the same steps
+written out:
 }
-\section{Support and limitations}{
-
-For normalised weights p, corrected variance is sum(p * (x - mean)^2)
-divided by sum(p * (1 - p)); effective sample size is 1 / sum(p^2).
-Equal weighting reproduces ordinary sample SD and SE. SD and SE require
-at least two valid samples; otherwise they return NA with a diagnostic.
-SE assumes independent samples and does not correct spatial or temporal
-autocorrelation. It is not an automatic estimate of environmental
-uncertainty.
-All statistics, including min and max, require the requested valid coverage.
-
-At least one window must be positive. Bounds describe represented support;
-inferred intervals do not establish that instantaneous values are interval
-means. The calculation treats each sample as constant over its assigned
-support. No interpolation or nearest fallback expands an empty buffer.
-
-Geographic grids must have separable one-dimensional longitude and latitude
-axes. Circles are geodesic on WGS84 with 720 segments. Each cell is weighted
-by the area of the circle it covers, measured on the WGS84 ellipsoid with
-terra. This is a polygonal approximation, independent of sf_use_s2().
-Unsupported projections, calendars, climatologies or transformed vertical
-coordinates require explicit preprocessing. The depth coordinate may be
-stored shallow to deep or deep to shallow; depths stored in any other order
-are rejected.
-
-Complementary sources are combined before applying min_valid_fraction.
-Overlapping selected support is an error, including duplicate values or
-a missing copy. Sources for one variable must use matching value units.
-Point-time selection is resolved across eligible sources before aggregation.
-Index neighbourhoods require matching grid/layer coordinates and bounds
-across sources. If requested indices extend beyond available coverage, the
-result is NA because the full requested physical support is unknown.
+\details{
+\enumerate{
+\item \strong{Build:} each observation becomes a point with \code{\link[=as_vector3d]{as_vector3d()}}, and a
+buffer with \code{\link[=buffer_3d]{buffer_3d()}} when \code{horizontal_radius_km} is positive.
+\item \strong{Intersect:} the data for its time steps are read with \code{\link[terra:crop]{crop()}} and
+\code{\link[=as_voxel]{as_voxel()}} (or \link[=rast-SpatProxy]{rast()} for a variable without
+depth), and the values inside the buffer are kept with \code{\link[terra:mask]{mask()}}.
+\item \strong{Summarise:} \code{\link[=summarise_3d]{summarise_3d()}} gives the statistic of those values.
 }
 
+A cell or depth level counts in full when the buffer reaches it, as in
+\code{\link[terra:mask]{mask()}}: a cell the circle touches, and a level whose slab of water
+overlaps the depth window. With \code{weighting = "weighted"} each value is
+weighted by the volume of its cell and level (by the cell's area for a
+variable without depth, or when \code{method} picks one level per cell), as
+\code{\link[=summarise_3d]{summarise_3d()}} does.
+
+Without a depth window, \code{method} picks the level in each cell: by default
+the level nearest the observation's depth that has a value, as
+\code{\link[=extract_to_point]{extract_to_point()}} does. Without a radius, the buffer is the
+observation's own cell. Without a time window, the time step is the one
+\code{time_match} matches. A time window pools the values of every time step
+inside it into one statistic, each value keeping its own weight.
+
+An observation outside the grid, without a date on data with several time
+steps, without a depth where one is needed, or with no time step in its
+window gets \code{NA}, with \code{n = 0}.
+}
 \examples{
-\dontrun{
-observations <- data.frame(lon = 0, lat = 38, depth = 60,
-                           date = as.Date("2020-01-15"))
-extract_to_buffer(observations, "temperature.nc", var = "thetao",
-                  horizontal_radius_km = 5, method = "surface")
-extract_to_buffer(observations, "temperature.nc", var = "thetao",
-                  depth_radius_m = 10, time_before = 3)
-}
+# Daily temperature on a 10 x 10 grid of 1 degree cells at four depths.
+path <- tempfile(fileext = ".nc")
+lon <- ncdf4::ncdim_def("lon", "degrees_east", seq(0.5, 9.5))
+lat <- ncdf4::ncdim_def("lat", "degrees_north", seq(0.5, 9.5))
+depth <- ncdf4::ncdim_def("depth", "m", c(5, 15, 30, 60))
+time <- ncdf4::ncdim_def("time", "days since 2020-01-01", 0:2)
+temp <- ncdf4::ncvar_def("temp", "degree_Celsius",
+                         list(lon, lat, depth, time), -9999)
+nc <- ncdf4::nc_create(path, temp)
+ncdf4::ncvar_put(nc, temp, seq_len(10 * 10 * 4 * 3) / 10)
+ncdf4::nc_close(nc)
+
+obs <- data.frame(lon = 5.2, lat = 5.3, depth = 20,
+                  date = as.Date("2020-01-02"))
+
+# The mean within 150 km and 10 m above and below, on the observation's day.
+extract_to_buffer(obs, path, horizontal_radius_km = 150,
+                  depth_radius_m = 10)
+
+# Pooled over a day either side.
+extract_to_buffer(obs, path, horizontal_radius_km = 150,
+                  depth_radius_m = 10, time_before = 1, time_after = 1)
 }
 \seealso{
-\code{\link[=extract_to_point]{extract_to_point()}}, \code{\link[=extract_to_area]{extract_to_area()}}
+\code{\link[=extract_to_point]{extract_to_point()}}, \code{\link[=extract_to_area]{extract_to_area()}}, and the \href{../articles/workflow-values-in-shapes.html}{workflow article}.
 }

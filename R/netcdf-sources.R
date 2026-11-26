@@ -80,7 +80,7 @@
   # When `var = NULL`, the package tries to detect the variable automatically.
   # This is useful for workflows where each netCDF file contains one main
   # environmental variable, for example one file for NPPV and another file for
-  # salinity. Used by extract_to_point() and extract_to_buffer().
+  # salinity. Used by as_proxy(), extract_to_point() and the track functions.
   #
   # Coordinate variables and the variables that CF metadata attaches to them
   # (`bounds`, `climatology`, `coordinates` and `grid_mapping` attributes,

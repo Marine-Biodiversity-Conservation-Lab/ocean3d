@@ -3,15 +3,15 @@
 # Custom conditions shared by the exported extraction functions.
 #
 # Each helper signals the error or warning for one state of the input to
-# extract_to_point() and extract_to_buffer(). Keeping them here gives both
-# functions the same wording. Condition classes are internal: they let tests
+# extract_to_point() and the track functions. Keeping them here gives them
+# the same wording. Condition classes are internal: they let tests
 # catch a specific condition without matching its wording, and are not
 # documented for users. Nothing here is exported.
 
 # Error: a selected variable has a time dimension, but no date input was
 # supplied (no `date` argument, or `date_col` is not a column of `data`).
 # An explicit NA date is allowed; only a missing input is an error.
-# Called once per source by extract_to_point() and extract_to_buffer().
+# Called once per source by extract_to_point() and the track functions.
 .require_observation_time <- function(data, date_col, var, source_file,
                                       direct_input = FALSE) {
   named_column <- is.character(date_col) &&
