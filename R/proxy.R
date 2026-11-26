@@ -721,8 +721,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # NULL reads them all. Every source, a voxel in memory too, reads a span
 # through the same per-step path, so each group carries the proxy's depth
 # edges.
-.proxy_steps <- function(x, time, varname, time_match, max_time_diff,
-                         depth = NULL, voxel = TRUE) {
+.read_time_steps <- function(x, time, varname, time_match, max_time_diff,
+                             depth = NULL, voxel = TRUE) {
   axes <- x@axes
   if (voxel && is.null(axes$depth)) {
     rlang::abort(glue::glue(
@@ -737,13 +737,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       "terra::rast() on a proxy reads variables without depth."
     ), class = "ocean3d_error_proxy_has_depth", call = NULL)
   }
-  if (!is.null(max_time_diff) && (!is.numeric(max_time_diff) ||
-                                    length(max_time_diff) != 1L ||
-                                    is.na(max_time_diff) ||
-                                    max_time_diff < 0)) {
-    .abort_voxel_input("`max_time_diff` must be one number of days, 0 or more.")
-  }
-  selected <- .proxy_time_step(x, time, time_match, max_time_diff)
+  .check_max_time_diff(max_time_diff)
+  selected <- .select_time_steps(x, time, time_match, max_time_diff)
   if (identical(x@source$type, "voxel") && is.null(depth)) {
     # A voxel already in memory is its own only time step.
     out <- list(x@source$voxel)
@@ -795,6 +790,87 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   if (selected$list) out else out[[1L]]
 }
 
+# The read budget, in MB: the option `ocean3d.max_read_mb`, 1024 by default,
+# which caps how much one read of a SpatProxy holds in memory. Read by
+# volume() on a proxy and extract() on a proxy, which split their reads to
+# fit it.
+.read_budget_mb <- function() {
+  budget <- getOption("ocean3d.max_read_mb", 1024)
+  if (!is.numeric(budget) || length(budget) != 1L || !is.finite(budget) ||
+        budget <= 0) {
+    rlang::abort(glue::glue(
+      "The option `ocean3d.max_read_mb` must be one positive number of ",
+      "megabytes; got {format(budget)}."
+    ), class = "ocean3d_error_read_budget", call = NULL)
+  }
+  budget
+}
+
+# `max_time_diff` is NULL or one number of days, 0 or more. Checked before
+# any data are read, by the step reader and by extract() on a SpatProxy.
+.check_max_time_diff <- function(max_time_diff) {
+  if (!is.null(max_time_diff) && (!is.numeric(max_time_diff) ||
+                                    length(max_time_diff) != 1L ||
+                                    is.na(max_time_diff) ||
+                                    max_time_diff < 0)) {
+    .abort_voxel_input("`max_time_diff` must be one number of days, 0 or more.")
+  }
+  invisible(max_time_diff)
+}
+
+# The one producer of `ocean3d_error_proxy_time`: a `time` that selects no
+# step of a SpatProxy, from .select_time_steps() and .match_time_steps().
+.abort_proxy_time <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_proxy_time", call = NULL)
+}
+
+# The time step of a SpatProxy's dated time axis that each of `times`
+# (prepared date-times, as .prepare_time_input() gives) matches, with the
+# nearest or exact rule (`time_match`, `max_time_diff`) at `resolution`:
+# dates compare by UTC day, date-times exactly. Several steps on the day of
+# a date can't be told apart, which stops. A time that matches no step
+# stops with `on_missing = "abort"`, as for the `time` of as_voxel(); with
+# `"na"`, as for the points of extract(), its step is NA; the messages name
+# `time` or the points to match. The one matcher for as_voxel(), rast() and
+# extract() on a proxy, so their rules agree.
+.match_time_steps <- function(x, times, resolution, time_match,
+                              max_time_diff, on_missing = c("abort", "na")) {
+  on_missing <- match.arg(on_missing)
+  dates <- x@axes$time$cftime$as_timestamp(asPOSIX = TRUE)
+  shown <- function(values) toString(unique(format(values)))
+  steps <- tryCatch(
+    .match_time_indices(dates, times, time_match, max_time_diff, resolution),
+    ocean3d_error_repeated_time = function(e) {
+      .abort_proxy_time(if (on_missing == "abort") {
+        glue::glue(
+          "Several time steps fall on the day of `time` ",
+          "({shown(times[!is.na(times)])}). Give a date-time to read one ",
+          "of them, or a window of two dates to read them all."
+        )
+      } else {
+        paste("Several time steps fall on the day of some points' dates.",
+              "Give the points date-times (with hours) in as_vector3d().")
+      })
+    }
+  )
+  missed <- is.na(steps) & !is.na(times)
+  if (on_missing == "abort" && any(missed)) {
+    how <- if (time_match == "exact" || is.null(max_time_diff)) {
+      "matches"
+    } else {
+      glue::glue("is within {max_time_diff} days of")
+    }
+    range_shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
+                         collapse = " to ")
+    .abort_proxy_time(glue::glue(
+      "No time step {how} `time` ({shown(times[missed])}). The steps run ",
+      "from {range_shown} UTC; give a step number, a date or date-time, or ",
+      "a window of two."
+    ))
+  }
+  steps
+}
+
 # The time steps `time` selects: `steps` (their indices, or NULL when the
 # proxy has no time axis), `dates` (their date-times, or NULL when the axis
 # has none: a climatology or no time axis) and `list` (whether as_voxel()
@@ -805,11 +881,9 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # interval (a polygon) is used the same way and always gives a list. Without
 # `time`, a proxy with one step (or a one-step climatology) gives that step,
 # and one with more is an error.
-.proxy_time_step <- function(x, time, time_match = "nearest",
-                             max_time_diff = NULL) {
-  stop_time <- function(message) {
-    rlang::abort(message, class = "ocean3d_error_proxy_time", call = NULL)
-  }
+.select_time_steps <- function(x, time, time_match = "nearest",
+                               max_time_diff = NULL) {
+  stop_time <- .abort_proxy_time
   axis <- x@axes$time
   n <- if (is.null(axis)) 1L else x@variable$dim_lengths[[axis$dim]]
   dated <- !is.null(axis) && !isTRUE(axis$climatology)
@@ -909,30 +983,8 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   shown <- paste(format(range(dates), "%Y-%m-%d %H:%M:%S"),
                  collapse = " to ")
   if (length(time) == 1L) {
-    # Several steps on the day of a date tie; a date-time tells them apart.
-    step <- tryCatch(
-      .match_time_indices(dates, prepared$values, time_match, max_time_diff,
-                          resolution),
-      ocean3d_error_repeated_time = function(e) {
-        stop_time(glue::glue(
-          "Several time steps fall on the day of `time` ",
-          "({format(prepared$values)}). Give a date-time to read one of ",
-          "them, or a window of two dates to read them all."
-        ))
-      }
-    )
-    if (is.na(step)) {
-      how <- if (time_match == "exact" || is.null(max_time_diff)) {
-        "matches"
-      } else {
-        glue::glue("is within {max_time_diff} days of")
-      }
-      stop_time(glue::glue(
-        "No time step {how} `time` ({format(prepared$values)}). The steps ",
-        "run from {shown} UTC; give a step number, a date or date-time, or ",
-        "a window of two."
-      ))
-    }
+    step <- .match_time_steps(x, prepared$values, resolution, time_match,
+                              max_time_diff)
     return(selected(step, as_list))
   }
   # A window: every step from the start to the end. With dates, the whole
@@ -1044,8 +1096,8 @@ setMethod("rast", "SpatProxy", function(x, time = NULL,
     ))
   }
   time_match <- match.arg(time_match)
-  .proxy_steps(x, time, x@variable$name, time_match, max_time_diff,
-               voxel = FALSE)
+  .read_time_steps(x, time, x@variable$name, time_match, max_time_diff,
+                   voxel = FALSE)
 })
 
 #' @rdname SpatProxy-class
@@ -1078,13 +1130,14 @@ setMethod("crop", "SpatProxy", function(x, y, ...) {
       # Points along the box's edges, so the projected extent also reaches
       # where a curved projection (a polar one, say) bends an edge beyond
       # its corners.
+      # An area with no width or height, such as a single point, has no
+      # edge to add points along.
       e <- as.vector(terra::ext(y))
-      box <- terra::densify(
-        terra::as.polygons(terra::ext(y), crs = crs),
-        interval = max(e[["xmax"]] - e[["xmin"]], e[["ymax"]] - e[["ymin"]]) /
-          100,
-        flat = TRUE
-      )
+      span <- max(e[["xmax"]] - e[["xmin"]], e[["ymax"]] - e[["ymin"]])
+      box <- terra::as.polygons(terra::ext(y), crs = crs)
+      if (span > 0) {
+        box <- terra::densify(box, interval = span / 100, flat = TRUE)
+      }
       projected <- terra::project(box, x@crs)
       y <- terra::ext(projected)
       # A box across the antimeridian: going round its edge, the projected

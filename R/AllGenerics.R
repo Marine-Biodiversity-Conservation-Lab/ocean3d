@@ -203,15 +203,18 @@ setGeneric("volume", function(x, per_cell = FALSE, per_level = FALSE, ...) {
 #'   \item{A voxel and [SpatVector3D-class] points}{A point covers one cell
 #'     and one depth level: the cell that holds it and the level whose depth
 #'     is nearest the point's depth (a tie goes to the shallower level, as in
-#'     [extract_to_point()]). The level is chosen by depth alone, so a point
-#'     whose nearest level has no value in the voxel shares nothing there.
+#'     [extract_to_point()]), as [mask()][mask-3d] picks it with
+#'     `method = "nearest_level"`. The level is chosen by depth alone, so if
+#'     the level nearest a point's depth has no value in the voxel, the point
+#'     shares nothing there.
 #'     When the voxel's depth edges give uneven slabs, the slab that contains
-#'     a point can belong to another level; the nearest level is used. The
-#'     result is a presence voxel on the voxel's levels, and `bounds` doesn't
-#'     apply. Points off the grid share nothing. Points' times aren't
-#'     compared, since a voxel shows one time step. `intersect_3d()` doesn't
-#'     read the voxel's values; to keep the values at the nearest level that
-#'     has one, at the bottom or at the surface, use [mask()][mask-3d] with
+#'     a point can belong to another level; the level nearest the point's
+#'     depth is used. The result is a presence voxel on the voxel's levels,
+#'     and `bounds` doesn't apply. Points off the grid share nothing. Points'
+#'     times aren't compared, since a voxel shows one time step.
+#'     `intersect_3d()` doesn't read the voxel's values; to keep the values
+#'     at the level nearest the point's depth, skipping levels without a
+#'     value, or at the bottom or the surface, use [mask()][mask-3d] with
 #'     `method`.}
 #'   \item{An envelope and [SpatVector3D-class] points}{In each cell where a
 #'     point's depth lies within the envelope's interval (both ends
@@ -368,9 +371,11 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' as [intersect_3d()] compares them, after being put on the 3D object's
 #' grid. A cell is `TRUE` where the voxel has a value at the level nearest a
 #' point's depth, or where a point's depth lies within the envelope's
-#' interval. Points always take the level nearest their depth here; the
-#' other depth rules (the nearest level with a value, the bottom and the
-#' surface) are in the `method` of [mask()][mask-3d].
+#' interval. Points here always take the level nearest their depth, even if
+#' it has no value, as `method = "nearest_level"` does in [mask()][mask-3d].
+#' The other depth rules (the level nearest the point's depth, skipping
+#' levels without a value; the bottom; the surface) are in the `method` of
+#' [mask()][mask-3d].
 #'
 #' Two [SpatVector3D-class] sets (polygons with polygons, or points with
 #' polygons) have no grid to answer on, so the answer is a list instead, as

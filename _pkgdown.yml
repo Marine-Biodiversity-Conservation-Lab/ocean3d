@@ -41,6 +41,7 @@ reference:
   - intersect_3d
   - intersects_3d
   - mask-3d
+  - extract-SpatProxy
 - title: Summarise
   desc: Measure 3D objects and their overlap, and summarise their values.
   contents:

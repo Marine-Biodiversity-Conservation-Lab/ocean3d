@@ -57,8 +57,9 @@
       "take a depth level of their own."
     ),
     method = paste0(
-      "`method` applies only when mask() keeps a SpatVoxel's values at ",
-      "SpatVector3D points."
+      "`method` sets the depth level SpatVector3D points take, so it ",
+      "applies only to a variable with depth: mask() of a SpatVoxel by ",
+      "points, or extract() on a SpatProxy whose variable has depth."
     )
   )
   why <- why[intersect(names(why), nms)]

@@ -831,12 +831,15 @@ test_that("mask(voxel, points) keeps the value at each point's level only", {
   expect_equal(unname(vals[23, ]), c(NA, NA, 3))
   expect_true(all(is.na(vals[-c(13, 23), ])))
 
-  # The level comes from the point's depth, not from where the voxel has
-  # values: a point at a level that is NA there masks to nothing.
+  # With "nearest_level", the level comes from the point's depth, not from
+  # where the voxel has values: a point at a level that is NA there masks to
+  # nothing.
   gappy <- voxel
   gappy[[1]] <- terra::setValues(make_template(), NA)
   gappy <- as_voxel(gappy)
-  expect_true(all(is.na(terra::values(mask(gappy, points_at(2.5, 2.5, 40))))))
+  expect_true(all(is.na(terra::values(
+    mask(gappy, points_at(2.5, 2.5, 40), method = "nearest_level")
+  ))))
 
   # Points take the nearest level, so `bounds` is an error, not ignored.
   for (call in list(function() intersect_3d(points, voxel, bounds = "top"),
@@ -871,11 +874,11 @@ test_that("mask(voxel, points) picks each point's level with `method`", {
   }
   cases <- list(
     # The nearest level is NA here, so it keeps nothing.
-    list(depth = 110, method = "nearest", want = numeric(0)),
+    list(depth = 110, method = "nearest_level", want = numeric(0)),
     # The nearest level with a value: 200 m is nearer than 0 m.
-    list(depth = 110, method = "nearest_value", want = 30),
+    list(depth = 110, method = "nearest", want = 30),
     # Halfway between two levels with values, the shallower wins.
-    list(depth = 100, method = "nearest_value", want = 10),
+    list(depth = 100, method = "nearest", want = 10),
     # The deepest level with a value, whatever the point's depth.
     list(depth = 0, method = "bottom", want = 30),
     # The shallowest level, whatever the point's depth.
@@ -888,9 +891,13 @@ test_that("mask(voxel, points) picks each point's level with `method`", {
   # Only the chosen cell and level keep a value.
   out <- terra::values(mask(voxel, points_at(2.5, 2.5, 0), method = "bottom"))
   expect_equal(which(!is.na(out)), 13 + 25 * 2)
+  # Without `method`, a point takes the nearest level with a value.
+  expect_equal(terra::values(mask(voxel, points_at(2.5, 2.5, 110))),
+               terra::values(mask(voxel, points_at(2.5, 2.5, 110),
+                                  method = "nearest")))
 
   # A cell with no value at any level, and a point off the grid, keep nothing.
-  for (method in c("nearest_value", "bottom", "surface")) {
+  for (method in c("nearest", "bottom", "surface")) {
     empty <- mask(voxel, points_at(c(0.5, 20), c(0.5, 20), c(0, 0)),
                   method = method)
     expect_true(all(is.na(terra::values(empty))), info = method)
@@ -903,7 +910,7 @@ test_that("mask(voxel, points) picks each point's level with `method`", {
                     function() {
                       mask(envelope, points_at(2.5, 2.5, 50), method = "bottom")
                     })) {
-    expect_error(call(), "`method` applies only",
+    expect_error(call(), "applies only to a variable with depth",
                  class = "ocean3d_error_unused_argument")
   }
   expect_error(mask(voxel, points_at(2.5, 2.5, 0), method = "deepest"),
@@ -916,7 +923,7 @@ test_that("mask(voxel, points) picks each point's level with `method`", {
                     function() {
                       intersects_3d(point, voxel, method = "bottom")
                     })) {
-    expect_error(call(), "`method` applies only when mask\\(\\)",
+    expect_error(call(), "mask\\(\\) of a SpatVoxel by points",
                  class = "ocean3d_error_unused_argument")
   }
 })
@@ -936,7 +943,7 @@ test_that("many points pick their levels once per cell and depth", {
     calls <<- calls + 1L
     helper(...)
   })
-  for (method in c("nearest", "nearest_value", "bottom")) {
+  for (method in c("nearest_level", "nearest", "bottom")) {
     calls <- 0L
     out <- terra::values(mask(voxel, many, method = method))
     # One call per distinct profile and depth, not one per point.
@@ -966,7 +973,7 @@ test_that("mask(voxel, points, method) reads a voxel from a netCDF file", {
   voxel <- as_voxel(as_proxy(path))
   obs <- data.frame(lon = c(0.5, 0.5, 1.5, 1.5), lat = 10.5,
                     depth = c(12, 30, 0, 16))
-  expected <- list(nearest_value = c(2, 4, 5, 7), bottom = c(4, 4, 7, 7),
+  expected <- list(nearest = c(2, 4, 5, 7), bottom = c(4, 4, 7, 7),
                    surface = c(1, 1, 5, 5))
   for (method in names(expected)) {
     got <- vapply(seq_len(nrow(obs)), function(i) {
