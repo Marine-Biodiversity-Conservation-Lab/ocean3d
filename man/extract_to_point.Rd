@@ -46,8 +46,9 @@ date-times. Each has length 1 or the same length as the others.
 \item{var}{Name of the variable. \code{NULL} detects it when the file holds one
 data variable.}
 
-\item{method}{\code{"2d"} (default) for a variable without depth, or
-\code{"surface"}, \code{"bottom"} or \code{"nearest"} for one with depth (see Details).}
+\item{method}{\code{"2d"} (default) for a variable without depth or with a
+single depth level, or \code{"surface"}, \code{"bottom"} or \code{"nearest"} for one
+with depth levels (see Details).}
 
 \item{lon_col, lat_col, date_col, depth_col}{Columns of \code{data} with the
 longitude, latitude, date and depth. \code{date_col} is needed when the

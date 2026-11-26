@@ -1,5 +1,5 @@
-# extract_to_point() and its extract2d()/extract3d_*() family: a wrapper over
-# as_vector3d(), as_proxy() and extract() (#116). Its own behaviour is tested
+# extract_to_point(): a wrapper over as_vector3d(), as_proxy() and
+# extract() (#116). Its own behaviour is tested
 # here: input forms, output naming, method and date checks. How values are
 # picked (cells, depth levels, time steps, series, the antimeridian) is
 # extract()'s, tested in test-proxy-extract.R. Synthetic files come from
@@ -161,14 +161,6 @@ test_that("extract_to_point() names its output column", {
     out <- do.call(extract_to_point, c(list(obs, f), case$args))
     expect_true(case$col %in% names(out), label = case$col)
   }
-  # The family: one method each.
-  expect_identical(extract3d_surface(obs, f)$surface_temp,
-                   extract_to_point(obs, f, method = "surface")$surface_temp)
-  expect_identical(extract3d_bottom(obs, f, var = "temp")$temp,
-                   extract_to_point(obs, f, var = "temp",
-                                    method = "bottom")$temp)
-  expect_identical(extract3d_nearest(obs, f)$nearest_temp,
-                   extract_to_point(obs, f, method = "nearest")$nearest_temp)
   obs$temp <- 1
   expect_error(extract_to_point(obs, f, var = "temp", method = "bottom"),
                "already has a column", class = "ocean3d_error_point_input")
@@ -339,18 +331,18 @@ test_that("source handling rejects unsupported inputs and missing paths", {
   )
 })
 
-test_that("depth wrappers name columns and extract values", {
+test_that("depth methods name columns and extract values", {
   f <- tempfile(fileext = ".nc")
   on.exit(unlink(f), add = TRUE)
   make_test_netcdf(f)
   cases <- list(
-    list(fun = extract3d_surface, col = "surface_temp", value = 13),
-    list(fun = extract3d_nearest, col = "nearest_temp", value = 17),
-    list(fun = extract3d_bottom, col = "seabottom_temp", value = 21)
+    list(method = "surface", col = "surface_temp", value = 13),
+    list(method = "nearest", col = "nearest_temp", value = 17),
+    list(method = "bottom", col = "seabottom_temp", value = 21)
   )
   x <- make_obs()
   for (case in cases) {
-    out <- case$fun(x, f, var = NULL)
+    out <- extract_to_point(x, f, var = NULL, method = case$method)
     expect_named(out, c(names(x), case$col))
     expect_equal(out[[case$col]], case$value)
     expect_equal(out[names(x)], x)
@@ -549,7 +541,7 @@ test_that("formula-based and pressure axes require explicit conversion", {
     standard_name = "sea_water_pressure"
   )
   for (path in paths) {
-    expect_error(extract3d_surface(
+    expect_error(extract_to_point(method = "surface", 
       data.frame(lon = 0, lat = 40), path, var = "temp", date_col = NULL
     ), "physical transformation")
   }
@@ -566,7 +558,7 @@ test_that("invalid file depth metadata fail before vertical extraction", {
   make_depth_axis_test_nc(paths[4], c(0, 50, 50), c(11, 22, 33))
   patterns <- c("ambiguous", "reference surface", "units", "duplicate")
   for (i in seq_along(paths)) {
-    expect_error(extract3d_surface(
+    expect_error(extract_to_point(method = "surface", 
       data.frame(lon = 0, lat = 40), paths[i], var = "temp", date_col = NULL
     ), patterns[i])
   }
@@ -643,7 +635,7 @@ test_that("static variables use default date_col without a date column", {
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
   x <- data.frame(id = c("a", "b"), lon = c(0, 1), lat = c(40, 41))
-  out <- extract2d(x, path, var = "temp")
+  out <- extract_to_point(x, path, var = "temp")
   expect_named(out, c("id", "lon", "lat", "temp"))
   expect_equal(out$temp, c(1, 4))
   expect_equal(out[names(x)], x)
@@ -659,7 +651,7 @@ test_that("an existing typed NA date preserves observations & missing values", {
   x <- data.frame(id = c("a", "b"), lon = c(0, 1), lat = c(40, 41),
                   date = as.Date(c("2020-01-03", NA_character_)))
   # A missing date gives NA, with extract()'s warning.
-  expect_warning(out <- extract2d(x, path, var = "temp"),
+  expect_warning(out <- extract_to_point(x, path, var = "temp"),
                  "has no time", class = "ocean3d_warning_point_time")
   expect_named(out, c("id", "lon", "lat", "date", "temp"))
   expect_equal(out[names(x)], x)
@@ -677,7 +669,7 @@ test_that("static inputs do not parse unused date values", {
   on.exit(unlink(path), add = TRUE)
   make_test_netcdf(path, with_depth = FALSE, with_time = FALSE)
   x <- data.frame(lon = 0, lat = 40, date = "not-a-date")
-  out <- extract2d(x, path, var = "temp")
+  out <- extract_to_point(x, path, var = "temp")
   expect_named(out, c("lon", "lat", "date", "temp"))
   expect_equal(out$temp, 1)
   expect_equal(out$date, "not-a-date")
@@ -693,7 +685,7 @@ test_that("custom date columns and scalar date recycling keep known values", {
   make_test_netcdf(path, with_depth = FALSE)
   x <- data.frame(lon = c(0, 1), lat = c(40, 41),
                   observed_at = as.Date(c("2020-01-01", "2020-01-03")))
-  out <- extract2d(x, path, var = "temp", date_col = "observed_at")
+  out <- extract_to_point(x, path, var = "temp", date_col = "observed_at")
   expect_named(out, c("lon", "lat", "observed_at", "temp"))
   expect_equal(out$observed_at, x$observed_at)
   expect_equal(out$temp, c(1, 8))
@@ -720,7 +712,7 @@ test_that("height axes without a positive attribute are not depths", {
   make_depth_axis_test_nc(path, c(2, 10, 20), c(11, 22, 33),
                           standard_name = "height")
   expect_error(
-    extract3d_surface(data.frame(lon = 0, lat = 40), path, var = "temp",
+    extract_to_point(method = "surface", data.frame(lon = 0, lat = 40), path, var = "temp",
                       date_col = NULL, depth_dim = "depth"),
     "reference surface"
   )
@@ -738,12 +730,11 @@ test_that("a depth dimension without coordinate variable fails clearly", {
   ncdf4::ncvar_put(nc, "temp", array(c(11, 22, 33), c(1, 1, 3)))
   ncdf4::nc_close(nc)
   printed <- capture.output(error <- tryCatch(
-    extract3d_surface(data.frame(lon = 0, lat = 40), path, var = "temp",
+    extract_to_point(method = "surface", data.frame(lon = 0, lat = 40), path, var = "temp",
                       date_col = NULL),
     error = identity
   ))
   expect_match(conditionMessage(error), "has no coordinate variable")
-  expect_match(conditionMessage(error), "extract2d()", fixed = TRUE)
   expect_length(printed, 0L)
 })
 
@@ -756,7 +747,7 @@ test_that("unusable spatial bounds stop extraction", {
   ncdf4::nc_close(nc)
   x <- data.frame(lon = c(0, 1, 5), lat = 40)
   err <- expect_error(
-    extract2d(x, path, var = "temp", date_col = NULL),
+    extract_to_point(x, path, var = "temp", date_col = NULL),
     class = "ocean3d_error_bounds"
   )
   # The message names the file, to find it in a multi-file call.
