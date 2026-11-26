@@ -284,3 +284,29 @@ test_that("extract() rejects input it can't use", {
   expect_error(extract(p, pts, bounds = "top"), "bounds",
                class = "ocean3d_error_unused_argument")
 })
+
+test_that("a single unbounded longitude or latitude reads points on it", {
+  # A point time series (one cell, three levels) and a transect along one
+  # latitude: a point on the coordinate reads it, a point off it gets NA.
+  f <- make_grid_file(lon = 150.25, lat = -20.5, depth = c(5, 15, 40),
+                      time = 0:2, values = 1:9)
+  g <- make_grid_file(lon = c(0.5, 1.5, 2.5), lat = 40.25, depth = NULL,
+                      time = 0:1, values = 1:6)
+  on.exit(unlink(c(f, g)), add = TRUE)
+  series <- as_vector3d(data.frame(
+    lon = c(150.25, 150.25, 150.3), lat = -20.5, depth = c(10, 30, 10),
+    date = as.Date("2020-01-01") + c(0, 2, 1)
+  ), time = "date")
+  p <- as_proxy(f)
+  expect_equal(extract(p, series, method = "surface")$value, c(1, 7, NA))
+  expect_equal(extract(p, series, method = "bottom")$value, c(3, 9, NA))
+  expect_equal(extract(p, series)$value, c(1, 9, NA))
+  transect <- as_vector3d(data.frame(
+    lon = c(0.5, 1.7, 2.5, 1), lat = c(40.25, 40.25, 40.25, 40.3), depth = 0,
+    date = as.Date("2020-01-02")
+  ), time = "date")
+  expect_equal(extract(as_proxy(g), transect)$value, c(4, 5, 6, NA))
+  # A voxel needs the cell's width, so as_voxel() still stops.
+  expect_error(as_voxel(p, time = 1), "single cell without bounds",
+               class = "ocean3d_error_irregular_grid")
+})

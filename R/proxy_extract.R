@@ -146,6 +146,19 @@ setMethod(
                         on_missing = "na")
     }
 
+    # A single longitude or latitude without bounds, as in a point time
+    # series or a transect, has no known width, so as_voxel() can't read it.
+    # A point reads it when it lies on the coordinate, so the cell gets that
+    # tolerance as its width here, on this copy of the proxy only.
+    for (a in c("lon", "lat")) {
+      ax <- x@axes[[a]]
+      if (length(ax$centres) == 1L && identical(ax$edges, "none")) {
+        tol <- .singleton_tolerance(ax$centres)
+        x@axes[[a]]$lower <- ax$centres - tol
+        x@axes[[a]]$upper <- ax$centres + tol
+      }
+    }
+
     # Half a cell each way: a group's crop then holds every cell a point on
     # the group's edge can fall in, as the cells a point's own crop holds,
     # so a point takes the same cell whatever other points share its step.
