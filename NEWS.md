@@ -2,6 +2,36 @@
 
 ## Breaking changes
 
+`extract_to_point()` is now a shortcut for `as_vector3d()`, `as_proxy()` and
+`terra::extract()` (#116), which reads each time step once for all the points
+on it. It keeps table, `sf`, matrix, list and direct input, the `"2d"`,
+`"surface"`, `"bottom"` and `"nearest"` methods with their meanings,
+`time_match`, `max_time_diff`, the column and dimension arguments and the
+output column's name. On the same file it gives the same values as before,
+except for a point exactly on the edge between two cells, which now takes
+the cell `extract()` takes. What changes for callers:
+
+* `extract2d()`, `extract3d_surface()`, `extract3d_bottom()`,
+  `extract3d_nearest()` and `extract3d_all()` are removed. Use
+  `extract_to_point(x, nc, method = "2d")`, `method = "surface"`,
+  `method = "bottom"` or `method = "nearest"`; for `extract3d_all()`, call
+  `extract_to_point()` once per method.
+* `method = "all"` is removed: call once per method.
+* `nc` is one file, several files of a series on one grid, or an open
+  connection. A table of files (`file_col`) and files on different grids are
+  no longer accepted: call once per grid.
+* `spatial_match = "nearest"` and `max_distance_km` are removed. A point
+  takes the cell that contains it and is `NA` off the grid.
+* `time_resolution` and `custom_time_interval` are removed. A date is
+  matched by its UTC day and a date-time as an instant; to match by day,
+  give dates. Monthly and yearly label matching is no longer offered.
+* `spatial_report`, `depth_report`, `time_report`, `return_match_info` and
+  `verbose` are removed.
+* An output column that already exists in `data` is now an error rather than
+  being replaced.
+* An observation with a missing date gives `NA` with a warning, and text
+  date-times without a time zone are read as UTC without a warning.
+
 `extract_to_area()` is now a shortcut for `as_proxy()`, `crop()`,
 `as_voxel()`, `as_vector3d()` and `mask()` (#116). It used to return only the
 layers between the levels nearest to `min_depth` and `max_depth`. Now it

@@ -118,11 +118,12 @@ takes one of them:
 
 | Input | Functions | Reads with |
 |---|---|---|
-| netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_point()` and its `extract2d()` / `extract3d_*()` wrappers, `extract_to_buffer()`, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
+| netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_buffer()`, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
 | `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions and `mask()` | terra; one time step per voxel |
 
-A voxel can't be passed to `extract_to_point()`. `extract_to_area()` and
-`volume()` take a voxel or a netCDF file described with `as_proxy()`.
+A voxel can't be passed to `extract_to_buffer()` or `extract_to_track()`.
+`extract_to_point()`, `extract_to_area()` and `volume()` take a netCDF
+file described with `as_proxy()`, and the last two a voxel too.
 Merging the two into one model with time is planned in
 [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
 Its first, experimental part is `as_proxy()`, which describes a netCDF file
@@ -212,24 +213,18 @@ range polygon through to a vertical profile of the values inside it.
 
 Input: observations (data frame, tibble, `sf` POINT, matrix, or named list)
 and one or more netCDF files. These functions read the files directly, only
-the cells each observation needs, and match time as well as depth. They don't
-take a `SpatVoxel`.
+the cells each observation needs, and match time as well as depth.
+`extract_to_buffer()` and `extract_to_track()` don't take a `SpatVoxel`.
 
-- `extract_to_point()` — the general engine: match observation points
-  against one or more netCDF files. By default a point takes the value of
-  the grid cell that contains it (`NA` outside the grid);
-  `spatial_match = "nearest"` accepts the nearest cell centre within
-  `max_distance_km`. Time is matched to the nearest timestamp and depth by
-  physical depth in metres. Returns the input with the extracted values
-  appended, structure preserved.
-- `extract2d()` — for variables with no depth dimension.
-- `extract3d_nearest()` — the valid, non-missing depth layer closest to
-  each observation’s depth, so a cell below the seabed does not silently
-  return `NA`.
-- `extract3d_surface()` / `extract3d_bottom()` — the physically
-  shallowest depth layer, or the deepest non-missing one at that cell.
-- `extract3d_all()` — nearest, surface and bottom in one pass, as three
-  columns.
+- `extract_to_point()` — values at observation points, from one netCDF file,
+  a series of files on one grid or an open connection. Each point takes the
+  cell that contains it (`NA` outside the grid), the nearest time step, and
+  the depth level `method` chooses: `"nearest"` (nearest level with a value),
+  `"surface"`, `"bottom"` (deepest level with a value), or `"2d"` for a
+  variable without depth. A short wrapper over `as_vector3d()`,
+  `as_proxy()` and `extract()`, which reads each time step once for all its
+  points. Returns the input with the extracted values appended, structure
+  preserved.
 - `extract_to_buffer()` — summarise values within a geodesic circle ×
   depth window × time window around each observation, weighted by cell
   coverage, layer thickness and time, or pick the value closest to a target.
