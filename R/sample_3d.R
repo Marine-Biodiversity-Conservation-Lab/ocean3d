@@ -198,4 +198,3 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
   }
   shifted
 }
-

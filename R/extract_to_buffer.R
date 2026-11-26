@@ -219,11 +219,12 @@ extract_to_buffer <- function(
   usable <- is.finite(work$lon) & is.finite(work$lat) & abs(work$lat) <= 90 &
     !is.na(work$depth) & (!timed | !is.na(work$time))
   if (any(!usable)) {
-    verb <- if (sum(!usable) == 1L) "has" else "have"
+    one <- sum(!usable) == 1L
     rlang::warn(glue::glue(
-      "{sum(!usable)} of {nrow(work)} observations {verb} no usable position",
+      "{sum(!usable)} of {nrow(work)} observations ",
+      "{if (one) 'has' else 'have'} no usable position",
       "{if (needs_depth) ', depth' else ''}{if (timed) ' or date' else ''}, ",
-      "so they get NA."
+      "so {if (one) 'it gets' else 'they get'} NA."
     ), class = "ocean3d_warning_buffer_rows")
   }
   value <- rep(NA_real_, nrow(work))
@@ -231,7 +232,8 @@ extract_to_buffer <- function(
   points <- if (any(usable)) {
     as_vector3d(work[usable, , drop = FALSE], time = if (timed) "time")
   }
-  daily <- timed && identical(points@time_resolution, "daily")
+  daily <- timed && !is.null(points) &&
+    identical(points@time_resolution, "daily")
   seconds <- c(days = 86400, hours = 3600, minutes = 60, seconds = 1)[[
     time_unit
   ]]

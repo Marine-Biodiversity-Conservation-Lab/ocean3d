@@ -112,6 +112,13 @@ test_that("observations it can't place get NA, with one warning", {
                  "2 of 4 observations", class = "ocean3d_warning_buffer_rows")
   expect_equal(out$temp, c(at(6, 6, 2, 2), NA, NA, NA))
   expect_identical(out$temp_n, c(1L, 0L, 0L, 0L))
+  # No observation usable at all.
+  undated <- obs()
+  undated$date <- as.Date(NA)
+  expect_warning(none <- extract_to_buffer(undated, path),
+                 "1 of 1 observations has",
+                 class = "ocean3d_warning_buffer_rows")
+  expect_identical(none$temp_n, 0L)
   # A window with no step in it.
   late <- obs()
   late$date <- as.Date("2020-02-01")

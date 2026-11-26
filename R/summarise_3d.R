@@ -103,8 +103,9 @@ summarise_3d <- function(x, statistic = "mean",
                          several.ok = TRUE)
   weighting <- match.arg(weighting)
   bounds <- match.arg(bounds)
-  if (!is.null(by) && !(rlang::is_string(by) &&
-                           by %in% c("depth", "time", "all"))) {
+  by_ok <- is.null(by) ||
+    (rlang::is_string(by) && by %in% c("depth", "time", "all"))
+  if (!by_ok) {
     .abort_summarise_input(paste(
       "`by` must be NULL (one row per voxel), \"depth\", \"time\" or",
       "\"all\" (one row for every voxel together)."
