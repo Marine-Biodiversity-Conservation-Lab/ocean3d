@@ -25,7 +25,7 @@
 #' With normalised weights \eqn{w_i}, the weighted standard deviation is the
 #' square root of \eqn{\sum w_i (v_i - \bar v)^2 / \sum w_i (1 - w_i)}, the
 #' sample standard deviation under equal weights and the same formula as in
-#' [extract_to_buffer()]. The weighted median is the value at which the
+#' [extract_to_track()]. The weighted median is the value at which the
 #' cumulative weight, over the values sorted from smallest to largest,
 #' reaches half the total; when it reaches half exactly, the two values
 #' either side are averaged, as [stats::median()] does. `min` and `max`
@@ -52,15 +52,18 @@
 #'   `depth` column. Values from different time steps aren't combined, so a
 #'   list shows the change from step to step. `"time"` means the same as
 #'   `NULL`, and says in a call on a list that the rows are per time step.
-#'   A one-layer `SpatRaster` has a single level, so `"depth"` is an error
-#'   for it.
+#'   `"all"` gives one row for every value of every voxel in `x` together,
+#'   for example all the time steps a time window covers, each value keeping
+#'   its own weight; its `time` is `NA`. A one-layer `SpatRaster` has a
+#'   single level, so `"depth"` is an error for it.
 #' @param bounds As in [volume()]: where the slab edges fall for a voxel that
 #'   carries no depth edges; used with `weighting = "volume"` only. Voxels
 #'   read with [as_voxel()] from a [SpatProxy-class] carry their edges, so
 #'   `bounds` isn't used for them.
 #'
 #' @returns A data frame with one row per voxel, or per voxel and depth level
-#'   with `by = "depth"`, in the order of `x` and then of depth. Columns:
+#'   with `by = "depth"`, in the order of `x` and then of depth, or one row
+#'   with `by = "all"`. Columns:
 #'   `time` (the voxel's [terra::time()], UTC, or `NA` when it has none),
 #'   `depth` (with `by = "depth"` only, in metres), one column per
 #'   `statistic`, and `n`, the number of values the row is built on, so rows
@@ -89,6 +92,9 @@
 #' terra::time(v) <- rep(as.POSIXct("2020-01-01", tz = "UTC"), 7)
 #' terra::time(later) <- rep(as.POSIXct("2020-01-02", tz = "UTC"), 7)
 #' summarise_3d(list(v, later), statistic = c("mean", "median"))
+#'
+#' # Or one row for the values of both steps together.
+#' summarise_3d(list(v, later), statistic = "mean", by = "all")
 #' @export
 summarise_3d <- function(x, statistic = "mean",
                          weighting = c("volume", "equal"), by = NULL,
@@ -97,10 +103,12 @@ summarise_3d <- function(x, statistic = "mean",
                          several.ok = TRUE)
   weighting <- match.arg(weighting)
   bounds <- match.arg(bounds)
-  if (!is.null(by) && !identical(by, "depth") && !identical(by, "time")) {
-    .abort_summarise_input(
-      "`by` must be NULL (one row per voxel), \"depth\" or \"time\"."
-    )
+  if (!is.null(by) && !(rlang::is_string(by) &&
+                           by %in% c("depth", "time", "all"))) {
+    .abort_summarise_input(paste(
+      "`by` must be NULL (one row per voxel), \"depth\", \"time\" or",
+      "\"all\" (one row for every voxel together)."
+    ))
   }
   # A 2D layer, as rast() reads a variable without depth: a plain one-layer
   # SpatRaster, not one of the 3D classes.
@@ -126,7 +134,8 @@ summarise_3d <- function(x, statistic = "mean",
     voxels <- list(x)
   }
 
-  rows <- lapply(voxels, function(v) {
+  # Each voxel's values (cells x depth levels), their weights and its time.
+  parts <- lapply(voxels, function(v) {
     two_d <- flat(v)
     if (!two_d) .check_3d(v, "x", "SpatVoxel")
     if (two_d && identical(by, "depth")) {
@@ -147,17 +156,28 @@ summarise_3d <- function(x, statistic = "mean",
       terra::values(volume(v, per_cell = TRUE, per_level = TRUE,
                            bounds = bounds), mat = TRUE)
     }
-    time <- .voxel_time(v)
+    list(values = values, weights = weights, time = .voxel_time(v),
+         depths = if (!two_d) depths(v))
+  })
+  # "all": every value of every voxel in one row, each with its own weight.
+  if (identical(by, "all")) {
+    parts <- list(list(
+      values = unlist(lapply(parts, `[[`, "values")),
+      weights = unlist(lapply(parts, `[[`, "weights")),
+      time = .POSIXct(NA_real_, tz = "UTC")
+    ))
+  }
+  rows <- lapply(parts, function(p) {
     groups <- if (identical(by, "depth")) {
-      lapply(seq_len(ncol(values)), function(i) {
-        c(list(depth = depths(v)[i]),
-          .weighted_statistics(values[, i], weights[, i], statistic))
+      lapply(seq_len(ncol(p$values)), function(i) {
+        c(list(depth = p$depths[i]),
+          .weighted_statistics(p$values[, i], p$weights[, i], statistic))
       })
     } else {
-      list(.weighted_statistics(values, weights, statistic))
+      list(.weighted_statistics(p$values, p$weights, statistic))
     }
     do.call(rbind, lapply(groups, function(g) {
-      data.frame(time = time, as.data.frame(g), stringsAsFactors = FALSE)
+      data.frame(time = p$time, as.data.frame(g), stringsAsFactors = FALSE)
     }))
   })
   out <- do.call(rbind, rows)
