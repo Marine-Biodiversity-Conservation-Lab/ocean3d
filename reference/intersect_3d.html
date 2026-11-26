@@ -193,15 +193,18 @@ result.</p></dd>
 <dd><p>A point covers one cell
 and one depth level: the cell that holds it and the level whose depth
 is nearest the point's depth (a tie goes to the shallower level, as in
-<code><a href="extract_to_point.html">extract_to_point()</a></code>). The level is chosen by depth alone, so a point
-whose nearest level has no value in the voxel shares nothing there.
+<code><a href="extract_to_point.html">extract_to_point()</a></code>), as <a href="mask-3d.html">mask()</a> picks it with
+<code>method = "nearest_level"</code>. The level is chosen by depth alone, so if
+the level nearest a point's depth has no value in the voxel, the point
+shares nothing there.
 When the voxel's depth edges give uneven slabs, the slab that contains
-a point can belong to another level; the nearest level is used. The
-result is a presence voxel on the voxel's levels, and <code>bounds</code> doesn't
-apply. Points off the grid share nothing. Points' times aren't
-compared, since a voxel shows one time step. <code>intersect_3d()</code> doesn't
-read the voxel's values; to keep the values at the nearest level that
-has one, at the bottom or at the surface, use <a href="mask-3d.html">mask()</a> with
+a point can belong to another level; the level nearest the point's
+depth is used. The result is a presence voxel on the voxel's levels,
+and <code>bounds</code> doesn't apply. Points off the grid share nothing. Points'
+times aren't compared, since a voxel shows one time step.
+<code>intersect_3d()</code> doesn't read the voxel's values; to keep the values
+at the level nearest the point's depth, skipping levels without a
+value, or at the bottom or the surface, use <a href="mask-3d.html">mask()</a> with
 <code>method</code>.</p></dd>
 
 <dt>An envelope and <a href="SpatVector3D-class.html">SpatVector3D</a> points</dt>

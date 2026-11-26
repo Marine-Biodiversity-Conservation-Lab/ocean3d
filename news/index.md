@@ -359,6 +359,23 @@ match, pass `max_time_diff` in days (no cap by default).
 
 ### New features
 
+- [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html)
+  on a `SpatProxy` reads the values at many `SpatVector3D` points at
+  once
+  ([\#163](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/163)).
+  It gives the same values as calling
+  [`crop()`](https://rspatial.github.io/terra/reference/crop.html),
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+  and [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+  for each point, and takes `method` for the depth level as
+  [`mask()`](https://rspatial.github.io/terra/reference/mask.html) does.
+  The result has one row per point: `feature_id`, `value`, and the
+  `time_step` and `depth_level` used. With `bind = TRUE`, as in terra,
+  it returns the points themselves with `value`, `time_step` and
+  `depth_level` added to their columns. Points far apart, or more than
+  `ocean3d.max_read_mb` would allow, are read in groups of nearby
+  points.
+
 - [`terra::rast()`](https://rspatial.github.io/terra/reference/rast.html)
   reads time steps of a `SpatProxy` as plain `SpatRaster`s
   ([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)),
@@ -380,21 +397,22 @@ match, pass `max_time_diff` in days (no cap by default).
 - [`mask()`](https://rspatial.github.io/terra/reference/mask.html) of a
   `SpatVoxel` by `SpatVector3D` points takes a `method` that sets the
   depth level each point keeps
-  ([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)):
+  ([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)).
+  `"nearest"`, `"bottom"` and `"surface"` mean what they mean in
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md):
 
-  - `"nearest"` (default, as before): the level nearest the point’s
-    depth, whatever its value.
-  - `"nearest_value"`: the nearest level that has a value, as
-    `extract_to_point(method = "nearest")` picks it.
-  - `"bottom"`: the deepest level that has a value, as
-    `extract_to_point(method = "bottom")`.
-  - `"surface"`: the shallowest level, as
-    `extract_to_point(method = "surface")`.
+  - `"nearest"` (default): the level nearest the point’s depth, skipping
+    levels without a value in the point’s cell.
+  - `"nearest_level"`: the level nearest the point’s depth, even if it
+    has no value.
+  - `"bottom"`: the deepest level that has a value.
+  - `"surface"`: the shallowest level.
 
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
   and
   [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md)
-  don’t read values, so points there always take the nearest level.
+  don’t read values, so points there take the level nearest their depth
+  even if it has no value, as `method = "nearest_level"` does.
 
 - New article,
   [`vignette("workflow-values-in-shapes")`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md)

@@ -131,7 +131,7 @@ every depth level.</p>
 <code class="sourceCode R"><span><span class="va">proxy</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_proxy.html">as_proxy</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="va">proxy</span></span>
 <span><span class="co">#&gt; class      : SpatProxy (experimental)</span></span>
-<span><span class="co">#&gt; source     : file2306e43bbc1.nc</span></span>
+<span><span class="co">#&gt; source     : file23c455b80636.nc</span></span>
 <span><span class="co">#&gt; variable   : temp (degC)</span></span>
 <span><span class="co">#&gt; dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)</span></span>
 <span><span class="co">#&gt; lon        : 150.025 to 150.975, 20 cells, edges inferred</span></span>
@@ -165,7 +165,8 @@ every depth level.</p>
 in, and <code><a href="../reference/as_voxel.html">as_voxel()</a></code> reads the time step nearest its date.
 With a shape as <code>time</code>, <code><a href="../reference/as_voxel.html">as_voxel()</a></code> always
 returns a list, here with one voxel. <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code> then keeps the
-value at the depth level nearest the detection’s depth:</p>
+value at the depth level nearest the detection’s depth, skipping levels
+without a value:</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">a</span> <span class="op">&lt;-</span> <span class="va">detections</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span></span>
 <span><span class="va">v</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_voxel.html">as_voxel</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">crop</a></span><span class="op">(</span><span class="va">proxy</span>, <span class="va">a</span><span class="op">)</span>, time <span class="op">=</span> <span class="va">a</span><span class="op">)</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
@@ -184,35 +185,61 @@ and for a date after the last step. <code><a href="../reference/extract_to_point
 warns when the step it picks is on another day; <code><a href="../reference/as_voxel.html">as_voxel()</a></code>
 doesn’t, so set <code>max_time_diff</code> in <code><a href="../reference/as_voxel.html">as_voxel()</a></code> to
 limit how far away the step may be.</p>
-<p>The two differ when the nearest depth level has no value.
-<code><a href="../reference/extract_to_point.html">extract_to_point()</a></code> skips such levels and takes the nearest
-level with a value. By default, <code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code> takes the nearest
-level whatever its value, so such a detection gets <code>NA</code>. Pass
-<code>method = "nearest_value"</code> to skip empty levels as
-<code><a href="../reference/extract_to_point.html">extract_to_point()</a></code> does, or <code>method = "bottom"</code>
-for the deepest level with a value, as
-<code>extract_to_point(method = "bottom")</code> gives.</p>
+<p><code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code> has two rules for the nearest depth level:</p>
+<ul>
+<li>
+<code>method = "nearest"</code> (default, as in
+<code><a href="../reference/extract_to_point.html">extract_to_point()</a></code>) takes the level nearest the detection’s
+depth, skipping levels without a value.</li>
+<li>
+<code>method = "nearest_level"</code> takes the level nearest the
+detection’s depth even if it has no value, so the detection gets
+<code>NA</code> there.</li>
+</ul>
+<p><code>"bottom"</code> takes the deepest level with a value and
+<code>"surface"</code> the shallowest level, as in
+<code><a href="../reference/extract_to_point.html">extract_to_point()</a></code>.</p>
 <p>This file has a value at every level, so the next chunk removes the
-10 m level from a copy of the voxel. Detection A at 12 m then gets
-<code>NA</code> by default. With <code>"nearest_value"</code> it takes
-the 0 m level, 12 m away, which is nearer than the 25 m level.
+10 m level from a copy of the voxel. Detection A at 12 m then takes the
+0 m level by default, 12 m away, which is nearer than the 25 m level.
+With <code>"nearest_level"</code> it gets <code>NA</code>.
 <code>"bottom"</code> takes the 200 m level, the same value
 <code><a href="../reference/extract_to_point.html">extract_to_point()</a></code> gives:</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">gappy</span> <span class="op">&lt;-</span> <span class="va">v</span></span>
 <span><span class="va">gappy</span><span class="op">[[</span><span class="fl">2</span><span class="op">]</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="cn">NA_real_</span>   <span class="co"># the 10 m level</span></span>
 <span><span class="fu"><a href="../reference/summarise_3d.html">summarise_3d</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">gappy</span>, <span class="va">a</span><span class="op">)</span>, statistic <span class="op">=</span> <span class="st">"mean"</span><span class="op">)</span></span>
-<span><span class="co">#&gt;         time mean n</span></span>
-<span><span class="co">#&gt; 1 2020-03-01   NA 0</span></span>
-<span><span class="fu"><a href="../reference/summarise_3d.html">summarise_3d</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">gappy</span>, <span class="va">a</span>, method <span class="op">=</span> <span class="st">"nearest_value"</span><span class="op">)</span>, statistic <span class="op">=</span> <span class="st">"mean"</span><span class="op">)</span></span>
 <span><span class="co">#&gt;         time  mean n</span></span>
 <span><span class="co">#&gt; 1 2020-03-01 28.35 1</span></span>
+<span><span class="fu"><a href="../reference/summarise_3d.html">summarise_3d</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">gappy</span>, <span class="va">a</span>, method <span class="op">=</span> <span class="st">"nearest_level"</span><span class="op">)</span>, statistic <span class="op">=</span> <span class="st">"mean"</span><span class="op">)</span></span>
+<span><span class="co">#&gt;         time mean n</span></span>
+<span><span class="co">#&gt; 1 2020-03-01   NA 0</span></span>
 <span><span class="fu"><a href="../reference/summarise_3d.html">summarise_3d</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">v</span>, <span class="va">a</span>, method <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span>, statistic <span class="op">=</span> <span class="st">"mean"</span><span class="op">)</span></span>
 <span><span class="co">#&gt;         time  mean n</span></span>
 <span><span class="co">#&gt; 1 2020-03-01 16.35 1</span></span>
 <span><span class="fu"><a href="../reference/extract_to_point.html">extract_to_point</a></span><span class="op">(</span><span class="va">obs</span><span class="op">[</span><span class="fl">1</span>, <span class="op">]</span>, <span class="va">path</span>, var <span class="op">=</span> <span class="st">"temp"</span>, date_col <span class="op">=</span> <span class="st">"date"</span>,</span>
 <span>                 method <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span><span class="op">$</span><span class="va">temp</span></span>
 <span><span class="co">#&gt; [1] 16.35</span></span></code></pre></div>
+<div class="section level3">
+<h3 id="many-points-at-once">Many points at once<a class="anchor" aria-label="anchor" href="#many-points-at-once"></a>
+</h3>
+<p>Repeating these steps for thousands of detections reads one window
+per detection. <code><a href="https://rspatial.github.io/terra/reference/extract.html" class="external-link">terra::extract()</a></code> on the proxy gives the same
+values for all of them in one call, and takes the same
+<code>method</code>. It returns one row per detection, with the time
+step used in <code>time_step</code> and the depth level used in
+<code>depth_level</code>:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/extract.html" class="external-link">extract</a></span><span class="op">(</span><span class="va">proxy</span>, <span class="va">detections</span><span class="op">)</span></span>
+<span><span class="co">#&gt;   feature_id value  time_step depth_level</span></span>
+<span><span class="co">#&gt; 1          A 27.75 2020-03-01          10</span></span>
+<span><span class="co">#&gt; 2          B 25.05 2020-03-02          50</span></span>
+<span><span class="co">#&gt; 3          C 21.95 2020-03-04         100</span></span></code></pre></div>
+<p>With <code>bind = TRUE</code>, as in terra, it returns the detections
+themselves with <code>value</code>, <code>time_step</code> and
+<code>depth_level</code> added to their columns, ready to keep working
+with as shapes.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="surface-data-a-variable-without-depth">Surface data: a variable without depth<a class="anchor" aria-label="anchor" href="#surface-data-a-variable-without-depth"></a>
@@ -224,7 +251,7 @@ the same as for a voxel, except that <code><a href="https://rspatial.github.io/t
 detection’s position, not its depth, and <code><a href="../reference/summarise_3d.html">summarise_3d()</a></code>
 weights each cell by its area. Here the surface file holds the top depth
 level of the example temperature.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sst</span> <span class="op">&lt;-</span> <span class="fu">ncdf4</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/ncdf4/man/ncvar_def.html" class="external-link">ncvar_def</a></span><span class="op">(</span><span class="st">"sst"</span>, <span class="st">"degC"</span>, <span class="va">dims</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">4</span><span class="op">)</span><span class="op">]</span>, missval <span class="op">=</span> <span class="op">-</span><span class="fl">9999</span>,</span>
 <span>                        prec <span class="op">=</span> <span class="st">"double"</span><span class="op">)</span></span>
 <span><span class="va">sst_path</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".nc"</span><span class="op">)</span></span>
@@ -248,7 +275,7 @@ value above, because the example water cools with depth.</p>
 <p><code><a href="../reference/buffer_3d.html">buffer_3d()</a></code> turns each detection into a polygon: here a
 circle of 5 km radius, from 20 m above to 20 m below the detection, and
 one day either side.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">buffers</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buffer_3d.html">buffer_3d</a></span><span class="op">(</span><span class="va">detections</span>, radius_km <span class="op">=</span> <span class="fl">5</span>, depth_window <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>                     time_window <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">buffers</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"feature_id"</span>, <span class="st">"depth_min"</span>, <span class="st">"depth_max"</span>,</span>
@@ -268,7 +295,7 @@ mean is weighted by the volume of water each value stands for, and
 because <code><a href="../reference/as_voxel.html">as_voxel()</a></code> has already used its time. It prints a
 message saying so each time, which <code><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressMessages()</a></code> hides
 inside the loop.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">buffer_rows</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">buffers</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">b</span> <span class="op">&lt;-</span> <span class="va">buffers</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
 <span>  <span class="va">voxels</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_voxel.html">as_voxel</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">crop</a></span><span class="op">(</span><span class="va">proxy</span>, <span class="va">b</span><span class="op">)</span>, time <span class="op">=</span> <span class="va">b</span><span class="op">)</span></span>
@@ -294,7 +321,7 @@ doesn’t pool values across steps.</p>
 </h2>
 <p>A track is a line with a depth and a time at each vertex. This tag
 records three positions over 30 hours:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">route</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>  tag <span class="op">=</span> <span class="st">"D"</span>,</span>
 <span>  lon <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">150.15</span>, <span class="fl">150.45</span>, <span class="fl">150.85</span><span class="op">)</span>,</span>
@@ -310,7 +337,7 @@ range, from 5 m to 60 m over two days. To follow the route more closely,
 apart. Each point gets the depth and time interpolated between the
 vertices either side, and <code>support_km</code>, the length of route
 it stands for: half the distance to the points either side.</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">samples</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/sample_3d.html">sample_3d</a></span><span class="op">(</span><span class="va">track</span>, spacing_km <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="va">samples</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"feature_id"</span>, <span class="st">"distance_km"</span>, <span class="st">"depth"</span>, <span class="st">"time"</span>,</span>
 <span>                         <span class="st">"support_km"</span><span class="op">)</span><span class="op">]</span></span>
@@ -335,7 +362,7 @@ step; with daily data and a window of a few hours,
 <code><a href="../reference/as_voxel.html">as_voxel()</a></code> stops because the window holds no step. Each row
 also keeps its point’s <code>support_km</code>, so the weights stay with
 their rows:</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">sample_buffers</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/buffer_3d.html">buffer_3d</a></span><span class="op">(</span><span class="va">samples</span>, radius_km <span class="op">=</span> <span class="fl">3</span>, depth_window <span class="op">=</span> <span class="fl">10</span><span class="op">)</span></span>
 <span><span class="va">local</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">sample_buffers</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">b</span> <span class="op">&lt;-</span> <span class="va">sample_buffers</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
@@ -368,7 +395,7 @@ travelled, from the water the buffers cover, so a stretch of route
 sampled more densely doesn’t count for more. To weight by time spent
 instead, use the <code>support_seconds</code> column.
 <code>na.rm = TRUE</code> leaves out buffers with no water:</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/weighted.mean.html" class="external-link">weighted.mean</a></span><span class="op">(</span><span class="va">local</span><span class="op">$</span><span class="va">mean</span>, <span class="va">local</span><span class="op">$</span><span class="va">support_km</span>, na.rm <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] 25.96283</span></span></code></pre></div>
 <p>The weights ignore <code>n</code>, so a buffer with 3 values counts
@@ -385,7 +412,7 @@ water, so check that your samples aren’t on land before summarising them
 </h2>
 <p>An area is a polygon with a depth range. This one covers the middle
 of the grid, from the surface to 50 m:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">mpa</span> <span class="op">&lt;-</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/sf.html" class="external-link">st_sf</a></span><span class="op">(</span></span>
 <span>  name <span class="op">=</span> <span class="st">"reef"</span>,</span>
 <span>  geometry <span class="op">=</span> <span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/sfc.html" class="external-link">st_sfc</a></span><span class="op">(</span><span class="fu">sf</span><span class="fu">::</span><span class="fu"><a href="https://r-spatial.github.io/sf/reference/st.html" class="external-link">st_polygon</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/cbind.html" class="external-link">rbind</a></span><span class="op">(</span></span>
@@ -398,7 +425,7 @@ of the grid, from the surface to 50 m:</p>
 <span><span class="co">#&gt; [1] 92.38822</span></span></code></pre></div>
 <p>The area has no time, so pick the time step with a date.
 <code>by = "depth"</code> gives one row per depth level:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">v</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_voxel.html">as_voxel</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">crop</a></span><span class="op">(</span><span class="va">proxy</span>, <span class="va">reef</span><span class="op">)</span>, time <span class="op">=</span> <span class="st">"2020-03-03"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/summarise_3d.html">summarise_3d</a></span><span class="op">(</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask</a></span><span class="op">(</span><span class="va">v</span>, <span class="va">reef</span><span class="op">)</span>, statistic <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"mean"</span>, <span class="st">"min"</span>, <span class="st">"max"</span><span class="op">)</span>,</span>
 <span>             by <span class="op">=</span> <span class="st">"depth"</span><span class="op">)</span></span>
@@ -428,7 +455,7 @@ each depth limit as a number or a raster. Here a synthetic bathymetry
 deepens from 20 m in the west to 320 m in the east. Bathymetry such as
 GEBCO is elevation, negative below sea level, so flip its sign and set
 land to 0 before use, then resample it onto the voxel’s grid:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">elevation</span> <span class="op">&lt;-</span> <span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/rast.html" class="external-link">rast</a></span><span class="op">(</span>nrows <span class="op">=</span> <span class="fl">10</span>, ncols <span class="op">=</span> <span class="fl">10</span>, xmin <span class="op">=</span> <span class="fl">150</span>, xmax <span class="op">=</span> <span class="fl">151</span>,</span>
 <span>                         ymin <span class="op">=</span> <span class="op">-</span><span class="fl">21</span>, ymax <span class="op">=</span> <span class="op">-</span><span class="fl">20</span>, crs <span class="op">=</span> <span class="st">"EPSG:4326"</span><span class="op">)</span></span>
 <span><span class="va">elevation</span> <span class="op">&lt;-</span> <span class="op">-</span><span class="op">(</span><span class="fl">20</span> <span class="op">+</span> <span class="fl">300</span> <span class="op">*</span> <span class="op">(</span><span class="fu">terra</span><span class="fu">::</span><span class="fu"><a href="https://rspatial.github.io/terra/reference/init.html" class="external-link">init</a></span><span class="op">(</span><span class="va">elevation</span>, <span class="st">"x"</span><span class="op">)</span> <span class="op">-</span> <span class="fl">150</span><span class="op">)</span><span class="op">)</span></span>
@@ -459,7 +486,7 @@ seafloor or another surface.</p>
 <p><code><a href="../reference/volume.html">volume()</a></code> on the proxy measures each time step in turn,
 in km³. Pass <code>fun</code> to count only some values as habitat, here
 water between 24 and 26 °C:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">proxy</span>, fun <span class="op">=</span> <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span> <span class="op">&gt;=</span> <span class="fl">24</span> <span class="op">&amp;</span> <span class="va">x</span> <span class="op">&lt;=</span> <span class="fl">26</span><span class="op">)</span></span>
 <span><span class="co">#&gt;         time volume_km3</span></span>
 <span><span class="co">#&gt; 1 2020-03-01   490.6675</span></span>
@@ -475,7 +502,7 @@ whole depth levels, so the 50 m level would count water down to 75 m,
 below the area’s floor. Instead, turn the habitat into a depth range per
 cell with <code><a href="../reference/voxel_to_envelope.html">voxel_to_envelope()</a></code> and intersect it with the
 area, which cuts it at 50 m:</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">habitat</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/occupied.html">occupied</a></span><span class="op">(</span><span class="va">v</span>, <span class="kw">function</span><span class="op">(</span><span class="va">x</span><span class="op">)</span> <span class="va">x</span> <span class="op">&gt;=</span> <span class="fl">24</span> <span class="op">&amp;</span> <span class="va">x</span> <span class="op">&lt;=</span> <span class="fl">26</span><span class="op">)</span></span>
 <span><span class="va">inside</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/intersect_3d.html">intersect_3d</a></span><span class="op">(</span><span class="fu"><a href="../reference/voxel_to_envelope.html">voxel_to_envelope</a></span><span class="op">(</span><span class="va">habitat</span><span class="op">)</span>, <span class="va">reef</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/volume.html">volume</a></span><span class="op">(</span><span class="va">inside</span><span class="op">)</span> <span class="co"># km³</span></span>
@@ -490,7 +517,7 @@ starting with the buffer’s <code>feature_id</code>.
 can then join back to the observations by ID. In the result,
 <code>date</code> is the detection date and <code>time</code> is the
 time step the values come from:</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">results</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">buffer_rows</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rspatial.github.io/terra/reference/merge.html" class="external-link">merge</a></span><span class="op">(</span><span class="va">obs</span>, <span class="va">results</span>, by.x <span class="op">=</span> <span class="st">"tag"</span>, by.y <span class="op">=</span> <span class="st">"feature_id"</span><span class="op">)</span></span>
 <span><span class="co">#&gt;   tag    lon    lat depth       date       time     mean        sd  n</span></span>

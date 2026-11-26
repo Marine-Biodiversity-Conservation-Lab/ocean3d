@@ -66,7 +66,7 @@ only the cells and time steps it needs, at every depth level.
 proxy <- as_proxy(path)
 proxy
 #> class      : SpatProxy (experimental)
-#> source     : file2306e43bbc1.nc
+#> source     : file23c455b80636.nc
 #> variable   : temp (degC)
 #> dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)
 #> lon        : 150.025 to 150.975, 20 cells, edges inferred
@@ -108,7 +108,8 @@ reads the time step nearest its date. With a shape as `time`,
 [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
 always returns a list, here with one voxel.
 [`mask()`](https://rspatial.github.io/terra/reference/mask.html) then
-keeps the value at the depth level nearest the detection’s depth:
+keeps the value at the depth level nearest the detection’s depth,
+skipping levels without a value:
 
 ``` r
 
@@ -140,20 +141,24 @@ doesn’t, so set `max_time_diff` in
 [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
 to limit how far away the step may be.
 
-The two differ when the nearest depth level has no value.
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-skips such levels and takes the nearest level with a value. By default,
-[`mask()`](https://rspatial.github.io/terra/reference/mask.html) takes
-the nearest level whatever its value, so such a detection gets `NA`.
-Pass `method = "nearest_value"` to skip empty levels as
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-does, or `method = "bottom"` for the deepest level with a value, as
-`extract_to_point(method = "bottom")` gives.
+[`mask()`](https://rspatial.github.io/terra/reference/mask.html) has two
+rules for the nearest depth level:
+
+- `method = "nearest"` (default, as in
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md))
+  takes the level nearest the detection’s depth, skipping levels without
+  a value.
+- `method = "nearest_level"` takes the level nearest the detection’s
+  depth even if it has no value, so the detection gets `NA` there.
+
+`"bottom"` takes the deepest level with a value and `"surface"` the
+shallowest level, as in
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
 
 This file has a value at every level, so the next chunk removes the 10 m
-level from a copy of the voxel. Detection A at 12 m then gets `NA` by
-default. With `"nearest_value"` it takes the 0 m level, 12 m away, which
-is nearer than the 25 m level. `"bottom"` takes the 200 m level, the
+level from a copy of the voxel. Detection A at 12 m then takes the 0 m
+level by default, 12 m away, which is nearer than the 25 m level. With
+`"nearest_level"` it gets `NA`. `"bottom"` takes the 200 m level, the
 same value
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
 gives:
@@ -163,11 +168,11 @@ gives:
 gappy <- v
 gappy[[2]] <- NA_real_   # the 10 m level
 summarise_3d(mask(gappy, a), statistic = "mean")
-#>         time mean n
-#> 1 2020-03-01   NA 0
-summarise_3d(mask(gappy, a, method = "nearest_value"), statistic = "mean")
 #>         time  mean n
 #> 1 2020-03-01 28.35 1
+summarise_3d(mask(gappy, a, method = "nearest_level"), statistic = "mean")
+#>         time mean n
+#> 1 2020-03-01   NA 0
 summarise_3d(mask(v, a, method = "bottom"), statistic = "mean")
 #>         time  mean n
 #> 1 2020-03-01 16.35 1
@@ -175,6 +180,28 @@ extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
                  method = "bottom")$temp
 #> [1] 16.35
 ```
+
+### Many points at once
+
+Repeating these steps for thousands of detections reads one window per
+detection.
+[`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html)
+on the proxy gives the same values for all of them in one call, and
+takes the same `method`. It returns one row per detection, with the time
+step used in `time_step` and the depth level used in `depth_level`:
+
+``` r
+
+terra::extract(proxy, detections)
+#>   feature_id value  time_step depth_level
+#> 1          A 27.75 2020-03-01          10
+#> 2          B 25.05 2020-03-02          50
+#> 3          C 21.95 2020-03-04         100
+```
+
+With `bind = TRUE`, as in terra, it returns the detections themselves
+with `value`, `time_step` and `depth_level` added to their columns,
+ready to keep working with as shapes.
 
 ## Surface data: a variable without depth
 

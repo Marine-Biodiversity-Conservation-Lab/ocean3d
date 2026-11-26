@@ -641,8 +641,11 @@ Jay Matsushiba on 2 November 2026 (#112).
   step (`crop()` then
   [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)).
   Block reads for many shapes were dropped with the coverage function on
-  23 November 2026 (#115). A faster path for many points is deferred to
-  \#163.
+  23 November 2026 (#115). For many points,
+  [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html)
+  on a `SpatProxy` matches every point to a time step, reads each step
+  once cropped to its points, and splits a step into groups of nearby
+  points when one read would exceed `ocean3d.max_read_mb` (#163).
   - **Shapes across the antimeridian:** read from both ends of the grid.
     A `SpatVector3D`’s extent stays continuous across the antimeridian
     (a line from 179 to -179 degrees, or a buffer that
@@ -655,13 +658,18 @@ Jay Matsushiba on 2 November 2026 (#112).
     by Jay Matsushiba on 24 November 2026 (#166), replacing the 23
     November 2026 decision in \#115 to document this as a known
     limitation.
-- **Nearest depth with missing layers:** the rebuilt
+- **Nearest depth with missing layers:** `mask()` and
+  [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html)
+  on a `SpatProxy` use
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)’s
+  names for the point depth rules (#177, renamed by Jay Matsushiba on 26
+  November 2026). Their default, `"nearest"`, takes the level nearest
+  the point’s depth, skipping levels without a value, so the rebuilt
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-  (#116) can keep skipping levels without a value, through
-  `mask(method = "nearest_value")` (#177). The default, `"nearest"`, and
+  (#116) keeps skipping empty levels. `method = "nearest_level"` and
   [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
-  keep the nearest level whatever its value (see [Intersect: spatial
-  query](#intersect-spatial-query)).
+  take the level nearest the point’s depth, even if it has no value (see
+  [Intersect: spatial query](#intersect-spatial-query)).
 - **Extraction:**
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
   [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
@@ -902,9 +910,13 @@ build step.
   voxel’s depth edges or else from the `bounds` rule (`"midpoint"` or
   `"top"`).
 - A point covers one cell and one depth level: the cell it falls in and
-  the nearest depth level (#168). `mask(method = "nearest_value")` skips
-  levels without a value, as `extract_to_point(method = "nearest")` does
-  (#177).
+  the nearest depth level (#168). By default `mask()` takes the level
+  nearest the point’s depth, skipping levels without a value, as
+  `extract_to_point(method = "nearest")` does; with
+  `method = "nearest_level"` it takes the level nearest the point’s
+  depth even if it has no value, as
+  [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+  does (#177).
 - Lines aren’t supported:
   [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
   turns them into polygons, and
@@ -1098,7 +1110,14 @@ of 25 November 2026.
     [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
     `crop()`,
     [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-    and `mask()`, is done (#175); the other three aren’t started.
+    and `mask()`, is done (#175); the other three aren’t started. The
+    fast path for many points,
+    [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html)
+    on a `SpatProxy` with `SpatVector3D` points, is done (#163); the
+    [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+    and
+    [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
+    wrappers build on it.
 9.  **Add track sampling** as a build step and buffered tracks (#105);
     then named shapes, raster and function surfaces for polygons (#117).
     *In progress:*

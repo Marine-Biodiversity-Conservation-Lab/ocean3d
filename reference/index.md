@@ -77,6 +77,8 @@ Find where 3D objects meet.
   [`mask(`*`<SpatRaster>`*`,`*`<SpatVoxel>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
   [`mask(`*`<SpatRaster>`*`,`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
   : Keep a raster's values inside a 3D domain
+- [`extract(`*`<SpatProxy>`*`,`*`<SpatVector3D>`*`)`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract-SpatProxy.md)
+  : Values at many points from a SpatProxy
 
 ## Summarise
 

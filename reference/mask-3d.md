@@ -36,7 +36,7 @@ mask(
   x,
   mask,
   bounds = c("midpoint", "top"),
-  method = c("nearest", "nearest_value", "bottom", "surface"),
+  method = c("nearest", "nearest_level", "bottom", "surface"),
   ...
 )
 ```
@@ -88,15 +88,14 @@ mask(
   [SpatVector3D](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVector3D-class.md)
   points: which depth level each point keeps.
 
-  - `"nearest"` (default): the level nearest the point's depth, whatever
-    the voxel holds there, as
-    [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
-    places points. A point whose nearest level has no value keeps
-    nothing.
+  - `"nearest"` (default): the level nearest the point's depth, skipping
+    levels without a value in the point's cell, as
+    `extract_to_point(method = "nearest")` picks it.
 
-  - `"nearest_value"`: the nearest level that has a value in the point's
-    cell, as `extract_to_point(method = "nearest")` picks it. Levels
-    without a value are skipped.
+  - `"nearest_level"`: the level nearest the point's depth, even if it
+    has no value, as
+    [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md)
+    places points. If that level has no value, the point keeps nothing.
 
   - `"bottom"`: the deepest level that has a value in the point's cell,
     whatever the point's depth, as
@@ -108,11 +107,12 @@ mask(
 
   For the two nearest rules, a point halfway between two levels takes
   the shallower one. A point whose cell has no value at any level keeps
-  nothing under `"nearest_value"` and `"bottom"`. These rules match
+  nothing under `"nearest"` and `"bottom"`. `"nearest"`, `"bottom"` and
+  `"surface"` match
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)'s
-  for the depth level. The cell is the one that holds the point; for a
-  point exactly on the edge between two cells it can differ from the
-  cell
+  rules of the same name for the depth level. The cell is the one that
+  holds the point; for a point exactly on the edge between two cells it
+  can differ from the cell
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
   picks.
 

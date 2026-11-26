@@ -174,16 +174,20 @@ horizontally and leaves its depths alone.
   A point covers one cell and one depth level: the cell that holds it
   and the level whose depth is nearest the point's depth (a tie goes to
   the shallower level, as in
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)).
-  The level is chosen by depth alone, so a point whose nearest level has
-  no value in the voxel shares nothing there. When the voxel's depth
-  edges give uneven slabs, the slab that contains a point can belong to
-  another level; the nearest level is used. The result is a presence
-  voxel on the voxel's levels, and `bounds` doesn't apply. Points off
-  the grid share nothing. Points' times aren't compared, since a voxel
-  shows one time step. `intersect_3d()` doesn't read the voxel's values;
-  to keep the values at the nearest level that has one, at the bottom or
-  at the surface, use
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)),
+  as
+  [mask()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
+  picks it with `method = "nearest_level"`. The level is chosen by depth
+  alone, so if the level nearest a point's depth has no value in the
+  voxel, the point shares nothing there. When the voxel's depth edges
+  give uneven slabs, the slab that contains a point can belong to
+  another level; the level nearest the point's depth is used. The result
+  is a presence voxel on the voxel's levels, and `bounds` doesn't apply.
+  Points off the grid share nothing. Points' times aren't compared,
+  since a voxel shows one time step. `intersect_3d()` doesn't read the
+  voxel's values; to keep the values at the level nearest the point's
+  depth, skipping levels without a value, or at the bottom or the
+  surface, use
   [mask()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/mask-3d.md)
   with `method`.
 
