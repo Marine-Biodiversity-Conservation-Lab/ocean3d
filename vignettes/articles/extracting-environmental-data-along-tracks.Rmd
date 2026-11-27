@@ -77,8 +77,8 @@ a connecting segment.
 
 ## Step 1: Extracting at the recorded positions
 
-First, use only the supplied vertices. This provides the same environmental
-selection as applying `extract_to_point()` to those coordinates.
+First, use only the supplied vertices. Each vertex takes the value of the
+cell, depth level and time step it falls in, as a point does.
 
 ```{r observed-vertices}
 observed <- extract_to_track(
@@ -166,10 +166,9 @@ Non-coordinate vertex attributes are also `NA` between observations.
 The generated `track_id` remains available for every sample.
 
 **This interpolates the path, not the temperature.** Each inserted location
-is passed to `extract_to_point()` with the usual cell, depth and time
-selection rules. Several nearby samples can therefore select the same
-environmental value. No interpolation between environmental grid values
-has been performed.
+takes the value of its cell, depth level and time step, as a point does.
+Several nearby samples can therefore select the same environmental value. No
+interpolation between environmental grid values has been performed.
 
 A one-kilometre spacing can select the same grid cell several times. That is
 expected: these are positions along the route, not a list of unique cells.
@@ -979,8 +978,8 @@ article_signature(extract_to_track, "extract_to_track")
 | Safety limits | `max_samples = 100000L` caps generated positions; `max_segment_km = NULL` and `max_gap_hours = NULL` disable connection limits until positive values are supplied. |
 | Messages | `quiet = FALSE` (default) permits ordinary reports; TRUE hides them. Timezone and scientific warnings remain active. |
 
-The arguments passed through `...` are restricted to the following point
-selection options. Their defaults are also read from the current point function:
+The arguments passed through `...` are restricted to point selection options.
+Those that `extract_to_point()` also has keep its defaults:
 
 ```{r track-forwarded-defaults, echo=FALSE, results='asis'}
 forwarded <- c(
@@ -988,15 +987,22 @@ forwarded <- c(
   "max_time_diff", "custom_time_interval", "spatial_match", "max_distance_km",
   "time_report", "spatial_report", "depth_report", "verbose"
 )
+forwarded <- intersect(forwarded, names(formals(extract_to_point)))
 defaults <- formals(extract_to_point)[forwarded]
 print(knitr::kable(data.frame(
   Argument = forwarded,
   Default = vapply(defaults, function(x) paste(deparse(x), collapse = " "),
                    character(1)),
-  Meaning = article_selection_notes(forwarded)
+  Meaning = article_selection_notes(forwarded),
+  row.names = NULL
 )))
 ```
 
+The track function also takes `file_col`, `custom_time_interval`,
+`spatial_match`, `max_distance_km` and the report switches `time_report`,
+`spatial_report`, `depth_report` and `verbose`, which `extract_to_point()` no
+longer has; see
+[`extract_to_track()`](../reference/extract_to_track.html).
 `quiet = TRUE` overrides ordinary report switches. The inherited
 `time_step_seconds` argument expresses an elapsed-time step in seconds and
 cannot be combined with `time_step`. See

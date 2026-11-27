@@ -236,7 +236,7 @@
       "YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS.\n",
       "Text timestamps are interpreted in UTC. ",
       "For another time zone, supply a POSIXct/POSIXlt object."
-    ), call = NULL)
+    ), class = "ocean3d_error_time_input", call = NULL)
   }
 
   if (inherits(x, "POSIXt")) {
@@ -276,7 +276,7 @@
     if (time_resolution == "auto" && any(date_only) && any(datetime)) {
       fail(which(present), paste0(
         "Time input mixes dates with and without hours. ",
-        "Set time_resolution explicitly or use a consistent format."
+        "Use one format for every observation."
       ))
     }
     has_time <- any(datetime)

@@ -71,10 +71,10 @@ once".
 \details{
 Each point takes the time step nearest its time, or the step equal to it
 with \code{time_match = "exact"}, as \code{\link[=as_voxel]{as_voxel()}} matches a point. With dates,
-a point's date matches by UTC day. A source with one time step, such as a
-World Ocean Atlas climatology, gives that step to every point, whatever
-its time. On a source with several steps, a point without a time gets
-\code{NA}, with a warning.
+a point's date matches by UTC day. A climatology with one time step, such
+as a World Ocean Atlas annual field, gives that step to every point,
+whatever its time. On a source with dated time steps, even one, a point
+without a time gets \code{NA}, with a warning.
 
 Each point takes the cell that holds it and, for a variable with depth,
 one depth level, chosen with \code{method} as \link[=mask-3d]{mask()} does for points:

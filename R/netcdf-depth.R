@@ -63,9 +63,7 @@
   if (!is.character(units) || length(units) != 1L || is.na(units)) {
     stop(
       "Depth units cannot be converted to metres. ",
-      "Supply a coordinate with explicit supported length units. ",
-      "For a file with a single depth level, extract2d() reads it ",
-      "without depth metadata.",
+      "Supply a coordinate with explicit supported length units.",
       call. = FALSE
     )
   }
@@ -75,8 +73,7 @@
       "Depth units cannot be converted to metres. ",
       "Check the vertical coordinate metadata; supported units are ",
       "m, meter(s), metre(s), km, kilometer(s), kilometre(s), cm, ",
-      "centimeter(s) and centimetre(s). For a file with a single depth ",
-      "level, extract2d() reads it without depth metadata.",
+      "centimeter(s) and centimetre(s).",
       call. = FALSE
     )
   }
@@ -134,9 +131,7 @@
     stop(
       "The depth dimension `", coordinate, "` has no coordinate variable, ",
       "so its physical depths and units are unknown. Add a coordinate ",
-      "variable with depth values and units to the file before extraction. ",
-      "For a file with a single depth level, extract2d() reads it without ",
-      "depth metadata.",
+      "variable with depth values and units to the file before extraction.",
       call. = FALSE
     )
   }

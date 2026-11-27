@@ -108,9 +108,9 @@ extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
 
 Both pick the nearest time step: on this data they give the same values for
 all three detections, for a time halfway between two steps, and for a date
-after the last step. `extract_to_point()` warns when the step it picks is on
-another day; `as_voxel()` doesn't, so set `max_time_diff` in `as_voxel()` to
-limit how far away the step may be.
+after the last step. Neither warns when the step it picks is on another day,
+so set `max_time_diff` in either function to limit how far away the step may
+be.
 
 `mask()` has two rules for the nearest depth level:
 

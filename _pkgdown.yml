@@ -54,8 +54,6 @@ reference:
     intersect and summarise in one call.
   contents:
   - extract_to_point
-  - extract2d
-  - starts_with("extract3d_")
   - extract_to_buffer
   - extract_to_track
   - extract_to_area
