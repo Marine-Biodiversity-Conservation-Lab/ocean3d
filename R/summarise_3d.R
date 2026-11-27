@@ -218,8 +218,7 @@ summarise_3d <- function(x, statistic = "mean",
 # the value at which the cumulative weight reaches half, averaged with the
 # next when it lands exactly on half, as stats::median() does. Weights that
 # sum to 0, such as volumes of a zero-thickness slab, count each value once.
-# Shared by buffer extraction (.buffer_summarise_samples()) and
-# summarise_3d().
+# Used by summarise_3d().
 .weighted_statistic <- function(values, weights, statistic) {
   if (statistic == "min") return(min(values))
   if (statistic == "max") return(max(values))

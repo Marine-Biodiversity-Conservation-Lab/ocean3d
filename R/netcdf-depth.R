@@ -1,12 +1,12 @@
 # The depth axis of a netCDF variable, as depths in metres increasing
 # downward: units are converted to metres, the `positive` direction is read
 # (or inferred for heights and altitudes), and formula-based or pressure
-# coordinates are rejected. Shared by point, buffer and track extraction.
+# coordinates are rejected. Used by the core object (as_proxy()).
 
 # Depths read back slightly off their nominal values (float32 storage, or a
 # depth written into a layer name and parsed again), so comparisons allow a
-# small relative tolerance, per depth. Used by point extraction's reports and
-# by SpatVoxel depth edges (.edge_rows()).
+# small relative tolerance, per depth. Used by SpatVoxel depth edges
+# (.edge_rows()).
 .depth_tolerance <- function(depths) {
   1e-6 * pmax(1, abs(depths))
 }
