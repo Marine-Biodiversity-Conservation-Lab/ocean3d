@@ -1154,7 +1154,7 @@ extract_to_track <- function(
   } else {
     time_resolution
   }
-  prefixes <- .buffer_output_names(variables, output_col, names(samples), FALSE)
+  prefixes <- .buffer_output_names(variables, output_col, names(samples))
   output_columns <- character()
   for (variable in variables) {
     group <- Filter(function(x) x$variable == variable, metadata)
@@ -1634,8 +1634,7 @@ extract_to_track <- function(
 
 
 # The output column for each variable, checked against the input's names.
-.buffer_output_names <- function(variables, output_col, input_names,
-                                 match_info, locations = FALSE) {
+.buffer_output_names <- function(variables, output_col, input_names) {
   outputs <- if (is.null(output_col)) {
     variables
   } else if (length(variables) == 1L && length(output_col) == 1L) {
@@ -1654,15 +1653,46 @@ extract_to_track <- function(
     stop("Output column names must be distinct, non-empty strings.",
          call. = FALSE)
   }
-  generated <- c(outputs, if (match_info) paste0(outputs, "_match_info"))
-  if (locations) {
-    generated <- c(generated, outer(outputs, c(
-      "_match_lon", "_match_lat", "_match_depth", "_match_time"
-    ), paste0))
-  }
-  if (anyDuplicated(generated) || any(generated %in% input_names)) {
-    stop("Output or diagnostic names would overwrite existing columns. ",
+  if (any(outputs %in% input_names)) {
+    stop("Output names would overwrite existing columns. ",
          "Choose different `output_col` names.", call. = FALSE)
   }
   stats::setNames(outputs, variables)
+}
+
+
+# Shift times by `amount` units: elapsed seconds, or UTC calendar months and
+# years, clamped to the end of a shorter month. Used by the track functions.
+.buffer_shift_time <- function(values, amount, unit) {
+  # Months/years are UTC calendar shifts, with end-of-month clamping.
+  # Reuse the scalar calendar helper already used by point diagnostics.
+  if (unit %in% c("months", "years")) {
+    months <- if (unit == "years") amount * 12 else amount
+    shifted <- values
+    for (i in which(!is.na(values))) {
+      shifted[i] <- tryCatch(
+        .shift_temporal_months(values[i], months),
+        error = function(e) {
+          stop(
+            paste0("The requested time buffer exceeds the supported ",
+                   "calendar range. "),
+            "Check `time_before`, `time_after` and `time_unit`.",
+            call. = FALSE
+          )
+        }
+      )
+    }
+  } else {
+    shifted <- values + amount * .time_unit_seconds(unit)
+  }
+
+  if (any(!is.na(values) & !is.finite(as.numeric(shifted)))) {
+    stop(
+      paste0("The requested time buffer exceeds the supported ",
+             "calendar range. "),
+      "Check `time_before`, `time_after` and `time_unit`.",
+      call. = FALSE
+    )
+  }
+  shifted
 }

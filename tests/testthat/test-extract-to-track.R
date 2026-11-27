@@ -1759,3 +1759,23 @@ test_that(
     }
   }
 )
+
+
+test_that(".buffer_shift_time() clamps calendar shifts to the month end", {
+  shift <- function(x, amount, unit) {
+    shifted <- .buffer_shift_time(as.POSIXct(x, tz = "UTC"), amount, unit)
+    format(shifted, "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  }
+  ends <- c("2020-01-31 12:34:56", "2020-03-31 12:34:56",
+            "2021-03-31 12:34:56", NA)
+  expect_equal(shift(ends, 1, "months"),
+               c("2020-02-29 12:34:56", "2020-04-30 12:34:56",
+                 "2021-04-30 12:34:56", NA))
+  expect_equal(shift(ends, -1, "months"),
+               c("2019-12-31 12:34:56", "2020-02-29 12:34:56",
+                 "2021-02-28 12:34:56", NA))
+  # Years are 12 months, so a leap day moves to 28 February.
+  leap_day <- "2020-02-29 19:30:00"
+  expect_equal(shift(leap_day, 1, "years"), "2021-02-28 19:30:00")
+  expect_equal(shift(leap_day, -1, "years"), "2019-02-28 19:30:00")
+})

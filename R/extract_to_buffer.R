@@ -236,9 +236,7 @@ extract_to_buffer <- function(
   }
   daily <- timed && !is.null(points) &&
     identical(points@time_resolution, "daily")
-  seconds <- c(days = 86400, hours = 3600, minutes = 60, seconds = 1)[[
-    time_unit
-  ]]
+  seconds <- .time_unit_seconds(time_unit)
   if (daily && windowed) {
     days <- c(time_before, time_after) * seconds / 86400
     if (any(abs(days - round(days)) > 1e-6)) {

@@ -11,8 +11,8 @@ decode_time <- function(f, bounds = NULL, readunlim = TRUE) {
 }
 
 # Index of the time step each observation time is matched to.
-match_times <- function(axis, times, ...) {
-  prepared <- .prepare_time_input(times)
+match_times <- function(axis, times, ..., time_resolution = "auto") {
+  prepared <- .prepare_time_input(times, time_resolution)
   .match_time_indices(axis, prepared$values,
                       resolution = prepared$resolution, ...)
 }
@@ -426,13 +426,13 @@ test_that("only text clock times without a zone are unzoned", {
   }
 })
 
-# Matching one observation time (.match_time_index()) --------------------------
+# Matching observation times (.match_time_indices()) ------------------------
 
 test_that("temporal matching handles empty and entirely missing time axes", {
   for (values in list(as.Date(character()), as.Date(c(NA, NA)))) {
     for (method in c("nearest", "exact")) {
       expect_identical(
-        .match_time_index(
+        match_times(
           values, as.Date("2020-01-03"), time_match = method
         ),
         NA_integer_
@@ -464,7 +464,7 @@ test_that("daily comparison keeps late observations on the same day", {
 
     for (matching in c("nearest", "exact")) {
       indices <- vapply(seq_along(observations), function(i) {
-        .match_time_index(
+        match_times(
           available, observations[i],
           time_match = matching,
           time_resolution = "daily"
@@ -477,7 +477,7 @@ test_that("daily comparison keeps late observations on the same day", {
 })
 
 test_that("datetime matching keeps minutes; coarser matching compares labels", {
-  # `args` are the other arguments to .match_time_index(); `index` is the
+  # `args` are the other arguments to match_times(); `index` is the
   # time step it picks.
   hours <- utc(c("2020-01-02 19:00:00", "2020-01-02 20:00:00"))
   at_1954 <- utc("2020-01-02 19:54:00")
@@ -502,7 +502,7 @@ test_that("datetime matching keeps minutes; coarser matching compares labels", {
          index = 2L)
   )
   for (case in cases) {
-    index <- do.call(.match_time_index,
+    index <- do.call(match_times,
                      c(list(case$available, case$target), case$args))
     expect_identical(index, case$index, label = case$label)
   }
@@ -515,12 +515,12 @@ test_that("coarse selection rejects multiple records in one period", {
   )
 
   expect_error(
-    .match_time_index(available, as.Date("2020-01-02")),
+    match_times(available, as.Date("2020-01-02")),
     "Multiple dataset timestamps", class = "ocean3d_error_repeated_time"
   )
   for (resolution in c("monthly", "yearly")) {
     expect_error(
-      .match_time_index(
+      match_times(
         available, as.Date("2020-01-02"),
         time_resolution = resolution
       ),
