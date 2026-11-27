@@ -33,18 +33,18 @@ extract_to_buffer(
 \item{data}{Observation table, matrix, named list or sf POINT object.}
 
 \item{nc}{The data: a netCDF file path, several paths for a series of
-files on one grid, an open \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} connection, or a
-\link[=SpatProxy-class]{SpatProxy} from \code{\link[=as_proxy]{as_proxy()}}.}
+files on one grid, an open \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} connection, a
+\link[=SpatProxy-class]{SpatProxy} from \code{\link[=as_proxy]{as_proxy()}}, or a \link[=SpatVoxel-class]{SpatVoxel} in memory.}
 
 \item{var}{Name of the variable, for a netCDF source. \code{NULL} detects the
 only data variable of the file.}
 
 \item{horizontal_radius_km}{Radius of the circle around each observation,
-in kilometres, measured on the WGS84 ellipsoid. \code{0} (default) uses the
-observation's own cell.}
+in kilometres, measured on the WGS84 ellipsoid, below 10000 as in
+\code{\link[=buffer_3d]{buffer_3d()}}. \code{0} (default) uses the observation's own cell.}
 
-\item{depth_radius_m}{Depth in metres above and below the observation.
-\code{0} (default) picks one level per cell with \code{method}.}
+\item{depth_radius_m}{Distance in metres above and below the observation's
+depth. \code{0} (default) picks one level per cell with \code{method}.}
 
 \item{time_before, time_after}{Time before and after the observation, in
 \code{time_unit}. Both \code{0} (default) read the one time step \code{time_match}
@@ -57,14 +57,16 @@ whole UTC days, including the last.}
 \item{statistic}{One of \code{"mean"} (default), \code{"sd"}, \code{"min"} and \code{"max"}.}
 
 \item{weighting}{\code{"weighted"} (default) weights each value by the volume of
-its cell and level, or by its cell's area; \code{"equal"} counts each value
-once.}
+its cell and level with a depth window, and by its cell's area without
+one (one level per cell) or for a variable without depth; \code{"equal"}
+counts each value once.}
 
-\item{method}{Without a depth window, the level each cell takes: one of
-the rules of \code{\link[terra:mask]{mask()}} for points, \code{"nearest"} (default; the level
-nearest the observation's depth that has a value), \code{"nearest_level"},
-\code{"bottom"} or \code{"surface"}. Leave \code{NULL} with a depth window, and for a
-variable without depth, where \code{"2d"} is accepted too.}
+\item{method}{How the level in each cell is chosen when there is no depth
+window: one of the rules of \code{\link[terra:mask]{mask()}} for points, \code{"nearest"} (default;
+the level nearest the observation's depth that has a value),
+\code{"nearest_level"} (the nearest level, even if it has no value),
+\code{"bottom"} or \code{"surface"}. Leave \code{NULL} with a depth window. For a
+variable without depth, leave \code{NULL} or use \code{"2d"}.}
 
 \item{lon_col, lat_col, depth_col, date_col}{Observation columns. The depth is
 needed with a depth window or a \code{"nearest"} rule, and the date for data
@@ -84,8 +86,8 @@ name.}
 \value{
 \code{data} with two columns added: the statistic, named \code{output_col}
 or after the variable, and \verb{<output>_n}, the number of values it is
-built on. sf input keeps its geometry. Existing columns are never
-overwritten.
+built on. sf input keeps its geometry. If \code{data} already has either
+column, the function stops with an error; choose another \code{output_col}.
 }
 \description{
 Calculates one statistic per observation from the values in a buffer
@@ -120,8 +122,12 @@ observation's own cell. Without a time window, the time step is the one
 inside it into one statistic, each value keeping its own weight.
 
 An observation outside the grid, without a date on data with several time
-steps, without a depth where one is needed, or with no time step in its
-window gets \code{NA}, with \code{n = 0}.
+steps, without a depth where one is needed (or with a negative one), or
+with no time step in its window or within \code{max_time_diff} gets \code{NA}, and
+\verb{<output>_n} is 0. One warning counts these observations, by reason. On
+data with several time steps on one day, observations need date-times or a
+time window: a date alone can't pick one of the steps, so the function
+stops.
 }
 \examples{
 # Daily temperature on a 10 x 10 grid of 1 degree cells at four depths.

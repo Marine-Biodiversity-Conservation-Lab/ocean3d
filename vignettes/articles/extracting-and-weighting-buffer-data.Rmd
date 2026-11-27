@@ -141,10 +141,10 @@ data.frame(
 
 The same values give two slightly different means. With equal weighting,
 every value counts once, so the thinner levels near the top of the window
-weigh as much as the thicker ones below; here the levels differ little in
-thickness, so the means differ by only a few hundredths of a degree. Which
-mean is right depends on the question: the weighted mean describes the water
-inside the buffer, the equal mean describes the model's values inside it.
+count as much as the thicker ones below. Here the levels differ little in
+thickness, so the means differ by only a few hundredths of a degree. Use the
+weighted mean for the average temperature of the water in the buffer, and the
+equal mean for the average of the grid values in it.
 
 ## Step 3: the same steps written out
 
@@ -189,8 +189,8 @@ data.frame(
 ```
 
 The standard deviation describes the spread of the values inside the buffer.
-Neighbouring cells, levels and days are correlated, so it isn't an
-uncertainty estimate of the mean.
+Values in neighbouring cells, levels and days are usually correlated, so it
+isn't a measure of the mean's uncertainty.
 
 ## Step 5: buffers in fewer directions
 
@@ -198,8 +198,8 @@ A buffer doesn't need to extend in all three directions. Without a depth
 window, `method` picks one depth level in each cell the circle touches. By
 default this is the level nearest the observation's depth that has a value,
 as `extract_to_point()` does; `"surface"` and `"bottom"` take the shallowest
-or deepest level instead. Without a time window, the time step nearest the
-observation is used.
+or deepest level instead. Each cell then counts by its area. Without a time
+window, the time step nearest the observation is used.
 
 ```{r fewer-directions}
 data.frame(
@@ -213,13 +213,11 @@ data.frame(
 )
 ```
 
-Each cell then counts by its area.
-
 ## When there is no value
 
 An observation without a date, outside the grid, or with no time step in its
-window gets `NA`, with `n = 0`. One warning counts the observations without a
-usable position, depth or date.
+window gets `NA`, and its `_n` column is 0. One warning counts these
+observations, by reason.
 
 ```{r missing-observation-date}
 undated <- observation
@@ -237,8 +235,11 @@ We have described the conditions around an observation with a horizontal,
 vertical and temporal buffer:
 
 1. We built a buffer around one observation.
-2. We compared a volume-weighted and an equal mean of the same values.
-3. We wrote out the build, intersect and summarise steps it runs.
+2. We compared a volume-weighted and an equal mean of the same values. Here
+   they differ by a few hundredths of a degree, because the depth levels are
+   similar in thickness.
+3. We wrote out the build, intersect and summarise steps that
+   `extract_to_buffer()` runs.
 4. We calculated other statistics, and buffers in fewer directions.
 
 ### Next steps
