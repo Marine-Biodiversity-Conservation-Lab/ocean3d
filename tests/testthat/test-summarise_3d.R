@@ -160,3 +160,32 @@ test_that("summarise_3d() rejects input it can't summarise", {
   expect_error(summarise_3d(list(v, v[[c(1, 1)]])),
                class = "ocean3d_error_invalid_3d")
 })
+
+
+test_that("weighted SD and SE of identical values are zero", {
+  for (statistic in c("sd", "se")) {
+    expect_equal(.weighted_statistic(c(7, 7, 7), c(1, 2, 3), statistic), 0)
+  }
+})
+
+test_that("by = \"all\" pools the values of every voxel in a list", {
+  r <- terra::rast(nrows = 1, ncols = 2, xmin = 0, xmax = 2, ymin = 0,
+                   ymax = 1, nlyrs = 2, crs = "EPSG:4326")
+  terra::values(r) <- cbind(c(1, 2), c(3, NA))
+  first <- as_voxel(r, depths = c(0, 100))
+  second <- first + 10
+  pooled <- summarise_3d(list(first, second), statistic = c("mean", "max"),
+                         weighting = "equal", by = "all")
+  expect_identical(nrow(pooled), 1L)
+  expect_equal(pooled$mean, mean(c(1, 2, 3, 11, 12, 13)))
+  expect_equal(pooled$max, 13)
+  expect_identical(pooled$n, 6L)
+  expect_true(is.na(pooled$time))
+  # Each value keeps its volume weight: with the same cells in both steps,
+  # the pooled mean is the mean of the two steps' means.
+  per_step <- summarise_3d(list(first, second))
+  expect_equal(summarise_3d(list(first, second), by = "all")$mean,
+               mean(per_step$mean))
+  expect_error(summarise_3d(first, by = "space"), "\"all\"",
+               class = "ocean3d_error_summarise_input")
+})

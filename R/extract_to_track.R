@@ -966,9 +966,11 @@
 #'   sf LINESTRING features first, e.g. with
 #'   `as.data.frame(sf::st_coordinates(sf::st_transform(lines, 4326)))` and
 #'   `lon_col = "X", lat_col = "Y", track_col = "L1"`.
-#' @param nc,var netCDF sources and selected variable names. See
-#'   [extract_to_buffer()]. Files are read directly with ncdf4; a
-#'   [SpatVoxel-class] or other `SpatRaster` isn't accepted.
+#' @param nc,var netCDF sources (a path, several paths, an open ncdf4
+#'   connection or a table with a file column) and the variable names to
+#'   read; `var = NULL` detects one data variable per file. Files are read
+#'   directly with ncdf4; a [SpatVoxel-class] or other `SpatRaster` isn't
+#'   accepted.
 #' @param track_col Optional track identifier column. Without it, the input is
 #'   one track. IDs are returned as text.
 #' @param sampling NULL (default) uses 'balanced' when spacing_km,
@@ -1064,7 +1066,7 @@
 #'   insufficient_variation_samples when accepted support has fewer than two
 #'   valid samples. not_available covers rejected support or non-finite
 #'   statistics; consult status for coverage and support problems. status
-#'   follows extract_to_buffer(): empty (no known support), all_missing,
+#'   is one of: empty (no known support), all_missing,
 #'   insufficient_coverage, partial or complete.
 #'   Samples follow traversal order. For vertices-only sampling the global
 #'   input row order is retained. Non-coordinate attributes of inserted samples
@@ -1094,7 +1096,7 @@
 #'   explicitly.
 #'
 #' SD and SE use the same reliability-weight correction and effective sample
-#' size as extract_to_buffer(). Adjacent samples are usually correlated: SE is
+#' size as [summarise_3d()]. Adjacent samples are usually correlated: SE is
 #' descriptive under an independence assumption, not an uncertainty estimate.
 #' Densifying a track does not create independent environmental observations.
 #' Distance-weighted summaries of stationary tracks are NA; duration weighting
@@ -1157,7 +1159,7 @@ extract_to_track <- function(
   } else {
     time_resolution
   }
-  prefixes <- .buffer_output_names(variables, output_col, names(samples), FALSE)
+  prefixes <- .buffer_output_names(variables, output_col, names(samples))
   output_columns <- character()
   for (variable in variables) {
     group <- Filter(function(x) x$variable == variable, metadata)
@@ -1514,4 +1516,188 @@ extract_to_track <- function(
     samples = sampled$samples, metadata = metadata, prepared = prepared,
     options = options, vertices = vertices, tracks = sampled$tracks
   )
+}
+
+
+# Shared netCDF reading and summary helpers of the track functions. They
+# came from the old buffer extraction, which is now a wrapper over the
+# exported step functions (#116), and go when extract_to_track() becomes one.
+
+# Open every netCDF source, select the requested (or detected) variables and
+# describe each source/variable pair with `describe(nc, var, dims,
+# source_index)`. Checks that each variable uses one method, is temporal in
+# all of its sources or none, and has identical value units. Returns the
+# records, the sources and the open handles; the caller closes the handles
+# (they are closed here if a check fails). Used by the track functions.
+.describe_netcdf_sources <- function(nc, var, file_col, dimension_args,
+                                     describe) {
+  sources <- .as_netcdf_sources(nc, file_col)
+  if (!length(sources)) {
+    stop("At least one netCDF source is required.", call. = FALSE)
+  }
+  opened <- list()
+  complete <- FALSE
+  on.exit(if (!complete) lapply(opened, .close_source), add = TRUE)
+  metadata <- list()
+  checks <- list()
+  for (i in seq_along(sources)) {
+    opened[[i]] <- .open_source(sources[[i]])
+    handle <- opened[[i]]$nc
+    variables <- if (is.null(var)) {
+      .detect_netcdf_var(handle)
+    } else {
+      intersect(var, names(handle$var))
+    }
+    if (!length(variables)) {
+      file <- basename(handle$filename)
+      stop(glue::glue("No requested variable is present in {file}."),
+           call. = FALSE)
+    }
+    for (variable in variables) {
+      dims <- do.call(.detect_dims, c(list(nc = handle, var = variable),
+                                      dimension_args))
+      record <- describe(handle, variable, dims, i)
+      metadata[[length(metadata) + 1L]] <- record
+      checks[[length(checks) + 1L]] <- list(
+        variable = variable, method = record$method,
+        temporal = !is.null(dims$time),
+        units = .read_attribute(handle, variable, "units")
+      )
+    }
+  }
+  found <- unique(vapply(checks, function(x) x$variable, character(1)))
+  if (!is.null(var) && !setequal(var, found)) {
+    missing <- toString(setdiff(var, found))
+    stop(glue::glue("Requested variables were not found: {missing}."),
+         call. = FALSE)
+  }
+  for (variable in found) {
+    group <- Filter(function(x) x$variable == variable, checks)
+    methods <- unique(vapply(group, function(x) x$method, character(1)))
+    temporal <- vapply(group, function(x) x$temporal, logical(1))
+    if (length(methods) != 1L || (any(temporal) && !all(temporal))) {
+      stop(glue::glue(
+        "Sources for `{variable}` have incompatible static/depth dimensions."
+      ), call. = FALSE)
+    }
+    units <- lapply(group, function(x) x$units)
+    if (!all(vapply(units, identical, logical(1), units[[1L]]))) {
+      stop(glue::glue(
+        "Sources for `{variable}` use different value units. ",
+        "Convert them first."
+      ), call. = FALSE)
+    }
+  }
+  complete <- TRUE
+  list(metadata = metadata, sources = sources, opened = opened)
+}
+
+
+
+
+# One summary of `samples` (a value and its area, depth and time fractions
+# per row), with the share of the requested support that has values.
+.buffer_summarise_samples <- function(samples, weighting, min_valid_fraction,
+                                      statistic = "mean") {
+  support <- with(samples, area_fraction * depth_fraction * time_fraction)
+  selected <- support > 0
+  valid <- selected & is.finite(samples$value)
+  coverage <- min(1, sum(support[selected]))
+  fraction <- min(1, sum(support[valid]))
+  # Geometric overlays and products can differ from unity by machine precision.
+  if (abs(coverage - 1) < 1e-10) coverage <- 1
+  if (abs(fraction - 1) < 1e-10) fraction <- 1
+  meets_threshold <- fraction >= min_valid_fraction ||
+    abs(fraction - min_valid_fraction) < 1e-10
+  status <- if (!any(selected)) {
+    "empty"
+  } else if (!any(valid)) {
+    "all_missing"
+  } else if (!meets_threshold) {
+    "insufficient_coverage"
+  } else {
+    if (fraction < 1) "partial" else "complete"
+  }
+  value <- NA_real_
+  effective_n <- NA_real_
+  if (any(valid)) {
+    weights <- if (weighting == "weighted") support[valid] else rep(1,
+                                                                    sum(valid))
+    effective_n <- 1 / sum((weights / sum(weights))^2)
+  }
+  if (any(valid) && meets_threshold) {
+    # The weighted statistics are shared with summarise_3d().
+    value <- .weighted_statistic(samples$value[valid], weights, statistic)
+    if (is.na(value) && statistic %in% c("sd", "se")) {
+      status <- "insufficient_variation_samples"
+    }
+  }
+  list(value = value, coverage_fraction = coverage, valid_fraction = fraction,
+       n_intersecting = sum(selected), n_valid = sum(valid), status = status,
+       contributing_rows = which(valid), effective_n = effective_n)
+}
+
+
+# The output column for each variable, checked against the input's names.
+.buffer_output_names <- function(variables, output_col, input_names) {
+  outputs <- if (is.null(output_col)) {
+    variables
+  } else if (length(variables) == 1L && length(output_col) == 1L) {
+    unname(output_col)
+  } else {
+    if (is.null(names(output_col)) || anyDuplicated(names(output_col)) ||
+          !setequal(names(output_col), variables)) {
+      stop(paste0("For multiple variables, `output_col` must name each ",
+                  "variable once."),
+           call. = FALSE)
+    }
+    unname(output_col[variables])
+  }
+  if (!is.character(outputs) || anyNA(outputs) || any(!nzchar(outputs)) ||
+        anyDuplicated(outputs)) {
+    stop("Output column names must be distinct, non-empty strings.",
+         call. = FALSE)
+  }
+  if (any(outputs %in% input_names)) {
+    stop("Output names would overwrite existing columns. ",
+         "Choose different `output_col` names.", call. = FALSE)
+  }
+  stats::setNames(outputs, variables)
+}
+
+
+# Shift times by `amount` units: elapsed seconds, or UTC calendar months and
+# years, clamped to the end of a shorter month. Used by the track functions.
+.buffer_shift_time <- function(values, amount, unit) {
+  # Months/years are UTC calendar shifts, with end-of-month clamping.
+  # Reuse the scalar calendar helper already used by point diagnostics.
+  if (unit %in% c("months", "years")) {
+    months <- if (unit == "years") amount * 12 else amount
+    shifted <- values
+    for (i in which(!is.na(values))) {
+      shifted[i] <- tryCatch(
+        .shift_temporal_months(values[i], months),
+        error = function(e) {
+          stop(
+            paste0("The requested time buffer exceeds the supported ",
+                   "calendar range. "),
+            "Check `time_before`, `time_after` and `time_unit`.",
+            call. = FALSE
+          )
+        }
+      )
+    }
+  } else {
+    shifted <- values + amount * .time_unit_seconds(unit)
+  }
+
+  if (any(!is.na(values) & !is.finite(as.numeric(shifted)))) {
+    stop(
+      paste0("The requested time buffer exceeds the supported ",
+             "calendar range. "),
+      "Check `time_before`, `time_after` and `time_unit`.",
+      call. = FALSE
+    )
+  }
+  shifted
 }

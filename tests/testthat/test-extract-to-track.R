@@ -1710,6 +1710,77 @@ test_that("unzoned text times warn even when quiet", {
   expect_equal(out$samples$temp, c(0, 2020))
 })
 
+
+# The buffer summary the track functions share (moved with the helper from
+# the old buffer extraction).
+test_that(
+  "buffer summaries respect missing values and physical coverage",
+  {
+    samples <- data.frame(
+      value = c(10, 20, NA_real_),
+      area_fraction = c(0.2, 0.6, 0.2),
+      depth_fraction = 1,
+      time_fraction = 1
+    )
+    statistics <- c("mean", "sd", "se", "min", "max")
+    expected <- c(17.5, sqrt(50), sqrt(31.25), 10, 20)
+    for (i in seq_along(statistics)) {
+      out <- .buffer_summarise_samples(samples, "weighted", 0.8, statistics[i])
+      expect_equal(out$value, expected[i])
+      expect_equal(out$valid_fraction, 0.8)
+      expect_equal(out$effective_n, 1.6)
+      expect_identical(out$status, "partial")
+      rejected <- .buffer_summarise_samples(
+        samples,
+        "weighted",
+        0.9,
+        statistics[i]
+      )
+      expect_true(is.na(rejected$value))
+      expect_identical(rejected$status, "insufficient_coverage")
+      missing <- samples
+      missing$value[] <- NA_real_
+      rejected <- .buffer_summarise_samples(
+        missing,
+        "weighted",
+        0,
+        statistics[i]
+      )
+      expect_true(is.na(rejected$value))
+      expect_identical(rejected$status, "all_missing")
+      empty <- .buffer_summarise_samples(
+        samples[FALSE, ],
+        "equal",
+        0,
+        statistics[i]
+      )
+      expect_true(is.na(empty$value))
+      expect_identical(empty$status, "empty")
+    }
+  }
+)
+
+
+test_that(".buffer_shift_time() clamps calendar shifts to the month end", {
+  shift <- function(x, amount, unit) {
+    shifted <- .buffer_shift_time(as.POSIXct(x, tz = "UTC"), amount, unit)
+    format(shifted, "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  }
+  ends <- c("2020-01-31 12:34:56", "2020-03-31 12:34:56",
+            "2021-03-31 12:34:56", NA)
+  expect_equal(shift(ends, 1, "months"),
+               c("2020-02-29 12:34:56", "2020-04-30 12:34:56",
+                 "2021-04-30 12:34:56", NA))
+  expect_equal(shift(ends, -1, "months"),
+               c("2019-12-31 12:34:56", "2020-02-29 12:34:56",
+                 "2021-02-28 12:34:56", NA))
+  # Years are 12 months, so a leap day moves to 28 February.
+  leap_day <- "2020-02-29 19:30:00"
+  expect_equal(shift(leap_day, 1, "years"), "2021-02-28 19:30:00")
+  expect_equal(shift(leap_day, -1, "years"), "2019-02-28 19:30:00")
+})
+
+
 # Legacy point extraction ------------------------------------------------------
 
 # These tests reach only the internals of .extract_points_legacy() (time

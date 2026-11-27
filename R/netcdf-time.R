@@ -396,32 +396,6 @@
   out
 }
 
-# One observation at a time, for callers that match row by row.
-.match_time_index <- function(
-  values,
-  target,
-  time_match = c("nearest", "exact"),
-  max_time_diff = NULL,
-  time_resolution = c(
-    "auto", "datetime", "daily", "monthly", "yearly"
-  ),
-  file = NULL) {
-  time_match <- match.arg(time_match)
-  time_resolution <- match.arg(time_resolution)
-
-  if (length(values) == 0L ||
-        all(is.na(values)) ||
-        is.na(target)) {
-    return(NA_integer_)
-  }
-
-  prepared <- .prepare_time_input(target, time_resolution)
-  .match_time_indices(
-    values, prepared$values, time_match, max_time_diff, prepared$resolution,
-    file = file
-  )
-}
-
 # A source may offer a temporal candidate without implying a coverage interval.
 # Matching and tolerance are handled by .match_time_indices().
 .temporal_source_eligible <- function(time_values, target, resolution) {

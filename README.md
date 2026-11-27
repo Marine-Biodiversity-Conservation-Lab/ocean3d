@@ -118,15 +118,15 @@ takes one of them:
 
 | Input | Functions | Reads with |
 |---|---|---|
-| netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_buffer()`, `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
+| netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
 | `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions and `mask()` | terra; one time step per voxel |
 | netCDF paths, an open `ncdf4` connection or a `SpatProxy` from `as_proxy()` | `extract_to_point()` | `as_proxy()` and `terra::extract()`, each time step once for its points |
 
-A voxel can't be passed to `extract_to_point()`, `extract_to_buffer()` or
-`extract_to_track()`. `extract_to_point()` takes netCDF paths, a connection
-or a `SpatProxy`, and reads paths and connections through `as_proxy()`;
-`extract_to_area()` and `volume()` take a voxel or a `SpatProxy` from
-`as_proxy()`.
+A voxel can't be passed to `extract_to_point()` or `extract_to_track()`.
+`extract_to_point()` takes netCDF paths, a connection or a `SpatProxy`, and
+reads paths and connections through `as_proxy()`. `extract_to_buffer()`
+takes those or a voxel. `extract_to_area()` and `volume()` take a voxel or a
+`SpatProxy` from `as_proxy()`.
 Merging the two into one model with time is planned in
 [#99](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99).
 Its first, experimental part is `as_proxy()`, which describes a netCDF file
@@ -217,7 +217,7 @@ range polygon through to a vertical profile of the values inside it.
 Input: observations (data frame, tibble, `sf` POINT, matrix, or named list)
 and one or more netCDF files. These functions read the files directly, only
 the cells each observation needs, and match time as well as depth.
-`extract_to_buffer()` and `extract_to_track()` don't take a `SpatVoxel`.
+`extract_to_track()` doesn't take a `SpatVoxel`.
 
 - `extract_to_point()` — values at observation points, from one netCDF file,
   a series of files on one grid, an open connection or a `SpatProxy`. Each
@@ -229,8 +229,9 @@ the cells each observation needs, and match time as well as depth.
   points at that time. Returns the input with the extracted values appended,
   structure preserved.
 - `extract_to_buffer()` — summarise values within a geodesic circle ×
-  depth window × time window around each observation, weighted by cell
-  coverage, layer thickness and time, or pick the value closest to a target.
+  depth window × time window around each observation, weighted by the
+  volume of each cell and depth level; a shortcut for `buffer_3d()`,
+  `mask()` and `summarise_3d()`.
 - `extract_to_track()` — sample points along ordered tracks (e.g. tagging
   data), extract values at them, and optionally summarise per track.
 

@@ -48,9 +48,11 @@ sf LINESTRING features first, e.g. with
 \code{as.data.frame(sf::st_coordinates(sf::st_transform(lines, 4326)))} and
 \verb{lon_col = "X", lat_col = "Y", track_col = "L1"}.}
 
-\item{nc, var}{netCDF sources and selected variable names. See
-\code{\link[=extract_to_buffer]{extract_to_buffer()}}. Files are read directly with ncdf4; a
-\link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't accepted.}
+\item{nc, var}{netCDF sources (a path, several paths, an open ncdf4
+connection or a table with a file column) and the variable names to
+read; \code{var = NULL} detects one data variable per file. Files are read
+directly with ncdf4; a \link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't
+accepted.}
 
 \item{track_col}{Optional track identifier column. Without it, the input is
 one track. IDs are returned as text.}
@@ -170,7 +172,7 @@ available when the requested variation statistics are finite, or
 insufficient_variation_samples when accepted support has fewer than two
 valid samples. not_available covers rejected support or non-finite
 statistics; consult status for coverage and support problems. status
-follows extract_to_buffer(): empty (no known support), all_missing,
+is one of: empty (no known support), all_missing,
 insufficient_coverage, partial or complete.
 Samples follow traversal order. For vertices-only sampling the global
 input row order is retained. Non-coordinate attributes of inserted samples
@@ -205,7 +207,7 @@ Missing coordinates are rejected and multipart lines must be split
 explicitly.
 
 SD and SE use the same reliability-weight correction and effective sample
-size as extract_to_buffer(). Adjacent samples are usually correlated: SE is
+size as \code{\link[=summarise_3d]{summarise_3d()}}. Adjacent samples are usually correlated: SE is
 descriptive under an independence assumption, not an uncertainty estimate.
 Densifying a track does not create independent environmental observations.
 Distance-weighted summaries of stationary tracks are NA; duration weighting

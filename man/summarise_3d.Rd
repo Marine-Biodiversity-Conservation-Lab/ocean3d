@@ -37,8 +37,10 @@ for a list; \code{"depth"} one row per depth level of each voxel, with a
 \code{depth} column. Values from different time steps aren't combined, so a
 list shows the change from step to step. \code{"time"} means the same as
 \code{NULL}, and says in a call on a list that the rows are per time step.
-A one-layer \code{SpatRaster} has a single level, so \code{"depth"} is an error
-for it.}
+\code{"all"} gives one row for every value of every voxel in \code{x} together,
+for example all the time steps a time window covers, each value keeping
+its own weight; its \code{time} is \code{NA}. A one-layer \code{SpatRaster} has a
+single level, so \code{"depth"} is an error for it.}
 
 \item{bounds}{As in \code{\link[=volume]{volume()}}: where the slab edges fall for a voxel that
 carries no depth edges; used with \code{weighting = "volume"} only. Voxels
@@ -47,7 +49,8 @@ read with \code{\link[=as_voxel]{as_voxel()}} from a \link[=SpatProxy-class]{Spa
 }
 \value{
 A data frame with one row per voxel, or per voxel and depth level
-with \code{by = "depth"}, in the order of \code{x} and then of depth. Columns:
+with \code{by = "depth"}, in the order of \code{x} and then of depth, or one row
+with \code{by = "all"}. Columns:
 \code{time} (the voxel's \code{\link[terra:time]{terra::time()}}, UTC, or \code{NA} when it has none),
 \code{depth} (with \code{by = "depth"} only, in metres), one column per
 \code{statistic}, and \code{n}, the number of values the row is built on, so rows
@@ -75,7 +78,7 @@ then \code{\link[stats:sd]{stats::sd()}} and \code{\link[stats:median]{stats::me
 With normalised weights \eqn{w_i}, the weighted standard deviation is the
 square root of \eqn{\sum w_i (v_i - \bar v)^2 / \sum w_i (1 - w_i)}, the
 sample standard deviation under equal weights and the same formula as in
-\code{\link[=extract_to_buffer]{extract_to_buffer()}}. The weighted median is the value at which the
+\code{\link[=extract_to_track]{extract_to_track()}}. The weighted median is the value at which the
 cumulative weight, over the values sorted from smallest to largest,
 reaches half the total; when it reaches half exactly, the two values
 either side are averaged, as \code{\link[stats:median]{stats::median()}} does. \code{min} and \code{max}
@@ -101,6 +104,9 @@ later <- v + 1
 terra::time(v) <- rep(as.POSIXct("2020-01-01", tz = "UTC"), 7)
 terra::time(later) <- rep(as.POSIXct("2020-01-02", tz = "UTC"), 7)
 summarise_3d(list(v, later), statistic = c("mean", "median"))
+
+# Or one row for the values of both steps together.
+summarise_3d(list(v, later), statistic = "mean", by = "all")
 }
 \seealso{
 \code{\link[terra:mask]{mask()}} to keep the values inside a shape; \code{\link[=volume]{volume()}} for the

@@ -2,6 +2,63 @@
 
 ## Breaking changes
 
+`extract_to_buffer()` is now a shortcut for `as_vector3d()`, `buffer_3d()`,
+`crop()`, `as_voxel()` (or `rast()` for a variable without depth), `mask()`
+and `summarise_3d()` (#116). It returns `data` with the statistic, named
+after the variable or `output_col`, and a new `<output>_n` column with the
+number of values it is built on. What changes:
+
+* **Whole cells, levels and steps.** A cell the circle touches, a level
+  whose slab of water overlaps the depth window, and a time step inside the
+  window count in full, weighted by the volume of the cell and level (its
+  area for a variable without depth). Before, each counted with the share of
+  it inside the buffer, so means near the buffer's edges shift.
+* **Time windows pool their steps.** Every value of every step inside the
+  window goes into one statistic, each with its own weight; before, each
+  step was weighted by the share of its time interval inside the window.
+  Windows are in days, hours, minutes or seconds; `"months"` and `"years"`
+  are gone.
+* **No depth window.** `method` still picks one level per cell, now with the
+  point rules of `mask()`: `"nearest"` (the default, the level nearest the
+  observation's depth that has a value), `"bottom"` or `"surface"` as before,
+  and the new `"nearest_level"` (the nearest level, even if it has no value).
+  Each cell counts by its area, not by the share of it inside the circle.
+* **Arguments removed.** What to do instead:
+  * `statistic = "se"`: no replacement. Values in neighbouring cells, levels
+    and days are usually correlated, so a standard error that treats them as
+    independent is too small; use `"sd"` and `<output>_n`.
+  * `statistic = "most_similar"` with `target_col`, `max_target_difference`
+    and `target_ties`: no replacement yet.
+  * `min_valid_fraction`: filter on `<output>_n` to drop summaries built on
+    too few values.
+  * `lon_cell_radius`, `lat_cell_radius` and `depth_layer_radius`: give a
+    radius in km and a depth window in m.
+  * `infer_bounds`: cell and depth edges are read from the file's bounds, or
+    placed halfway between centres, as in `as_proxy()`.
+  * `spatial_match` and `max_distance_km`: an observation off the grid gets
+    `NA`.
+  * `time_resolution`: a date without a time is matched by UTC day, a
+    date-time by its exact time. On data with several time steps on one day,
+    a date alone is now an error: give date-times, or a time window of whole
+    days to pool the steps.
+  * `return_match_info`: `extract()` of a `SpatProxy` at the observations
+    gives the time step and level each is matched to (`time_step` and
+    `depth_level`). To see the cells a buffer takes, write out the steps, as
+    in the buffer article.
+  * `id_col`: `data` comes back with all its columns, so join on your own ID
+    column.
+  * `quiet`: no longer needed, because the function prints no summaries.
+  * `file_col`: see the next point.
+* **One variable on one grid.** `var` is one name, and `nc` one file, a
+  series of files on one grid, an open connection, a `SpatProxy` or a
+  `SpatVoxel`. For several variables, call it once per variable; files on
+  different grids, or a table of files, are no longer read together.
+* Observations that can't be placed (off the grid, no date on data with
+  several time steps, no depth or a negative one where one is needed, or no
+  time step in the window or within `max_time_diff`) get `NA`, as before, and
+  an `<output>_n` of 0. One warning counts them by reason, in place of the
+  report that printed one line per row.
+
 `extract_to_point()` is now a shortcut for `as_vector3d()`, `as_proxy()` and
 `terra::extract()` (#116), which reads each time step once for all the points
 at that time. It keeps table, `sf`, matrix, list and direct input, the `"2d"`,
@@ -280,6 +337,10 @@ an exact match and stop otherwise. For the old behaviour, pass
 `max_time_diff` in days (no cap by default).
 
 ## New features
+
+* `summarise_3d(x, by = "all")` summarises every value of every voxel in a
+  list in one row, such as all the time steps of a time window, each value
+  keeping its own weight (#116).
 
 * `terra::extract()` on a `SpatProxy` reads the values at many
   `SpatVector3D` points at once (#163). It gives the same values as calling

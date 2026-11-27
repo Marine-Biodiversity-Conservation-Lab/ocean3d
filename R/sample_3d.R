@@ -154,3 +154,9 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
   .new_vector3d("points", x@time_resolution,
                 vertices = .add_attributes(points, extra))
 }
+
+
+# Seconds in one elapsed (non-calendar) time unit.
+.time_unit_seconds <- function(unit) {
+  switch(unit, days = 86400, hours = 3600, minutes = 60, seconds = 1)
+}
