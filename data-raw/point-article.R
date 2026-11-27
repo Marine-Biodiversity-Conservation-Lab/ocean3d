@@ -84,20 +84,20 @@ prepare_point_article <- function(source_file, root = ".") {
   for (i in c(1L, 3L)) write_subset(file.path(destination,
     paste0("temperature-", c("2026-09-19", "2026-09-20", "2026-09-21")[i], ".nc")), selected$time[i])
 
-  # Retain actual messages as well as values for finite interactive examples.
-  call_point <- function(data, file = main, method = "nearest", ...) {
-    messages <- warnings <- character()
-    result <- withCallingHandlers(ocean3d::extract_to_point(data = data, nc = file,
-      var = "thetao", method = method, output_col = "temperature", ...),
-      message = function(c) {messages <<- c(messages, conditionMessage(c)); invokeRestart("muffleMessage")},
-      warning = function(c) {warnings <<- c(warnings, conditionMessage(c)); invokeRestart("muffleWarning")})
-    list(result = result, messages = messages, warnings = warnings)
+  # Figure 1 data: the cells around the observation, its cell's profiles and
+  # the level each depth method takes at each date and target depth.
+  call_point <- function(data, file = main, method = "nearest") {
+    suppressWarnings(ocean3d::extract_to_point(data = data, nc = file,
+      var = "thetao", method = method, output_col = "temperature"))
   }
   observation <- data.frame(lon = 0, lat = 38, depth = 60,
     date = as.POSIXct("2026-09-20", tz = "UTC"))
-  a <- call_point(observation, source_file, method = "all")$result
-  b <- call_point(observation, main, method = "all")$result
-  stopifnot(isTRUE(all.equal(a, b, tolerance = 1e-10)))
+  methods <- c("nearest", "surface", "bottom")
+  for (method in methods) {
+    a <- call_point(observation, source_file, method)$temperature
+    b <- call_point(observation, main, method)$temperature
+    stopifnot(isTRUE(all.equal(a, b, tolerance = 1e-10)))
+  }
 
   midpoint_bounds <- function(x) {
     mid <- (head(x, -1L) + tail(x, -1L)) / 2
@@ -124,27 +124,13 @@ prepare_point_article <- function(source_file, root = ".") {
   locations <- data.frame(key = c("inside", "outside"),
     label = c("Inside the grid", "Just outside the cropped grid"),
     lon = c(0, max(bounds$longitude) + 0.03), lat = c(38, 38))
-  horizontal <- list()
-  for (i in seq_len(nrow(locations))) for (policy in c("within", "nearest")) {
-    for (limit in c(1, 20)) {
-      obs <- observation
-      obs$lon <- locations$lon[i]; obs$lat <- locations$lat[i]
-      candidate_distances <- as.numeric(sf::st_distance(
-        sf::st_sfc(sf::st_point(c(obs$lon, obs$lat)), crs = 4326),
-        sf::st_sfc(lapply(cells, function(c) sf::st_point(c(c$lon, c$lat))), crs = 4326))) / 1000
-      nearest <- which.min(candidate_distances)
-      out <- call_point(obs, spatial_match = policy,
-        max_distance_km = if (policy == "nearest") limit else NULL)
-      horizontal[[length(horizontal) + 1L]] <- list(
-        location = locations$key[i], policy = policy, limit = limit,
-        point = unname(as.numeric(project(obs$lon, obs$lat))), cell = nearest,
-        distance_km = candidate_distances[nearest], value = out$result$temperature,
-        messages = out$messages, warnings = out$warnings)
-      if (is.finite(out$result$temperature)) stopifnot(isTRUE(all.equal(
-        out$result$temperature, cells[[nearest]]$value, tolerance = 1e-10)))
-    }
-  }
-  inside <- horizontal[[1]]$cell
+  # The observation's cell: the one extract_to_point() reads. The observation
+  # lies on the edge between two cells, so the cell is found by its value.
+  taken <- call_point(observation)$temperature
+  inside <- which(vapply(cells, function(c) {
+    isTRUE(all.equal(c$value, taken, tolerance = 1e-10))
+  }, logical(1)))
+  stopifnot(length(inside) == 1L)
   cell <- cells[[inside]]
   profiles <- lapply(seq_along(centres$time), function(i) list(
     date = format(as.POSIXct(centres$time[i], origin = "1970-01-01", tz = "UTC"), "%Y-%m-%d"),
@@ -153,33 +139,17 @@ prepare_point_article <- function(source_file, root = ".") {
   for (date in seq_along(profiles)) for (target in c(60, 100, 800)) {
     obs <- observation; obs$depth <- target
     obs$date <- as.POSIXct(profiles[[date]]$date, tz = "UTC")
-    out <- call_point(obs, method = "all")
-    indices <- vapply(c("nearest_temperature", "surface_temperature", "seabottom_temperature"),
-      function(name) match(out$result[[name]], profiles[[date]]$values), integer(1))
+    indices <- vapply(methods, function(method) {
+      match(call_point(obs, method = method)$temperature, profiles[[date]]$values)
+    }, integer(1))
     stopifnot(!anyNA(indices))
     vertical[[length(vertical) + 1L]] <- list(date = profiles[[date]]$date,
-      target = target, nearest = unname(indices[1]), surface = unname(indices[2]), bottom = unname(indices[3]),
-      warnings = out$warnings, messages = out$messages)
+      target = target, nearest = unname(indices[1]), surface = unname(indices[2]),
+      bottom = unname(indices[3]))
   }
-  requests <- c("2026-09-20 00:00:00", "2026-09-20 12:00:00", "2026-09-25 00:00:00")
-  baseline <- vapply(profiles, function(p) p$values[base_z], numeric(1))
-  stopifnot(!anyDuplicated(baseline))
-  temporal <- list()
-  for (request in requests) for (precision in c("datetime", "daily")) {
-    for (matching in c("nearest", "exact")) for (limit in c("none", "0.1", "1")) {
-      obs <- observation; obs$date <- as.POSIXct(request, tz = "UTC")
-      out <- call_point(obs, time_resolution = precision, time_match = matching,
-        max_time_diff = if (limit == "none") NULL else as.numeric(limit))
-      chosen <- match(out$result$temperature, baseline)
-      temporal[[length(temporal) + 1L]] <- list(request = request, precision = precision,
-        matching = matching, limit = limit, value = out$result$temperature,
-        selected = if (is.na(chosen)) NULL else profiles[[chosen]]$date,
-        warnings = out$warnings, messages = out$messages)
-    }
-  }
-  example <- list(cells = cells, locations = locations, horizontal = horizontal,
-    profiles = profiles, depths = unname(centres$depth), depth_bounds = unname(bounds$depth),
-    vertical = vertical, temporal = temporal, selected_cell = inside,
+  example <- list(cells = cells, locations = locations, profiles = profiles,
+    depths = unname(centres$depth), depth_bounds = unname(bounds$depth),
+    vertical = vertical, selected_cell = inside,
     source = basename(source_file), main_md5 = unname(tools::md5sum(main)))
   saveRDS(example, file.path(destination, "point-display.rds"), version = 2)
   invisible(example)

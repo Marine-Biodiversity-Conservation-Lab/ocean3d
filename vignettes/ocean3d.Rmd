@@ -1197,12 +1197,13 @@ associated with a location, date and depth.
 these observations with environmental
 information from NetCDF datasets.
 
-Its `method` argument chooses the depth:
+You choose the depth level with its `method`
+argument:
 
 - `method = "2d"` for environmental variables
   without a depth dimension.
 - `method = "nearest"` for values at the
-  nearest valid depth.
+  nearest depth level with a value.
 - `method = "surface"` and
   `method = "bottom"` for surface and
   bottom conditions.

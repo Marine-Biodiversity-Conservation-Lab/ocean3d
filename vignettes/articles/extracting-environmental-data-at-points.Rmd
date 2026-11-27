@@ -166,6 +166,9 @@ and each observation takes the grid cell that contains it.
 An observation takes the grid cell that contains it. It does not need to
 coincide with the cell's centre: in Figure 1, the requested point and the
 selected centre are a short distance apart, which is a normal selection.
+`set_A` lies exactly on the edge between two cells, at 38 degrees N, so it
+takes the cell south of the edge, as any point on an edge between two cells
+takes the cell east or south of it.
 
 The supplied subset is intentionally small. A point just outside its
 coverage gets `NA`, even when it is close to a cell in the subset:
@@ -185,16 +188,16 @@ on its location first, or summarise the values around it with the
 ## Step 4: Choosing a depth selection
 
 Different research questions call for different parts of the water column.
-`method` chooses the depth level:
+You choose the depth level with `method`:
 
 | `method` | Selection |
 |---|---|
-| `"nearest"` | Valid layer closest to the requested depth; a depth tie selects the shallower layer. |
+| `"nearest"` | Layer with a value closest to the requested depth; at a tie, the shallower layer. |
 | `"surface"` | Physically shallowest layer, even if its value is missing. |
-| `"bottom"` | Deepest layer with a valid value in the selected profile. |
+| `"bottom"` | Deepest layer with a value in that cell's profile. |
 | `"2d"` (default) | Variable without a depth dimension, or with one depth layer. |
 
-Let's obtain our nearest, surface and deepest-valid temperatures.
+Let's obtain our nearest, surface and bottom temperatures.
 
 ```{r all-depth-selections}
 depth_methods <- c(nearest = "nearest", surface = "surface",
@@ -208,8 +211,8 @@ Surface and bottom selection do not require an observation depth column.
 They are defined by the physical depth coordinates and valid values in
 the profile, rather than the order in which layers were stored. When
 `var` is left out and detected, the columns are named `nearest_<var>`,
-`surface_<var>` and `seabottom_<var>`; the last name follows the existing
-naming convention and does not establish the location of the real seabed.
+`surface_<var>` and `seabottom_<var>`. Despite its name, `seabottom_<var>` is
+the deepest layer with a value, which may be above the real seabed.
 
 **Nearest selection is not interpolation, and it does not impose a maximum
 vertical distance.** A request beyond the available depth range can return
@@ -258,10 +261,10 @@ extract_to_point(midday, nc_file, var = "thetao", method = "nearest",
                  time_match = "nearest")
 ```
 
-`time_match = "nearest"` (the default) chooses the closest time step;
-`"exact"` requires a step at the same time. A date-time such as this one is
-compared as an instant, and a `Date` by its UTC day. The nearest rule does
-not impose a maximum time gap on its own.
+With `time_match = "nearest"` (the default), each observation takes the
+closest time step; with `"exact"`, it needs a step at the same time. A
+date-time such as this one is compared as an instant, and a `Date` by its UTC
+day. The nearest rule sets no maximum time gap on its own.
 
 ### 5.1. Limiting the accepted time gap
 
@@ -343,9 +346,9 @@ environment
 ```
 
 Rows and their order are retained. `extract_to_point()` reads each time step
-once for all the observations on it, so a large table is quick. To add
-another variable, make another call using the previous result as the input
-table. `var` names one variable.
+once for all the observations at that time, so a large table needs few
+reads. `var` takes one variable, so to add another, call again with the
+previous result as the input table.
 
 ```{r add-another-variable}
 environment <- extract_to_point(
@@ -457,8 +460,8 @@ invalid_date$date <- "20/09/2026"
 extract_to_point(invalid_date, nc_file, var = "thetao", method = "nearest")
 ```
 
-The message names the affected input and original value, and describes the
-admitted formats. Original `NA` values are not conversion errors.
+The message names the affected input and original value, and lists the
+accepted formats. A date that was `NA` to begin with is not an error.
 
 These errors are intentionally printed in this tutorial. They show requests
 that need correction, rather than conditions to solve by silently
@@ -541,7 +544,7 @@ we have:
 
 1. Used `extract_to_point()` with each of its four depth methods.
 2. Seen that an observation takes the cell that contains it, and gets `NA` off the grid.
-3. Compared nearest, surface and deepest-valid layers without interpolation.
+3. Compared nearest, surface and bottom layers without interpolation.
 4. Preserved observation hours and time zones, and applied explicit temporal limits.
 5. Read a series of files, named outputs and distinguished missing values from invalid inputs.
 
@@ -594,7 +597,7 @@ The tutorial does not imply endorsement by Copernicus Marine or CMCC.
 
 The repository's
 [`data-raw/point-article.R`](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/data-raw/point-article.R)
-recreates the files and display data.
+recreates the files and Figure 1's display data.
 
 ## All arguments and defaults
 
@@ -614,7 +617,7 @@ display_helpers$article_signature(extract_to_point, "extract_to_point")
 | Decision | Choices, meaning and effective default |
 |:--|:--|
 | Input and variable | `data = NULL` uses direct lon/lat/depth/date inputs; supply a table, matrix, named list or sf points instead. Dates are required only for variables with several time steps. `nc` is a file path, several paths of a series on one grid, or an open connection; `var = NULL` detects a single data variable. |
-| `method` | `"2d"` (default) for a variable without depth or with one depth layer; `"nearest"` selects the closest valid layer to the requested depth; `"surface"` selects the physically shallowest layer; `"bottom"` selects the deepest valid layer. |
+| `method` | `"2d"` (default) for a variable without depth or with one depth layer; `"nearest"` takes the layer with a value closest to the requested depth; `"surface"` takes the physically shallowest layer; `"bottom"` takes the deepest layer with a value. |
 | Horizontal cell | Each observation takes the cell that contains it; an observation off the grid gets `NA`. |
 | `time_match` | `"nearest"` (default) chooses the nearest time step; `"exact"` requires a step at the same instant (date-time) or on the same UTC day (date). `max_time_diff = NULL` has no time-distance limit; a nonnegative value limits it in days. |
 | Missing dates | A static variable needs no date. A temporal variable requires the date input or column. An explicit `NA` keeps the row and returns a missing value, with a warning. |
