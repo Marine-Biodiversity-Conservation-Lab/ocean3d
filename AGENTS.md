@@ -10,7 +10,6 @@ changes, update this file in the same PR.
 ocean3d currently has two data models for gridded data (see SPEC.md,
 “Data model”): netCDF files read with ncdf4
 ([`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md),
 [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md))
 and `SpatVoxel` / `SpatEnvelope` objects built on terra (everything
 else). \#99 plans to unify them.

@@ -306,7 +306,7 @@ conventions define them.
 
 |  | netCDF model | `SpatVoxel` model |
 |----|----|----|
-| Functions | [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md), [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md), [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()`, voxel profiles, [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md) |
+| Functions | [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md), [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md), [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()`, voxel profiles, [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md) |
 | Input | netCDF paths, connections or file tables | `SpatVoxel` / `SpatEnvelope`, S4 classes extending [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html) |
 | Reads with | ncdf4, only the cells each observation needs | terra |
 | Depth | the netCDF depth coordinate: units converted to metres, `positive` direction, bounds | [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html), one set of depths for the whole grid, and each layer’s top and bottom (depth edges) when the voxel has them |
@@ -1117,16 +1117,23 @@ of 27 November 2026.
     [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
     and
     [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html),
-    is in review (#181). It removes `extract2d()` and the
-    `extract3d_*()` shortcuts, whose job `method` does (decided by Jay
-    Matsushiba on 26 November 2026).
+    is done (#181). It removes `extract2d()` and the `extract3d_*()`
+    shortcuts, whose job `method` does (decided by Jay Matsushiba on 26
+    November 2026). The third,
     [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
-    and
+    on
+    [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md),
+    [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
+    `crop()`,
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
+    `mask()` and `summarise_3d(by = "all")`, is in review (#182); it
+    drops the features left out on 25 November 2026 (partial weights,
+    `most_similar`, `min_valid_fraction`, `se`, cell and layer
+    neighbourhoods, month and year windows, several variables and files
+    on different grids).
     [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
-    are next. Until the track wrapper is rebuilt,
-    [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
-    uses the old point extraction internally. The fast path for many
-    points,
+    is next. Until it is rebuilt, it uses the old point extraction
+    internally. The fast path for many points,
     [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html)
     on a `SpatProxy` with `SpatVector3D` points, is done (#163); the
     [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
@@ -1292,13 +1299,13 @@ design](#package-design-build-intersect-summarise). Items marked
   available, time.
 - **Buffer extraction**.
   [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
-  summarises netCDF values within a geodesic circle × depth window ×
-  time window around each observation, with cell coverage, layer
-  thickness and time weighting, or picks the value closest to a target.
-  The three steps don’t reproduce these weights or `most_similar` for
-  now, so
-  [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
-  can’t become a wrapper with the same output (#116).
+  summarises the values of a netCDF file, `SpatProxy` or `SpatVoxel` in
+  a geodesic circle × depth window × time window around each
+  observation, with whole cells weighted by volume. It is a wrapper over
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
+  `mask()` and
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+  (#116); partial weights and `most_similar` were dropped.
 - **Track extraction**.
   [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
   samples points along ordered tracks (e.g. tagging data), extracts

@@ -148,19 +148,20 @@ function takes one of them:
 
 | Input | Functions | Reads with |
 |----|----|----|
-| netCDF files (paths, open `ncdf4` connections or a file table) | [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md), [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | ncdf4, only the cells each observation needs; keeps the time dimension |
+| netCDF files (paths, open `ncdf4` connections or a file table) | [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | ncdf4, only the cells each observation needs; keeps the time dimension |
 | `SpatVoxel` / `SpatEnvelope` (3D classes built on [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html)) | the build, intersect and volume functions and `mask()` | terra; one time step per voxel |
 | netCDF paths, an open `ncdf4` connection or a `SpatProxy` from [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md) | [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md) | [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md) and [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html), each time step once for its points |
 
 A voxel can’t be passed to
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
 or
 [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md).
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
 takes netCDF paths, a connection or a `SpatProxy`, and reads paths and
 connections through
-[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md);
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
+[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+takes those or a voxel.
 [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
 and
 [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
@@ -295,10 +296,8 @@ Input: observations (data frame, tibble, `sf` POINT, matrix, or named
 list) and one or more netCDF files. These functions read the files
 directly, only the cells each observation needs, and match time as well
 as depth.
-[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
-and
 [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
-don’t take a `SpatVoxel`.
+doesn’t take a `SpatVoxel`.
 
 - [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
   — values at observation points, from one netCDF file, a series of
@@ -314,8 +313,11 @@ don’t take a `SpatVoxel`.
   structure preserved.
 - [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
   — summarise values within a geodesic circle × depth window × time
-  window around each observation, weighted by cell coverage, layer
-  thickness and time, or pick the value closest to a target.
+  window around each observation, weighted by the volume of each cell
+  and depth level; a shortcut for
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
+  `mask()` and
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md).
 - [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
   — sample points along ordered tracks (e.g. tagging data), extract
   values at them, and optionally summarise per track.

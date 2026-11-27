@@ -379,8 +379,8 @@ route$summary$total_distance_km
 ```
 
 The mean uses those lengths as weights. This is a numerical
-approximation to conditions along the route. It differs from the area,
-depth thickness and duration weights used by
+approximation to conditions along the route. It differs from the cell
+volume weights used by
 [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md).
 
 ### Duration weight: what conditions describe time spent along the route?

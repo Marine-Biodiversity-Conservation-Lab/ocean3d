@@ -62,9 +62,11 @@ summarise_3d(
   list; `"depth"` one row per depth level of each voxel, with a `depth`
   column. Values from different time steps aren't combined, so a list
   shows the change from step to step. `"time"` means the same as `NULL`,
-  and says in a call on a list that the rows are per time step. A
-  one-layer `SpatRaster` has a single level, so `"depth"` is an error
-  for it.
+  and says in a call on a list that the rows are per time step. `"all"`
+  gives one row for every value of every voxel in `x` together, for
+  example all the time steps a time window covers, each value keeping
+  its own weight; its `time` is `NA`. A one-layer `SpatRaster` has a
+  single level, so `"depth"` is an error for it.
 
 - bounds:
 
@@ -80,8 +82,8 @@ summarise_3d(
 ## Value
 
 A data frame with one row per voxel, or per voxel and depth level with
-`by = "depth"`, in the order of `x` and then of depth. Columns: `time`
-(the voxel's
+`by = "depth"`, in the order of `x` and then of depth, or one row with
+`by = "all"`. Columns: `time` (the voxel's
 [`terra::time()`](https://rspatial.github.io/terra/reference/time.html),
 UTC, or `NA` when it has none), `depth` (with `by = "depth"` only, in
 metres), one column per `statistic`, and `n`, the number of values the
@@ -103,7 +105,7 @@ are then [`stats::sd()`](https://rdrr.io/r/stats/sd.html) and
 With normalised weights \\w_i\\, the weighted standard deviation is the
 square root of \\\sum w_i (v_i - \bar v)^2 / \sum w_i (1 - w_i)\\, the
 sample standard deviation under equal weights and the same formula as in
-[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md).
+[`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md).
 The weighted median is the value at which the cumulative weight, over
 the values sorted from smallest to largest, reaches half the total; when
 it reaches half exactly, the two values either side are averaged, as
@@ -157,4 +159,9 @@ summarise_3d(list(v, later), statistic = c("mean", "median"))
 #>         time mean median n
 #> 1 2020-01-01 10.2      8 7
 #> 2 2020-01-02 11.2      9 7
+
+# Or one row for the values of both steps together.
+summarise_3d(list(v, later), statistic = "mean", by = "all")
+#>   time mean  n
+#> 1 <NA> 10.7 14
 ```

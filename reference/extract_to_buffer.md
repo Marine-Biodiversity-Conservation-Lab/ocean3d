@@ -1,8 +1,12 @@
 # Summarise environmental values around observations
 
-Calculate one summary per observation and variable within horizontal,
-depth and/or temporal windows. Combine complementary netCDF sources
-before assessing coverage. Observations and input order are retained.
+Calculates one statistic per observation from the values in a buffer
+around it: a circle of `horizontal_radius_km`, a depth window of
+`depth_radius_m` above and below the observation, and a time window from
+`time_before` to `time_after`. It is a convenience wrapper over the
+three steps of an analysis, and the [workflow
+article](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md)
+shows the same steps written out:
 
 ## Usage
 
@@ -12,39 +16,24 @@ extract_to_buffer(
   nc,
   var = NULL,
   horizontal_radius_km = 0,
-  lon_cell_radius = NULL,
-  lat_cell_radius = NULL,
   depth_radius_m = 0,
-  depth_layer_radius = NULL,
   time_before = 0,
   time_after = 0,
-  time_unit = c("days", "hours", "minutes", "seconds", "months", "years"),
-  statistic = "mean",
+  time_unit = c("days", "hours", "minutes", "seconds"),
+  statistic = c("mean", "sd", "min", "max"),
   weighting = c("weighted", "equal"),
-  min_valid_fraction = NULL,
-  infer_bounds = FALSE,
   method = NULL,
   lon_col = "lon",
   lat_col = "lat",
   depth_col = "depth",
   date_col = "date",
-  id_col = NULL,
-  file_col = "file",
   lon_dim = NULL,
   lat_dim = NULL,
   depth_dim = NULL,
   time_dim = NULL,
   time_match = c("nearest", "exact"),
-  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly"),
   max_time_diff = NULL,
-  spatial_match = c("within", "nearest"),
-  max_distance_km = NULL,
-  output_col = NULL,
-  return_match_info = TRUE,
-  quiet = FALSE,
-  target_col = NULL,
-  max_target_difference = NULL,
-  target_ties = c("NA", "lower", "higher")
+  output_col = NULL
 )
 ```
 
@@ -56,209 +45,176 @@ extract_to_buffer(
 
 - nc:
 
-  netCDF path, paths, opened ncdf4 connection, list, or file table.
-  Files are read directly with ncdf4, only the cells each observation
-  needs. A
+  The data: a netCDF file path, several paths for a series of files on
+  one grid, an open
+  [`ncdf4::nc_open()`](https://rdrr.io/pkg/ncdf4/man/nc_open.html)
+  connection, a
+  [SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+  from
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+  or a
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
-  or other `SpatRaster` isn't accepted; for those, see
-  [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
-  and [`mask()`](https://rspatial.github.io/terra/reference/mask.html).
+  in memory.
 
 - var:
 
-  Variable name or vector of names. NULL detects one data variable per
-  file, excluding referenced bounds and coordinate variables.
+  Name of the variable, for a netCDF source. `NULL` detects the only
+  data variable of the file.
 
 - horizontal_radius_km:
 
-  Horizontal geodesic radius in kilometres. Positive radii below 10000
-  km are supported.
-
-- lon_cell_radius, lat_cell_radius:
-
-  Optional integer radii in grid cells. A radius of one on both axes
-  requests a 3 by 3 neighbourhood. Mutually exclusive with a positive
-  horizontal_radius_km.
+  Radius of the circle around each observation, in kilometres, measured
+  on the WGS84 ellipsoid, below 10000 as in
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md).
+  `0` (default) uses the observation's own cell.
 
 - depth_radius_m:
 
-  Symmetric depth radius in metres, positive downward.
-
-- depth_layer_radius:
-
-  Optional integer radius in physical depth order. Mutually exclusive
-  with a positive depth_radius_m.
+  Distance in metres above and below the observation's depth. `0`
+  (default) picks one level per cell with `method`.
 
 - time_before, time_after:
 
-  Non-negative temporal distances before and after the observation. Both
-  use time_unit.
+  Time before and after the observation, in `time_unit`. Both `0`
+  (default) read the one time step `time_match` matches. For
+  observations with dates and no hours, the window covers whole UTC
+  days, including the last.
 
 - time_unit:
 
-  One of days, hours, minutes, seconds, months or years. Days are 24
-  elapsed hours. Months and years require whole numbers and shift the
-  UTC calendar, clamping to the destination month's last day.
+  `"days"` (default), `"hours"`, `"minutes"` or `"seconds"`.
 
 - statistic:
 
-  One of "mean", "sd", "se", "min", "max" or "most_similar". SD uses the
-  sample variance correction. SE is SD divided by the square root of the
-  effective sample size. Min and max ignore weight magnitudes.
+  One of `"mean"` (default), `"sd"`, `"min"` and `"max"`.
 
 - weighting:
 
-  "weighted" uses intersecting area, thickness and duration; "equal"
-  gives equal weight to valid samples. Coverage uses physical support in
-  both modes. A point-selected axis contributes a factor of one.
-
-- min_valid_fraction:
-
-  Minimum valid fraction of the entire requested support, between zero
-  and one. NULL uses 0.8 for summaries and zero for most_similar (any
-  valid support). Empty/all-missing buffers remain NA.
-
-- infer_bounds:
-
-  Allow missing bounds to be estimated using neighbouring coordinate
-  midpoints, with half-gap extrapolation at outer edges. Inferred depth
-  support is clipped at zero metres. A singleton needs explicit bounds.
+  `"weighted"` (default) weights each value by the volume of its cell
+  and level with a depth window, and by its cell's area without one (one
+  level per cell) or for a variable without depth; `"equal"` counts each
+  value once.
 
 - method:
 
-  Depth selection on an unbuffered vertical axis: nearest, surface,
-  bottom or 2d. NULL uses 2d without a depth axis and nearest with one.
-  Leave NULL when requesting a depth interval or layer neighbourhood.
+  How the level in each cell is chosen when there is no depth window:
+  one of the rules of
+  [`mask()`](https://rspatial.github.io/terra/reference/mask.html) for
+  points, `"nearest"` (default; the level nearest the observation's
+  depth that has a value), `"nearest_level"` (the nearest level, even if
+  it has no value), `"bottom"` or `"surface"`. Leave `NULL` with a depth
+  window. For a variable without depth, leave `NULL` or use `"2d"`.
 
 - lon_col, lat_col, depth_col, date_col:
 
-  Observation coordinate columns. Dates are required only for temporal
-  variables. Date and ISO date-only text centre time buffers at midnight
-  UTC; POSIXt preserves instants.
-
-- id_col:
-
-  Optional observation identifier column used in diagnostics.
-
-- file_col:
-
-  File-path column when nc is a table.
+  Observation columns. The depth is needed with a depth window or a
+  `"nearest"` rule, and the date for data with several time steps. Dates
+  and date-times are read as in
+  [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md).
 
 - lon_dim, lat_dim, depth_dim, time_dim:
 
-  Optional netCDF dimension overrides.
+  Dimension names for a netCDF source, as in
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
 
-- time_match, time_resolution, max_time_diff:
+- time_match, max_time_diff:
 
-  Point-time selection options on an unbuffered time axis; see
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
-  max_time_diff is in days and cannot be combined with a temporal
-  window.
-
-- spatial_match, max_distance_km:
-
-  Point-cell or index-seed selection options; see
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
-  They do not expand a kilometre buffer.
+  Without a time window, how the time step is matched, as in
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md):
+  the nearest step (default) or an exact one, and the largest gap in
+  days for a nearest match.
 
 - output_col:
 
-  Output name for one variable, or a named character vector mapping
-  multiple variable names to distinct output columns.
-
-- return_match_info:
-
-  Add a list column named
-
-  \_match_info per variable, containing coverage, source, bounds and
-  selection diagnostics.
-
-- quiet:
-
-  Hide explanatory summaries. Time-zone and ambiguous-location warnings
-  remain active.
-
-- target_col:
-
-  Column containing the numeric target for most_similar. For several
-  variables, a named variable-to-column mapping. Targets must use the
-  environmental variable's units. Original NA targets return NA.
-
-- max_target_difference:
-
-  Optional non-negative maximum absolute difference from the target, in
-  the environmental variable's units.
-
-- target_ties:
-
-  How to resolve equally similar different values: NA (default), lower
-  or higher. Repeated identical winning values retain all their
-  locations in match_info; no file is chosen by input order. This rule
-  does not choose locations among repeated identical values.
+  Name of the output column. `NULL` uses the variable's name.
 
 ## Value
 
-The normalised observation table with one numeric summary column per
-variable and, optionally, a diagnostic list column per output. sf inputs
-retain their geometry. Existing columns are never overwritten.
-most_similar always adds
+`data` with two columns added: the statistic, named `output_col` or
+after the variable, and `<output>_n`, the number of values it is built
+on. sf input keeps its geometry. If `data` already has either column,
+the function stops with an error; choose another `output_col`.
 
-\_match_lon, \_match_lat, \_match_depth and \_match_time (UTC). They
-describe winning model coordinates, not corrected observations.
-Ambiguous or unavailable fields are NA. Longitude/latitude are returned
-together only for a unique horizontal location. All winning records
-remain in match_info when requested. Unresolved value or location ties
-emit one bounded warning per output with affected rows and guidance.
+## Details
 
-## Support and limitations
+1.  **Build:** each observation becomes a point with
+    [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md),
+    and a buffer with
+    [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
+    when `horizontal_radius_km` is positive.
 
-For normalised weights p, corrected variance is sum(p \* (x - mean)^2)
-divided by sum(p \* (1 - p)); effective sample size is 1 / sum(p^2).
-Equal weighting reproduces ordinary sample SD and SE. SD and SE require
-at least two valid samples; otherwise they return NA with a diagnostic.
-SE assumes independent samples and does not correct spatial or temporal
-autocorrelation. It is not an automatic estimate of environmental
-uncertainty. All statistics, including min and max, require the
-requested valid coverage.
+2.  **Intersect:** the data for its time steps are read with
+    [`crop()`](https://rspatial.github.io/terra/reference/crop.html) and
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+    (or
+    [rast()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/rast-SpatProxy.md)
+    for a variable without depth), and the values inside the buffer are
+    kept with
+    [`mask()`](https://rspatial.github.io/terra/reference/mask.html).
 
-At least one window must be positive. Bounds describe represented
-support; inferred intervals do not establish that instantaneous values
-are interval means. The calculation treats each sample as constant over
-its assigned support. No interpolation or nearest fallback expands an
-empty buffer.
+3.  **Summarise:**
+    [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+    gives the statistic of those values.
 
-Geographic grids must have separable one-dimensional longitude and
-latitude axes. Circles are geodesic on WGS84 with 720 segments. Each
-cell is weighted by the area of the circle it covers, measured on the
-WGS84 ellipsoid with terra. This is a polygonal approximation,
-independent of sf_use_s2(). Unsupported projections, calendars,
-climatologies or transformed vertical coordinates require explicit
-preprocessing. The depth coordinate may be stored shallow to deep or
-deep to shallow; depths stored in any other order are rejected.
+A cell or depth level counts in full when the buffer reaches it, as in
+[`mask()`](https://rspatial.github.io/terra/reference/mask.html): a cell
+the circle touches, and a level whose slab of water overlaps the depth
+window. With `weighting = "weighted"` each value is weighted by the
+volume of its cell and level (by the cell's area for a variable without
+depth, or when `method` picks one level per cell), as
+[`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+does.
 
-Complementary sources are combined before applying min_valid_fraction.
-Overlapping selected support is an error, including duplicate values or
-a missing copy. Sources for one variable must use matching value units.
-Point-time selection is resolved across eligible sources before
-aggregation. Index neighbourhoods require matching grid/layer
-coordinates and bounds across sources. If requested indices extend
-beyond available coverage, the result is NA because the full requested
-physical support is unknown.
+Without a depth window, `method` picks the level in each cell: by
+default the level nearest the observation's depth that has a value, as
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+does. Without a radius, the buffer is the observation's own cell.
+Without a time window, the time step is the one `time_match` matches. A
+time window pools the values of every time step inside it into one
+statistic, each value keeping its own weight.
+
+An observation outside the grid, without a date on data with several
+time steps, without a depth where one is needed (or with a negative
+one), or with no time step in its window or within `max_time_diff` gets
+`NA`, and `<output>_n` is 0. One warning counts these observations, by
+reason. On data with several time steps on one day, observations need
+date-times or a time window: a date alone can't pick one of the steps,
+so the function stops.
 
 ## See also
 
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
+[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md),
+and the [workflow
+article](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md).
 
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
-observations <- data.frame(lon = 0, lat = 38, depth = 60,
-                           date = as.Date("2020-01-15"))
-extract_to_buffer(observations, "temperature.nc", var = "thetao",
-                  horizontal_radius_km = 5, method = "surface")
-extract_to_buffer(observations, "temperature.nc", var = "thetao",
-                  depth_radius_m = 10, time_before = 3)
-} # }
+# Daily temperature on a 10 x 10 grid of 1 degree cells at four depths.
+path <- tempfile(fileext = ".nc")
+lon <- ncdf4::ncdim_def("lon", "degrees_east", seq(0.5, 9.5))
+lat <- ncdf4::ncdim_def("lat", "degrees_north", seq(0.5, 9.5))
+depth <- ncdf4::ncdim_def("depth", "m", c(5, 15, 30, 60))
+time <- ncdf4::ncdim_def("time", "days since 2020-01-01", 0:2)
+temp <- ncdf4::ncvar_def("temp", "degree_Celsius",
+                         list(lon, lat, depth, time), -9999)
+nc <- ncdf4::nc_create(path, temp)
+ncdf4::ncvar_put(nc, temp, seq_len(10 * 10 * 4 * 3) / 10)
+ncdf4::nc_close(nc)
+
+obs <- data.frame(lon = 5.2, lat = 5.3, depth = 20,
+                  date = as.Date("2020-01-02"))
+
+# The mean within 150 km and 10 m above and below, on the observation's day.
+extract_to_buffer(obs, path, horizontal_radius_km = 150,
+                  depth_radius_m = 10)
+#>   lon lat depth       date     temp temp_n
+#> 1 5.2 5.3    20 2020-01-02 61.60395     26
+
+# Pooled over a day either side.
+extract_to_buffer(obs, path, horizontal_radius_km = 150,
+                  depth_radius_m = 10, time_before = 1, time_after = 1)
+#>   lon lat depth       date     temp temp_n
+#> 1 5.2 5.3    20 2020-01-02 61.60395     78
 ```

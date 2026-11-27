@@ -106,9 +106,11 @@ sf LINESTRING features first, e.g. with
 
 
 <dt id="arg-nc-var">nc, var<a class="anchor" aria-label="anchor" href="#arg-nc-var"></a></dt>
-<dd><p>netCDF sources and selected variable names. See
-<code><a href="extract_to_buffer.html">extract_to_buffer()</a></code>. Files are read directly with ncdf4; a
-<a href="SpatVoxel-class.html">SpatVoxel</a> or other <code>SpatRaster</code> isn't accepted.</p></dd>
+<dd><p>netCDF sources (a path, several paths, an open ncdf4
+connection or a table with a file column) and the variable names to
+read; <code>var = NULL</code> detects one data variable per file. Files are read
+directly with ncdf4; a <a href="SpatVoxel-class.html">SpatVoxel</a> or other <code>SpatRaster</code> isn't
+accepted.</p></dd>
 
 
 <dt id="arg-track-col">track_col<a class="anchor" aria-label="anchor" href="#arg-track-col"></a></dt>
@@ -276,7 +278,7 @@ available when the requested variation statistics are finite, or
 insufficient_variation_samples when accepted support has fewer than two
 valid samples. not_available covers rejected support or non-finite
 statistics; consult status for coverage and support problems. status
-follows extract_to_buffer(): empty (no known support), all_missing,
+is one of: empty (no known support), all_missing,
 insufficient_coverage, partial or complete.
 Samples follow traversal order. For vertices-only sampling the global
 input row order is retained. Non-coordinate attributes of inserted samples
@@ -307,7 +309,7 @@ depths stored in any other order are rejected.
 Missing coordinates are rejected and multipart lines must be split
 explicitly.</p>
 <p>SD and SE use the same reliability-weight correction and effective sample
-size as extract_to_buffer(). Adjacent samples are usually correlated: SE is
+size as <code><a href="summarise_3d.html">summarise_3d()</a></code>. Adjacent samples are usually correlated: SE is
 descriptive under an independence assumption, not an uncertainty estimate.
 Densifying a track does not create independent environmental observations.
 Distance-weighted summaries of stationary tracks are NA; duration weighting

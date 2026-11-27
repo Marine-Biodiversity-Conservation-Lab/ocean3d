@@ -58,9 +58,10 @@ extract_to_track(
 
 - nc, var:
 
-  netCDF sources and selected variable names. See
-  [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md).
-  Files are read directly with ncdf4; a
+  netCDF sources (a path, several paths, an open ncdf4 connection or a
+  table with a file column) and the variable names to read; `var = NULL`
+  detects one data variable per file. Files are read directly with
+  ncdf4; a
   [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
   or other `SpatRaster` isn't accepted.
 
@@ -218,12 +219,12 @@ variation_status is not_requested when neither SD nor SE is requested,
 available when the requested variation statistics are finite, or
 insufficient_variation_samples when accepted support has fewer than two
 valid samples. not_available covers rejected support or non-finite
-statistics; consult status for coverage and support problems. status
-follows extract_to_buffer(): empty (no known support), all_missing,
-insufficient_coverage, partial or complete. Samples follow traversal
-order. For vertices-only sampling the global input row order is
-retained. Non-coordinate attributes of inserted samples are NA.
-source_row indexes the input rows.
+statistics; consult status for coverage and support problems. status is
+one of: empty (no known support), all_missing, insufficient_coverage,
+partial or complete. Samples follow traversal order. For vertices-only
+sampling the global input row order is retained. Non-coordinate
+attributes of inserted samples are NA. source_row indexes the input
+rows.
 
 ## Interpretation and limits
 
@@ -247,14 +248,16 @@ other order are rejected. Missing coordinates are rejected and multipart
 lines must be split explicitly.
 
 SD and SE use the same reliability-weight correction and effective
-sample size as extract_to_buffer(). Adjacent samples are usually
-correlated: SE is descriptive under an independence assumption, not an
-uncertainty estimate. Densifying a track does not create independent
-environmental observations. Distance-weighted summaries of stationary
-tracks are NA; duration weighting requires known time support and
-returns NA if any adjacent duration is unknown. settings records options
-and candidate files. Actual selected records are stored in the
-per-output match_info columns in samples.
+sample size as
+[`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md).
+Adjacent samples are usually correlated: SE is descriptive under an
+independence assumption, not an uncertainty estimate. Densifying a track
+does not create independent environmental observations.
+Distance-weighted summaries of stationary tracks are NA; duration
+weighting requires known time support and returns NA if any adjacent
+duration is unknown. settings records options and candidate files.
+Actual selected records are stored in the per-output match_info columns
+in samples.
 
 ## See also
 

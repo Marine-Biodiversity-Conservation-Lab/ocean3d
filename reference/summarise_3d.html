@@ -111,8 +111,10 @@ for a list; <code>"depth"</code> one row per depth level of each voxel, with a
 <code>depth</code> column. Values from different time steps aren't combined, so a
 list shows the change from step to step. <code>"time"</code> means the same as
 <code>NULL</code>, and says in a call on a list that the rows are per time step.
-A one-layer <code>SpatRaster</code> has a single level, so <code>"depth"</code> is an error
-for it.</p></dd>
+<code>"all"</code> gives one row for every value of every voxel in <code>x</code> together,
+for example all the time steps a time window covers, each value keeping
+its own weight; its <code>time</code> is <code>NA</code>. A one-layer <code>SpatRaster</code> has a
+single level, so <code>"depth"</code> is an error for it.</p></dd>
 
 
 <dt id="arg-bounds">bounds<a class="anchor" aria-label="anchor" href="#arg-bounds"></a></dt>
@@ -125,7 +127,8 @@ read with <code><a href="as_voxel.html">as_voxel()</a></code> from a <a href="Sp
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with one row per voxel, or per voxel and depth level
-with <code>by = "depth"</code>, in the order of <code>x</code> and then of depth. Columns:
+with <code>by = "depth"</code>, in the order of <code>x</code> and then of depth, or one row
+with <code>by = "all"</code>. Columns:
 <code>time</code> (the voxel's <code><a href="https://rspatial.github.io/terra/reference/time.html" class="external-link">terra::time()</a></code>, UTC, or <code>NA</code> when it has none),
 <code>depth</code> (with <code>by = "depth"</code> only, in metres), one column per
 <code>statistic</code>, and <code>n</code>, the number of values the row is built on, so rows
@@ -145,7 +148,7 @@ then <code><a href="https://rdrr.io/r/stats/sd.html" class="external-link">stats
 <p>With normalised weights \(w_i\), the weighted standard deviation is the
 square root of \(\sum w_i (v_i - \bar v)^2 / \sum w_i (1 - w_i)\), the
 sample standard deviation under equal weights and the same formula as in
-<code><a href="extract_to_buffer.html">extract_to_buffer()</a></code>. The weighted median is the value at which the
+<code><a href="extract_to_track.html">extract_to_track()</a></code>. The weighted median is the value at which the
 cumulative weight, over the values sorted from smallest to largest,
 reaches half the total; when it reaches half exactly, the two values
 either side are averaged, as <code><a href="https://rdrr.io/r/stats/median.html" class="external-link">stats::median()</a></code> does. <code>min</code> and <code>max</code>
@@ -193,6 +196,11 @@ weights; <code><a href="as_voxel.html">as_voxel()</a></code> to read one time st
 <span class="r-out co"><span class="r-pr">#&gt;</span>         time mean median n</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1 2020-01-01 10.2      8 7</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 2 2020-01-02 11.2      9 7</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Or one row for the values of both steps together.</span></span></span>
+<span class="r-in"><span><span class="fu">summarise_3d</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">v</span>, <span class="va">later</span><span class="op">)</span>, statistic <span class="op">=</span> <span class="st">"mean"</span>, by <span class="op">=</span> <span class="st">"all"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   time mean  n</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 &lt;NA&gt; 10.7 14</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
