@@ -43,14 +43,20 @@
     if (target < -90 || target > 90) return(integer())
     targets <- rep(target, length(axis$centres))
   }
-  # A singleton axis without bounds has zero width. Allow single-precision
-  # rounding of the stored coordinate, but no real offset.
   tol <- if (identical(axis$basis, "singleton_coordinate")) {
-    pmax(1e-8, abs(axis$centres) * 2^-23)
+    .singleton_tolerance(axis$centres)
   } else {
     1e-8
   }
   which(targets >= axis$lower - tol & targets <= axis$upper + tol)
+}
+
+# A single horizontal coordinate without bounds (a point time series or a
+# transect) has no width. A point matches it when it lies on the coordinate,
+# allowing for single-precision rounding of the stored value but no real
+# offset. Used by .containing_axis_indices() and extract() on a SpatProxy.
+.singleton_tolerance <- function(centres) {
+  pmax(1e-8, abs(centres) * 2^-23)
 }
 
 # Great-circle distance on a sphere with the s2 mean Earth radius, so values

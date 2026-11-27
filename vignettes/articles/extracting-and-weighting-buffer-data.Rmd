@@ -538,8 +538,7 @@ first_layer <- which.min(abs(depth_centres - 60))
 pair <- target_observation[rep(1, 2), ]
 pair$depth <- depth_centres[c(first_layer, first_layer + 1)]
 pair <- extract_to_point(
-  pair, target_nc, var = "thetao", method = "nearest", output_col = "temperature",
-  time_report = FALSE, spatial_report = FALSE, depth_report = FALSE
+  pair, target_nc, var = "thetao", method = "nearest", output_col = "temperature"
 )
 pair[c("depth", "temperature")]
 tie_observation <- target_observation

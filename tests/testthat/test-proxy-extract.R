@@ -145,9 +145,11 @@ test_that("points off the grid or the time axis give NA", {
   expect_warning(out <- extract(p, half_timed), "1 of 2 points has no time",
                  class = "ocean3d_warning_point_time")
   expect_identical(is.na(out$value), c(FALSE, TRUE))
-  # A source with one step reads it for every point, whatever its time.
+  # A one-step climatology reads its step for every point, whatever its
+  # time.
   one <- grid_proxy(lon = seq(0.5, 4.5, 1), lat = c(10.5, 11.5),
-                    depth = c(0, 50), time = 0)
+                    depth = c(0, 50), time = 6,
+                    time_units = "months since 0000-01-01 00:00:00")
   expect_false(is.na(extract(one, untimed)$value))
 })
 
@@ -283,4 +285,48 @@ test_that("extract() rejects input it can't use", {
                class = "ocean3d_error_voxel_input")
   expect_error(extract(p, pts, bounds = "top"), "bounds",
                class = "ocean3d_error_unused_argument")
+})
+
+test_that("a single dated time step is matched to each point's time", {
+  f <- make_grid_file(lon = c(0.5, 1.5), lat = c(10.5, 11.5), depth = NULL,
+                      time = 0, values = 1:4)
+  on.exit(unlink(f), add = TRUE)
+  p <- as_proxy(f)
+  pts <- as_vector3d(data.frame(
+    lon = c(0.5, 1.5), lat = 10.5, depth = 0,
+    date = as.Date(c("2020-01-01", "2020-03-01"))
+  ), time = "date")
+  expect_equal(extract(p, pts)$value, c(1, 2))
+  expect_equal(extract(p, pts, time_match = "exact")$value, c(1, NA))
+  expect_equal(extract(p, pts, max_time_diff = 1)$value, c(1, NA))
+  untimed <- as_vector3d(data.frame(lon = 0.5, lat = 10.5, depth = 0))
+  expect_warning(out <- extract(p, untimed), "a dated time step",
+                 class = "ocean3d_warning_point_time")
+  expect_true(is.na(out$value))
+})
+
+test_that("a single unbounded longitude or latitude reads points on it", {
+  # A point time series (one cell, three levels) and a transect along one
+  # latitude: a point on the coordinate reads it, a point off it gets NA.
+  f <- make_grid_file(lon = 150.25, lat = -20.5, depth = c(5, 15, 40),
+                      time = 0:2, values = 1:9)
+  g <- make_grid_file(lon = c(0.5, 1.5, 2.5), lat = 40.25, depth = NULL,
+                      time = 0:1, values = 1:6)
+  on.exit(unlink(c(f, g)), add = TRUE)
+  series <- as_vector3d(data.frame(
+    lon = c(150.25, 150.25, 150.3), lat = -20.5, depth = c(10, 30, 10),
+    date = as.Date("2020-01-01") + c(0, 2, 1)
+  ), time = "date")
+  p <- as_proxy(f)
+  expect_equal(extract(p, series, method = "surface")$value, c(1, 7, NA))
+  expect_equal(extract(p, series, method = "bottom")$value, c(3, 9, NA))
+  expect_equal(extract(p, series)$value, c(1, 9, NA))
+  transect <- as_vector3d(data.frame(
+    lon = c(0.5, 1.7, 2.5, 1), lat = c(40.25, 40.25, 40.25, 40.3), depth = 0,
+    date = as.Date("2020-01-02")
+  ), time = "date")
+  expect_equal(extract(as_proxy(g), transect)$value, c(4, 5, 6, NA))
+  # A voxel needs the cell's width, so as_voxel() still stops.
+  expect_error(as_voxel(p, time = 1), "single cell without bounds",
+               class = "ocean3d_error_irregular_grid")
 })

@@ -2,7 +2,7 @@
 % Please edit documentation in R/extract_to_points.R
 \name{extract_to_point}
 \alias{extract_to_point}
-\title{Extract values from netCDFs to one or more point observations}
+\title{Extract values from netCDF files at point observations}
 \usage{
 extract_to_point(
   data = NULL,
@@ -12,13 +12,12 @@ extract_to_point(
   depth = NULL,
   date = NULL,
   var = NULL,
-  method = c("2d", "surface", "bottom", "nearest", "all"),
+  method = c("2d", "surface", "bottom", "nearest"),
   lon_col = "lon",
   lat_col = "lat",
   date_col = "date",
   depth_col = "depth",
   id_col = NULL,
-  file_col = "file",
   lon_dim = NULL,
   lat_dim = NULL,
   depth_dim = NULL,
@@ -26,437 +25,98 @@ extract_to_point(
   time_match = c("nearest", "exact"),
   max_time_diff = NULL,
   output_prefix = NULL,
-  output_col = NULL,
-  verbose = FALSE,
-  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly", "custom"),
-  custom_time_interval = NULL,
-  time_report = TRUE,
-  spatial_match = c("within", "nearest"),
-  max_distance_km = NULL,
-  spatial_report = NULL,
-  depth_report = NULL,
-  return_match_info = FALSE
+  output_col = NULL
 )
 }
 \arguments{
-\item{data}{Optional object containing observation points. Can be a data
-frame, tibble, \code{sf} object with POINT geometries, matrix with column names,
-or named list. If \code{NULL}, coordinates can be supplied directly through
-\code{lon}, \code{lat}, and optionally \code{depth} and \code{date}. For \code{sf} objects,
-longitude and latitude are obtained from the POINT geometries; projected
-geometries are transformed internally to longitude and latitude when a CRS
-is available.}
+\item{data}{Optional observations: a data frame, tibble, \code{sf} object with
+POINT geometries, numeric matrix with column names, or named list. If
+\code{NULL}, give the coordinates directly with \code{lon}, \code{lat}, and \code{depth} and
+\code{date} as needed. \code{sf} points need a CRS and are transformed to longitude
+and latitude.}
 
-\item{nc}{netCDF source. Can be a file path, vector of file paths, list of
-file paths, opened \code{ncdf4} object, list of opened objects, or a data frame
-with a file column.
-Files are read directly with ncdf4, only the cells each observation
-needs. A \link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't accepted; for
-those, see \code{\link[=extract_to_area]{extract_to_area()}} and \code{\link[terra:mask]{mask()}}.}
+\item{nc}{The netCDF data: a file path, several paths for a series of files
+on one grid (each with its own time steps, such as one file per day), a
+connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}}, or a \code{SpatProxy} from
+\code{\link[=as_proxy]{as_proxy()}}. Paths and connections are read through \code{\link[=as_proxy]{as_proxy()}}; a
+\code{SpatProxy} is used as it is, so \code{var} and the dimension arguments don't
+apply to it.}
 
-\item{lon}{Optional numeric longitude value or vector for direct point
-extraction when \code{data = NULL}.}
+\item{lon, lat, depth, date}{Direct input when \code{data = NULL}: numeric
+longitudes, latitudes and depths (metres, positive down), and dates or
+date-times. Each has length 1 or the same length as the others.
+\code{depth} is needed for \code{method = "nearest"}.}
 
-\item{lat}{Optional numeric latitude value or vector for direct point
-extraction when \code{data = NULL}.}
+\item{var}{Name of the variable. \code{NULL} detects it when the file holds one
+data variable.}
 
-\item{depth}{Optional numeric observation depth value or vector for direct
-point extraction. Required when \code{data = NULL} and \code{method = "nearest"} or
-\code{method = "all"}.}
+\item{method}{\code{"2d"} (default) for a variable without depth or with a
+single depth level, or \code{"surface"}, \code{"bottom"} or \code{"nearest"} for one
+with depth levels (see Details).}
 
-\item{date}{Optional observation date or vector of dates for direct point
-extraction. Used when \code{data = NULL} and the netCDF variable has a time
-dimension. Accepts Date and POSIXt objects, or character values in
-"YYYY-MM-DD", "YYYY-MM-DD HH:MM" or "YYYY-MM-DD HH:MM:SS" format.
-Text timestamps are UTC; POSIXt objects preserve their actual instant.
-Explicit NA values are retained. Direct input vectors may have length 1
-or a common compatible length.}
+\item{lon_col, lat_col, date_col, depth_col}{Columns of \code{data} with the
+longitude, latitude, date and depth. \code{date_col} is needed when the
+variable has dated time steps (not a climatology); \code{depth_col} for
+\code{method = "nearest"}. The coordinate columns must be numeric.}
 
-\item{var}{Name of the variable to extract from the netCDF file. If \code{NULL},
-the function tries to detect the variable automatically from each file.
-This only works when each netCDF file contains one single variable.}
+\item{id_col}{Optional column of observation identifiers. It is checked to
+exist; extraction doesn't use it.}
 
-\item{method}{Extraction method. Options are \code{"2d"}, \code{"surface"}, \code{"bottom"},
-\code{"nearest"} and \code{"all"}. With \code{method = "all"}, the function returns
-nearest, surface and bottom outputs together.}
+\item{lon_dim, lat_dim, depth_dim, time_dim}{Optional dimension names, passed
+to \code{\link[=as_proxy]{as_proxy()}}.}
 
-\item{lon_col}{Name of the longitude column in \code{data}.}
+\item{time_match}{\code{"nearest"} (default) or \code{"exact"}: how observation times
+are matched to time steps, as in \code{\link[=as_voxel]{as_voxel()}}.}
 
-\item{lat_col}{Name of the latitude column in \code{data}.}
+\item{max_time_diff}{Optional largest gap, in days, between an observation
+and its nearest time step with \code{time_match = "nearest"}; \code{NULL} (default)
+allows any gap.}
 
-\item{date_col}{Name of the date column in \code{data}. Required only when a
-selected netCDF variable has a time dimension. A missing column is an
-error for temporal variables; an explicit missing date retains the row
-and returns NA for its temporal output. Static variables do not require
-a date column and do not parse unused date values.}
-
-\item{depth_col}{Name of the observation-depth column in \code{data}. Required
-only when \code{method = "nearest"} or \code{method = "all"}.}
-
-\item{id_col}{Optional observation identifier column. It is not required for
-extraction, but it is checked when provided to help users detect mistakes.}
-
-\item{file_col}{Column containing file paths when \code{nc} is a data frame.}
-
-\item{lon_dim}{Optional name of the longitude dimension in the netCDF file.}
-
-\item{lat_dim}{Optional name of the latitude dimension in the netCDF file.}
-
-\item{depth_dim}{Optional name of the depth dimension in the netCDF file.}
-
-\item{time_dim}{Optional name of the time dimension in the netCDF file.}
-
-\item{time_match}{Character. How observation dates are matched to netCDF time
-values. \code{"nearest"} (default) selects the closest time step; an
-observation exactly halfway between two steps takes the one on its own
-UTC day. \code{"exact"} requires the same comparison value (see
-\code{time_resolution}): the same instant for date-times, or the same day,
-month or year, and returns \code{NA} when no step matches.}
-
-\item{max_time_diff}{Optional non-negative numeric value giving the maximum
-allowed difference, in days, between an observation date and the nearest
-netCDF date when \code{time_match = "nearest"}. If \code{NULL} (default), no maximum
-temporal distance is imposed. Ignored when \code{time_match = "exact"}.}
-
-\item{output_prefix}{Optional name used for the extracted output column. If
-omitted, \code{var} is used.}
-
-\item{output_col}{Optional alias for \code{output_prefix}. Use this when you want
-to define the exact name of the output column directly. If both
-\code{output_col} and \code{output_prefix} are provided, \code{output_col} is used. With
-\code{method = "all"}, this name is used as the suffix in \verb{nearest_*},
-\verb{surface_*} and \verb{seabottom_*} columns.}
-
-\item{verbose}{Logical. If \code{TRUE}, progress messages are printed every 100
-rows.}
-
-\item{time_resolution}{Precision used to compare observation times with
-dataset timestamps. "auto" uses daily comparison for Date objects
-and date-only text, and datetime comparison for POSIXt objects and
-date-time text. Explicit alternatives are "datetime", "daily",
-"monthly", "yearly" and "custom". Calendar comparisons use UTC.
-These options compare timestamp labels; they do not infer averaging
-intervals or calculate temporal summaries. Date-times are compared as
-instants, so on a daily file stamped at 00:00 an afternoon observation
-matches the next day's step; use "daily" to match by day. If an
-observation selects a time step that appears more than once at its
-comparison resolution (for example a daily comparison on a file with
-several steps per day), extraction stops with an error naming the file
-and the timestamp; repeated steps that no observation selects are
-ignored.
-With nearest matching, monthly and yearly comparisons use the start
-of the labelled month or year. max_time_diff remains in days and
-applies to these comparison values. Use exact matching to require
-the same labelled day, month or year.}
-
-\item{custom_time_interval}{Positive difftime value used as the warning
-interval when time_resolution = "custom". Matching uses full timestamps.
-This interval does not reject candidates; use max_time_diff for that.}
-
-\item{time_report}{Logical. If TRUE, the default, display a temporal summary
-when returned values are displaced in time, or outputs are missing for a
-temporal reason (no timestamp within the matching settings, or no
-observation date for a source with a time dimension). Outputs missing
-because of location or depth are reported by spatial_report and
-depth_report instead. The return format is unchanged. FALSE hides the
-summary but does not suppress temporal warnings.}
-
-\item{spatial_match}{Horizontal selection rule. "within" (default) requires
-the point to lie inside a cell. "nearest" selects the geographically
-closest cell centre, including outside the grid, up to max_distance_km.
-The rule applies equally to one or multiple sources. A selected missing
-value does not trigger a search for another cell in the same source.}
-
-\item{max_distance_km}{Required finite non-negative distance in kilometres
-when spatial_match = "nearest". Distance is the great-circle distance
-from the observation to the cell centre on a sphere of radius 6371.01 km
-(the radius sf::st_distance() uses with s2), and does not depend on sf
-settings. A cell exactly at the limit is accepted. Must be NULL with
-"within".}
-
-\item{spatial_report}{NULL (default) reports missing spatial outputs and
-selections of cells that do not contain the requested point. TRUE also
-reports normal and exact selections; FALSE hides the spatial report.}
-
-\item{depth_report}{NULL (default) reports missing depth outputs, selections
-more than one local layer spacing away, and displaced singleton layers
-whose spacing cannot be assessed. TRUE also reports normal surface, bottom
-and exact depth selections; FALSE hides the depth report. Depths are in
-metres, positive down. Report modes do not change returned values.}
-
-\item{return_match_info}{Logical, FALSE by default. With table inputs, add
-one list column per output describing the selected source file, cell,
-depth and timestamp. Missing outputs have no assigned selected source.}
+\item{output_col, output_prefix}{Name of the output column. If both are
+given, \code{output_col} is used. By default, the variable's name, or with
+\code{var} detected, \verb{surface_<var>}, \verb{seabottom_<var>} or \verb{nearest_<var>} for
+those methods.}
 }
 \value{
-If \code{data} is provided, the input observations with extracted values
-appended. Data frames, tibbles and \code{sf} objects retain their structure;
-matrices and named lists are returned as data frames. If \code{data = NULL},
-direct extraction returns a numeric value for one point and one output, a
-numeric vector for multiple points and one output, a named numeric vector
-for one point and multiple outputs (for example, \code{method = "all"}), or a
-data frame for multiple points and multiple outputs.
+With \code{data}, the observations with the value column added. Data
+frames, tibbles and \code{sf} objects keep their class; matrices and named
+lists become data frames. With direct input, a numeric vector, one value
+per point. A value is \code{NA} when the observation lies off the grid, has
+no coordinates, has no time step within \code{max_time_diff}, or has no
+level its \code{method} can take.
 }
 \description{
-This is the general point-extraction interface. It can extract environmental
-values for one or multiple observations. The user chooses the type of
-extraction with the \code{method} argument. The more specific functions
-\code{extract2d()}, \code{extract3d_surface()}, \code{extract3d_bottom()},
-\code{extract3d_nearest()} and \code{extract3d_all()} are wrappers around this
-function.
+A convenience wrapper over the build and intersect steps: it turns the
+observations into \link[=SpatVector3D-class]{SpatVector3D} points with \code{\link[=as_vector3d]{as_vector3d()}},
+describes the netCDF data with \code{\link[=as_proxy]{as_proxy()}}, and reads the value at every
+point with \link[=extract-SpatProxy]{extract()}, which reads each time step once
+for all the points in it. The same can be done step by step; see the
+workflow article, \code{vignette("workflow-values-in-shapes")}.
 }
 \details{
-Numeric netCDF time coordinates must provide units expressed as
-milliseconds, seconds, minutes, hours or days since a reference
-date-time. Singular and plural unit names are accepted. A single time
-step in months or years since a reference date-time is also accepted;
-several are not, because their length is ambiguous.
-
-Reference date-times are interpreted in UTC. A trailing "Z" or
-"UTC" is accepted; numeric timezone offsets such as "+02:00"
-are not currently supported.
-
-Supported calendars are "standard", "gregorian" and
-"proleptic_gregorian".
-Unsupported units, calendars or missing time units produce an error.
-
-Temporal resolution controls comparison of timestamp labels.
-It does not identify averaging intervals, calculate temporal means,
-or interpret climatological periods.
+You choose the depth level with \code{method}, which follows the rules of the
+same name in \code{extract()}: \code{"nearest"} takes the level nearest the
+observation's depth, skipping levels without a value; \code{"surface"} takes the
+shallowest level, even if it has no value; \code{"bottom"} takes the deepest
+level with a value. \code{"2d"} is for a variable without depth. Each observation
+takes the cell that contains it. Times are matched to the nearest time step
+by default (see \code{time_match} and \code{max_time_diff}): a date by its UTC day, a
+date-time as an instant.
 }
-\section{Required observation dates}{
-
-Date requirements follow each selected variable's dimensions, including
-when a file contains both static and temporal variables. Static variables
-can be extracted without date or date_col input. Temporal variables require
-date for direct input, or an existing column named by date_col for tables;
-date_col = NULL does not bypass this requirement. With multiple sources,
-every selected temporal variable requires a date input. Explicit NA entries,
-including NA without a date class, retain their observations; temporal
-outputs are NA while independent static outputs can still be extracted.
-An entirely missing date vector does not trigger calendar-label ambiguity
-checks because no observation has a date to compare.
-}
-
-\section{Observation time zones and formats}{
-
-Date inputs have daily precision. POSIXct and POSIXlt inputs preserve the
-instant represented, including their time-zone offset; matching and calendar
-labels use UTC. For example, 2020-01-02 00:30 in Europe/Madrid is
-2020-01-01 23:30 UTC, so daily matching uses January 1.
-Character input must use the ISO formats listed for date. A space or T may
-separate date and time, and a trailing Z is accepted for date-times. Minutes
-without seconds are interpreted with zero seconds. Text has no inferred
-local zone. Date-times without Z generate one warning per extraction,
-even when time_report is FALSE, because they are interpreted as UTC.
-Date-only text and POSIXt inputs do not generate this warning. Numeric
-offsets and zone names in text are rejected; supply a
-POSIXt object constructed with the intended zone instead. Resolve ambiguous
-or nonexistent local times when constructing that object; this function
-cannot recover the intended local time from an already converted instant.
-Conversion errors identify the input, affected observations, original values
-and identifiers from id_col when available. At most five cases are shown.
-Original NA values are not conversion failures. For recycled direct inputs,
-positions refer to the resulting observation rows.
-}
-
-\section{Physical depth coordinates}{
-
-Observation depths must be in metres, positive downward (0 at the
-surface); negative observation depths are rejected, and depths in other
-units must be converted first. Dataset coordinates are converted from m,
-meter(s), metre(s), km, kilometer(s), kilometre(s), cm, centimeter(s) or
-centimetre(s). The positive attribute determines direction when supplied;
-height and altitude axes without it are read as positive-up. Otherwise
-uniformly non-negative values imply positive-down and non-positive values
-imply positive-up. Mixed signs without direction metadata are rejected.
-The depth coordinate must have units, including for surface and bottom
-extraction; a file with a single depth level can be read with extract2d().
-Surface means the physically shallowest layer, even if its value is missing.
-Bottom means the deepest non-missing layer. Nearest selects the valid layer
-closest to the observation depth; ties select the shallower layer.
-Selection works the same whether the depth coordinate is stored shallow to
-deep or deep to shallow; depths stored in any other order are rejected.
-Duplicate physical depths, unsupported units, coordinates above the assumed
-reference surface, and sigma, formula-based or pressure coordinates require
-explicit correction or conversion before extraction.
-}
-
-\section{Multiple sources}{
-
-Spatial matching uses the same rules for one or multiple sources.
-With spatial_match = "within", only cells containing the point are eligible.
-With spatial_match = "nearest", the requested point may be outside grid
-coverage. The nearest cell centre must be within max_distance_km of it.
-Explicit spatial cell bounds are used when the file has them, and bad
-bounds (a missing bounds variable, cells that don't contain their centres
-or that overlap) stop with an error that names the file. Without bounds,
-edges are inferred from adjacent centres; singleton axes without bounds
-require coincidence, up to single-precision rounding of the stored
-coordinate.
-Longitude comparisons support equivalent coordinates across the antimeridian.
-A point on an edge shared by two cells uses the first cell in storage order.
-Among eligible sources the closest temporal candidate with a valid value
-wins. With "within" matching, equal temporal distances are resolved by
-input order, so list the preferred source first. With "nearest" matching,
-they are resolved by geographic distance to the cell centre (differences
-under 1 m are ignored), then by input order. Existing output columns are
-replaced, including by NA. Output names cannot overwrite extraction inputs
-or combine different variables in the same column.
-}
-
-\section{Custom temporal intervals}{
-
-With time_resolution = "custom", observations require hours as for datetime.
-For example, custom_time_interval = as.difftime(3, units = "hours") warns
-above three hours of displacement. Exact matching requires the same
-timestamp.
-Auto matching remains unchanged and uses the observed cadence for
-diagnostics.
-}
-
-\section{Spatial and depth reports}{
-
-The default NULL mode reports only missing outputs, selected cells that do
-not contain the requested point, and unusually distant depth selections.
-TRUE requests a full report, including normal and exact selections; FALSE
-hides the corresponding report. Returned values are identical in all modes.
-Spatial reports show the requested point, selected cell centre, distance
-and any explicit distance limit. With within matching, a point may be
-inside a cell without coinciding with its centre.
-Depth reports describe physical layers in metres, positive down from the
-reference surface. Surface means the shallowest layer; bottom means the
-deepest layer with a valid value, not an independently measured seabed.
-Values are selected without vertical interpolation. Normal nearest-depth
-approximations are silent in automatic mode. A difference strictly greater
-than the local layer spacing is reported. Spacing uses the two physical
-layers surrounding the requested depth, including layers with missing
-values. At an exact layer, its nearest neighbour defines the spacing; outside
-the range, the two nearest edge layers are used. Singleton axes have no
-spacing to assess a nonzero displacement. Messages identify the reference
-layers and only attribute a displacement to missing values when closer
-physical layers must lack valid values under nearest-valid selection.
-Missing outputs are explained once, with rejection reasons for each
-relevant source; a repeated reason is shown once with up to three of its
-files. The cause is taken from the sources whose grid covers the point,
-unless none does. Temporal causes (including a missing observation date)
-are reported by time_report; spatial and depth causes by their
-corresponding switches, so FALSE hides them. Mixed causes are grouped under
-spatial first, then depth, then time, with all reasons shown.
-Reports count distinct observations and output values separately. At most
-five cases are shown, prioritising missing values; truncation and the count
-omitted are stated. Coordinates use up to five decimals; metres/kilometres
-normally use up to two. Extra decimals distinguish values close to a limit
-when rounding would otherwise make them appear equal. Calculations retain
-full precision. Small positive distances use
-<0.01 rather than zero. Depth comparisons in reports allow a relative
-tolerance of 1e-6, so single-precision depth axes match their nominal
-depths.
-}
-
-\section{Temporal diagnostics}{
-
-Diagnostics are emitted after source selection, for values actually returned.
-Daily, monthly and yearly comparisons warn on a change of calendar period
-in UTC. Datetime comparisons warn when displacement exceeds one observed
-cadence step, or when a nonzero displacement has no reliable cadence.
-With a detected daily cadence, datetime comparison also warns when the
-selected value falls on a different UTC day, even below 24 hours.
-Explanatory warnings include the requested and selected timestamps, their
-difference, the comparison resolution, cadence, row, variable and file name.
-Reports explain non-warning displacements and missing outputs without
-repeating examples already explained by a temporal warning.
-Cadence inference does not change matching or impose a maximum time gap.
-Singleton sources may use the observed sequence of compatible files for the
-same variable. Time bounds describe intervals, not sampling frequency.
-}
-
 \examples{
-nc_file <- system.file(
-  "extdata", "example_3d.nc",
-  package = "ocean3d"
-)
+nc_file <- system.file("extdata", "example_3d.nc", package = "ocean3d")
 
-# Extract the value closest to a single observation
-extract_to_point(
-  nc = nc_file,
-  lon = 0,
-  lat = 40,
-  depth = 60,
-  date = "2020-01-03",
-  var = "temp",
-  method = "nearest"
-)
+# One observation: the nearest level with a value, on 3 January.
+extract_to_point(nc = nc_file, lon = 0, lat = 40, depth = 60,
+                 date = "2020-01-03", var = "temp", method = "nearest")
 
-# Extract values for multiple observations
-extract_to_point(
-  nc = nc_file,
-  lon = c(0, 1),
-  lat = c(40, 41),
-  depth = c(60, 100),
-  date = "2020-01-03",
-  var = "temp",
-  method = "nearest"
-)
-
-# Match a complete observation timestamp.
-# The example file has a reading at midnight on 2020-01-03.
-extract_to_point(
-  nc = nc_file,
-  lon = 0,
-  lat = 40,
-  depth = 60,
-  date = as.POSIXct("2020-01-03 00:15:00", tz = "UTC"),
-  var = "temp",
-  method = "nearest",
-  time_resolution = "datetime",
-  max_time_diff = 30 / 1440
-)
-
-# Horizontal matching: this point is outside the example grid's cell edges.
-# The default within rule returns NA; nearest accepts a centre within 60 km.
-extract_to_point(
-  nc = nc_file, lon = -0.6, lat = 40, date = "2020-01-03",
-  var = "temp", method = "surface", spatial_match = "within"
-)
-extract_to_point(
-  nc = nc_file, lon = -0.6, lat = 40, date = "2020-01-03",
-  var = "temp", method = "surface", spatial_match = "nearest",
-  max_distance_km = 60
-)
-
-# Report modes do not change the extracted value.
-# NULL is automatic: the normal nearest-depth approximation stays silent.
-automatic <- extract_to_point(
-  nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
-  var = "temp", method = "nearest",
-  spatial_report = NULL, depth_report = NULL
-)
-# TRUE explains the selected cell and depth, including normal selections.
-detailed <- extract_to_point(
-  nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
-  var = "temp", method = "nearest",
-  spatial_report = TRUE, depth_report = TRUE
-)
-# FALSE hides informational reports; temporal warnings remain active.
-quiet <- extract_to_point(
-  nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
-  var = "temp", method = "nearest",
-  spatial_report = FALSE, depth_report = FALSE, time_report = FALSE
-)
-identical(automatic, detailed)
-identical(automatic, quiet)
-
-# Compare monthly labels when the file has one record per month.
-# Here the timestamp labels are illustrative.
-monthly_labels <- as.Date(c("2020-01-15", "2020-02-15"))
-observation_date <- as.Date("2020-02-28")
-format(monthly_labels, "\%Y-\%m") ==
-  format(observation_date, "\%Y-\%m")
-
-# For extraction from such a file, use:
-# time_resolution = "monthly", time_match = "exact".
-# Multiple records in the same month cause an error;
-# they are not averaged automatically.
-
+# A table of observations keeps its columns and gains one.
+obs <- data.frame(id = c("a", "b"), lon = c(0, 1), lat = c(40, 41),
+                  depth = c(60, 100),
+                  date = as.Date(c("2020-01-03", "2020-01-03")))
+extract_to_point(obs, nc_file, var = "temp", method = "bottom")
+}
+\seealso{
+\link[=extract-SpatProxy]{extract()} for the step this wraps;
+\code{\link[=extract_to_buffer]{extract_to_buffer()}} and \code{\link[=extract_to_track]{extract_to_track()}}.
 }

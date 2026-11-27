@@ -1197,18 +1197,16 @@ associated with a location, date and depth.
 these observations with environmental
 information from NetCDF datasets.
 
-Different extraction methods are available,
-including:
+You choose the depth level with its `method`
+argument:
 
-- `extract2d()` for environmental variables
+- `method = "2d"` for environmental variables
   without a depth dimension.
-- `extract3d_nearest()` for values at the
-  nearest valid depth.
-- `extract3d_surface()` and
-  `extract3d_bottom()` for surface and
+- `method = "nearest"` for values at the
+  nearest depth level with a value.
+- `method = "surface"` and
+  `method = "bottom"` for surface and
   bottom conditions.
-- `extract3d_all()` for obtaining several
-  depth-specific values together.
 
 Alternatively, `extract_to_area()` allows
 you to extract environmental data within

@@ -1583,414 +1583,282 @@
 }
 
 
-#' Extract values from netCDFs to one or more point observations
+#' Extract values from netCDF files at point observations
 #'
-#' This is the general point-extraction interface. It can extract environmental
-#' values for one or multiple observations. The user chooses the type of
-#' extraction with the `method` argument. The more specific functions
-#' `extract2d()`, `extract3d_surface()`, `extract3d_bottom()`,
-#' `extract3d_nearest()` and `extract3d_all()` are wrappers around this
-#' function.
+#' A convenience wrapper over the build and intersect steps: it turns the
+#' observations into [SpatVector3D-class] points with [as_vector3d()],
+#' describes the netCDF data with [as_proxy()], and reads the value at every
+#' point with [extract()][extract-SpatProxy], which reads each time step once
+#' for all the points in it. The same can be done step by step; see the
+#' workflow article, `vignette("workflow-values-in-shapes")`.
 #'
-#' @param data Optional object containing observation points. Can be a data
-#'   frame, tibble, `sf` object with POINT geometries, matrix with column names,
-#'   or named list. If `NULL`, coordinates can be supplied directly through
-#'   `lon`, `lat`, and optionally `depth` and `date`. For `sf` objects,
-#'   longitude and latitude are obtained from the POINT geometries; projected
-#'   geometries are transformed internally to longitude and latitude when a CRS
-#'   is available.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of
-#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
-#'   with a file column.
-#'   Files are read directly with ncdf4, only the cells each observation
-#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
-#'   those, see [extract_to_area()] and [mask()].
-#' @param lon Optional numeric longitude value or vector for direct point
-#'   extraction when `data = NULL`.
-#' @param lat Optional numeric latitude value or vector for direct point
-#'   extraction when `data = NULL`.
-#' @param depth Optional numeric observation depth value or vector for direct
-#'   point extraction. Required when `data = NULL` and `method = "nearest"` or
-#'   `method = "all"`.
-#' @param date Optional observation date or vector of dates for direct point
-#'   extraction. Used when `data = NULL` and the netCDF variable has a time
-#'   dimension. Accepts Date and POSIXt objects, or character values in
-#'   "YYYY-MM-DD", "YYYY-MM-DD HH:MM" or "YYYY-MM-DD HH:MM:SS" format.
-#'   Text timestamps are UTC; POSIXt objects preserve their actual instant.
-#'   Explicit NA values are retained. Direct input vectors may have length 1
-#'   or a common compatible length.
-#' @param var Name of the variable to extract from the netCDF file. If `NULL`,
-#'   the function tries to detect the variable automatically from each file.
-#'   This only works when each netCDF file contains one single variable.
-#' @param method Extraction method. Options are `"2d"`, `"surface"`, `"bottom"`,
-#'   `"nearest"` and `"all"`. With `method = "all"`, the function returns
-#'   nearest, surface and bottom outputs together.
-#' @param lon_col Name of the longitude column in `data`.
-#' @param lat_col Name of the latitude column in `data`.
-#' @param date_col Name of the date column in `data`. Required only when a
-#'   selected netCDF variable has a time dimension. A missing column is an
-#'   error for temporal variables; an explicit missing date retains the row
-#'   and returns NA for its temporal output. Static variables do not require
-#'   a date column and do not parse unused date values.
-#' @param depth_col Name of the observation-depth column in `data`. Required
-#'   only when `method = "nearest"` or `method = "all"`.
-#' @param id_col Optional observation identifier column. It is not required for
-#'   extraction, but it is checked when provided to help users detect mistakes.
-#' @param file_col Column containing file paths when `nc` is a data frame.
-#' @param lon_dim Optional name of the longitude dimension in the netCDF file.
-#' @param lat_dim Optional name of the latitude dimension in the netCDF file.
-#' @param depth_dim Optional name of the depth dimension in the netCDF file.
-#' @param time_dim Optional name of the time dimension in the netCDF file.
-#' @param time_match Character. How observation dates are matched to netCDF time
-#'   values. `"nearest"` (default) selects the closest time step; an
-#'   observation exactly halfway between two steps takes the one on its own
-#'   UTC day. `"exact"` requires the same comparison value (see
-#'   `time_resolution`): the same instant for date-times, or the same day,
-#'   month or year, and returns `NA` when no step matches.
-#' @param max_time_diff Optional non-negative numeric value giving the maximum
-#'   allowed difference, in days, between an observation date and the nearest
-#'   netCDF date when `time_match = "nearest"`. If `NULL` (default), no maximum
-#'   temporal distance is imposed. Ignored when `time_match = "exact"`.
-#' @param output_prefix Optional name used for the extracted output column. If
-#'   omitted, `var` is used.
-#' @param output_col Optional alias for `output_prefix`. Use this when you want
-#'   to define the exact name of the output column directly. If both
-#'   `output_col` and `output_prefix` are provided, `output_col` is used. With
-#'   `method = "all"`, this name is used as the suffix in `nearest_*`,
-#'   `surface_*` and `seabottom_*` columns.
-#' @section Required observation dates:
-#' Date requirements follow each selected variable's dimensions, including
-#' when a file contains both static and temporal variables. Static variables
-#' can be extracted without date or date_col input. Temporal variables require
-#' date for direct input, or an existing column named by date_col for tables;
-#' date_col = NULL does not bypass this requirement. With multiple sources,
-#' every selected temporal variable requires a date input. Explicit NA entries,
-#' including NA without a date class, retain their observations; temporal
-#' outputs are NA while independent static outputs can still be extracted.
-#' An entirely missing date vector does not trigger calendar-label ambiguity
-#' checks because no observation has a date to compare.
-#' @section Observation time zones and formats:
-#' Date inputs have daily precision. POSIXct and POSIXlt inputs preserve the
-#' instant represented, including their time-zone offset; matching and calendar
-#' labels use UTC. For example, 2020-01-02 00:30 in Europe/Madrid is
-#' 2020-01-01 23:30 UTC, so daily matching uses January 1.
-#' Character input must use the ISO formats listed for date. A space or T may
-#' separate date and time, and a trailing Z is accepted for date-times. Minutes
-#' without seconds are interpreted with zero seconds. Text has no inferred
-#' local zone. Date-times without Z generate one warning per extraction,
-#' even when time_report is FALSE, because they are interpreted as UTC.
-#' Date-only text and POSIXt inputs do not generate this warning. Numeric
-#' offsets and zone names in text are rejected; supply a
-#' POSIXt object constructed with the intended zone instead. Resolve ambiguous
-#' or nonexistent local times when constructing that object; this function
-#' cannot recover the intended local time from an already converted instant.
-#' Conversion errors identify the input, affected observations, original values
-#' and identifiers from id_col when available. At most five cases are shown.
-#' Original NA values are not conversion failures. For recycled direct inputs,
-#' positions refer to the resulting observation rows.
-#' @section Physical depth coordinates:
-#' Observation depths must be in metres, positive downward (0 at the
-#' surface); negative observation depths are rejected, and depths in other
-#' units must be converted first. Dataset coordinates are converted from m,
-#' meter(s), metre(s), km, kilometer(s), kilometre(s), cm, centimeter(s) or
-#' centimetre(s). The positive attribute determines direction when supplied;
-#' height and altitude axes without it are read as positive-up. Otherwise
-#' uniformly non-negative values imply positive-down and non-positive values
-#' imply positive-up. Mixed signs without direction metadata are rejected.
-#' The depth coordinate must have units, including for surface and bottom
-#' extraction; a file with a single depth level can be read with extract2d().
-#' Surface means the physically shallowest layer, even if its value is missing.
-#' Bottom means the deepest non-missing layer. Nearest selects the valid layer
-#' closest to the observation depth; ties select the shallower layer.
-#' Selection works the same whether the depth coordinate is stored shallow to
-#' deep or deep to shallow; depths stored in any other order are rejected.
-#' Duplicate physical depths, unsupported units, coordinates above the assumed
-#' reference surface, and sigma, formula-based or pressure coordinates require
-#' explicit correction or conversion before extraction.
-#' @section Multiple sources:
-#' Spatial matching uses the same rules for one or multiple sources.
-#' With spatial_match = "within", only cells containing the point are eligible.
-#' With spatial_match = "nearest", the requested point may be outside grid
-#' coverage. The nearest cell centre must be within max_distance_km of it.
-#' Explicit spatial cell bounds are used when the file has them, and bad
-#' bounds (a missing bounds variable, cells that don't contain their centres
-#' or that overlap) stop with an error that names the file. Without bounds,
-#' edges are inferred from adjacent centres; singleton axes without bounds
-#' require coincidence, up to single-precision rounding of the stored
-#' coordinate.
-#' Longitude comparisons support equivalent coordinates across the antimeridian.
-#' A point on an edge shared by two cells uses the first cell in storage order.
-#' Among eligible sources the closest temporal candidate with a valid value
-#' wins. With "within" matching, equal temporal distances are resolved by
-#' input order, so list the preferred source first. With "nearest" matching,
-#' they are resolved by geographic distance to the cell centre (differences
-#' under 1 m are ignored), then by input order. Existing output columns are
-#' replaced, including by NA. Output names cannot overwrite extraction inputs
-#' or combine different variables in the same column.
-#' @section Custom temporal intervals:
-#' With time_resolution = "custom", observations require hours as for datetime.
-#' For example, custom_time_interval = as.difftime(3, units = "hours") warns
-#' above three hours of displacement. Exact matching requires the same
-#' timestamp.
-#' Auto matching remains unchanged and uses the observed cadence for
-#' diagnostics.
-#' @section Spatial and depth reports:
-#' The default NULL mode reports only missing outputs, selected cells that do
-#' not contain the requested point, and unusually distant depth selections.
-#' TRUE requests a full report, including normal and exact selections; FALSE
-#' hides the corresponding report. Returned values are identical in all modes.
-#' Spatial reports show the requested point, selected cell centre, distance
-#' and any explicit distance limit. With within matching, a point may be
-#' inside a cell without coinciding with its centre.
-#' Depth reports describe physical layers in metres, positive down from the
-#' reference surface. Surface means the shallowest layer; bottom means the
-#' deepest layer with a valid value, not an independently measured seabed.
-#' Values are selected without vertical interpolation. Normal nearest-depth
-#' approximations are silent in automatic mode. A difference strictly greater
-#' than the local layer spacing is reported. Spacing uses the two physical
-#' layers surrounding the requested depth, including layers with missing
-#' values. At an exact layer, its nearest neighbour defines the spacing; outside
-#' the range, the two nearest edge layers are used. Singleton axes have no
-#' spacing to assess a nonzero displacement. Messages identify the reference
-#' layers and only attribute a displacement to missing values when closer
-#' physical layers must lack valid values under nearest-valid selection.
-#' Missing outputs are explained once, with rejection reasons for each
-#' relevant source; a repeated reason is shown once with up to three of its
-#' files. The cause is taken from the sources whose grid covers the point,
-#' unless none does. Temporal causes (including a missing observation date)
-#' are reported by time_report; spatial and depth causes by their
-#' corresponding switches, so FALSE hides them. Mixed causes are grouped under
-#' spatial first, then depth, then time, with all reasons shown.
-#' Reports count distinct observations and output values separately. At most
-#' five cases are shown, prioritising missing values; truncation and the count
-#' omitted are stated. Coordinates use up to five decimals; metres/kilometres
-#' normally use up to two. Extra decimals distinguish values close to a limit
-#' when rounding would otherwise make them appear equal. Calculations retain
-#' full precision. Small positive distances use
-#' <0.01 rather than zero. Depth comparisons in reports allow a relative
-#' tolerance of 1e-6, so single-precision depth axes match their nominal
-#' depths.
+#' You choose the depth level with `method`, which follows the rules of the
+#' same name in `extract()`: `"nearest"` takes the level nearest the
+#' observation's depth, skipping levels without a value; `"surface"` takes the
+#' shallowest level, even if it has no value; `"bottom"` takes the deepest
+#' level with a value. `"2d"` is for a variable without depth. Each observation
+#' takes the cell that contains it. Times are matched to the nearest time step
+#' by default (see `time_match` and `max_time_diff`): a date by its UTC day, a
+#' date-time as an instant.
 #'
-#' @section Temporal diagnostics:
-#' Diagnostics are emitted after source selection, for values actually returned.
-#' Daily, monthly and yearly comparisons warn on a change of calendar period
-#' in UTC. Datetime comparisons warn when displacement exceeds one observed
-#' cadence step, or when a nonzero displacement has no reliable cadence.
-#' With a detected daily cadence, datetime comparison also warns when the
-#' selected value falls on a different UTC day, even below 24 hours.
-#' Explanatory warnings include the requested and selected timestamps, their
-#' difference, the comparison resolution, cadence, row, variable and file name.
-#' Reports explain non-warning displacements and missing outputs without
-#' repeating examples already explained by a temporal warning.
-#' Cadence inference does not change matching or impose a maximum time gap.
-#' Singleton sources may use the observed sequence of compatible files for the
-#' same variable. Time bounds describe intervals, not sampling frequency.
-#' @param spatial_match Horizontal selection rule. "within" (default) requires
-#'   the point to lie inside a cell. "nearest" selects the geographically
-#'   closest cell centre, including outside the grid, up to max_distance_km.
-#'   The rule applies equally to one or multiple sources. A selected missing
-#'   value does not trigger a search for another cell in the same source.
-#' @param max_distance_km Required finite non-negative distance in kilometres
-#'   when spatial_match = "nearest". Distance is the great-circle distance
-#'   from the observation to the cell centre on a sphere of radius 6371.01 km
-#'   (the radius sf::st_distance() uses with s2), and does not depend on sf
-#'   settings. A cell exactly at the limit is accepted. Must be NULL with
-#'   "within".
-#' @param custom_time_interval Positive difftime value used as the warning
-#'   interval when time_resolution = "custom". Matching uses full timestamps.
-#'   This interval does not reject candidates; use max_time_diff for that.
-#' @param spatial_report NULL (default) reports missing spatial outputs and
-#'   selections of cells that do not contain the requested point. TRUE also
-#'   reports normal and exact selections; FALSE hides the spatial report.
-#' @param depth_report NULL (default) reports missing depth outputs, selections
-#'   more than one local layer spacing away, and displaced singleton layers
-#'   whose spacing cannot be assessed. TRUE also reports normal surface, bottom
-#'   and exact depth selections; FALSE hides the depth report. Depths are in
-#'   metres, positive down. Report modes do not change returned values.
-#' @param return_match_info Logical, FALSE by default. With table inputs, add
-#'   one list column per output describing the selected source file, cell,
-#'   depth and timestamp. Missing outputs have no assigned selected source.
-#' @param time_report Logical. If TRUE, the default, display a temporal summary
-#'   when returned values are displaced in time, or outputs are missing for a
-#'   temporal reason (no timestamp within the matching settings, or no
-#'   observation date for a source with a time dimension). Outputs missing
-#'   because of location or depth are reported by spatial_report and
-#'   depth_report instead. The return format is unchanged. FALSE hides the
-#'   summary but does not suppress temporal warnings.
-#' @param time_resolution Precision used to compare observation times with
-#'   dataset timestamps. "auto" uses daily comparison for Date objects
-#'   and date-only text, and datetime comparison for POSIXt objects and
-#'   date-time text. Explicit alternatives are "datetime", "daily",
-#'   "monthly", "yearly" and "custom". Calendar comparisons use UTC.
-#'   These options compare timestamp labels; they do not infer averaging
-#'   intervals or calculate temporal summaries. Date-times are compared as
-#'   instants, so on a daily file stamped at 00:00 an afternoon observation
-#'   matches the next day's step; use "daily" to match by day. If an
-#'   observation selects a time step that appears more than once at its
-#'   comparison resolution (for example a daily comparison on a file with
-#'   several steps per day), extraction stops with an error naming the file
-#'   and the timestamp; repeated steps that no observation selects are
-#'   ignored.
-#'   With nearest matching, monthly and yearly comparisons use the start
-#'   of the labelled month or year. max_time_diff remains in days and
-#'   applies to these comparison values. Use exact matching to require
-#'   the same labelled day, month or year.
-#' @param verbose Logical. If `TRUE`, progress messages are printed every 100
-#'   rows.
+#' @param data Optional observations: a data frame, tibble, `sf` object with
+#'   POINT geometries, numeric matrix with column names, or named list. If
+#'   `NULL`, give the coordinates directly with `lon`, `lat`, and `depth` and
+#'   `date` as needed. `sf` points need a CRS and are transformed to longitude
+#'   and latitude.
+#' @param nc The netCDF data: a file path, several paths for a series of files
+#'   on one grid (each with its own time steps, such as one file per day), a
+#'   connection opened with [ncdf4::nc_open()], or a `SpatProxy` from
+#'   [as_proxy()]. Paths and connections are read through [as_proxy()]; a
+#'   `SpatProxy` is used as it is, so `var` and the dimension arguments don't
+#'   apply to it.
+#' @param lon,lat,depth,date Direct input when `data = NULL`: numeric
+#'   longitudes, latitudes and depths (metres, positive down), and dates or
+#'   date-times. Each has length 1 or the same length as the others.
+#'   `depth` is needed for `method = "nearest"`.
+#' @param var Name of the variable. `NULL` detects it when the file holds one
+#'   data variable.
+#' @param method `"2d"` (default) for a variable without depth or with a
+#'   single depth level, or `"surface"`, `"bottom"` or `"nearest"` for one
+#'   with depth levels (see Details).
+#' @param lon_col,lat_col,date_col,depth_col Columns of `data` with the
+#'   longitude, latitude, date and depth. `date_col` is needed when the
+#'   variable has dated time steps (not a climatology); `depth_col` for
+#'   `method = "nearest"`. The coordinate columns must be numeric.
+#' @param id_col Optional column of observation identifiers. It is checked to
+#'   exist; extraction doesn't use it.
+#' @param lon_dim,lat_dim,depth_dim,time_dim Optional dimension names, passed
+#'   to [as_proxy()].
+#' @param time_match `"nearest"` (default) or `"exact"`: how observation times
+#'   are matched to time steps, as in [as_voxel()].
+#' @param max_time_diff Optional largest gap, in days, between an observation
+#'   and its nearest time step with `time_match = "nearest"`; `NULL` (default)
+#'   allows any gap.
+#' @param output_col,output_prefix Name of the output column. If both are
+#'   given, `output_col` is used. By default, the variable's name, or with
+#'   `var` detected, `surface_<var>`, `seabottom_<var>` or `nearest_<var>` for
+#'   those methods.
 #'
-#' @details
-#' Numeric netCDF time coordinates must provide units expressed as
-#' milliseconds, seconds, minutes, hours or days since a reference
-#' date-time. Singular and plural unit names are accepted. A single time
-#' step in months or years since a reference date-time is also accepted;
-#' several are not, because their length is ambiguous.
+#' @return With `data`, the observations with the value column added. Data
+#'   frames, tibbles and `sf` objects keep their class; matrices and named
+#'   lists become data frames. With direct input, a numeric vector, one value
+#'   per point. A value is `NA` when the observation lies off the grid, has
+#'   no coordinates, has no time step within `max_time_diff`, or has no
+#'   level its `method` can take.
 #'
-#' Reference date-times are interpreted in UTC. A trailing "Z" or
-#' "UTC" is accepted; numeric timezone offsets such as "+02:00"
-#' are not currently supported.
-#'
-#' Supported calendars are "standard", "gregorian" and
-#' "proleptic_gregorian".
-#' Unsupported units, calendars or missing time units produce an error.
-#'
-#' Temporal resolution controls comparison of timestamp labels.
-#' It does not identify averaging intervals, calculate temporal means,
-#' or interpret climatological periods.
-#'
-#' @return If `data` is provided, the input observations with extracted values
-#'   appended. Data frames, tibbles and `sf` objects retain their structure;
-#'   matrices and named lists are returned as data frames. If `data = NULL`,
-#'   direct extraction returns a numeric value for one point and one output, a
-#'   numeric vector for multiple points and one output, a named numeric vector
-#'   for one point and multiple outputs (for example, `method = "all"`), or a
-#'   data frame for multiple points and multiple outputs.
-#'
+#' @seealso [extract()][extract-SpatProxy] for the step this wraps;
+#'   [extract_to_buffer()] and [extract_to_track()].
 #' @examples
-#' nc_file <- system.file(
-#'   "extdata", "example_3d.nc",
-#'   package = "ocean3d"
-#' )
+#' nc_file <- system.file("extdata", "example_3d.nc", package = "ocean3d")
 #'
-#' # Extract the value closest to a single observation
-#' extract_to_point(
-#'   nc = nc_file,
-#'   lon = 0,
-#'   lat = 40,
-#'   depth = 60,
-#'   date = "2020-01-03",
-#'   var = "temp",
-#'   method = "nearest"
-#' )
+#' # One observation: the nearest level with a value, on 3 January.
+#' extract_to_point(nc = nc_file, lon = 0, lat = 40, depth = 60,
+#'                  date = "2020-01-03", var = "temp", method = "nearest")
 #'
-#' # Extract values for multiple observations
-#' extract_to_point(
-#'   nc = nc_file,
-#'   lon = c(0, 1),
-#'   lat = c(40, 41),
-#'   depth = c(60, 100),
-#'   date = "2020-01-03",
-#'   var = "temp",
-#'   method = "nearest"
-#' )
-#'
-#' # Match a complete observation timestamp.
-#' # The example file has a reading at midnight on 2020-01-03.
-#' extract_to_point(
-#'   nc = nc_file,
-#'   lon = 0,
-#'   lat = 40,
-#'   depth = 60,
-#'   date = as.POSIXct("2020-01-03 00:15:00", tz = "UTC"),
-#'   var = "temp",
-#'   method = "nearest",
-#'   time_resolution = "datetime",
-#'   max_time_diff = 30 / 1440
-#' )
-#'
-#' # Horizontal matching: this point is outside the example grid's cell edges.
-#' # The default within rule returns NA; nearest accepts a centre within 60 km.
-#' extract_to_point(
-#'   nc = nc_file, lon = -0.6, lat = 40, date = "2020-01-03",
-#'   var = "temp", method = "surface", spatial_match = "within"
-#' )
-#' extract_to_point(
-#'   nc = nc_file, lon = -0.6, lat = 40, date = "2020-01-03",
-#'   var = "temp", method = "surface", spatial_match = "nearest",
-#'   max_distance_km = 60
-#' )
-#'
-#' # Report modes do not change the extracted value.
-#' # NULL is automatic: the normal nearest-depth approximation stays silent.
-#' automatic <- extract_to_point(
-#'   nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
-#'   var = "temp", method = "nearest",
-#'   spatial_report = NULL, depth_report = NULL
-#' )
-#' # TRUE explains the selected cell and depth, including normal selections.
-#' detailed <- extract_to_point(
-#'   nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
-#'   var = "temp", method = "nearest",
-#'   spatial_report = TRUE, depth_report = TRUE
-#' )
-#' # FALSE hides informational reports; temporal warnings remain active.
-#' quiet <- extract_to_point(
-#'   nc = nc_file, lon = 0, lat = 40, depth = 60, date = "2020-01-03",
-#'   var = "temp", method = "nearest",
-#'   spatial_report = FALSE, depth_report = FALSE, time_report = FALSE
-#' )
-#' identical(automatic, detailed)
-#' identical(automatic, quiet)
-#'
-#' # Compare monthly labels when the file has one record per month.
-#' # Here the timestamp labels are illustrative.
-#' monthly_labels <- as.Date(c("2020-01-15", "2020-02-15"))
-#' observation_date <- as.Date("2020-02-28")
-#' format(monthly_labels, "%Y-%m") ==
-#'   format(observation_date, "%Y-%m")
-#'
-#' # For extraction from such a file, use:
-#' # time_resolution = "monthly", time_match = "exact".
-#' # Multiple records in the same month cause an error;
-#' # they are not averaged automatically.
-#'
+#' # A table of observations keeps its columns and gains one.
+#' obs <- data.frame(id = c("a", "b"), lon = c(0, 1), lat = c(40, 41),
+#'                   depth = c(60, 100),
+#'                   date = as.Date(c("2020-01-03", "2020-01-03")))
+#' extract_to_point(obs, nc_file, var = "temp", method = "bottom")
 #' @export
-
-extract_to_point <- function(data = NULL,
-                             nc,
-                             lon = NULL,
-                             lat = NULL,
-                             depth = NULL,
-                             date = NULL,
-                             var = NULL,
-                             method = c(
-                               "2d", "surface", "bottom", "nearest", "all"
-                             ),
-                             lon_col = "lon",
-                             lat_col = "lat",
-                             date_col = "date",
-                             depth_col = "depth",
-                             id_col = NULL,
-                             file_col = "file",
-                             lon_dim = NULL,
-                             lat_dim = NULL,
-                             depth_dim = NULL,
-                             time_dim = NULL,
+extract_to_point <- function(data = NULL, nc, lon = NULL, lat = NULL,
+                             depth = NULL, date = NULL, var = NULL,
+                             method = c("2d", "surface", "bottom", "nearest"),
+                             lon_col = "lon", lat_col = "lat",
+                             date_col = "date", depth_col = "depth",
+                             id_col = NULL, lon_dim = NULL, lat_dim = NULL,
+                             depth_dim = NULL, time_dim = NULL,
                              time_match = c("nearest", "exact"),
-                             max_time_diff = NULL,
-                             output_prefix = NULL,
-                             output_col = NULL,
-                             verbose = FALSE,
-                             time_resolution = c(
-                               "auto", "datetime", "daily",
-                               "monthly", "yearly", "custom"
-                             ),
-                             custom_time_interval = NULL,
-                             time_report = TRUE,
-                             spatial_match = c("within", "nearest"),
-                             max_distance_km = NULL,
-                             spatial_report = NULL,
-                             depth_report = NULL,
-                             return_match_info = FALSE) {
+                             max_time_diff = NULL, output_prefix = NULL,
+                             output_col = NULL) {
+  method <- match.arg(method)
+  time_match <- match.arg(time_match)
+  stop_input <- function(message) {
+    rlang::abort(message, class = "ocean3d_error_point_input", call = NULL)
+  }
+  if (is.data.frame(nc)) {
+    stop_input(paste(
+      "`nc` as a table of files is no longer supported. Give one path,",
+      "several paths of a series on one grid, a connection or a SpatProxy;",
+      "for files on different grids, call once per grid."
+    ))
+  }
+  if (is.list(nc) && !inherits(nc, "ncdf4")) nc <- unlist(nc)
+  proxy <- if (methods::is(nc, "SpatProxy")) {
+    nc
+  } else {
+    as_proxy(nc, var = var, lon_dim = lon_dim, lat_dim = lat_dim,
+             depth_dim = depth_dim, time_dim = time_dim)
+  }
+  var_name <- proxy@variable$name
+  has_depth <- !is.null(proxy@axes$depth)
+  # A single depth level, as in many surface products, reads as 2D.
+  if (method == "2d" && length(proxy@axes$depth$centres) > 1L) {
+    stop_input(glue::glue(
+      "Variable `{var_name}` has several depth levels, so `method = \"2d\"` ",
+      "doesn't apply. Use \"surface\", \"bottom\" or \"nearest\"."
+    ))
+  }
+  if (method != "2d" && !has_depth) {
+    stop_input(glue::glue(
+      "Variable `{var_name}` has no depth axis. Use `method = \"2d\"`."
+    ))
+  }
+  # Dated time steps, even one, are matched to each observation's date; a
+  # climatology gives its steps to every observation.
+  time_axis <- proxy@axes$time
+  timed <- !is.null(time_axis) && !isTRUE(time_axis$climatology)
+
+  # The observations as a plain table of coordinates, depth and time.
+  direct <- is.null(data)
+  if (direct) {
+    inputs <- Filter(Negate(is.null),
+                     list(lon = lon, lat = lat, depth = depth, date = date))
+    n <- max(lengths(inputs))
+    if (!all(lengths(inputs) %in% c(1L, n))) {
+      stop_input(paste(
+        "`lon`, `lat`, `depth` and `date` must each have length 1 or the",
+        "same length."
+      ))
+    }
+    table <- data.frame(lapply(inputs, rep_len, length.out = n))
+    lon_col <- "lon"
+    lat_col <- "lat"
+    depth_col <- "depth"
+    date_col <- if (!is.null(date)) "date"
+  } else if (inherits(data, "sf")) {
+    if (is.na(sf::st_crs(data))) {
+      stop_input(paste(
+        "`data` has no CRS, so its points can't be placed on the grid. Set",
+        "it with `sf::st_set_crs()`, for example to 4326 for longitude and",
+        "latitude."
+      ))
+    }
+    xy <- sf::st_coordinates(sf::st_transform(sf::st_geometry(data), 4326))
+    table <- sf::st_drop_geometry(data)
+    table[[lon_col]] <- xy[, "X"]
+    table[[lat_col]] <- xy[, "Y"]
+  } else {
+    table <- as.data.frame(data, stringsAsFactors = FALSE)
+  }
+  n <- nrow(table)
+  if (timed && is.null(date_col)) {
+    stop_input(glue::glue(
+      "Variable `{var_name}` has dated time steps, so the observations need ",
+      "a date."
+    ))
+  }
+  needed <- c(lon_col, lat_col, if (method == "nearest") depth_col,
+              if (timed) date_col, id_col)
+  missing_cols <- setdiff(needed, names(table))
+  if (length(missing_cols)) {
+    stop_input(glue::glue("`data` has no column {toString(missing_cols)}."))
+  }
+  # Coordinates held as text, as in a matrix with a date column or a column
+  # read from a file as text, would otherwise all give NA.
+  coordinate_cols <- c(lon_col, lat_col, if (method == "nearest") depth_col)
+  text_cols <- coordinate_cols[
+    !vapply(table[coordinate_cols], is.numeric, logical(1))
+  ]
+  if (length(text_cols)) {
+    columns_word <- if (length(text_cols) == 1L) "Column" else "Columns"
+    stop_input(glue::glue(
+      "{columns_word} {toString(paste0('`', text_cols, '`'))} must be ",
+      "numeric. A matrix with a date column holds its numbers as text; give ",
+      "a data frame instead."
+    ))
+  }
+
+  output <- if (!is.null(output_col)) {
+    output_col
+  } else if (!is.null(output_prefix)) {
+    output_prefix
+  } else if (is.null(var) && method != "2d") {
+    paste0(c(surface = "surface_", bottom = "seabottom_",
+             nearest = "nearest_")[[method]], var_name)
+  } else {
+    var_name
+  }
+  if (!direct && output %in% names(table)) {
+    stop_input(glue::glue(
+      "`data` already has a column `{output}`; choose another name with ",
+      "`output_col`."
+    ))
+  }
+
+  # Observations without coordinates, or without the depth `nearest` needs,
+  # get NA; the rest become points. Depth only matters for `nearest`.
+  point_depth <- rep_len(if (method == "nearest") table[[depth_col]] else 0, n)
+  usable <- is.finite(table[[lon_col]]) & is.finite(table[[lat_col]]) &
+    is.finite(point_depth)
+  values <- rep(NA_real_, n)
+  if (any(usable)) {
+    points <- data.frame(lon = table[[lon_col]][usable],
+                         lat = table[[lat_col]][usable],
+                         depth = point_depth[usable])
+    # The date column keeps its own name, so an unreadable date is reported
+    # by the name the caller gave it.
+    time_col <- if (timed) {
+      if (date_col %in% names(points)) "time" else date_col
+    }
+    if (timed) points[[time_col]] <- table[[date_col]][usable]
+    points <- as_vector3d(points, time = time_col)
+    rule <- if (method != "2d") {
+      list(method = method)
+    } else if (has_depth) {
+      list(method = "surface")
+    }
+    found <- do.call(terra::extract, c(list(proxy, points), rule, list(
+      time_match = time_match, max_time_diff = max_time_diff
+    )))
+    values[usable] <- found$value
+  }
+  if (direct) return(values)
+  data <- if (inherits(data, c("data.frame", "sf"))) data else table
+  data[[output]] <- values
+  data
+}
+
+# The pre-#116 point extraction, kept only for extract_to_track(), which
+# passes it file tables, method = "all", time_resolution and match_info.
+# It goes when extract_to_track() is rebuilt on sample_3d() and extract()
+# (#116); nothing else may call it.
+.extract_points_legacy <- function(data = NULL,
+                                   nc,
+                                   lon = NULL,
+                                   lat = NULL,
+                                   depth = NULL,
+                                   date = NULL,
+                                   var = NULL,
+                                   method = c(
+                                     "2d", "surface", "bottom", "nearest", "all"
+                                   ),
+                                   lon_col = "lon",
+                                   lat_col = "lat",
+                                   date_col = "date",
+                                   depth_col = "depth",
+                                   id_col = NULL,
+                                   file_col = "file",
+                                   lon_dim = NULL,
+                                   lat_dim = NULL,
+                                   depth_dim = NULL,
+                                   time_dim = NULL,
+                                   time_match = c("nearest", "exact"),
+                                   max_time_diff = NULL,
+                                   output_prefix = NULL,
+                                   output_col = NULL,
+                                   verbose = FALSE,
+                                   time_resolution = c(
+                                     "auto", "datetime", "daily",
+                                     "monthly", "yearly", "custom"
+                                   ),
+                                   custom_time_interval = NULL,
+                                   time_report = TRUE,
+                                   spatial_match = c("within", "nearest"),
+                                   max_distance_km = NULL,
+                                   spatial_report = NULL,
+                                   depth_report = NULL,
+                                   return_match_info = FALSE) {
   if (!is.logical(return_match_info) || length(return_match_info) != 1L ||
         is.na(return_match_info)) {
     stop("return_match_info must be TRUE or FALSE.", call. = FALSE)
@@ -2258,257 +2126,4 @@ extract_to_point <- function(data = NULL,
   }
 
   out
-}
-
-# -----------------------------------------------------------------------------
-# Wrapper functions
-# -----------------------------------------------------------------------------
-# These functions keep explicit names for the most common extraction modes.
-# They are easier to discover and easier to document, while the internal
-# workflow stays centralised in `extract_to_point()`.
-# -----------------------------------------------------------------------------
-
-#' Extract values from a 2D netCDF variable
-#'
-#' Use this function when the variable has longitude and latitude dimensions,
-#' and optionally a time dimension, but no depth dimension.
-#'
-#' @param data Object containing observation points. Can be a data frame,
-#'   tibble, `sf` object with POINT geometries, matrix with column names, or
-#'   named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of
-#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
-#'   with a file column.
-#'   Files are read directly with ncdf4, only the cells each observation
-#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
-#'   those, see [extract_to_area()] and [mask()].
-#' @param var Name of the variable to extract from the netCDF file. If `NULL`,
-#'   the function tries to detect the variable automatically from each file.
-#'   This only works when each netCDF file contains one single variable.
-#' @param ... Additional arguments passed to [extract_to_point()].
-#'
-#' @return The input observations with extracted values appended. Data frames,
-#'   tibbles and `sf` objects retain their structure; matrices and named lists
-#'   are returned as data frames.
-#'
-#' @examples
-#' nc_file <- system.file(
-#'   "extdata", "example_2d.nc",
-#'   package = "ocean3d"
-#' )
-#'
-#' observations <- data.frame(
-#'   lon = c(0, 1),
-#'   lat = c(40, 41),
-#'   date = as.Date(c("2020-01-01", "2020-01-03"))
-#' )
-#'
-#' extract2d(
-#'   data = observations,
-#'   nc = nc_file,
-#'   var = "temp"
-#' )
-#'
-#' @export
-extract2d <- function(data, nc, var = NULL, ...) {
-  extract_to_point(data = data, nc = nc, var = var, method = "2d", ...)
-}
-
-#' Extract the surface layer from a 3D netCDF variable
-#'
-#' The surface layer is defined as the physically shallowest depth layer in the
-#' netCDF file, whether the depth coordinate is stored shallow to deep
-#' or deep to shallow.
-#'
-#' @param data Object containing observation points. Can be a data frame,
-#'   tibble, `sf` object with POINT geometries, matrix with column names, or
-#'   named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of
-#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
-#'   with a file column.
-#'   Files are read directly with ncdf4, only the cells each observation
-#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
-#'   those, see [extract_to_area()] and [mask()].
-#' @param var Name of the variable to extract from the netCDF file. If `NULL`,
-#'   the function tries to detect the variable automatically from each file.
-#'   This only works when each netCDF file contains one single variable.
-#' @param ... Additional arguments passed to [extract_to_point()].
-#'
-#' @return The input observations with extracted values appended. Data frames,
-#'   tibbles and `sf` objects retain their structure; matrices and named lists
-#'   are returned as data frames.
-#'
-#' @examples
-#' nc_file <- system.file(
-#'   "extdata", "example_3d.nc",
-#'   package = "ocean3d"
-#' )
-#'
-#' observations <- data.frame(
-#'   lon = c(0, 1),
-#'   lat = c(40, 41),
-#'   date = as.Date(c("2020-01-01", "2020-01-03"))
-#' )
-#'
-#' extract3d_surface(
-#'   data = observations,
-#'   nc = nc_file,
-#'   var = "temp"
-#' )
-#'
-#' @export
-extract3d_surface <- function(data, nc, var = NULL, ...) {
-  extract_to_point(data = data, nc = nc, var = var, method = "surface", ...)
-}
-
-#' Extract the bottom available layer from a 3D netCDF variable
-#'
-#' For each observation, this function reads the vertical profile at the cell
-#' and timestamp selected under spatial_match and time_match. Spatial matching
-#' defaults to "within", requiring the point to lie inside a cell; "nearest"
-#' requires an explicit max_distance_km limit. The deepest layer with a valid
-#' value is returned. This layer does not establish the actual seabed depth.
-#' See [extract_to_point()] for matching rules and report options.
-#'
-#' @param data Object containing observation points. Can be a data frame,
-#'   tibble, `sf` object with POINT geometries, matrix with column names, or
-#'   named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of
-#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
-#'   with a file column.
-#'   Files are read directly with ncdf4, only the cells each observation
-#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
-#'   those, see [extract_to_area()] and [mask()].
-#' @param var Name of the variable to extract from the netCDF file. If `NULL`,
-#'   the function tries to detect the variable automatically from each file.
-#'   This only works when each netCDF file contains one single variable.
-#' @param ... Additional arguments passed to [extract_to_point()].
-#'
-#' @return The input observations with extracted values appended. Data frames,
-#'   tibbles and `sf` objects retain their structure; matrices and named lists
-#'   are returned as data frames.
-#'
-#' @examples
-#' nc_file <- system.file(
-#'   "extdata", "example_3d.nc",
-#'   package = "ocean3d"
-#' )
-#'
-#' observations <- data.frame(
-#'   lon = c(0, 1),
-#'   lat = c(40, 41),
-#'   date = as.Date(c("2020-01-01", "2020-01-03"))
-#' )
-#'
-#' extract3d_bottom(
-#'   data = observations,
-#'   nc = nc_file,
-#'   var = "temp"
-#' )
-#'
-#' @export
-extract3d_bottom <- function(data, nc, var = NULL, ...) {
-  extract_to_point(data = data, nc = nc, var = var, method = "bottom", ...)
-}
-
-#' Extract the nearest valid depth layer from a 3D netCDF variable
-#'
-#' For each observation, this function reads the full vertical profile and
-#' finds the valid, non-missing netCDF depth layer closest to the observation
-#' depth. This avoids returning `NA` when the geometrically closest depth layer
-#' is invalid at that grid cell, for example below the seabed.
-#'
-#' @param data Object containing observation points. Can be a data frame,
-#'   tibble, `sf` object with POINT geometries, matrix with column names, or
-#'   named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of
-#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
-#'   with a file column.
-#'   Files are read directly with ncdf4, only the cells each observation
-#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
-#'   those, see [extract_to_area()] and [mask()].
-#' @param var Name of the variable to extract from the netCDF file. If `NULL`,
-#'   the function tries to detect the variable automatically from each file.
-#'   This only works when each netCDF file contains one single variable.
-#' @param ... Additional arguments passed to [extract_to_point()].
-#'
-#' @return The input observations with extracted values appended. Data frames,
-#'   tibbles and `sf` objects retain their structure; matrices and named lists
-#'   are returned as data frames.
-#'
-#' @examples
-#' nc_file <- system.file(
-#'   "extdata", "example_3d.nc",
-#'   package = "ocean3d"
-#' )
-#'
-#' observations <- data.frame(
-#'   lon = c(0, 1),
-#'   lat = c(40, 41),
-#'   depth = c(60, 100),
-#'   date = as.Date(c("2020-01-01", "2020-01-03"))
-#' )
-#'
-#' extract3d_nearest(
-#'   data = observations,
-#'   nc = nc_file,
-#'   var = "temp"
-#' )
-#'
-#' @export
-
-extract3d_nearest <- function(data, nc, var = NULL, ...) {
-  extract_to_point(data = data, nc = nc, var = var, method = "nearest", ...)
-}
-
-#' Extract nearest, surface and bottom values from a 3D netCDF variable
-#'
-#' For each observation, this function reads the vertical profile at the cell
-#' and timestamp selected under spatial_match and time_match. Spatial matching
-#' defaults to "within"; "nearest" requires an explicit max_distance_km limit.
-#' It returns three summaries: the valid layer nearest the requested depth,
-#' the physically shallowest layer, and the deepest layer with a valid value.
-#' See [extract_to_point()] for depth conventions and report options.
-#'
-#' @param data Object containing observation points. Can be a data frame,
-#'   tibble, `sf` object with POINT geometries, matrix with column names, or
-#'   named list.
-#' @param nc netCDF source. Can be a file path, vector of file paths, list of
-#'   file paths, opened `ncdf4` object, list of opened objects, or a data frame
-#'   with a file column.
-#'   Files are read directly with ncdf4, only the cells each observation
-#'   needs. A [SpatVoxel-class] or other `SpatRaster` isn't accepted; for
-#'   those, see [extract_to_area()] and [mask()].
-#' @param var Name of the variable to extract from the netCDF file. If `NULL`,
-#'   the function tries to detect the variable automatically from each file.
-#'   This only works when each netCDF file contains one single variable.
-#' @param ... Additional arguments passed to [extract_to_point()].
-#'
-#' @return The input observations with three extracted columns: `nearest_*`,
-#'   `surface_*` and `seabottom_*`. Data frames, tibbles and `sf` objects retain
-#'   their structure; matrices and named lists are returned as data frames.
-#'
-#' @examples
-#' nc_file <- system.file(
-#'   "extdata", "example_3d.nc",
-#'   package = "ocean3d"
-#' )
-#'
-#' observations <- data.frame(
-#'   lon = c(0, 1),
-#'   lat = c(40, 41),
-#'   depth = c(60, 100),
-#'   date = as.Date(c("2020-01-01", "2020-01-03"))
-#' )
-#'
-#' extract3d_all(
-#'   data = observations,
-#'   nc = nc_file,
-#'   var = "temp"
-#' )
-#'
-#' @export
-
-extract3d_all <- function(data, nc, var = NULL, ...) {
-  extract_to_point(data = data, nc = nc, var = var, method = "all", ...)
 }
