@@ -957,8 +957,8 @@
 
 #' Extract environmental values along tracks and lines
 #'
-#' Sample ordered trajectories and reuse [extract_to_point()] for environmental
-#' selection. Return sampled positions and optional summaries per track.
+#' Sample ordered trajectories and take the environmental value at each sampled
+#' position. Return sampled positions and optional summaries per track.
 #'
 #' @param data Ordered vertex table: a data frame, matrix, named list or sf
 #'   POINT features, as for [extract_to_point()]. Rows are traversed in their
@@ -1016,8 +1016,10 @@
 #' @param mask_step_km Maximum segment length of the polyline used for mask
 #'   predicates. This is an approximation to the geodesic; coastline accuracy
 #'   also depends on the supplied mask. Touching land counts as an intersection.
-#' @param method Depth method passed to [extract_to_point()], including 'all'.
-#'   NULL uses nearest for variables with depth and 2d for variables without it.
+#' @param method Depth method for each sample: 'nearest', 'surface', 'bottom'
+#'   or '2d', as in [extract_to_point()], or 'all' for one column per depth
+#'   method. NULL uses nearest for variables with depth and 2d for variables
+#'   without it.
 #' @param statistics NULL for samples only, or distinct names from mean, sd, se,
 #'   min and max. Summaries describe sampled environmental selections.
 #' @param weighting 'distance', 'duration' or 'equal'. Distance and duration
@@ -1031,8 +1033,11 @@
 #'   required for selected temporal variables, duration weights or time-gap
 #'   limits.
 #' @param output_col Output name or named variable-to-column mapping.
-#' @param time_resolution Point-time precision; see [extract_to_point()]. With
-#'   auto, the original observations determine precision, before interpolation.
+#' @param time_resolution Point-time precision: 'auto', 'datetime' (instants),
+#'   'daily', 'monthly' or 'yearly' (UTC calendar labels), or 'custom' (full
+#'   timestamps, with `custom_time_interval` in `...` as a warning threshold).
+#'   With auto, the original observations set the precision, before
+#'   interpolation.
 #' @param max_samples Maximum total sampled positions, a positive integer.
 #' @param max_segment_km,max_gap_hours Optional limits that reject long segments
 #'   or known elapsed time gaps. Split disconnected trajectories explicitly.
@@ -1081,8 +1086,8 @@
 #' and spatial nearest matching are currently unsupported in cells mode.
 #' Overlapping sources with different horizontal grids require explicit
 #' alignment or another sampling mode.
-#' Environmental values are selected using extract_to_point(), never
-#'   interpolated.
+#' Environmental values are taken from the grid cell and time step each
+#'   sample falls in, never interpolated.
 #' The depth coordinate may be stored shallow to deep or deep to shallow;
 #'   depths stored in any other order are rejected.
 #' Missing coordinates are rejected and multipart lines must be split

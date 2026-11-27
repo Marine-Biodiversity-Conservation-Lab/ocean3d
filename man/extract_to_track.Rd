@@ -80,8 +80,10 @@ values are retained; missing endpoints produce missing intermediate values.}
 samples. Require the corresponding interpolation switch. They supplement
 horizontal spacing, including for stationary or vertically moving tracks.}
 
-\item{method}{Depth method passed to \code{\link[=extract_to_point]{extract_to_point()}}, including 'all'.
-NULL uses nearest for variables with depth and 2d for variables without it.}
+\item{method}{Depth method for each sample: 'nearest', 'surface', 'bottom'
+or '2d', as in \code{\link[=extract_to_point]{extract_to_point()}}, or 'all' for one column per depth
+method. NULL uses nearest for variables with depth and 2d for variables
+without it.}
 
 \item{statistics}{NULL for samples only, or distinct names from mean, sd, se,
 min and max. Summaries describe sampled environmental selections.}
@@ -101,8 +103,11 @@ limits.}
 
 \item{output_col}{Output name or named variable-to-column mapping.}
 
-\item{time_resolution}{Point-time precision; see \code{\link[=extract_to_point]{extract_to_point()}}. With
-auto, the original observations determine precision, before interpolation.}
+\item{time_resolution}{Point-time precision: 'auto', 'datetime' (instants),
+'daily', 'monthly' or 'yearly' (UTC calendar labels), or 'custom' (full
+timestamps, with \code{custom_time_interval} in \code{...} as a warning threshold).
+With auto, the original observations set the precision, before
+interpolation.}
 
 \item{max_samples}{Maximum total sampled positions, a positive integer.}
 
@@ -172,8 +177,8 @@ input row order is retained. Non-coordinate attributes of inserted samples
 are NA. source_row indexes the input rows.
 }
 \description{
-Sample ordered trajectories and reuse \code{\link[=extract_to_point]{extract_to_point()}} for environmental
-selection. Return sampled positions and optional summaries per track.
+Sample ordered trajectories and take the environmental value at each sampled
+position. Return sampled positions and optional summaries per track.
 }
 \section{Interpretation and limits}{
 
@@ -192,8 +197,8 @@ the temporal rules still compare timestamp labels. Custom temporal precision
 and spatial nearest matching are currently unsupported in cells mode.
 Overlapping sources with different horizontal grids require explicit
 alignment or another sampling mode.
-Environmental values are selected using extract_to_point(), never
-interpolated.
+Environmental values are taken from the grid cell and time step each
+sample falls in, never interpolated.
 The depth coordinate may be stored shallow to deep or deep to shallow;
 depths stored in any other order are rejected.
 Missing coordinates are rejected and multipart lines must be split

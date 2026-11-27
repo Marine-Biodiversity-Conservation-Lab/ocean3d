@@ -30,13 +30,17 @@ extract_to_point(
 }
 \arguments{
 \item{data}{Optional observations: a data frame, tibble, \code{sf} object with
-POINT geometries, matrix with column names, or named list. If \code{NULL},
-give the coordinates directly with \code{lon}, \code{lat}, and \code{depth} and \code{date}
-as needed. \code{sf} points are transformed to longitude and latitude.}
+POINT geometries, numeric matrix with column names, or named list. If
+\code{NULL}, give the coordinates directly with \code{lon}, \code{lat}, and \code{depth} and
+\code{date} as needed. \code{sf} points need a CRS and are transformed to longitude
+and latitude.}
 
 \item{nc}{The netCDF data: a file path, several paths for a series of files
-on one grid (each with its own time steps, such as one file per day), or
-a connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}}. Read through \code{\link[=as_proxy]{as_proxy()}}.}
+on one grid (each with its own time steps, such as one file per day), a
+connection opened with \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}}, or a \code{SpatProxy} from
+\code{\link[=as_proxy]{as_proxy()}}. Paths and connections are read through \code{\link[=as_proxy]{as_proxy()}}; a
+\code{SpatProxy} is used as it is, so \code{var} and the dimension arguments don't
+apply to it.}
 
 \item{lon, lat, depth, date}{Direct input when \code{data = NULL}: numeric
 longitudes, latitudes and depths (metres, positive down), and dates or
@@ -52,8 +56,8 @@ with depth levels (see Details).}
 
 \item{lon_col, lat_col, date_col, depth_col}{Columns of \code{data} with the
 longitude, latitude, date and depth. \code{date_col} is needed when the
-variable has more than one time step; \code{depth_col} for
-\code{method = "nearest"}.}
+variable has dated time steps (not a climatology); \code{depth_col} for
+\code{method = "nearest"}. The coordinate columns must be numeric.}
 
 \item{id_col}{Optional column of observation identifiers. It is checked to
 exist; extraction doesn't use it.}
@@ -65,13 +69,13 @@ to \code{\link[=as_proxy]{as_proxy()}}.}
 are matched to time steps, as in \code{\link[=as_voxel]{as_voxel()}}.}
 
 \item{max_time_diff}{Optional largest gap, in days, between an observation
-and the time step \code{time_match = "nearest"} picks; \code{NULL} (default)
+and its nearest time step with \code{time_match = "nearest"}; \code{NULL} (default)
 allows any gap.}
 
-\item{output_col, output_prefix}{Name of the output column. \code{output_col}
-wins when both are given. By default, the variable's name, or with \code{var}
-detected, \verb{surface_<var>}, \verb{seabottom_<var>} or \verb{nearest_<var>} for those
-methods.}
+\item{output_col, output_prefix}{Name of the output column. If both are
+given, \code{output_col} is used. By default, the variable's name, or with
+\code{var} detected, \verb{surface_<var>}, \verb{seabottom_<var>} or \verb{nearest_<var>} for
+those methods.}
 }
 \value{
 With \code{data}, the observations with the value column added. Data
@@ -90,13 +94,14 @@ for all the points in it. The same can be done step by step; see the
 workflow article, \code{vignette("workflow-values-in-shapes")}.
 }
 \details{
-\code{method} chooses the depth level, as \code{extract()}'s rules of the same name
-do: \code{"nearest"} takes the level nearest the observation's depth, skipping
-levels without a value; \code{"surface"} takes the shallowest level, even if it
-has no value; \code{"bottom"} takes the deepest level with a value. \code{"2d"} is
-for a variable without depth. Each observation takes the cell that
-contains it. Times are matched to the nearest time step by default (see
-\code{time_match} and \code{max_time_diff}): a date by UTC day, a date-time exactly.
+You choose the depth level with \code{method}, which follows the rules of the
+same name in \code{extract()}: \code{"nearest"} takes the level nearest the
+observation's depth, skipping levels without a value; \code{"surface"} takes the
+shallowest level, even if it has no value; \code{"bottom"} takes the deepest
+level with a value. \code{"2d"} is for a variable without depth. Each observation
+takes the cell that contains it. Times are matched to the nearest time step
+by default (see \code{time_match} and \code{max_time_diff}): a date by its UTC day, a
+date-time as an instant.
 }
 \examples{
 nc_file <- system.file("extdata", "example_3d.nc", package = "ocean3d")

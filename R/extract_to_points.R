@@ -1592,21 +1592,26 @@
 #' for all the points in it. The same can be done step by step; see the
 #' workflow article, `vignette("workflow-values-in-shapes")`.
 #'
-#' `method` chooses the depth level, as `extract()`'s rules of the same name
-#' do: `"nearest"` takes the level nearest the observation's depth, skipping
-#' levels without a value; `"surface"` takes the shallowest level, even if it
-#' has no value; `"bottom"` takes the deepest level with a value. `"2d"` is
-#' for a variable without depth. Each observation takes the cell that
-#' contains it. Times are matched to the nearest time step by default (see
-#' `time_match` and `max_time_diff`): a date by UTC day, a date-time exactly.
+#' You choose the depth level with `method`, which follows the rules of the
+#' same name in `extract()`: `"nearest"` takes the level nearest the
+#' observation's depth, skipping levels without a value; `"surface"` takes the
+#' shallowest level, even if it has no value; `"bottom"` takes the deepest
+#' level with a value. `"2d"` is for a variable without depth. Each observation
+#' takes the cell that contains it. Times are matched to the nearest time step
+#' by default (see `time_match` and `max_time_diff`): a date by its UTC day, a
+#' date-time as an instant.
 #'
 #' @param data Optional observations: a data frame, tibble, `sf` object with
-#'   POINT geometries, matrix with column names, or named list. If `NULL`,
-#'   give the coordinates directly with `lon`, `lat`, and `depth` and `date`
-#'   as needed. `sf` points are transformed to longitude and latitude.
+#'   POINT geometries, numeric matrix with column names, or named list. If
+#'   `NULL`, give the coordinates directly with `lon`, `lat`, and `depth` and
+#'   `date` as needed. `sf` points need a CRS and are transformed to longitude
+#'   and latitude.
 #' @param nc The netCDF data: a file path, several paths for a series of files
-#'   on one grid (each with its own time steps, such as one file per day), or
-#'   a connection opened with [ncdf4::nc_open()]. Read through [as_proxy()].
+#'   on one grid (each with its own time steps, such as one file per day), a
+#'   connection opened with [ncdf4::nc_open()], or a `SpatProxy` from
+#'   [as_proxy()]. Paths and connections are read through [as_proxy()]; a
+#'   `SpatProxy` is used as it is, so `var` and the dimension arguments don't
+#'   apply to it.
 #' @param lon,lat,depth,date Direct input when `data = NULL`: numeric
 #'   longitudes, latitudes and depths (metres, positive down), and dates or
 #'   date-times. Each has length 1 or the same length as the others.
@@ -1618,8 +1623,8 @@
 #'   with depth levels (see Details).
 #' @param lon_col,lat_col,date_col,depth_col Columns of `data` with the
 #'   longitude, latitude, date and depth. `date_col` is needed when the
-#'   variable has more than one time step; `depth_col` for
-#'   `method = "nearest"`.
+#'   variable has dated time steps (not a climatology); `depth_col` for
+#'   `method = "nearest"`. The coordinate columns must be numeric.
 #' @param id_col Optional column of observation identifiers. It is checked to
 #'   exist; extraction doesn't use it.
 #' @param lon_dim,lat_dim,depth_dim,time_dim Optional dimension names, passed
@@ -1627,12 +1632,12 @@
 #' @param time_match `"nearest"` (default) or `"exact"`: how observation times
 #'   are matched to time steps, as in [as_voxel()].
 #' @param max_time_diff Optional largest gap, in days, between an observation
-#'   and the time step `time_match = "nearest"` picks; `NULL` (default)
+#'   and its nearest time step with `time_match = "nearest"`; `NULL` (default)
 #'   allows any gap.
-#' @param output_col,output_prefix Name of the output column. `output_col`
-#'   wins when both are given. By default, the variable's name, or with `var`
-#'   detected, `surface_<var>`, `seabottom_<var>` or `nearest_<var>` for those
-#'   methods.
+#' @param output_col,output_prefix Name of the output column. If both are
+#'   given, `output_col` is used. By default, the variable's name, or with
+#'   `var` detected, `surface_<var>`, `seabottom_<var>` or `nearest_<var>` for
+#'   those methods.
 #'
 #' @return With `data`, the observations with the value column added. Data
 #'   frames, tibbles and `sf` objects keep their class; matrices and named
@@ -1668,34 +1673,41 @@ extract_to_point <- function(data = NULL, nc, lon = NULL, lat = NULL,
                              output_col = NULL) {
   method <- match.arg(method)
   time_match <- match.arg(time_match)
-  stop_input <- function(...) {
-    rlang::abort(paste0(...), class = "ocean3d_error_point_input",
-                 call = NULL)
+  stop_input <- function(message) {
+    rlang::abort(message, class = "ocean3d_error_point_input", call = NULL)
   }
   if (is.data.frame(nc)) {
-    stop_input("`nc` as a table of files is no longer supported. Give one ",
-               "path, several paths of a series on one grid, or a ",
-               "connection; for files on different grids, call once per ",
-               "grid.")
+    stop_input(paste(
+      "`nc` as a table of files is no longer supported. Give one path,",
+      "several paths of a series on one grid, a connection or a SpatProxy;",
+      "for files on different grids, call once per grid."
+    ))
   }
   if (is.list(nc) && !inherits(nc, "ncdf4")) nc <- unlist(nc)
-  proxy <- as_proxy(nc, var = var, lon_dim = lon_dim, lat_dim = lat_dim,
-                    depth_dim = depth_dim, time_dim = time_dim)
+  proxy <- if (methods::is(nc, "SpatProxy")) {
+    nc
+  } else {
+    as_proxy(nc, var = var, lon_dim = lon_dim, lat_dim = lat_dim,
+             depth_dim = depth_dim, time_dim = time_dim)
+  }
   var_name <- proxy@variable$name
   has_depth <- !is.null(proxy@axes$depth)
   # A single depth level, as in many surface products, reads as 2D.
   if (method == "2d" && length(proxy@axes$depth$centres) > 1L) {
-    stop_input("Variable `", var_name, "` has several depth levels, so ",
-               "`method = \"2d\"` doesn't apply. Use \"surface\", ",
-               "\"bottom\" or \"nearest\".")
+    stop_input(glue::glue(
+      "Variable `{var_name}` has several depth levels, so `method = \"2d\"` ",
+      "doesn't apply. Use \"surface\", \"bottom\" or \"nearest\"."
+    ))
   }
   if (method != "2d" && !has_depth) {
-    stop_input("Variable `", var_name, "` has no depth axis. Use ",
-               "`method = \"2d\"`.")
+    stop_input(glue::glue(
+      "Variable `{var_name}` has no depth axis. Use `method = \"2d\"`."
+    ))
   }
+  # Dated time steps, even one, are matched to each observation's date; a
+  # climatology gives its steps to every observation.
   time_axis <- proxy@axes$time
-  timed <- !is.null(time_axis) && !isTRUE(time_axis$climatology) &&
-    length(time_axis$cftime) > 1L
+  timed <- !is.null(time_axis) && !isTRUE(time_axis$climatology)
 
   # The observations as a plain table of coordinates, depth and time.
   direct <- is.null(data)
@@ -1704,8 +1716,10 @@ extract_to_point <- function(data = NULL, nc, lon = NULL, lat = NULL,
                      list(lon = lon, lat = lat, depth = depth, date = date))
     n <- max(lengths(inputs))
     if (!all(lengths(inputs) %in% c(1L, n))) {
-      stop_input("`lon`, `lat`, `depth` and `date` must each have length 1 ",
-                 "or the same length.")
+      stop_input(paste(
+        "`lon`, `lat`, `depth` and `date` must each have length 1 or the",
+        "same length."
+      ))
     }
     table <- data.frame(lapply(inputs, rep_len, length.out = n))
     lon_col <- "lon"
@@ -1713,6 +1727,13 @@ extract_to_point <- function(data = NULL, nc, lon = NULL, lat = NULL,
     depth_col <- "depth"
     date_col <- if (!is.null(date)) "date"
   } else if (inherits(data, "sf")) {
+    if (is.na(sf::st_crs(data))) {
+      stop_input(paste(
+        "`data` has no CRS, so its points can't be placed on the grid. Set",
+        "it with `sf::st_set_crs()`, for example to 4326 for longitude and",
+        "latitude."
+      ))
+    }
     xy <- sf::st_coordinates(sf::st_transform(sf::st_geometry(data), 4326))
     table <- sf::st_drop_geometry(data)
     table[[lon_col]] <- xy[, "X"]
@@ -1722,14 +1743,30 @@ extract_to_point <- function(data = NULL, nc, lon = NULL, lat = NULL,
   }
   n <- nrow(table)
   if (timed && is.null(date_col)) {
-    stop_input("Variable `", var_name, "` has ", length(time_axis$cftime),
-               " time steps, so the observations need a date.")
+    stop_input(glue::glue(
+      "Variable `{var_name}` has dated time steps, so the observations need ",
+      "a date."
+    ))
   }
   needed <- c(lon_col, lat_col, if (method == "nearest") depth_col,
               if (timed) date_col, id_col)
   missing_cols <- setdiff(needed, names(table))
   if (length(missing_cols)) {
-    stop_input("`data` has no column ", toString(missing_cols), ".")
+    stop_input(glue::glue("`data` has no column {toString(missing_cols)}."))
+  }
+  # Coordinates held as text, as in a matrix with a date column or a column
+  # read from a file as text, would otherwise all give NA.
+  coordinate_cols <- c(lon_col, lat_col, if (method == "nearest") depth_col)
+  text_cols <- coordinate_cols[
+    !vapply(table[coordinate_cols], is.numeric, logical(1))
+  ]
+  if (length(text_cols)) {
+    columns_word <- if (length(text_cols) == 1L) "Column" else "Columns"
+    stop_input(glue::glue(
+      "{columns_word} {toString(paste0('`', text_cols, '`'))} must be ",
+      "numeric. A matrix with a date column holds its numbers as text; give ",
+      "a data frame instead."
+    ))
   }
 
   output <- if (!is.null(output_col)) {
@@ -1743,8 +1780,10 @@ extract_to_point <- function(data = NULL, nc, lon = NULL, lat = NULL,
     var_name
   }
   if (!direct && output %in% names(table)) {
-    stop_input("`data` already has a column `", output, "`; choose another ",
-               "name with `output_col`.")
+    stop_input(glue::glue(
+      "`data` already has a column `{output}`; choose another name with ",
+      "`output_col`."
+    ))
   }
 
   # Observations without coordinates, or without the depth `nearest` needs,

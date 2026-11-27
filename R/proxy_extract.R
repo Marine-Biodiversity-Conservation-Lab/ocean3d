@@ -16,10 +16,10 @@
 #'
 #' Each point takes the time step nearest its time, or the step equal to it
 #' with `time_match = "exact"`, as [as_voxel()] matches a point. With dates,
-#' a point's date matches by UTC day. A source with one time step, such as a
-#' World Ocean Atlas climatology, gives that step to every point, whatever
-#' its time. On a source with several steps, a point without a time gets
-#' `NA`, with a warning.
+#' a point's date matches by UTC day. A climatology with one time step, such
+#' as a World Ocean Atlas annual field, gives that step to every point,
+#' whatever its time. On a source with dated time steps, even one, a point
+#' without a time gets `NA`, with a warning.
 #'
 #' Each point takes the cell that holds it and, for a variable with depth,
 #' one depth level, chosen with `method` as [mask()][mask-3d] does for points:
@@ -118,8 +118,9 @@ setMethod(
     v <- y@vertices
     n <- nrow(v)
     # Each point's time step: 0 for a source without a time axis (read
-    # whole), 1 for a source with one step, else the step matched to its
-    # time, as as_voxel() matches a point.
+    # whole), 1 for a climatology with one step, else the step matched to
+    # its time, as as_voxel() matches a point. A single dated step is
+    # matched too, so `time_match` and `max_time_diff` apply to it.
     axis <- x@axes$time
     n_steps <- if (is.null(axis)) 1L else x@variable$dim_lengths[[axis$dim]]
     dates <- if (!is.null(axis) && !isTRUE(axis$climatology)) {
@@ -127,16 +128,18 @@ setMethod(
     }
     step <- if (is.null(axis)) {
       rep(0L, n)
-    } else if (n_steps == 1L) {
+    } else if (n_steps == 1L && isTRUE(axis$climatology)) {
       rep(1L, n)
     } else {
       untimed <- sum(is.na(v$time))
       if (untimed > 0L) {
         points_word <- if (n == 1L) "point" else "points"
         verb <- if (untimed == 1L) "has" else "have"
+        steps_word <- if (n_steps == 1L) "a dated time step" else
+          glue::glue("{n_steps} time steps")
         rlang::warn(glue::glue(
           "{untimed} of {n} {points_word} {verb} no time, but variable ",
-          "`{x@variable$name}` has {n_steps} time steps, so their values ",
+          "`{x@variable$name}` has {steps_word}, so their values ",
           "are NA. Give the points a time in as_vector3d()."
         ), class = "ocean3d_warning_point_time")
       }

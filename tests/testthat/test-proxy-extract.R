@@ -145,9 +145,11 @@ test_that("points off the grid or the time axis give NA", {
   expect_warning(out <- extract(p, half_timed), "1 of 2 points has no time",
                  class = "ocean3d_warning_point_time")
   expect_identical(is.na(out$value), c(FALSE, TRUE))
-  # A source with one step reads it for every point, whatever its time.
+  # A one-step climatology reads its step for every point, whatever its
+  # time.
   one <- grid_proxy(lon = seq(0.5, 4.5, 1), lat = c(10.5, 11.5),
-                    depth = c(0, 50), time = 0)
+                    depth = c(0, 50), time = 6,
+                    time_units = "months since 0000-01-01 00:00:00")
   expect_false(is.na(extract(one, untimed)$value))
 })
 
@@ -283,6 +285,24 @@ test_that("extract() rejects input it can't use", {
                class = "ocean3d_error_voxel_input")
   expect_error(extract(p, pts, bounds = "top"), "bounds",
                class = "ocean3d_error_unused_argument")
+})
+
+test_that("a single dated time step is matched to each point's time", {
+  f <- make_grid_file(lon = c(0.5, 1.5), lat = c(10.5, 11.5), depth = NULL,
+                      time = 0, values = 1:4)
+  on.exit(unlink(f), add = TRUE)
+  p <- as_proxy(f)
+  pts <- as_vector3d(data.frame(
+    lon = c(0.5, 1.5), lat = 10.5, depth = 0,
+    date = as.Date(c("2020-01-01", "2020-03-01"))
+  ), time = "date")
+  expect_equal(extract(p, pts)$value, c(1, 2))
+  expect_equal(extract(p, pts, time_match = "exact")$value, c(1, NA))
+  expect_equal(extract(p, pts, max_time_diff = 1)$value, c(1, NA))
+  untimed <- as_vector3d(data.frame(lon = 0.5, lat = 10.5, depth = 0))
+  expect_warning(out <- extract(p, untimed), "a dated time step",
+                 class = "ocean3d_warning_point_time")
+  expect_true(is.na(out$value))
 })
 
 test_that("a single unbounded longitude or latitude reads points on it", {

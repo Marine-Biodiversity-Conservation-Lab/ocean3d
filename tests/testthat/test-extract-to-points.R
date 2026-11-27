@@ -1,9 +1,9 @@
-# extract_to_point(): a wrapper over as_vector3d(), as_proxy() and
-# extract() (#116). Its own behaviour is tested
-# here: input forms, output naming, method and date checks. How values are
-# picked (cells, depth levels, time steps, series, the antimeridian) is
-# extract()'s, tested in test-proxy-extract.R. Synthetic files come from
-# make_grid_file() (helper-netcdf-grid.R).
+# extract_to_point(): a wrapper over as_vector3d(), as_proxy() and extract()
+# (#116). The first tests cover its own behaviour: input forms, output naming,
+# method and date checks. How values are picked (cells, depth levels, time
+# steps, series, the antimeridian) is extract()'s, tested in
+# test-proxy-extract.R. The rest test shared internals (see below). Synthetic
+# files come from make_grid_file() (helper-netcdf-grid.R).
 
 # lon 0.5, 1.5, 2.5 x lat 10.5, 11.5 x depth 5, 15, 40, 80 m x days 0-4, with
 # the deepest level empty in the first cell and the 15 m level empty in the
@@ -112,6 +112,8 @@ test_that("extract_to_point() takes tables, sf, matrices, lists and vectors", {
                            time = NULL)
   on.exit(unlink(static), add = TRUE)
   expect_s3_class(extract_to_point(mat, static), "data.frame")
+  # A SpatProxy is used as it is.
+  expect_equal(extract_to_point(obs, as_proxy(f))$temp, want)
 
   # Direct input: one value per point, length-1 inputs recycled.
   expect_equal(extract_to_point(nc = f, lon = obs$lon, lat = obs$lat,
@@ -168,6 +170,23 @@ test_that("extract_to_point() names its output column", {
                "already has a column", class = "ocean3d_error_point_input")
 })
 
+test_that("a single dated time step is matched like several", {
+  # One file per day: the old extract_to_point() gave 1, 2 with the nearest
+  # rule, 1, NA with "exact" or max_time_diff = 1, and needed a date.
+  f <- make_grid_file(c(0.5, 1.5), c(10.5, 11.5), depth = NULL, time = 0,
+                      values = 1:4)
+  on.exit(unlink(f), add = TRUE)
+  obs <- data.frame(lon = c(0.5, 1.5), lat = 10.5,
+                    date = as.Date(c("2020-01-01", "2020-03-01")))
+  expect_equal(extract_to_point(obs, f, var = "temp")$temp, c(1, 2))
+  expect_equal(extract_to_point(obs, f, var = "temp",
+                                time_match = "exact")$temp, c(1, NA))
+  expect_equal(extract_to_point(obs, f, var = "temp",
+                                max_time_diff = 1)$temp, c(1, NA))
+  expect_error(extract_to_point(obs[c("lon", "lat")], f, var = "temp"),
+               "has no column date", class = "ocean3d_error_point_input")
+})
+
 test_that("a single depth level reads with method = \"2d\"", {
   vals <- point_grid_values()
   f <- make_grid_file(c(0.5, 1.5, 2.5), c(10.5, 11.5), depth = 0.5,
@@ -201,7 +220,14 @@ test_that("extract_to_point() rejects input it can't use", {
          args = list(method = "nearest"), pattern = "has no column depth"),
     list(label = "missing id column", nc = f, data = obs,
          args = list(method = "surface", id_col = "tag"),
-         pattern = "has no column tag")
+         pattern = "has no column tag"),
+    # A matrix with a date column holds its coordinates as text.
+    list(label = "text coordinates", nc = f, data = as.matrix(obs),
+         args = list(method = "surface"),
+         pattern = "Columns `lon`, `lat` must be numeric"),
+    list(label = "sf without a CRS", nc = f,
+         data = sf::st_as_sf(obs, coords = c("lon", "lat")),
+         args = list(method = "surface"), pattern = "has no CRS")
   )
   for (case in cases) {
     expect_error(
@@ -210,6 +236,14 @@ test_that("extract_to_point() rejects input it can't use", {
       case$pattern, class = "ocean3d_error_point_input", label = case$label
     )
   }
+  # An unreadable date is reported by its column, without advice about
+  # arguments extract_to_point() doesn't have.
+  bad <- obs
+  bad$date <- c("2020-01-01", "2020-01-02 10:00", rep("2020-01-03", 4))
+  err <- expect_error(extract_to_point(bad, f, method = "surface"),
+                      "Input: column `date`",
+                      class = "ocean3d_error_time_input")
+  expect_no_match(conditionMessage(err), "time_resolution")
   # Negative depths are rejected when the points are built.
   bad <- obs
   bad$depth[1] <- -5
@@ -229,19 +263,10 @@ test_that("an open connection is read and left open", {
 
 # Shared internals ------------------------------------------------------------
 
-# The tests below call internals that extract_to_buffer() and the legacy
-# point extraction behind extract_to_track() still use (netCDF sources,
-# horizontal matching, depth axes, time diagnostics and reports). The legacy
-# ones go when extract_to_track() is rebuilt on sample_3d() and extract()
-# (#116).
-
-without_selection_reports <- function(expr) {
-  quiet <- function(condition) invokeRestart("muffleMessage")
-  withCallingHandlers(
-    expr, ocean3d_time_report = quiet, ocean3d_spatial_report = quiet,
-    ocean3d_depth_report = quiet
-  )
-}
+# The tests below call internals that the proxy, extract_to_buffer() and
+# extract_to_track() still share: netCDF sources, horizontal matching, depth
+# and time axes, bounds and report numbers. Tests that reach only the legacy
+# point extraction are in test-extract-to-track.R.
 
 make_test_netcdf <- function(path, var = "temp", with_depth = TRUE,
                              with_time = TRUE, bottom_na = FALSE,
@@ -261,33 +286,6 @@ make_test_netcdf <- function(path, var = "temp", with_depth = TRUE,
 
 make_obs <- function(date = as.Date("2020-01-03"), depth = 60) {
   data.frame(lon = 0, lat = 40, date = date, depth = depth)
-}
-
-capture_temporal_warning <- function(expr) {
-  warnings <- list()
-  value <- withCallingHandlers(expr, ocean3d_time_warning = function(w) {
-    warnings[[length(warnings) + 1L]] <<- w
-    invokeRestart("muffleWarning")
-  })
-  list(value = value, warnings = warnings)
-}
-
-make_b_diagnostic_input <- function(requested, selected, axis = selected,
-                                    resolution = "datetime") {
-  utc <- function(x) as.POSIXct(x, tz = "UTC")
-  infer_cadence <- getFromNamespace(".infer_temporal_cadence", "ocean3d")
-  diagnose <- getFromNamespace(".diagnose_temporal_selection", "ocean3d")
-  metadata <- list(list(
-    static = FALSE, variable = "temp", calendar = "standard",
-    variable_units = "degree_Celsius", cell_methods = NULL,
-    climatology = NULL, timestamps = utc(axis),
-    cadence = infer_cadence(utc(axis))
-  ))
-  provenance <- list(temp = data.frame(
-    source_index = rep(1L, length(selected)), variable = "temp",
-    timestamp = utc(selected)
-  ))
-  diagnose(provenance, utc(requested), resolution, metadata)
 }
 
 make_horizontal_test_nc <- function(path, lon, lat, values, days = NULL) {
@@ -349,169 +347,6 @@ test_that("depth methods name columns and extract values", {
     expect_equal(out[[case$col]], case$value)
     expect_equal(out[names(x)], x)
   }
-})
-
-test_that("merging records provenance separately for each output column", {
-  stamp <- as.POSIXct(c("2020-01-01", "2020-01-11"), tz = "UTC")
-  a <- data.frame(id = 1:2, nearest_temp = c(1, NA), surface_temp = c(NA, 2))
-  b <- data.frame(id = 1:2, nearest_temp = c(11, 12), surface_temp = c(13, 14))
-  attr(a, ".source_candidate") <- list(
-    distance_days = c(9, 1), timestamp = as.numeric(stamp),
-    distance_km = c(0, 0), selected_lon = c(0, 0), selected_lat = c(40, 40),
-    time_index = c(1L, 2L), variable = "temp"
-  )
-  attr(b, ".source_candidate") <- list(
-    distance_days = c(1, 9), timestamp = as.numeric(rev(stamp)),
-    distance_km = c(0, 0), selected_lon = c(0, 0), selected_lat = c(40, 40),
-    time_index = c(2L, 1L), variable = "temp"
-  )
-  merged <- .merge_source_outputs(list(a, b), "id", return_provenance = TRUE)
-  expect_equal(merged$data$nearest_temp, c(11, 12))
-  expect_equal(merged$data$surface_temp, c(13, 2))
-  expect_identical(merged$provenance$nearest_temp$source_index, c(2L, 2L))
-  expect_identical(merged$provenance$surface_temp$source_index, c(2L, 1L))
-  expect_equal(merged$provenance$nearest_temp$timestamp, rev(stamp))
-  expect_identical(merged$provenance$nearest_temp$time_index, c(2L, 1L))
-  expect_equal(merged$provenance$nearest_temp$distance_days, c(1, 9))
-  expect_identical(merged$provenance$nearest_temp$variable, rep("temp", 2))
-  expect_null(attr(merged$data, ".source_candidate", exact = TRUE))
-  expect_equal(.merge_source_outputs(list(a, b), "id"), merged$data)
-})
-
-test_that("cadence inference distinguishes fixed and calendar sequences", {
-  utc <- function(x) as.POSIXct(x, tz = "UTC")
-  expect_identical(.infer_temporal_cadence(utc(c(
-    "2020-01-01 00:00:00", "2020-01-01 03:00:00",
-    "2020-01-01 06:00:00"
-  )))$seconds, 10800)
-  expect_identical(.infer_temporal_cadence(utc(c(
-    "2020-01-01", "2020-01-02", "2020-01-03"
-  )))$type, "daily")
-  monthly <- .infer_temporal_cadence(utc(c(
-    "2020-01-31", "2020-02-29", "2020-03-31"
-  )))
-  expect_identical(monthly$type, "monthly")
-  expect_identical(monthly$months, 1L)
-  expect_identical(.infer_temporal_cadence(utc(c(
-    "2019-01-01", "2020-01-01", "2021-01-01"
-  )))$type, "yearly")
-  expect_identical(.infer_temporal_cadence(utc(c(
-    "2020-01-01", "2020-01-03", "2020-01-08"
-  )))$type, "irregular")
-  expect_identical(.infer_temporal_cadence(utc("2020-01-01"))$type, "unknown")
-})
-
-test_that("calendar period changes warn even below 24 hours", {
-  daily <- make_b_diagnostic_input(
-    "2020-10-19 19:23:00", "2020-10-20 00:00:00", resolution = "daily"
-  )
-  expect_identical(daily$reason, "period_changed")
-  expect_lt(abs(daily$difference_seconds), 86400)
-  expect_warning(
-    .warn_temporal_selection(daily), class = "ocean3d_time_warning"
-  )
-  expect_identical(make_b_diagnostic_input(
-    "2020-01-31 23:00:00", "2020-02-01 00:00:00", resolution = "monthly"
-  )$reason, "period_changed")
-  expect_identical(make_b_diagnostic_input(
-    "2020-12-31 23:00:00", "2021-01-01 00:00:00", resolution = "yearly"
-  )$reason, "period_changed")
-  expect_true(is.na(make_b_diagnostic_input(
-    "2020-10-19 01:00:00", "2020-10-19 23:00:00", resolution = "daily"
-  )$reason))
-})
-
-test_that("datetime diagnostics use cadence and calendar limits", {
-  axis <- c("2020-01-01 00:00:00", "2020-01-01 03:00:00",
-            "2020-01-01 06:00:00")
-  expect_true(is.na(make_b_diagnostic_input(
-    "2020-01-01 09:00:00", "2020-01-01 06:00:00", axis
-  )$reason))
-  expect_identical(make_b_diagnostic_input(
-    "2020-01-01 09:00:01", "2020-01-01 06:00:00", axis
-  )$reason, "cadence_exceeded")
-  months <- c("2020-01-31", "2020-02-29", "2020-03-31")
-  expect_true(is.na(make_b_diagnostic_input(
-    "2020-02-29", "2020-01-31", months
-  )$reason))
-  expect_identical(make_b_diagnostic_input(
-    "2020-03-01", "2020-01-31", months
-  )$reason, "cadence_exceeded")
-})
-
-test_that("unknown and irregular cadences do not invent thresholds", {
-  expect_identical(make_b_diagnostic_input(
-    "2020-01-02", "2020-01-01"
-  )$reason, "cadence_unknown")
-  expect_identical(make_b_diagnostic_input(
-    "2020-01-09", "2020-01-08", c("2020-01-01", "2020-01-03", "2020-01-08")
-  )$reason, "cadence_unknown")
-  expect_true(is.na(make_b_diagnostic_input(
-    "2020-01-01", "2020-01-01"
-  )$reason))
-})
-
-test_that("custom intervals require explicit positive durations", {
-  interval <- as.difftime(3, units = "hours")
-  expect_equal(
-    .validate_custom_time_interval("custom", interval), 10800
-  )
-  expect_error(.validate_custom_time_interval("custom", NULL), "difftime")
-  expect_error(.validate_custom_time_interval("custom", 3), "difftime")
-  expect_error(
-    .validate_custom_time_interval(
-      "custom", as.difftime(0, units = "hours")
-    ),
-    "greater than zero"
-  )
-  expect_error(
-    .validate_custom_time_interval(
-      "custom", as.difftime(Inf, units = "hours")
-    ),
-    "finite"
-  )
-  expect_error(.validate_custom_time_interval("daily", interval), "requires")
-})
-
-test_that("daily datetime warnings explain day changes below 24 hours", {
-  axis <- c("2020-01-01", "2020-01-02", "2020-01-03")
-  result <- make_b_diagnostic_input(
-    "2020-01-02 12:00:00", "2020-01-03 00:00:00", axis
-  )
-  expect_identical(result$reason, "period_changed")
-  expect_false(result$cadence_exceeded)
-  captured <- capture_temporal_warning(.warn_temporal_selection(result))
-  text <- conditionMessage(captured$warnings[[1L]])
-  expect_match(text, "12 hours later", fixed = TRUE)
-  expect_match(text, "different day", fixed = TRUE)
-  expect_match(text, "Comparison resolution: datetime", fixed = TRUE)
-  expect_match(text, "Detected cadence: daily", fixed = TRUE)
-  expect_match(text, "Row 1; variable: temp", fixed = TRUE)
-  expect_match(text, "Observation: 2020-01-02 12:00:00 UTC", fixed = TRUE)
-  expect_match(text, "Selected data: 2020-01-03 00:00:00 UTC", fixed = TRUE)
-  late <- make_b_diagnostic_input(
-    "2020-01-05 12:00:00", "2020-01-03 00:00:00", axis
-  )
-  expect_identical(late$reason, "period_changed")
-  expect_true(late$cadence_exceeded)
-  captured <- capture_temporal_warning(.warn_temporal_selection(late))
-  text <- conditionMessage(captured$warnings[[1L]])
-  expect_match(text, "60 hours earlier", fixed = TRUE)
-  expect_match(text, "also more than one observed", fixed = TRUE)
-  within_day <- make_b_diagnostic_input(
-    "2020-01-02 12:00:00", "2020-01-02 00:00:00", axis
-  )
-  expect_true(is.na(within_day$reason))
-})
-
-test_that("unknown cadence warnings explain how to set an interval", {
-  result <- make_b_diagnostic_input("2020-01-02", "2020-01-01")
-  captured <- capture_temporal_warning(.warn_temporal_selection(result))
-  text <- conditionMessage(captured$warnings[[1L]])
-  expect_match(
-    text, "do not establish a reliable sampling interval", fixed = TRUE
-  )
-  expect_match(text, "custom_time_interval", fixed = TRUE)
 })
 
 test_that("nearest spatial matching requires an explicit valid distance", {
@@ -577,61 +412,6 @@ test_that("report numbers are short without hiding small differences", {
   expect_equal(.selection_number(0), "0")
   expect_equal(.selection_number(0.001, small = TRUE), "<0.01")
   expect_equal(.selection_number(0.01, small = TRUE), "0.01")
-})
-
-test_that("local spacing uses surrounding layers instead of a global mean", {
-  reference <- .depth_selection_reference(c(150, 67, 55, 0), 60, 150)
-  expect_equal(c(reference$lower, reference$upper, reference$spacing),
-               c(55, 67, 12))
-  expect_identical(reference$basis, "surrounding")
-  expect_identical(reference$status, "distant_depth")
-  expect_true(reference$closer_missing)
-  exact <- .depth_selection_reference(c(0, 55, 67, 150), 55, 150)
-  expect_identical(exact$basis, "adjacent")
-  expect_equal(c(exact$lower, exact$upper, exact$spacing), c(55, 67, 12))
-  tied <- .depth_selection_reference(c(0, 50, 100), 50, 0)
-  expect_equal(tied$spacing, 50)
-  expect_identical(tied$status, "normal")
-  expect_equal(.depth_selection_reference(c(0, 50, 100), 0, 100)$spacing, 50)
-  expect_equal(.depth_selection_reference(c(0, 50, 100), 100, 0)$spacing, 50)
-})
-
-test_that("spacing outside the range uses edge layers and a strict threshold", {
-  for (requested in c(-100, 200)) {
-    chosen <- if (requested < 0) 0 else 100
-    reference <- .depth_selection_reference(c(100, 0, 50), requested, chosen)
-    expect_true(reference$outside)
-    expect_equal(reference$spacing, 50)
-    expect_identical(reference$basis, "nearest_edge")
-    expect_identical(reference$status, "distant_depth")
-    expect_false(reference$closer_missing)
-    text <- .format_depth_reference(reference)
-    expect_match(text, "outside the layer range", fixed = TRUE)
-    expect_false(grepl("no valid value", text, fixed = TRUE))
-  }
-  boundary <- .depth_selection_reference(c(0, 50, 100), 150, 100)
-  expect_identical(boundary$status, "normal")
-  above <- .depth_selection_reference(c(0, 50, 100), 150.001, 100)
-  expect_identical(above$status, "distant_depth")
-  singleton <- .depth_selection_reference(50, 60, 50)
-  expect_identical(singleton$status, "spacing_unknown")
-  expect_true(is.na(singleton$spacing))
-  expect_identical(.depth_selection_reference(50, 50, 50)$status, "normal")
-})
-
-test_that("comparison precision distinguishes close values", {
-  expect_identical(.selection_comparison(1.114, 1.111),
-                   list(value = "1.114", limit = "1.111"))
-  expect_identical(.selection_comparison(1.111, 1.114),
-                   list(value = "1.111", limit = "1.114"))
-  expect_identical(.selection_comparison(1.111, 1.111),
-                   list(value = "1.11", limit = "1.11"))
-  expect_identical(.selection_comparison(12.634, 20),
-                   list(value = "12.63", limit = "20"))
-  tiny <- .selection_comparison(0.00002, 0.00001)
-  expect_identical(tiny, list(value = "0.00002", limit = "0.00001"))
-  close <- .selection_comparison(1 + .Machine$double.eps, 1)
-  expect_false(identical(close$value, close$limit))
 })
 
 test_that("static variables use default date_col without a date column", {
@@ -758,21 +538,6 @@ test_that("unusable spatial bounds stop extraction", {
   # The message names the file, to find it in a multi-file call.
   expected <- paste0("Bounds for `lon` in ", basename(path), " were not found")
   expect_match(conditionMessage(err), expected, fixed = TRUE)
-})
-
-test_that("depth references tolerate float32 axes and blame missing layers", {
-  layers <- c(0, 50, 100)
-  far <- .depth_selection_reference(layers, 200, 50)
-  expect_identical(far$status, "distant_depth")
-  expect_false(far$closer_missing)
-  near <- .depth_selection_reference(layers, 120, 50)
-  expect_true(near$closer_missing)
-  float32 <- c(0.49402499198913574, 1.54137504100799561, 3.81949496269226074)
-  exact <- .depth_selection_reference(float32, 1.541375, float32[2])
-  expect_identical(exact$basis, "adjacent")
-  expect_identical(exact$status, "normal")
-  deepest <- .depth_selection_reference(float32, 3.819495, float32[2])
-  expect_false(deepest$outside)
 })
 
 test_that("bad spatial bounds stop point extraction and the core object", {

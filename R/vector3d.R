@@ -101,7 +101,7 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     resolution <- NA_character_
   } else {
     prepared <- .prepare_time_input(
-      table[[time]], "auto", input_name = glue::glue("`x${time}`")
+      table[[time]], "auto", input_name = glue::glue("column `{time}`")
     )
     times <- prepared$values
     resolution <- prepared$resolution
@@ -202,7 +202,7 @@ as_vector3d <- function(x, type = c("points", "lines"), depth = "depth",
     # would convert the second to the first's class and lose its hours.
     prepared <- lapply(unique(time), function(column) {
       .prepare_time_input(table[[column]], "auto",
-                          input_name = glue::glue("`x${column}`"))
+                          input_name = glue::glue("column `{column}`"))
     })
     resolution <- unique(vapply(prepared, `[[`, "", "resolution"))
     if (length(resolution) > 1L) {
