@@ -131,9 +131,8 @@ onto the exported function rather than deleting them.
     directly: time decoding and matching, the netCDF readers and similar
     helpers. Tests through the combined extraction functions
     ([`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-    [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md)
-    and the like) would need rewriting if those functions are retired
-    (#116).
+    `extract2d()` and the like) would need rewriting if those functions
+    are retired (#116).
   - Don’t flag a direct test of one of these helpers as a convention
     breach.
 - Check conditions with `expect_error()` / `expect_warning()` using

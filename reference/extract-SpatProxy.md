@@ -96,10 +96,11 @@ with the same features in the same order and all their columns, plus
 Each point takes the time step nearest its time, or the step equal to it
 with `time_match = "exact"`, as
 [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-matches a point. With dates, a point's date matches by UTC day. A source
-with one time step, such as a World Ocean Atlas climatology, gives that
-step to every point, whatever its time. On a source with several steps,
-a point without a time gets `NA`, with a warning.
+matches a point. With dates, a point's date matches by UTC day. A
+climatology with one time step, such as a World Ocean Atlas annual
+field, gives that step to every point, whatever its time. On a source
+with dated time steps, even one, a point without a time gets `NA`, with
+a warning.
 
 Each point takes the cell that holds it and, for a variable with depth,
 one depth level, chosen with `method` as

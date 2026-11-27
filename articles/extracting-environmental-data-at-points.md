@@ -18,10 +18,9 @@ and how do our selection rules affect the answer?**
 
 In this tutorial, we will use
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-and its convenience functions to answer this question. We will follow
-one observation through the horizontal, vertical and temporal
-selections, then extend the workflow to several observations and netCDF
-files.
+to answer this question. We will follow one observation through the
+horizontal, vertical and temporal selections, then extend the workflow
+to several observations and netCDF files.
 
 ## Our research question
 
@@ -63,13 +62,13 @@ library(ocean3d)
 example_dir <- "point-data"
 nc_file <- file.path(example_dir, "temperature-points.nc")
 
-# Load the article's display data and plotting helpers.
+# Load the article's display data and plotting helper.
 example <- readRDS(file.path(example_dir, "point-display.rds"))
 source(file.path(example_dir, "figures.R"))
 ```
 
-The plotting helpers are specific to this article; they are not exported
-`ocean3d` functions. All environmental extractions below use the netCDF
+The plotting helper is specific to this article; it is not an exported
+`ocean3d` function. All environmental extractions below use the netCDF
 files directly.
 
 We begin by creating our observation table. Depths are positive
@@ -134,15 +133,16 @@ degrees E, 38 degrees N.*
 
 ## Step 2: Extracting our first temperature
 
-We can request the valid depth layer closest to our observation using
-[`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_nearest.md).
+We can request the valid depth layer closest to our observation with
+`method = "nearest"`.
 
 ``` r
 
-nearest <- extract3d_nearest(
+nearest <- extract_to_point(
   data = one,
   nc = nc_file,
   var = "thetao",
+  method = "nearest",
   output_col = "temperature",
   id_col = "record"
 )
@@ -153,210 +153,77 @@ nearest
 ```
 
 The original row is retained and a new column contains its selected
-temperature. `output_col` lets us choose that column’s name; `id_col`
-adds the observation identifier to diagnostic messages when needed.
+temperature. `output_col` lets us choose that column’s name; `id_col` is
+checked to exist, so a misspelt identifier column is caught early.
 
-The convenience function calls the general function with
-`method = "nearest"`. The following request gives the same result:
-
-``` r
-
-general <- extract_to_point(
-  data = one,
-  nc = nc_file,
-  var = "thetao",
-  method = "nearest",
-  output_col = "temperature",
-  id_col = "record"
-)
-
-all.equal(nearest, general)
-#> [1] TRUE
-```
-
-Here, “nearest” refers to **depth**. The horizontal and temporal rules
-are separate arguments: `spatial_match` and `time_match`.
+Here, “nearest” refers to **depth**. Time has its own rule,
+`time_match`, and each observation takes the grid cell that contains it.
 
 ## Step 3: Understanding the horizontal selection
 
-By default, `spatial_match = "within"` requires the point to lie inside
-a grid cell. It does not require the point to coincide with its centre.
-The reported distance to that centre can therefore be nonzero even for a
-normal, accepted selection.
+An observation takes the grid cell that contains it. It does not need to
+coincide with the cell’s centre: in Figure 1, the requested point and
+the selected centre are a short distance apart, which is a normal
+selection. `set_A` lies exactly on the edge between two cells, at 38
+degrees N, so it takes the cell south of the edge, as any point on an
+edge between two cells takes the cell east or south of it.
 
-Let’s ask explicitly for the spatial and depth reports:
-
-``` r
-
-extract3d_nearest(
-  data = one,
-  nc = nc_file,
-  var = "thetao",
-  output_col = "temperature",
-  spatial_report = TRUE,
-  depth_report = TRUE
-)
-#> Spatial selection: 1 observation matched the requested selection.
-#> 1 output value reported.
-#> 
-#> Row 1 · netCDF variable: thetao · output column: temperature
-#> Requested: (0, 38) → containing cell centre: (0, 37.97917)
-#> Distance: 2.32 km.
-#> File: temperature-points.nc
-#> Depth selection: 1 observation matched the requested selection.
-#> 1 output value reported.
-#> 
-#> Row 1 · netCDF variable: thetao · output column: temperature
-#> Requested: 60 m → selected: 61.52 m (1.52 m deeper).
-#> No vertical interpolation.
-#> Surrounding layers: 56.33–61.52 m (5.19 m apart).
-#> File: temperature-points.nc
-#>   record lon lat depth       date temperature
-#> 1  set_A   0  38    60 2026-09-20     15.9467
-```
-
-These messages explain the selection without changing the returned
-value. Unlike
-[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md),
-the point functions do not add a `*_match_info` list column; their
-selection diagnostics appear as reports and warnings.
-
-### 3.1. What happens outside the grid?
-
-The supplied subset is intentionally small. A point can lie just outside
-its coverage while still being close to a cell in that subset.
-
-``` r
-
-point_explorer(example, "horizontal", file.path(example_dir, "explorer.js"))
-```
-
-*Figure 2. Exploring horizontal selection. Choose the point inside or
-just outside the cropped grid. With “Within a cell”, an outside point is
-rejected. With “Nearest cell centre”, it is accepted only when the
-distance is within the chosen limit. The red cross marks the
-observation; an accepted cell is outlined and connected to its centre.
-Each menu combination displays a result and messages calculated by the
-public R function, rather than recalculating selection in the browser.
-The crop boundary is an example-data boundary, not a coastline or the
-full extent of the original Copernicus product.*
-
-We can make these two requests directly in R:
+The supplied subset is intentionally small. A point just outside its
+coverage gets `NA`, even when it is close to a cell in the subset:
 
 ``` r
 
 outside <- one
 outside$lon <- example$locations$lon[2]
 
-# Default: the point must be inside a cell.
-extract3d_nearest(outside, nc_file, var = "thetao")
-#> Spatial selection: 1 observation had no value extracted.
-#> 1 output value affected; 1 missing.
-#> 
-#> Row 1 · netCDF variable: thetao · output column: thetao
-#> Point outside cell coverage (within matching).
-#> File: temperature-points.nc
-#> Result: NA.
+extract_to_point(outside, nc_file, var = "thetao", method = "nearest")
 #>   record       lon lat depth       date thetao
 #> 1  set_A 0.2175002  38    60 2026-09-20     NA
-
-# Alternative: allow the nearest cell centre up to 20 km away.
-extract3d_nearest(
-  outside, nc_file, var = "thetao",
-  spatial_match = "nearest", max_distance_km = 20
-)
-#> Spatial selection: 1 observation outside cell coverage used the nearest cell.
-#> 1 output value affected.
-#> 
-#> Row 1 · netCDF variable: thetao · output column: thetao
-#> Requested: (0.2175, 38) → nearest cell centre: (0.16667, 38.02083)
-#> Distance: 5.02 km; allowed: 20 km.
-#> File: temperature-points.nc
-#>   record       lon lat depth       date   thetao
-#> 1  set_A 0.2175002  38    60 2026-09-20 16.00149
 ```
 
-`max_distance_km` is required for nearest spatial matching. It is
-measured from the requested point to the cell centre, not to its nearest
-edge. It must be omitted with `spatial_match = "within"`.
-
-Selecting a cell whose value is missing does not initiate a search for a
-different horizontal cell in the same file. This is different from
-nearest-depth selection, which considers valid values in the vertical
-profile.
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+doesn’t search for a nearby cell. For a point just outside the grid or
+in a cell without data, such as near the coast, decide on its location
+first, or summarise the values around it with the [buffer extraction
+tutorial](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-and-weighting-buffer-data.md).
 
 ## Step 4: Choosing a depth selection
 
 Different research questions call for different parts of the water
-column. Let’s obtain our nearest, surface and deepest-valid temperatures
-together.
+column. You choose the depth level with `method`:
 
-``` r
-
-all_depths <- extract3d_all(
-  data = one,
-  nc = nc_file,
-  var = "thetao",
-  output_col = "temperature"
-)
-
-all_depths
-#>   record lon lat depth       date nearest_temperature surface_temperature
-#> 1  set_A   0  38    60 2026-09-20             15.9467            26.52825
-#>   seabottom_temperature
-#> 1              13.79936
-```
-
-This adds `nearest_temperature`, `surface_temperature` and
-`seabottom_temperature`. The last name follows the existing output
-naming convention; it does not establish the location of the real
-seabed.
-
-| Function | Selection |
+| `method` | Selection |
 |----|----|
-| [`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_nearest.md) | Valid layer closest to the requested depth; a depth tie selects the shallower layer. |
-| [`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_surface.md) | Physically shallowest layer, even if its value is missing. |
-| [`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_bottom.md) | Deepest layer with a valid value in the selected profile. |
-| [`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_all.md) | All three selections above. |
-| [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md) | Variable without a depth dimension, or with one depth layer. |
-| [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md) | General interface using `method = "nearest"`, `"surface"`, `"bottom"`, `"all"` or `"2d"`. |
+| `"nearest"` | Layer with a value closest to the requested depth; at a tie, the shallower layer. |
+| `"surface"` | Physically shallowest layer, even if its value is missing. |
+| `"bottom"` | Deepest layer with a value in that cell’s profile. |
+| `"2d"` (default) | Variable without a depth dimension, or with one depth layer. |
 
-We can obtain surface and deepest-valid values separately as well.
+Let’s obtain our nearest, surface and bottom temperatures.
 
 ``` r
 
-surface <- extract3d_surface(one, nc_file, var = "thetao", output_col = "surface")
-bottom <- extract3d_bottom(one, nc_file, var = "thetao", output_col = "deepest_valid")
-
-data.frame(surface = surface$surface, deepest_valid = bottom$deepest_valid)
-#>    surface deepest_valid
-#> 1 26.52825      13.79936
+depth_methods <- c(nearest = "nearest", surface = "surface",
+                   deepest_valid = "bottom")
+sapply(depth_methods, function(m) {
+  extract_to_point(one, nc_file, var = "thetao", method = m)$thetao
+})
+#>       nearest       surface deepest_valid 
+#>      15.94670      26.52825      13.79936
 ```
 
 Surface and bottom selection do not require an observation depth column.
 They are defined by the physical depth coordinates and valid values in
-the profile, rather than the order in which layers were stored.
-
-``` r
-
-point_explorer(example, "vertical", file.path(example_dir, "explorer.js"))
-```
-
-*Figure 3. Exploring depth selection. Compare the requested depth with
-the available profile and change the selection method. In the 3D view,
-the prisms show the selected cell’s temperature layers using inferred
-boundaries for display only. The point extractor selects layer values;
-it does not average these prisms. Depth is visually exaggerated, and the
-temperature scale is fixed across dates. The 800 m request illustrates
-nearest selection beyond the file’s depth range. Messages are taken from
-the corresponding R call with `method = "all"`, so they can mention all
-three outputs even when the display highlights only one.*
+the profile, rather than the order in which layers were stored. When
+`var` is left out and detected, the columns are named `nearest_<var>`,
+`surface_<var>` and `seabottom_<var>`. Despite its name,
+`seabottom_<var>` is the deepest layer with a value, which may be above
+the real seabed.
 
 **Nearest selection is not interpolation, and it does not impose a
 maximum vertical distance.** A request beyond the available depth range
-can return a distant valid layer. Automatic depth reports highlight
-unusually large displacements; the reader must still decide whether that
-selection is appropriate for the analysis.
+can return a distant valid layer; decide whether that selection is
+appropriate for the analysis.
 
 Our subset retains all 50 original depth levels, down to approximately
 398.54 m. The deepest valid `thetao` value is therefore the deepest
@@ -366,14 +233,15 @@ seabed.
 ### 4.1. Reading a variable without a depth dimension
 
 The source also provides `bottomT`, a separate
-temperature-at-the-seafloor variable. We use
-[`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md)
-because that variable has no vertical axis. It still has a time axis and
-therefore still requires a date.
+temperature-at-the-seafloor variable. We use `method = "2d"`, the
+default, because that variable has no vertical axis. It still has a time
+axis and therefore still requires a date.
 
 ``` r
 
-provider_bottom <- extract2d(
+deepest_valid <- extract_to_point(one, nc_file, var = "thetao",
+                                  method = "bottom")$thetao
+provider_bottom <- extract_to_point(
   data = one,
   nc = nc_file,
   var = "bottomT",
@@ -381,7 +249,7 @@ provider_bottom <- extract2d(
 )
 
 data.frame(
-  deepest_valid_thetao = bottom$deepest_valid,
+  deepest_valid_thetao = deepest_valid,
   provider_bottom_temperature = provider_bottom$provider_bottom_temperature
 )
 #>   deepest_valid_thetao provider_bottom_temperature
@@ -402,104 +270,53 @@ observations often fall between records. Let’s move it to midday.
 midday <- one
 midday$date <- as.POSIXct("2026-09-20 12:00:00", tz = "UTC")
 
-extract3d_nearest(
-  midday, nc_file, var = "thetao",
-  time_match = "nearest", time_resolution = "datetime"
-)
-#> Temporal report: 1 observation(s) have additional information.
-#> 
-#> A value with a different timestamp was selected.
-#> Row 1; variable: thetao; output: thetao.
-#> Observation: 2026-09-20 12:00:00 UTC
-#> Selected data: 2026-09-20 00:00:00 UTC
-#> Difference: 12 hours earlier.
-#> Comparison resolution: datetime.
-#> Detected cadence: daily (one observed step is 24 hours).
-#> The difference is within one observed sampling interval. No temporal warning is required.
-#> File: temperature-points.nc
+extract_to_point(midday, nc_file, var = "thetao", method = "nearest",
+                 time_match = "nearest")
 #>   record lon lat depth                date  thetao
 #> 1  set_A   0  38    60 2026-09-20 12:00:00 15.9467
 ```
 
-`time_match = "nearest"` chooses a temporal candidate; `"exact"`
-requires equality at the chosen comparison precision. The default
-nearest rule does not impose a maximum time gap. Cadence detection
-informs diagnostics, not an automatic acceptance limit.
-
-``` r
-
-point_explorer(example, "temporal", file.path(example_dir, "explorer.js"))
-```
-
-*Figure 4. Exploring temporal matching. Blue points are available
-records, the red cross is the requested instant, and the orange diamond
-is the value used for comparison. With daily precision, the comparison
-uses the UTC calendar day. The selected record is outlined; if no
-candidate satisfies the settings, the result is `NA`. Try the midday
-request with exact datetime matching, then daily matching, and finally
-nearest datetime matching with a 0.1-day limit. The displayed
-temperature and messages come from R calls made when preparing the
-example.*
+With `time_match = "nearest"` (the default), each observation takes the
+closest time step; with `"exact"`, it needs a step at the same time. A
+date-time such as this one is compared as an instant, and a `Date` by
+its UTC day. The nearest rule sets no maximum time gap on its own.
 
 ### 5.1. Limiting the accepted time gap
 
-`max_time_diff` is in **days**, even for datetime matching. For example,
-0.1 days is 2.4 hours, so neither neighbouring midnight satisfies this
-limit for our midday observation.
+`max_time_diff` is in **days**, even for date-times. For example, 0.1
+days is 2.4 hours, so neither neighbouring midnight satisfies this limit
+for our midday observation.
 
 ``` r
 
-extract3d_nearest(
-  midday, nc_file, var = "thetao",
-  time_resolution = "datetime", max_time_diff = 0.1
-)
-#> Temporal report: 1 observation(s) have additional information.
-#> 
-#> No value was extracted.
-#> Row 1; variable: thetao; output: thetao.
-#> Observation: 2026-09-20 12:00:00 UTC
-#> No timestamp satisfied the requested temporal settings.
-#> File: temperature-points.nc
-#> Result: NA.
+extract_to_point(midday, nc_file, var = "thetao", method = "nearest",
+                 max_time_diff = 0.1)
 #>   record lon lat depth                date thetao
 #> 1  set_A   0  38    60 2026-09-20 12:00:00     NA
 ```
 
-The result is `NA` with an explanation. To require the same UTC day
-instead of the same instant, use exact daily matching:
+The result is `NA`. To require a step on the same UTC day instead of the
+same instant, give the date without the hour and match exactly:
 
 ``` r
 
-extract3d_nearest(
-  midday, nc_file, var = "thetao",
-  time_match = "exact", time_resolution = "daily"
-)
-#> Temporal report: 1 observation(s) have additional information.
-#> 
-#> A value with a different timestamp was selected.
-#> Row 1; variable: thetao; output: thetao.
-#> Observation: 2026-09-20 12:00:00 UTC
-#> Selected data: 2026-09-20 00:00:00 UTC
-#> Difference: 12 hours earlier.
-#> Comparison resolution: daily.
-#> Detected cadence: daily (one observed step is 24 hours).
-#> The selected value remains within the requested daily calendar period. No temporal warning is required.
-#> File: temperature-points.nc
-#>   record lon lat depth                date  thetao
-#> 1  set_A   0  38    60 2026-09-20 12:00:00 15.9467
+same_day <- midday
+same_day$date <- as.Date("2026-09-20")
+extract_to_point(same_day, nc_file, var = "thetao", method = "nearest",
+                 time_match = "exact")
+#>   record lon lat depth       date  thetao
+#> 1  set_A   0  38    60 2026-09-20 15.9467
 ```
 
 This reads a record labelled on that day; it does not calculate a daily
-average. In calendar modes, the tolerance applies to the comparison
-values, rather than the original within-day time difference. Use
-datetime precision when an elapsed-time limit is required.
+average.
 
 ### 5.2. Preserving hours and time zones
 
-With `time_resolution = "auto"`, a `Date` or date-only ISO string uses
-daily comparison. A `POSIXct`/`POSIXlt` object or ISO date-time retains
-the hour and uses datetime comparison. Auto follows the observation’s
-precision, not the file’s sampling frequency.
+A `Date` or date-only ISO string compares by UTC day. A
+`POSIXct`/`POSIXlt` object or ISO date-time keeps the hour and compares
+the instant. This follows the observation’s precision, not the file’s
+sampling frequency.
 
 Let’s represent the original midnight UTC observation in Madrid time.
 
@@ -508,8 +325,10 @@ Let’s represent the original midnight UTC observation in Madrid time.
 local_time <- one
 local_time$date <- as.POSIXct("2026-09-20 02:00:00", tz = "Europe/Madrid")
 
-utc_result <- extract3d_nearest(one, nc_file, var = "thetao", time_match = "exact")
-local_result <- extract3d_nearest(local_time, nc_file, var = "thetao", time_match = "exact")
+utc_result <- extract_to_point(one, nc_file, var = "thetao",
+                               method = "nearest", time_match = "exact")
+local_result <- extract_to_point(local_time, nc_file, var = "thetao",
+                                 method = "nearest", time_match = "exact")
 
 data.frame(utc = utc_result$thetao, madrid = local_result$thetao)
 #>       utc  madrid
@@ -517,79 +336,26 @@ data.frame(utc = utc_result$thetao, madrid = local_result$thetao)
 ```
 
 These represent the same instant and return the same value. Calendar
-labels are compared in UTC, so a local date can correspond to the
-previous UTC day.
+days are compared in UTC, so a local date can correspond to the previous
+UTC day.
 
 For text, use unambiguous ISO dates such as `"2026-09-20"`, or
-date-times such as `"2026-09-20T00:00:00Z"`. Date-time text without `Z`
-is interpreted as UTC and generates a warning. Numeric offsets and zone
-names in text are not accepted; construct a `POSIXct` object with the
-intended zone instead. Resolve ambiguous daylight-saving times when
-creating that object.
+date-times such as `"2026-09-20T00:00:00Z"`. Date-time text is read as
+UTC, with or without the `Z`, so text recorded in local time gives the
+wrong instant. Numeric offsets and zone names in text are not accepted;
+construct a `POSIXct` object with the intended zone instead. Resolve
+ambiguous daylight-saving times when creating that object.
 
 ``` r
 
 unspecified_zone <- one
 unspecified_zone$date <- "2026-09-20 00:00:00"
 
-# This warning is intentional: the text does not state a time zone.
-extract3d_nearest(unspecified_zone, nc_file, var = "thetao", time_report = FALSE)
-#> Warning: Time zone warning: 1 observation has times without a time zone.
-#> Input: `data$date`. These times are being interpreted as UTC.
-#> If they represent local time, supply POSIXct/POSIXlt values constructed with the correct time zone.
-#> If they are UTC, add Z: "2020-01-02T19:54Z".
+# Read as midnight UTC.
+extract_to_point(unspecified_zone, nc_file, var = "thetao", method = "nearest")
 #>   record lon lat depth                date  thetao
 #> 1  set_A   0  38    60 2026-09-20 00:00:00 15.9467
 ```
-
-### 5.3. Calendar labels and custom diagnostic intervals
-
-The monthly and yearly modes compare labels; they do not combine
-records. Our daily dataset has several records in the same month and
-year. Reducing their precision would create an ambiguous selection, so
-the function rejects it rather than choosing the first or computing a
-mean.
-
-``` r
-
-extract3d_nearest(one, nc_file, var = "thetao", time_resolution = "monthly")
-#> Error:
-#> ! Multiple dataset timestamps map to the same 'monthly' comparison value: 2026-09-01 00:00:00 UTC appears 3 times in temperature-points.nc.
-#> Selecting the first would discard information. Use a finer time_resolution, select the intended records, or aggregate the data explicitly before extraction.
-```
-
-The yearly mode applies the same ambiguity rule. For actual summaries
-over several records, consider a temporal buffer instead.
-
-The `custom` mode has a different purpose: it compares full timestamps
-and lets us choose the displacement that should trigger a diagnostic
-warning. For example, we might want to highlight a displacement over
-three hours.
-
-``` r
-
-extract3d_nearest(
-  midday, nc_file, var = "thetao",
-  time_resolution = "custom",
-  custom_time_interval = as.difftime(3, units = "hours")
-)
-#> Warning: Temporal warning: 1 observation(s) need attention.
-#> 
-#> The selected value exceeds your custom time interval.
-#> Row 1; variable: thetao; output: thetao.
-#> Observation: 2026-09-20 12:00:00 UTC
-#> Selected data: 2026-09-20 00:00:00 UTC
-#> Difference: 12 hours earlier.
-#> Comparison resolution: custom.
-#> Detected cadence: daily (one observed step is 24 hours).
-#> Your custom warning interval is 3 hours. The selected value is further away than this interval. This warning does not reject the extracted value.
-#> File: temperature-points.nc
-#>   record lon lat depth                date  thetao
-#> 1  set_A   0  38    60 2026-09-20 12:00:00 15.9467
-```
-
-This warns about the displacement but does not reject the candidate. Use
-`max_time_diff` to enforce an acceptance limit.
 
 ## Step 6: Extending the workflow to tables, variables and files
 
@@ -597,10 +363,11 @@ We can now apply the same rules to every observation in our table.
 
 ``` r
 
-environment <- extract3d_nearest(
+environment <- extract_to_point(
   data = observations,
   nc = nc_file,
   var = "thetao",
+  method = "nearest",
   output_col = "temperature",
   id_col = "record"
 )
@@ -612,13 +379,15 @@ environment
 #> 3  set_C -0.08 38.06   200 2026-09-21    13.88106
 ```
 
-Rows and their order are retained. To add another variable, make another
-call using the previous result as the input table. For point extraction,
-an explicit `var` names one variable, not a vector of variable names.
+Rows and their order are retained.
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+reads each time step once for all the observations at that time, so a
+large table needs few reads. `var` takes one variable, so to add
+another, call again with the previous result as the input table.
 
 ``` r
 
-environment <- extract2d(
+environment <- extract_to_point(
   data = environment,
   nc = nc_file,
   var = "bottomT",
@@ -632,9 +401,8 @@ environment[, c("record", "temperature", "bottom_temperature")]
 #> 3  set_C    13.88106           13.61041
 ```
 
-Choose distinct output names for different quantities. Existing output
-columns of the same name are replaced, including by `NA`; extraction
-inputs such as coordinates cannot be used as output names. `output_col`
+Choose distinct output names for different quantities: a column that
+already exists is an error rather than being overwritten. `output_col`
 is the preferred naming option and overrides the older `output_prefix`.
 
 ### 6.1. A static variable does not need a date
@@ -647,7 +415,7 @@ same file also contains temporal, three-dimensional temperatures.
 
 locations <- observations[, c("record", "lon", "lat")]
 
-extract2d(locations, nc_file, var = "cell_id", output_col = "grid_cell")
+extract_to_point(locations, nc_file, var = "cell_id", output_col = "grid_cell")
 #>   record   lon   lat grid_cell
 #> 1  set_A  0.00 38.00        32
 #> 2  set_B  0.08 38.04        43
@@ -657,11 +425,13 @@ extract2d(locations, nc_file, var = "cell_id", output_col = "grid_cell")
 The need for a date follows the **selected variable**, not the presence
 of a time dimension elsewhere in the file.
 
-### 6.2. Selecting between files with one timestamp each
+### 6.2. A series of files, one per date
 
 The example also includes two files containing only `thetao`, one for 19
-September and another for 21 September. Let’s request the later date,
-first with the earlier file listed first, then in the reverse order.
+September and another for 21 September, on the same grid. Several files
+of one variable on one grid are read as a series: their time steps are
+put in time order and joined, so the order we list them in doesn’t
+matter.
 
 ``` r
 
@@ -671,19 +441,22 @@ files <- file.path(example_dir, c(
 ))
 
 later <- observations[3, ]
-first_order <- extract3d_nearest(later, files, var = "thetao", output_col = "temperature")
-reverse_order <- extract3d_nearest(later, rev(files), var = "thetao", output_col = "temperature")
+first_order <- extract_to_point(later, files, var = "thetao",
+                                method = "nearest", output_col = "temperature")
+reverse_order <- extract_to_point(later, rev(files), var = "thetao",
+                                  method = "nearest",
+                                  output_col = "temperature")
 
-data.frame(first_order = first_order$temperature, reverse_order = reverse_order$temperature)
+data.frame(first_order = first_order$temperature,
+           reverse_order = reverse_order$temperature)
 #>   first_order reverse_order
 #> 1    13.88106      13.88106
 ```
 
-Both return the later timestamp’s value. The first listed file does not
-automatically win: temporal candidates are compared across eligible
-sources. Equal temporal distances are resolved by distance to the cell
-centre and then input order. Selection also depends on valid values.
-Input order can therefore matter in a complete tie.
+Both return the 21 September value. Files on different grids, such as
+spatial tiles, are not one series: call
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+once per grid.
 
 These daily files each contain a single data variable, so automatic
 variable detection is possible when `var` is omitted. The main example
@@ -691,7 +464,7 @@ file contains several variables and needs an explicit choice.
 
 ``` r
 
-extract3d_nearest(later, files, output_col = "temperature")
+extract_to_point(later, files, method = "nearest", output_col = "temperature")
 #>   record   lon   lat depth       date temperature
 #> 3  set_C -0.08 38.06   200 2026-09-21    13.88106
 ```
@@ -707,44 +480,33 @@ invalid date string. Let’s keep both a valid row and a row whose date is
 with_missing <- observations[1:2, ]
 with_missing$date[2] <- NA
 
-extract3d_nearest(with_missing, nc_file, var = "thetao", id_col = "record")
-#> Temporal report: 1 observation(s) have additional information.
-#> 
-#> No value was extracted.
-#> Row 2; variable: thetao; output: thetao.
-#> Observation: unavailable
-#> No observation date was supplied, but this source has a time dimension; supply `date` or `date_col`.
-#> File: temperature-points.nc
-#> Result: NA.
+extract_to_point(with_missing, nc_file, var = "thetao", method = "nearest",
+                 id_col = "record")
+#> Warning: 1 of 2 points has no time, but variable `thetao` has 3 time steps, so
+#> their values are NA. Give the points a time in as_vector3d().
 #>   record  lon   lat depth       date  thetao
 #> 1  set_A 0.00 38.00    60 2026-09-20 15.9467
 #> 2  set_B 0.08 38.04   100       <NA>      NA
 ```
 
-Both rows remain in the output, but the second temperature is `NA`. A
-static-variable extraction can still succeed for that same row.
-Similarly, a missing requested depth leaves nearest-depth output
-missing; with
-[`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_all.md),
-surface and bottom outputs can still be available.
+Both rows remain in the output, but the second temperature is `NA`, with
+a warning that says how many observations had no time. A static-variable
+extraction can still succeed for that same row. Similarly, a missing
+requested depth leaves the nearest-depth value missing, while surface
+and bottom values, which need no depth, are still available.
 
 ``` r
 
 missing_depth <- one
 missing_depth$depth <- NA_real_
 
-extract3d_all(missing_depth, nc_file, var = "thetao", output_col = "temperature")
-#> Depth selection: 1 observation had no value extracted.
-#> 1 output value affected; 1 missing.
-#> 
-#> Row 1 · netCDF variable: thetao · output column: nearest_temperature
-#> Requested depth is missing; no nearest layer can be selected.
-#> File: temperature-points.nc
-#> Result: NA.
-#>   record lon lat depth       date nearest_temperature surface_temperature
-#> 1  set_A   0  38    NA 2026-09-20                  NA            26.52825
-#>   seabottom_temperature
-#> 1              13.79936
+sapply(c(nearest = "nearest", surface = "surface", bottom = "bottom"),
+       function(m) {
+         extract_to_point(missing_depth, nc_file, var = "thetao",
+                          method = m)$thetao
+       })
+#>  nearest  surface   bottom 
+#>       NA 26.52825 13.79936
 ```
 
 If the date column is absent for a temporal variable, the request is
@@ -753,12 +515,9 @@ invalid:
 ``` r
 
 without_date <- one[, setdiff(names(one), "date")]
-extract3d_nearest(without_date, nc_file, var = "thetao")
+extract_to_point(without_date, nc_file, var = "thetao", method = "nearest")
 #> Error:
-#> ! netCDF variable `thetao` has a time dimension.
-#> File: temperature-points.nc
-#> Column `date` is missing from `data`. Supply that column or set `date_col` to an existing date column.
-#> An explicit NA date is allowed; a missing date input is not.
+#> ! `data` has no column date.
 ```
 
 A date written in an ambiguous format is invalid as well:
@@ -767,34 +526,22 @@ A date written in an ambiguous format is invalid as well:
 
 invalid_date <- one
 invalid_date$date <- "20/09/2026"
-extract3d_nearest(invalid_date, nc_file, var = "thetao", id_col = "record")
+extract_to_point(invalid_date, nc_file, var = "thetao", method = "nearest")
 #> Error:
 #> ! Time values could not be converted. Invalid date/time.
-#> Input: `data$date`
+#> Input: column `date`
 #> Affected observations: 1.
-#> row/position 1 (id: "set_A"): "20/09/2026"
+#> row/position 1: "20/09/2026"
 #> Use Date, POSIXct/POSIXlt, YYYY-MM-DD, YYYY-MM-DD HH:MM or YYYY-MM-DD HH:MM:SS.
 #> Text timestamps are interpreted in UTC. For another time zone, supply a POSIXct/POSIXlt object.
 ```
 
-The diagnostic identifies the affected input, observation and original
-value, and describes the admitted formats. Original `NA` values are not
-conversion errors. A limited number of examples is shown for large
-inputs.
-
-Spatial settings can also be incomplete. Nearest spatial selection needs
-an explicit limit:
-
-``` r
-
-extract3d_nearest(outside, nc_file, var = "thetao", spatial_match = "nearest")
-#> Error:
-#> ! Nearest spatial matching requires one finite, non-negative max_distance_km value. For example, use max_distance_km = 5 for five kilometres.
-```
+The message names the affected input and original value, and lists the
+accepted formats. A date that was `NA` to begin with is not an error.
 
 These errors are intentionally printed in this tutorial. They show
 requests that need correction, rather than conditions to solve by
-silently increasing the search distance or time tolerance.
+silently widening the time tolerance.
 
 For other datasets, also inspect the coordinate metadata. Depths stored
 in supported metre, centimetre or kilometre units are converted to
@@ -802,25 +549,8 @@ physical metres, with their positive direction taken into account.
 Pressure, sigma and formula-based vertical coordinates need an explicit
 conversion rather than being treated as metre depths. Nonstandard time
 calendars likewise need compatible handling; see
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
 for supported cases.
-
-### 7.1. Choosing how much diagnostic information to display
-
-Normal within-cell and nearby nearest-depth selections are silent by
-default. `spatial_report = TRUE` and `depth_report = TRUE` request full
-reports; `FALSE` hides the respective report. Their default `NULL` mode
-highlights missing outputs and selections that need attention.
-
-`time_report = TRUE` explains temporal displacements and missing
-outputs. Setting it to `FALSE` hides the summary, but not temporal
-warnings. Likewise, a warning about a missing text time zone remains
-active. Changing report switches does not change the extracted values.
-
-For many observations, reports show only a limited number of cases and
-state when examples have been omitted. A displayed warning is an
-invitation to examine the selection and its suitability, not necessarily
-a software error.
 
 ## Step 8 (extra): Adapting the input to our own workflow
 
@@ -831,8 +561,8 @@ a software error.
 custom <- one
 names(custom) <- c("operation", "longitude", "latitude", "fishing_depth", "when")
 
-extract3d_nearest(
-  custom, nc_file, var = "thetao",
+extract_to_point(
+  custom, nc_file, var = "thetao", method = "nearest",
   lon_col = "longitude", lat_col = "latitude", depth_col = "fishing_depth",
   date_col = "when", id_col = "operation", output_col = "temperature"
 )
@@ -847,46 +577,38 @@ columns.
 
 ### 8.2. Direct coordinates and scalar recycling
 
-The general function can also receive coordinate vectors without an
-observation table. A scalar depth or date can be recycled across points.
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+can also receive coordinate vectors without an observation table, and
+returns one value per point. A scalar depth or date is recycled across
+points.
 
 ``` r
 
 extract_to_point(
   nc = nc_file, var = "thetao", method = "nearest",
   lon = c(0, 0.08), lat = c(38, 38.04), depth = 60,
-  date = as.POSIXct("2026-09-20", tz = "UTC"), output_col = "temperature"
+  date = as.POSIXct("2026-09-20", tz = "UTC")
 )
 #> [1] 15.94670 15.98264
 ```
 
-### 8.3. Spatial objects and file tables
+### 8.3. Spatial objects
 
 An `sf` input retains its POINT geometry:
 
 ``` r
 
 spatial_observations <- sf::st_as_sf(observations, coords = c("lon", "lat"), crs = 4326)
-extract3d_nearest(spatial_observations, nc_file, var = "thetao")
-#> Simple feature collection with 3 features and 6 fields
+extract_to_point(spatial_observations, nc_file, var = "thetao", method = "nearest")
+#> Simple feature collection with 3 features and 4 fields
 #> Geometry type: POINT
 #> Dimension:     XY
 #> Bounding box:  xmin: -0.08 ymin: 38 xmax: 0.08 ymax: 38.06
 #> Geodetic CRS:  WGS 84
-#>   record depth       date            geometry   lon   lat   thetao
-#> 1  set_A    60 2026-09-20        POINT (0 38)  0.00 38.00 15.94670
-#> 2  set_B   100 2026-09-20  POINT (0.08 38.04)  0.08 38.04 15.01775
-#> 3  set_C   200 2026-09-21 POINT (-0.08 38.06) -0.08 38.06 13.88106
-```
-
-Files can be supplied as a table with a named path column:
-
-``` r
-
-file_table <- data.frame(path = files)
-extract3d_nearest(later, file_table, var = "thetao", file_col = "path")
-#>   record   lon   lat depth       date   thetao
-#> 3  set_C -0.08 38.06   200 2026-09-21 13.88106
+#>   record depth       date            geometry   thetao
+#> 1  set_A    60 2026-09-20        POINT (0 38) 15.94670
+#> 2  set_B   100 2026-09-20  POINT (0.08 38.04) 15.01775
+#> 3  set_C   200 2026-09-21 POINT (-0.08 38.06) 13.88106
 ```
 
 Data frames, matrices with column names and named lists are also
@@ -905,7 +627,7 @@ local({
   connection <- ncdf4::nc_open(nc_file)
   on.exit(ncdf4::nc_close(connection))
 
-  result <- extract3d_nearest(one, connection, var = "thetao")
+  result <- extract_to_point(one, connection, var = "thetao", method = "nearest")
   print(ncdf4::ncatt_get(connection, "thetao", "units"))
   result
 })
@@ -924,26 +646,27 @@ We have assigned environmental values to fishing observations and traced
 how each request selects a cell, depth layer and timestamp. Along the
 way, we have:
 
-1.  Used the general point function and all five convenience functions.
-2.  Distinguished within-cell selection from an explicitly limited
-    nearest-cell search.
-3.  Compared nearest, surface and deepest-valid layers without
-    interpolation.
+1.  Used
+    [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+    with each of its four depth methods.
+2.  Seen that an observation takes the cell that contains it, and gets
+    `NA` off the grid.
+3.  Compared nearest, surface and bottom layers without interpolation.
 4.  Preserved observation hours and time zones, and applied explicit
     temporal limits.
-5.  Combined files, named outputs and distinguished missing values from
-    invalid inputs.
+5.  Read a series of files, named outputs and distinguished missing
+    values from invalid inputs.
 
 The complete basic workflow remains short:
 
 ``` r
 
-result <- extract3d_nearest(
+result <- extract_to_point(
   data = observations,
   nc = nc_file,
   var = "thetao",
+  method = "nearest",
   time_match = "nearest",
-  time_resolution = "datetime",
   max_time_diff = 1,
   output_col = "temperature",
   id_col = "record"
@@ -954,11 +677,22 @@ The one-day time limit is an example choice, not a universal
 recommendation. Choose settings that match the meaning and precision of
 your observations.
 
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+is a short wrapper over the package’s build and intersect steps:
+[`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
+builds the points,
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+describes the file and `extract()` reads the value at every point. The
+[workflow
+article](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md)
+shows those steps directly, and how to summarise values in buffers,
+areas and along tracks.
+
 ### Next steps
 
 - See
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-  for supported coordinates, calendars and detailed selection rules.
+  for supported inputs and detailed selection rules.
 - Explore the [buffer
   tutorial](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/extracting-and-weighting-buffer-data.md)
   when the question concerns a surrounding space and time window.
@@ -985,11 +719,7 @@ The tutorial does not imply endorsement by Copernicus Marine or CMCC.
 
 The repository’s
 [`data-raw/point-article.R`](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/blob/main/data-raw/point-article.R)
-recreates the files and display data. It checks the cropped extraction
-against the original for all three depth selections and stores results
-and messages from the public functions for every interactive menu
-combination. The widget is an explorer of these finite examples, not a
-general-purpose replacement for running the extraction in R.
+recreates the files and Figure 1’s display data.
 
 ## All arguments and defaults
 
@@ -1009,45 +739,30 @@ extract_to_point(
   lon = NULL, lat = NULL, depth = NULL, date = NULL,
 
   # Depth selection
-  method = c("2d", "surface", "bottom", "nearest", "all"),
+  method = c("2d", "surface", "bottom", "nearest"),
 
   # Observation and output columns
   lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
   output_col = NULL, output_prefix = NULL, id_col = NULL,
 
   # Source columns and dimensions
-  file_col = "file", lon_dim = NULL, lat_dim = NULL, depth_dim = NULL,
-  time_dim = NULL,
+  lon_dim = NULL, lat_dim = NULL, depth_dim = NULL, time_dim = NULL,
 
   # Temporal selection
-  time_match = c("nearest", "exact"),
-  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly", "custom"),
-  custom_time_interval = NULL, max_time_diff = NULL,
-
-  # Spatial selection
-  spatial_match = c("within", "nearest"), max_distance_km = NULL,
-
-  # Diagnostics and messages
-  return_match_info = FALSE, time_report = TRUE, spatial_report = NULL,
-  depth_report = NULL, verbose = FALSE
+  time_match = c("nearest", "exact"), max_time_diff = NULL
 )
 ```
 
 | Decision | Choices, meaning and effective default |
 |:---|:---|
-| Input and variables | `data = NULL` uses direct lon/lat/depth/date inputs; supply a table or sf points instead. Direct inputs default to NULL; dates are required only for temporal variables. `nc` is required; `var = NULL` detects variables or accepts explicit names. |
-| `method` | `"2d"` has no depth selection; `"nearest"` selects the closest valid layer to the requested depth; `"surface"` selects the physically shallowest layer; `"bottom"` selects the deepest valid layer. Default: `"2d"`. `"all"` returns surface, bottom and nearest outputs. |
-| Convenience functions | extract2d, extract3d_surface, extract3d_bottom and extract3d_nearest fix the corresponding method and forward point options. |
-| `spatial_match` | `spatial_match = "within"` (default) selects containing cells on point-selected axes; `"nearest"` allows a nearby cell only within an explicit `max_distance_km`. That distance limit defaults to NULL. |
-| `time_match` | `"nearest"` (default) chooses the nearest eligible timestamp or calendar label; `"exact"` requires the requested timestamp or label. `max_time_diff = NULL` has no additional time-distance limit; a nonnegative value limits it in days. |
-| `time_resolution` | `"auto"` follows observation precision; `"datetime"` preserves instants; `"daily"`, `"monthly"`, `"yearly"` compare UTC calendar labels. `"custom"` keeps full timestamps and requires a positive difftime `custom_time_interval` as a displacement warning threshold; it does not reject candidates. Default: `"auto"`; custom_time_interval defaults to NULL. No averaging is performed. |
-| Missing dates | A selected static variable needs no date. A temporal variable requires the date input or column. An explicit NA preserves the row and returns a missing value. |
-| Input and source names | `lon_col`, `lat_col`, `depth_col`, `date_col` default to lon, lat, depth, date. `id_col = NULL` means no ID column; `file_col = "file"` names the source-table path column. Dimension names default to NULL (detect); set lon_dim, lat_dim, depth_dim or time_dim to override. |
-| Output names | `output_col = NULL` chooses names automatically; supply explicit names to override. `output_prefix = NULL` adds no prefix; supply text to add one. Requested coordinates are retained; selected centres are separate diagnostics. |
-| Reports | `time_report = TRUE` (default) reports temporal selections needing explanation; FALSE hides it. `spatial_report` / `depth_report`: NULL (default) reports exceptional selections, TRUE adds routine detail, FALSE hides that report. |
-| Diagnostics | `return_match_info = FALSE` (default) omits detailed provenance; TRUE adds actual source, coordinates, depth and timestamp per output for table input. `verbose = FALSE` (default) suppresses progress detail; TRUE shows it. |
+| Input and variable | `data = NULL` uses direct lon/lat/depth/date inputs; supply a table, matrix, named list or sf points instead. Dates are required only for variables with several time steps. `nc` is a file path, several paths of a series on one grid, or an open connection; `var = NULL` detects a single data variable. |
+| `method` | `"2d"` (default) for a variable without depth or with one depth layer; `"nearest"` takes the layer with a value closest to the requested depth; `"surface"` takes the physically shallowest layer; `"bottom"` takes the deepest layer with a value. |
+| Horizontal cell | Each observation takes the cell that contains it; an observation off the grid gets `NA`. |
+| `time_match` | `"nearest"` (default) chooses the nearest time step; `"exact"` requires a step at the same instant (date-time) or on the same UTC day (date). `max_time_diff = NULL` has no time-distance limit; a nonnegative value limits it in days. |
+| Missing dates | A static variable needs no date. A temporal variable requires the date input or column. An explicit `NA` keeps the row and returns a missing value, with a warning. |
+| Input names | `lon_col`, `lat_col`, `depth_col`, `date_col` default to lon, lat, depth, date. `id_col = NULL` means no identifier column; a given one is checked to exist. Dimension names default to NULL (detect); set lon_dim, lat_dim, depth_dim or time_dim to override. |
+| Output name | `output_col = NULL` uses the variable name, or `nearest_`, `surface_` or `seabottom_` with it when `var` is detected; `output_prefix` is the older name for the same choice. A column that already exists is an error. |
 
 See
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-for accepted formats, units, matching limits and the full output
-description.
+for accepted formats, units and the full output description.

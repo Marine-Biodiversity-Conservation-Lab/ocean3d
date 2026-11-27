@@ -142,10 +142,10 @@ features in the same order and all their columns, plus <code>value</code>,
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>Each point takes the time step nearest its time, or the step equal to it
 with <code>time_match = "exact"</code>, as <code><a href="as_voxel.html">as_voxel()</a></code> matches a point. With dates,
-a point's date matches by UTC day. A source with one time step, such as a
-World Ocean Atlas climatology, gives that step to every point, whatever
-its time. On a source with several steps, a point without a time gets
-<code>NA</code>, with a warning.</p>
+a point's date matches by UTC day. A climatology with one time step, such
+as a World Ocean Atlas annual field, gives that step to every point,
+whatever its time. On a source with dated time steps, even one, a point
+without a time gets <code>NA</code>, with a warning.</p>
 <p>Each point takes the cell that holds it and, for a variable with depth,
 one depth level, chosen with <code>method</code> as <a href="mask-3d.html">mask()</a> does for points:</p><ul><li><p><code>"nearest"</code> (default): the level nearest the point's depth, skipping
 levels without a value, as <code>extract_to_point(method = "nearest")</code> does.</p></li>

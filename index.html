@@ -184,7 +184,7 @@
 <tr>
 <td>netCDF files (paths, open <code>ncdf4</code> connections or a file table)</td>
 <td>
-<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> and its <code><a href="reference/extract2d.html">extract2d()</a></code> / <code>extract3d_*()</code> wrappers, <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code>, <code><a href="reference/extract_to_track.html">extract_to_track()</a></code>
+<code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code>, <code><a href="reference/extract_to_track.html">extract_to_track()</a></code>
 </td>
 <td>ncdf4, only the cells each observation needs; keeps the time dimension</td>
 </tr>
@@ -195,9 +195,16 @@
 </td>
 <td>terra; one time step per voxel</td>
 </tr>
+<tr>
+<td>netCDF paths, an open <code>ncdf4</code> connection or a <code>SpatProxy</code> from <code><a href="reference/as_proxy.html">as_proxy()</a></code>
+</td>
+<td><code><a href="reference/extract_to_point.html">extract_to_point()</a></code></td>
+<td>
+<code><a href="reference/as_proxy.html">as_proxy()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/extract.html" class="external-link">terra::extract()</a></code>, each time step once for its points</td>
+</tr>
 </tbody>
 </table>
-<p>A voxel can’t be passed to <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>. <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> and <code><a href="reference/volume.html">volume()</a></code> take a voxel or a netCDF file described with <code><a href="reference/as_proxy.html">as_proxy()</a></code>. Merging the two into one model with time is planned in <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99" class="external-link">#99</a>. Its first, experimental part is <code><a href="reference/as_proxy.html">as_proxy()</a></code>, which describes a netCDF file (such as a World Ocean Atlas file from <code><a href="reference/woa_download.html">woa_download()</a></code>), a series of files or a voxel in memory as a <code>SpatProxy</code> without reading its values. To use a netCDF file with the voxel functions, describe it with <code><a href="reference/as_proxy.html">as_proxy()</a></code>, crop it to your area with <code><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">terra::crop()</a></code>, and read one time step with <code><a href="reference/as_voxel.html">as_voxel()</a></code>; only the cropped cells are read.</p>
+<p>A voxel can’t be passed to <code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code> or <code><a href="reference/extract_to_track.html">extract_to_track()</a></code>. <code><a href="reference/extract_to_point.html">extract_to_point()</a></code> takes netCDF paths, a connection or a <code>SpatProxy</code>, and reads paths and connections through <code><a href="reference/as_proxy.html">as_proxy()</a></code>; <code><a href="reference/extract_to_area.html">extract_to_area()</a></code> and <code><a href="reference/volume.html">volume()</a></code> take a voxel or a <code>SpatProxy</code> from <code><a href="reference/as_proxy.html">as_proxy()</a></code>. Merging the two into one model with time is planned in <a href="https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/99" class="external-link">#99</a>. Its first, experimental part is <code><a href="reference/as_proxy.html">as_proxy()</a></code>, which describes a netCDF file (such as a World Ocean Atlas file from <code><a href="reference/woa_download.html">woa_download()</a></code>), a series of files or a voxel in memory as a <code>SpatProxy</code> without reading its values. To use a netCDF file with the voxel functions, describe it with <code><a href="reference/as_proxy.html">as_proxy()</a></code>, crop it to your area with <code><a href="https://rspatial.github.io/terra/reference/crop.html" class="external-link">terra::crop()</a></code>, and read one time step with <code><a href="reference/as_voxel.html">as_voxel()</a></code>; only the cropped cells are read.</p>
 </div>
 <div class="section level3">
 <h3 id="build-3d-objects">Build: 3D objects<a class="anchor" aria-label="anchor" href="#build-3d-objects"></a>
@@ -263,18 +270,10 @@
 <div class="section level3">
 <h3 id="summarise-environmental-extraction-from-netcdf-files">Summarise: environmental extraction from netCDF files<a class="anchor" aria-label="anchor" href="#summarise-environmental-extraction-from-netcdf-files"></a>
 </h3>
-<p>Input: observations (data frame, tibble, <code>sf</code> POINT, matrix, or named list) and one or more netCDF files. These functions read the files directly, only the cells each observation needs, and match time as well as depth. They don’t take a <code>SpatVoxel</code>.</p>
+<p>Input: observations (data frame, tibble, <code>sf</code> POINT, matrix, or named list) and one or more netCDF files. These functions read the files directly, only the cells each observation needs, and match time as well as depth. <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code> and <code><a href="reference/extract_to_track.html">extract_to_track()</a></code> don’t take a <code>SpatVoxel</code>.</p>
 <ul>
 <li>
-<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> — the general engine: match observation points against one or more netCDF files. By default a point takes the value of the grid cell that contains it (<code>NA</code> outside the grid); <code>spatial_match = "nearest"</code> accepts the nearest cell centre within <code>max_distance_km</code>. Time is matched to the nearest timestamp and depth by physical depth in metres. Returns the input with the extracted values appended, structure preserved.</li>
-<li>
-<code><a href="reference/extract2d.html">extract2d()</a></code> — for variables with no depth dimension.</li>
-<li>
-<code><a href="reference/extract3d_nearest.html">extract3d_nearest()</a></code> — the valid, non-missing depth layer closest to each observation’s depth, so a cell below the seabed does not silently return <code>NA</code>.</li>
-<li>
-<code><a href="reference/extract3d_surface.html">extract3d_surface()</a></code> / <code><a href="reference/extract3d_bottom.html">extract3d_bottom()</a></code> — the physically shallowest depth layer, or the deepest non-missing one at that cell.</li>
-<li>
-<code><a href="reference/extract3d_all.html">extract3d_all()</a></code> — nearest, surface and bottom in one pass, as three columns.</li>
+<code><a href="reference/extract_to_point.html">extract_to_point()</a></code> — values at observation points, from one netCDF file, a series of files on one grid, an open connection or a <code>SpatProxy</code>. Each point takes the cell that contains it (<code>NA</code> outside the grid), the nearest time step, and the depth level you set with <code>method</code>: <code>"nearest"</code> (nearest level with a value), <code>"surface"</code>, <code>"bottom"</code> (deepest level with a value), or <code>"2d"</code> for a variable without depth. Built on <code><a href="reference/as_vector3d.html">as_vector3d()</a></code>, <code><a href="reference/as_proxy.html">as_proxy()</a></code> and <code>extract()</code>, it reads each time step once for all the points at that time. Returns the input with the extracted values appended, structure preserved.</li>
 <li>
 <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code> — summarise values within a geodesic circle × depth window × time window around each observation, weighted by cell coverage, layer thickness and time, or pick the value closest to a target.</li>
 <li>

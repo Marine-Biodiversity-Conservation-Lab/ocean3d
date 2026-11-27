@@ -1153,18 +1153,13 @@ location, date and depth.
 allows you to associate these observations with environmental
 information from NetCDF datasets.
 
-Different extraction methods are available, including:
+You choose the depth level with its `method` argument:
 
-- [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md)
-  for environmental variables without a depth dimension.
-- [`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_nearest.md)
-  for values at the nearest valid depth.
-- [`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_surface.md)
-  and
-  [`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_bottom.md)
-  for surface and bottom conditions.
-- [`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_all.md)
-  for obtaining several depth-specific values together.
+- `method = "2d"` for environmental variables without a depth dimension.
+- `method = "nearest"` for values at the nearest depth level with a
+  value.
+- `method = "surface"` and `method = "bottom"` for surface and bottom
+  conditions.
 
 Alternatively,
 [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)

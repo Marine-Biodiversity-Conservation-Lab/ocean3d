@@ -4,6 +4,60 @@
 
 ### Breaking changes
 
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+is now a shortcut for
+[`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md),
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)
+and
+[`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html)
+([\#116](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/116)),
+which reads each time step once for all the points at that time. It
+keeps table, `sf`, matrix, list and direct input, the `"2d"`,
+`"surface"`, `"bottom"` and `"nearest"` methods with their meanings,
+`time_match`, `max_time_diff`, the column and dimension arguments and
+the output column’s name, and `nc` can now also be a `SpatProxy` from
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
+On the same file it gives the same values as before, except for a point
+exactly on the edge between two cells, which now takes the cell east or
+south of the edge. What changes for callers:
+
+- `extract2d()`, `extract3d_surface()`, `extract3d_bottom()` and
+  `extract3d_nearest()` are removed. Use
+  `extract_to_point(x, nc, method = "2d")`, `method = "surface"`,
+  `method = "bottom"` or `method = "nearest"`.
+- `extract3d_all()` and `method = "all"` are removed: call
+  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+  once per method.
+- `nc` is one file, several files of a series on one grid, or an open
+  connection. A table of files (`file_col`) and files on different grids
+  are no longer accepted: call once per grid.
+- `spatial_match = "nearest"` and `max_distance_km` are removed. A point
+  takes the cell that contains it and is `NA` off the grid. For a point
+  just off the grid or near the coast, move it first, or summarise the
+  values around it with
+  [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md).
+- `time_resolution` and `custom_time_interval` are removed. A date is
+  matched by its UTC day and a date-time as an instant; to match by day,
+  give dates. Monthly and yearly label matching is no longer offered:
+  for monthly files, the default nearest matching with `max_time_diff`
+  of about 31 days takes the nearest monthly step, and `NA` when there
+  is none.
+- `spatial_report`, `depth_report`, `time_report`, `return_match_info`
+  and `verbose` are removed. To see the time step and depth level each
+  point took, call
+  [`extract()`](https://rspatial.github.io/terra/reference/extract.html)
+  on `as_proxy(nc)` with
+  [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md)
+  points; it returns them as `time_step` and `depth_level`.
+- An output column that already exists in `data` is now an error rather
+  than being replaced.
+- An observation with a missing date still gives `NA`, now with a
+  warning; it used to give none. Text date-times without a time zone are
+  read as UTC without the warning they used to give.
+- Coordinates that aren’t numeric, such as those of a matrix with a date
+  column, are now an error. They used to give `NA` for every
+  observation.
+
 [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
 is now a shortcut for
 [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
@@ -239,9 +293,8 @@ Pass `bounds = "top"` to keep the old results.
 
 Point extraction
 ([`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-[`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md),
-`extract3d_*()`) now checks the grid’s coordinates instead of assuming
-one layout
+`extract2d()`, `extract3d_*()`) now checks the grid’s coordinates
+instead of assuming one layout
 ([\#74](https://github.com/Marine-Biodiversity-Conservation-Lab/ocean3d/issues/74)).
 Some calls that used to return a value now return `NA` or stop with an
 error:
@@ -259,13 +312,9 @@ error:
   `positive` attribute sets their direction. Surface, bottom and nearest
   are chosen by physical depth, whether the coordinate is stored shallow
   to deep or deep to shallow. The depth coordinate must have length
-  units, including for
-  [`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_surface.md)
-  and
-  [`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_bottom.md);
+  units, including for `extract3d_surface()` and `extract3d_bottom()`;
   files without them stop with an error. A file with a single depth
-  level can be read with
-  [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md).
+  level can be read with `extract2d()`.
 - With several files, a temporal tie between sources keeps input order
   under `"within"` matching, and goes to the closer cell centre under
   `"nearest"` matching.
@@ -818,11 +867,10 @@ Apart from the changes below, behaviour is unchanged.
 
 - Point extraction functions
   ([`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-  [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md),
-  `extract3d_*()`) no longer drop netCDF sources when `nc` is a list
-  that contains a data frame of file paths; previously the data frame
-  replaced every source listed before it. A vector of paths inside a
-  list is now accepted too.
+  `extract2d()`, `extract3d_*()`) no longer drop netCDF sources when
+  `nc` is a list that contains a data frame of file paths; previously
+  the data frame replaced every source listed before it. A vector of
+  paths inside a list is now accepted too.
 
 ### Minor improvements
 

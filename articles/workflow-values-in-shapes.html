@@ -131,7 +131,7 @@ every depth level.</p>
 <code class="sourceCode R"><span><span class="va">proxy</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/as_proxy.html">as_proxy</a></span><span class="op">(</span><span class="va">path</span><span class="op">)</span></span>
 <span><span class="va">proxy</span></span>
 <span><span class="co">#&gt; class      : SpatProxy (experimental)</span></span>
-<span><span class="co">#&gt; source     : file23c455b80636.nc</span></span>
+<span><span class="co">#&gt; source     : file23945f5151ee.nc</span></span>
 <span><span class="co">#&gt; variable   : temp (degC)</span></span>
 <span><span class="co">#&gt; dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)</span></span>
 <span><span class="co">#&gt; lon        : 150.025 to 150.975, 20 cells, edges inferred</span></span>
@@ -181,10 +181,9 @@ without a value:</p>
 <span><span class="co">#&gt; [1] 27.75</span></span></code></pre></div>
 <p>Both pick the nearest time step: on this data they give the same
 values for all three detections, for a time halfway between two steps,
-and for a date after the last step. <code><a href="../reference/extract_to_point.html">extract_to_point()</a></code>
-warns when the step it picks is on another day; <code><a href="../reference/as_voxel.html">as_voxel()</a></code>
-doesn’t, so set <code>max_time_diff</code> in <code><a href="../reference/as_voxel.html">as_voxel()</a></code> to
-limit how far away the step may be.</p>
+and for a date after the last step. Neither warns when the step it picks
+is on another day, so set <code>max_time_diff</code> in either function
+to limit how far away the step may be.</p>
 <p><code><a href="https://rspatial.github.io/terra/reference/mask.html" class="external-link">mask()</a></code> has two rules for the nearest depth level:</p>
 <ul>
 <li>

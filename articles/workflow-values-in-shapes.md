@@ -66,7 +66,7 @@ only the cells and time steps it needs, at every depth level.
 proxy <- as_proxy(path)
 proxy
 #> class      : SpatProxy (experimental)
-#> source     : file23c455b80636.nc
+#> source     : file23945f5151ee.nc
 #> variable   : temp (degC)
 #> dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)
 #> lon        : 150.025 to 150.975, 20 cells, edges inferred
@@ -133,13 +133,9 @@ extract_to_point(obs[1, ], path, var = "temp", date_col = "date",
 
 Both pick the nearest time step: on this data they give the same values
 for all three detections, for a time halfway between two steps, and for
-a date after the last step.
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-warns when the step it picks is on another day;
-[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-doesn’t, so set `max_time_diff` in
-[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
-to limit how far away the step may be.
+a date after the last step. Neither warns when the step it picks is on
+another day, so set `max_time_diff` in either function to limit how far
+away the step may be.
 
 [`mask()`](https://rspatial.github.io/terra/reference/mask.html) has two
 rules for the nearest depth level:

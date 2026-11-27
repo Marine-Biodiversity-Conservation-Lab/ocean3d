@@ -1,9 +1,8 @@
 # Extract environmental values along tracks and lines
 
-Sample ordered trajectories and reuse
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-for environmental selection. Return sampled positions and optional
-summaries per track.
+Sample ordered trajectories and take the environmental value at each
+sampled position. Return sampled positions and optional summaries per
+track.
 
 ## Usage
 
@@ -102,10 +101,11 @@ extract_to_track(
 
 - method:
 
-  Depth method passed to
+  Depth method for each sample: 'nearest', 'surface', 'bottom' or '2d',
+  as in
   [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-  including 'all'. NULL uses nearest for variables with depth and 2d for
-  variables without it.
+  or 'all' for one column per depth method. NULL uses nearest for
+  variables with depth and 2d for variables without it.
 
 - statistics:
 
@@ -134,10 +134,11 @@ extract_to_track(
 
 - time_resolution:
 
-  Point-time precision; see
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
-  With auto, the original observations determine precision, before
-  interpolation.
+  Point-time precision: 'auto', 'datetime' (instants), 'daily',
+  'monthly' or 'yearly' (UTC calendar labels), or 'custom' (full
+  timestamps, with `custom_time_interval` in `...` as a warning
+  threshold). With auto, the original observations set the precision,
+  before interpolation.
 
 - max_samples:
 
@@ -239,11 +240,11 @@ integration of physical averaging periods; the temporal rules still
 compare timestamp labels. Custom temporal precision and spatial nearest
 matching are currently unsupported in cells mode. Overlapping sources
 with different horizontal grids require explicit alignment or another
-sampling mode. Environmental values are selected using
-extract_to_point(), never interpolated. The depth coordinate may be
-stored shallow to deep or deep to shallow; depths stored in any other
-order are rejected. Missing coordinates are rejected and multipart lines
-must be split explicitly.
+sampling mode. Environmental values are taken from the grid cell and
+time step each sample falls in, never interpolated. The depth coordinate
+may be stored shallow to deep or deep to shallow; depths stored in any
+other order are rejected. Missing coordinates are rejected and multipart
+lines must be split explicitly.
 
 SD and SE use the same reliability-weight correction and effective
 sample size as extract_to_buffer(). Adjacent samples are usually

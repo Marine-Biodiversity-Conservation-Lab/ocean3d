@@ -96,17 +96,7 @@ along tracks, or from a `SpatVoxel` within an area. These run build,
 intersect and summarise in one call.
 
 - [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-  : Extract values from netCDFs to one or more point observations
-- [`extract2d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract2d.md)
-  : Extract values from a 2D netCDF variable
-- [`extract3d_all()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_all.md)
-  : Extract nearest, surface and bottom values from a 3D netCDF variable
-- [`extract3d_bottom()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_bottom.md)
-  : Extract the bottom available layer from a 3D netCDF variable
-- [`extract3d_nearest()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_nearest.md)
-  : Extract the nearest valid depth layer from a 3D netCDF variable
-- [`extract3d_surface()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract3d_surface.md)
-  : Extract the surface layer from a 3D netCDF variable
+  : Extract values from netCDF files at point observations
 - [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
   : Summarise environmental values around observations
 - [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)

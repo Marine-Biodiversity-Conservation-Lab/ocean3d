@@ -75,10 +75,8 @@ silently become a connecting segment.
 
 ## Step 1: Extracting at the recorded positions
 
-First, use only the supplied vertices. This provides the same
-environmental selection as applying
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-to those coordinates.
+First, use only the supplied vertices. Each vertex takes the value of
+the cell, depth level and time step it falls in, as a point does.
 
 ``` r
 
@@ -201,11 +199,10 @@ observations. The generated `track_id` remains available for every
 sample.
 
 **This interpolates the path, not the temperature.** Each inserted
-location is passed to
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
-with the usual cell, depth and time selection rules. Several nearby
-samples can therefore select the same environmental value. No
-interpolation between environmental grid values has been performed.
+location takes the value of its cell, depth level and time step, as a
+point does. Several nearby samples can therefore select the same
+environmental value. No interpolation between environmental grid values
+has been performed.
 
 A one-kilometre spacing can select the same grid cell several times.
 That is expected: these are positions along the route, not a list of
@@ -1456,27 +1453,26 @@ extract_to_track(
 | Safety limits | `max_samples = 100000L` caps generated positions; `max_segment_km = NULL` and `max_gap_hours = NULL` disable connection limits until positive values are supplied. |
 | Messages | `quiet = FALSE` (default) permits ordinary reports; TRUE hides them. Timezone and scientific warnings remain active. |
 
-The arguments passed through `...` are restricted to the following point
-selection options. Their defaults are also read from the current point
-function:
+The arguments passed through `...` are restricted to point selection
+options. Those that
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+also has keep its defaults:
 
-|  | Argument | Default | Meaning |
-|:---|:---|:---|:---|
-| file_col | file_col | “file” | Source-table path column; default file. |
-| lon_dim | lon_dim | NULL | NULL detects the longitude dimension; supply a name to override. |
-| lat_dim | lat_dim | NULL | NULL detects the latitude dimension; supply a name to override. |
-| depth_dim | depth_dim | NULL | NULL detects the depth dimension; supply a name to override. |
-| time_dim | time_dim | NULL | NULL detects the time dimension; supply a name to override. |
-| time_match | time_match | c(“nearest”, “exact”) | nearest selects the nearest eligible timestamp/label (default); exact requires the requested timestamp/label. |
-| max_time_diff | max_time_diff | NULL | NULL has no extra temporal-distance limit; a nonnegative number sets a limit in days. |
-| custom_time_interval | custom_time_interval | NULL | Positive difftime warning threshold for custom resolution, which retains full timestamps. NULL by default; does not reject candidates. |
-| spatial_match | spatial_match | c(“within”, “nearest”) | within requires a containing cell (default); nearest allows a nearby cell with an explicit max_distance_km. |
-| max_distance_km | max_distance_km | NULL | Nonnegative distance to cell centre, required for nearest; NULL for within. |
-| time_report | time_report | TRUE | TRUE reports displaced or missing temporal results (default); FALSE hides the report. |
-| spatial_report | spatial_report | NULL | NULL reports exceptional spatial selections (default); TRUE adds routine detail; FALSE hides the report. |
-| depth_report | depth_report | NULL | NULL reports exceptional depth selections (default); TRUE adds routine detail; FALSE hides the report. |
-| verbose | verbose | FALSE | FALSE suppresses progress detail (default); TRUE shows it. |
+| Argument | Default | Meaning |
+|:---|:---|:---|
+| lon_dim | NULL | NULL detects the longitude dimension; supply a name to override. |
+| lat_dim | NULL | NULL detects the latitude dimension; supply a name to override. |
+| depth_dim | NULL | NULL detects the depth dimension; supply a name to override. |
+| time_dim | NULL | NULL detects the time dimension; supply a name to override. |
+| time_match | c(“nearest”, “exact”) | nearest selects the nearest eligible timestamp/label (default); exact requires the requested timestamp/label. |
+| max_time_diff | NULL | NULL has no extra temporal-distance limit; a nonnegative number sets a limit in days. |
 
+The track function also takes `file_col`, `custom_time_interval`,
+`spatial_match`, `max_distance_km` and the report switches
+`time_report`, `spatial_report`, `depth_report` and `verbose`, which
+[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
+no longer has; see
+[`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md).
 `quiet = TRUE` overrides ordinary report switches. The inherited
 `time_step_seconds` argument expresses an elapsed-time step in seconds
 and cannot be combined with `time_step`. See

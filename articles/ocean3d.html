@@ -1179,20 +1179,17 @@ tracking positions or biological sampling stations, each associated with
 a location, date and depth.</p>
 <p><code><a href="../reference/extract_to_point.html">extract_to_point()</a></code> allows you to associate these
 observations with environmental information from NetCDF datasets.</p>
-<p>Different extraction methods are available, including:</p>
+<p>You choose the depth level with its <code>method</code> argument:</p>
 <ul>
 <li>
-<code><a href="../reference/extract2d.html">extract2d()</a></code> for environmental variables without a depth
-dimension.</li>
+<code>method = "2d"</code> for environmental variables without a
+depth dimension.</li>
 <li>
-<code><a href="../reference/extract3d_nearest.html">extract3d_nearest()</a></code> for values at the nearest valid
-depth.</li>
+<code>method = "nearest"</code> for values at the nearest depth
+level with a value.</li>
 <li>
-<code><a href="../reference/extract3d_surface.html">extract3d_surface()</a></code> and <code><a href="../reference/extract3d_bottom.html">extract3d_bottom()</a></code>
+<code>method = "surface"</code> and <code>method = "bottom"</code>
 for surface and bottom conditions.</li>
-<li>
-<code><a href="../reference/extract3d_all.html">extract3d_all()</a></code> for obtaining several depth-specific
-values together.</li>
 </ul>
 <p>Alternatively, <code><a href="../reference/extract_to_area.html">extract_to_area()</a></code> allows you to extract
 environmental data within a geographical area and selected depth
