@@ -952,576 +952,368 @@
 }
 
 
-# Public function
-# --------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Track extraction: a convenience wrapper over the three steps (#116)
+# -----------------------------------------------------------------------------
+#
+# The vertex table becomes SpatVector3D lines, sampled into points along each
+# track with sample_3d(), and with a radius buffered with buffer_3d()
+# (build); each sample's value is read with extract(), or inside its buffer
+# with crop(), as_voxel() (rast() for a variable without depth) and mask()
+# (intersect); summarise_3d() gives a buffer's mean, and the samples' values
+# are summarised per track, weighted by the distance or time each sample
+# stands for (summarise). The wrapper calls only exported functions of those
+# steps.
 
-#' Extract environmental values along tracks and lines
+#' Summarise environmental values along tracks
 #'
-#' Sample ordered trajectories and take the environmental value at each sampled
-#' position. Return sampled positions and optional summaries per track.
+#' Samples points along each track, such as a dive or a vessel route, reads
+#' the value at each sample, and summarises the samples of each track. It is
+#' a convenience wrapper over the three steps of an analysis, and the
+#' [workflow article](../articles/workflow-values-in-shapes.html) shows the
+#' same steps written out:
 #'
-#' @param data Ordered vertex table: a data frame, matrix, named list or sf
-#'   POINT features, as for [extract_to_point()]. Rows are traversed in their
-#'   supplied order within each track; they are never sorted by date. Convert
-#'   sf LINESTRING features first, e.g. with
+#' 1. **Build:** the vertices of each track become a line with
+#'    [as_vector3d()], and [sample_3d()] places points along it, with depth
+#'    and time interpolated between vertices. With `horizontal_radius_km`,
+#'    [buffer_3d()] turns each sample into a buffer.
+#' 2. **Intersect:** without a radius, [extract()][extract-SpatProxy] reads
+#'    the value at each sample, in the cell that holds it and at the depth
+#'    level `method` picks. With a radius, the data for the sample's time
+#'    step are read with [crop()] and [as_voxel()] (or [rast()][rast-SpatProxy]
+#'    for a variable without depth), and [mask()] keeps the values inside its
+#'    buffer: the cells the circle touches, and the levels whose slab of
+#'    water overlaps the depth window. [summarise_3d()] gives their mean,
+#'    weighted by cell volume.
+#' 3. **Summarise:** the statistics of each track's sample values, each
+#'    sample weighted by `weighting`.
+#'
+#' Each sample is matched to the time step nearest its time, or equal to it
+#' with `time_match = "exact"`, as [extract()][extract-SpatProxy] matches
+#' points. A sample gets `NA` when it is outside the grid, on a cell or level
+#' without a value, or has no time step that matches. One warning counts
+#' these samples, by reason. The track summaries leave them out, and `n` is
+#' the number of samples with a value.
+#'
+#' With `weighting = "distance"` each sample stands for half the distance to
+#' the samples either side (`support_km`), so a stretch sampled more densely
+#' doesn't count for more; with `"duration"` for half the time
+#' (`support_seconds`). The weighted standard deviation is the one
+#' [summarise_3d()] uses. A track whose samples all have zero weight, such
+#' as a track that doesn't move with distance weights, gets equal weights.
+#' Neighbouring samples are usually correlated, so the standard deviation
+#' describes their spread, not the uncertainty of the mean.
+#'
+#' @param data Vertices of the tracks, in the order they were travelled: a
+#'   data frame, matrix, named list or sf POINT object. sf points are
+#'   transformed to longitude and latitude. To use sf lines, convert them
+#'   first, e.g. with
 #'   `as.data.frame(sf::st_coordinates(sf::st_transform(lines, 4326)))` and
 #'   `lon_col = "X", lat_col = "Y", track_col = "L1"`.
-#' @param nc,var netCDF sources (a path, several paths, an open ncdf4
-#'   connection or a table with a file column) and the variable names to
-#'   read; `var = NULL` detects one data variable per file. Files are read
-#'   directly with ncdf4; a [SpatVoxel-class] or other `SpatRaster` isn't
-#'   accepted.
-#' @param track_col Optional track identifier column. Without it, the input is
-#'   one track. IDs are returned as text.
-#' @param sampling NULL (default) uses 'balanced' when spacing_km,
-#'   depth_step_m, time_step_seconds or time_step is supplied, and
-#'   'vertices' otherwise. 'vertices' uses observations only; 'balanced'
-#'   uses a shared subdivision satisfying all explicit step limits;
-#'   'merged_steps' places the evenly spaced samples that the distance and
-#'   depth limits need, and separately a sample at each time step, and keeps
-#'   both sets;
-#'   'cells' splits each connection at
-#'   grid boundaries and samples interval midpoints, retaining original
+#' @param nc The data: a netCDF file path, several paths for a series of
+#'   files on one grid, an open [ncdf4::nc_open()] connection, or a
+#'   [SpatProxy-class] from [as_proxy()].
+#' @param var Name of the variable, for a netCDF source. `NULL` detects the
+#'   only data variable of the file.
+#' @param track_col Column with track IDs. `NULL` (default) reads all of
+#'   `data` as one track, with ID `"1"`. Each track needs at least two
 #'   vertices.
-#'   Repeated visits are retained. Cells mode currently uses spatial within
-#'   matching.
-#' @param spacing_km Maximum horizontal spacing in kilometres when inserting
-#'   samples.
-#'   Supply spacing or another step explicitly for balanced or merged_steps.
-#' @param interpolate_depth,interpolate_time Allow linear interpolation of depth
-#'   and elapsed UTC time between vertices. FALSE by default. Constant endpoint
-#'   values are retained; missing endpoints produce missing intermediate values.
-#' @param depth_step_m,time_step_seconds Optional maximum changes between
-#'   samples. Require the corresponding interpolation switch. They supplement
-#'   horizontal spacing, including for stationary or vertically moving tracks.
-#' @param time_step,time_unit Optional temporal step and units: seconds,
-#'   minutes,
-#'   hours, elapsed days, whole calendar months or years. Balanced sampling uses
-#'   one equal subdivision per original segment for elapsed-time limits.
-#'   Calendar steps count from the segment's start in UTC, and fall on the
-#'   last day of a shorter month: from 31 January, monthly steps give
-#'   29 February, 31 March, 30 April. Balanced sampling keeps these dates and
-#'   adds points between them where needed to meet the distance and depth
-#'   limits.
-#' @param land_mask Optional sf polygon or single-layer terra SpatRaster mask.
-#'   With no mask, marine connectivity is not checked.
-#'   Geographic rasters must use longitudes from -180 to 180; rotate or
-#'   reproject other conventions explicitly. Antimeridian connections are split.
-#' @param marine_values Numeric raster codes representing marine cells,
-#'   including the underlying codes of categorical rasters.
-#' @param mask_type Meaning of polygon interiors: land or marine.
-#' @param mask_domain Optional polygon domain for polygon masks. A land
-#'   polygon alone cannot establish that its exterior is known sea.
-#'   For rasters, coverage is defined by their extent and missing cells.
-#' @param land_policy Skip invalid connections (default) or raise an error.
-#'   Original observations remain; invalid support stays in the denominator.
-#' @param mask_step_km Maximum segment length of the polyline used for mask
-#'   predicates. This is an approximation to the geodesic; coastline accuracy
-#'   also depends on the supplied mask. Touching land counts as an intersection.
-#' @param method Depth method for each sample: 'nearest', 'surface', 'bottom'
-#'   or '2d', as in [extract_to_point()], or 'all' for one column per depth
-#'   method. NULL uses nearest for variables with depth and 2d for variables
-#'   without it.
-#' @param statistics NULL for samples only, or distinct names from mean, sd, se,
-#'   min and max. Summaries describe sampled environmental selections.
-#' @param weighting 'distance', 'duration' or 'equal'. Distance and duration
-#'   assign half each adjacent segment's horizontal length or elapsed seconds
-#'   to its endpoint samples. Equal gives each sample the same weight.
-#' @param min_valid_fraction Minimum valid fraction of total requested track
-#'   support for a summary, from zero to one. Missing values stay in its
-#'   denominator.
-#' @param lon_col,lat_col,depth_col,date_col Vertex coordinate columns. Dates
-#'   are
-#'   required for selected temporal variables, duration weights or time-gap
-#'   limits.
-#' @param output_col Output name or named variable-to-column mapping.
-#' @param time_resolution Point-time precision: 'auto', 'datetime' (instants),
-#'   'daily', 'monthly' or 'yearly' (UTC calendar labels), or 'custom' (full
-#'   timestamps, with `custom_time_interval` in `...` as a warning threshold).
-#'   With auto, the original observations set the precision, before
-#'   interpolation.
-#' @param max_samples Maximum total sampled positions, a positive integer.
-#' @param max_segment_km,max_gap_hours Optional limits that reject long segments
-#'   or known elapsed time gaps. Split disconnected trajectories explicitly.
-#'   FALSE by default because geometric elevation may use a different
-#'   convention.
-#' @param quiet Hide explanatory reports; scientific and time-zone warnings
-#'   remain.
-#' @param ... Point-selection options: file_col, dimension overrides,
-#'   time_match,
-#'   max_time_diff, custom_time_interval, spatial_match, max_distance_km, and
-#'   time_report, spatial_report, depth_report, verbose.
+#' @param sampling,spacing_km,depth_step_m,time_step,time_unit,max_samples
+#'   Where the samples go along each track, as in [sample_3d()]: only the
+#'   vertices (default without a step), or with a spacing in kilometres or
+#'   a depth or time step, points in between as well.
+#' @param horizontal_radius_km Radius of a circle around each sample, in
+#'   kilometres, below 10000 as in [buffer_3d()]. `0` (default) reads the
+#'   value at the sample itself.
+#' @param depth_radius_m Distance in metres above and below each sample's
+#'   depth, for the buffers. Needed with a radius for a variable with depth,
+#'   and used only with a radius.
+#' @param method For a variable with depth and no radius, the depth level
+#'   each sample takes, as in [extract()][extract-SpatProxy]: `"nearest"`
+#'   (default; the level nearest the sample's depth that has a value),
+#'   `"nearest_level"` (the nearest level, even if it has no value),
+#'   `"bottom"` (the deepest level with a value) or `"surface"`. Leave
+#'   `NULL` with a radius; for a variable without depth, leave `NULL` or use
+#'   `"2d"`.
+#' @param statistic One or more of `"mean"` (default), `"sd"`, `"min"` and
+#'   `"max"`, of the samples of each track.
+#' @param weighting How each sample is weighted in the track summaries:
+#'   `"distance"` (default) by `support_km`, `"duration"` by
+#'   `support_seconds` (needs dates), or `"equal"`.
+#' @param lon_col,lat_col,depth_col,date_col Vertex columns. The depth is
+#'   needed for a variable with depth, unless `method` is `"bottom"` or
+#'   `"surface"`, and for `depth_step_m`. The date is needed for data with
+#'   dated time steps, for `time_step` and for duration weights. Dates and
+#'   date-times are read as in [as_vector3d()].
+#' @param lon_dim,lat_dim,depth_dim,time_dim Dimension names for a netCDF
+#'   source, as in [as_proxy()].
+#' @param time_match,max_time_diff How a sample's time is matched to a time
+#'   step, as in [as_voxel()]: the nearest step (default) or an exact one,
+#'   and the largest gap in days for a nearest match.
+#' @param output_col Name of the value column in `samples`. `NULL` uses the
+#'   variable's name.
 #'
-#' @returns A list with samples (coordinates, original vertex attributes,
-#'   source-row references, sample support and extracted values), summary (one
-#'   row
-#'   per track and output, or NULL), and settings. Tracks follow first
-#'   appearance order. Summary counts n_observed and n_assumed distinguish
-#'   original vertices from inserted positions; n_samples is their total,
-#'   including missing results and invalid connections. The same counts are
-#'   available once per track in settings$sampling_counts, even when
-#'   statistics = NULL. Cell-interval midpoints count as assumed positions.
-#'   variation_status is not_requested when neither SD nor SE is requested,
-#'   available when the requested variation statistics are finite, or
-#'   insufficient_variation_samples when accepted support has fewer than two
-#'   valid samples. not_available covers rejected support or non-finite
-#'   statistics; consult status for coverage and support problems. status
-#'   is one of: empty (no known support), all_missing,
-#'   insufficient_coverage, partial or complete.
-#'   Samples follow traversal order. For vertices-only sampling the global
-#'   input row order is retained. Non-coordinate attributes of inserted samples
-#'   are NA. source_row indexes the input rows.
+#' @returns A list of two data frames:
+#'   * `samples`: one row per sample, in order along each track, with
+#'     `track_id`, `sample_id`, the position (in `lon_col` and `lat_col`),
+#'     the depth and date when used (in `depth_col` and `date_col`),
+#'     `distance_km` from the track's start, `support_km`,
+#'     `support_seconds`, `is_interpolated` (`FALSE` for the track's own
+#'     vertices), and the value in `output_col`. With a radius, also
+#'     `<output>_n`, the number of values in the sample's buffer.
+#'   * `summary`: one row per track, with `track_id`, a column per
+#'     statistic, and `n`, the number of samples with a value.
 #'
-#' @section Interpretation and limits:
-#' Positions follow WGS84 shortest geodesics. Distances are
-#' horizontal, not three-dimensional travel distances. Antipodal endpoints need
-#' a waypoint. Interpolated coordinates describe assumptions, not observations.
-#'
-#' Balanced sampling approximates line integration. Cells mode finds numerical
-#' intersections with rectilinear spatial cell boundaries and selection changes
-#' in depth and time. It retains separate segment visits, including returns to
-#' the same cell. Zero-support original vertices remain available for
-#'   inspection.
-#' Cells mode is not a volume-weighted integration of physical averaging
-#'   periods;
-#' the temporal rules still compare timestamp labels. Custom temporal precision
-#' and spatial nearest matching are currently unsupported in cells mode.
-#' Overlapping sources with different horizontal grids require explicit
-#' alignment or another sampling mode.
-#' Environmental values are taken from the grid cell and time step each
-#'   sample falls in, never interpolated.
-#' The depth coordinate may be stored shallow to deep or deep to shallow;
-#'   depths stored in any other order are rejected.
-#' Missing coordinates are rejected and multipart lines must be split
-#'   explicitly.
-#'
-#' SD and SE use the same reliability-weight correction and effective sample
-#' size as [summarise_3d()]. Adjacent samples are usually correlated: SE is
-#' descriptive under an independence assumption, not an uncertainty estimate.
-#' Densifying a track does not create independent environmental observations.
-#' Distance-weighted summaries of stationary tracks are NA; duration weighting
-#' requires known time support and returns NA if any adjacent duration is
-#'   unknown.
-#' settings records options and candidate files. Actual selected records are
-#' stored in the per-output match_info columns in samples.
-#'
+#' @seealso [sample_3d()], [extract_to_point()], [extract_to_buffer()], and
+#'   the [workflow article](../articles/workflow-values-in-shapes.html).
 #' @examples
-#' nc_file <- system.file("extdata", "example_2d.nc", package = "ocean3d")
-#' track <- data.frame(
-#'   lon = c(0, 1), lat = c(40, 40),
-#'   date = as.Date(c("2020-01-01", "2020-01-01"))
-#' )
-#' result <- extract_to_track(track, nc_file,
-#'   var = "temp", method = "2d",
-#'   spacing_km = 20, quiet = TRUE
-#' )
-#' result$summary
-#' @seealso [extract_to_point()], [extract_to_buffer()]
+#' # Daily temperature on a 10 x 10 grid of 1 degree cells at four depths.
+#' path <- tempfile(fileext = ".nc")
+#' lon <- ncdf4::ncdim_def("lon", "degrees_east", seq(0.5, 9.5))
+#' lat <- ncdf4::ncdim_def("lat", "degrees_north", seq(0.5, 9.5))
+#' depth <- ncdf4::ncdim_def("depth", "m", c(5, 15, 30, 60))
+#' time <- ncdf4::ncdim_def("time", "days since 2020-01-01", 0:2)
+#' temp <- ncdf4::ncvar_def("temp", "degree_Celsius",
+#'                          list(lon, lat, depth, time), -9999)
+#' nc <- ncdf4::nc_create(path, temp)
+#' ncdf4::ncvar_put(nc, temp, seq_len(10 * 10 * 4 * 3) / 10)
+#' ncdf4::nc_close(nc)
+#'
+#' # A dive from the surface to 50 m over two days.
+#' dive <- data.frame(lon = c(2.5, 6.5), lat = c(3.5, 5.5), depth = c(0, 50),
+#'                    date = as.Date(c("2020-01-01", "2020-01-03")))
+#'
+#' # The value at a sample at least every 50 km, and the mean along the dive.
+#' track <- extract_to_track(dive, path, spacing_km = 50)
+#' track$summary
+#'
+#' # The mean within 30 km and 10 m above and below each sample instead.
+#' extract_to_track(dive, path, spacing_km = 50, horizontal_radius_km = 30,
+#'                  depth_radius_m = 10)$summary
 #' @export
 extract_to_track <- function(
-  data, nc, var = NULL, track_col = NULL, sampling = NULL, spacing_km = NULL,
-  interpolate_depth = FALSE, interpolate_time = FALSE, depth_step_m = NULL,
-  time_step_seconds = NULL, method = NULL, statistics = "mean",
-  weighting = c("distance", "duration", "equal"), min_valid_fraction = 0.8,
-  lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
-  output_col = NULL,
-  time_resolution = c(
-    "auto", "datetime", "daily", "monthly", "yearly", "custom"
-  ),
-  max_samples = 100000L, max_segment_km = NULL, max_gap_hours = NULL,
-  quiet = FALSE, time_step = NULL,
+  data, nc, var = NULL, track_col = NULL,
+  sampling = NULL, spacing_km = NULL, depth_step_m = NULL, time_step = NULL,
   time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
-  land_mask = NULL, marine_values = NULL, mask_type = c("land", "marine"),
-  mask_domain = NULL, land_policy = c("skip", "error"), mask_step_km = 0.5,
-  ...
+  max_samples = 100000L,
+  horizontal_radius_km = 0, depth_radius_m = 0, method = NULL,
+  statistic = "mean", weighting = c("distance", "duration", "equal"),
+  lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
+  lon_dim = NULL, lat_dim = NULL, depth_dim = NULL, time_dim = NULL,
+  time_match = c("nearest", "exact"), max_time_diff = NULL,
+  output_col = NULL
 ) {
-  if (!is.null(sampling)) {
-    sampling <- match.arg(
-      sampling, c("vertices", "balanced", "merged_steps", "cells")
-    )
-  }
-  weighting <- match.arg(weighting)
-  time_resolution <- match.arg(time_resolution)
   time_unit <- match.arg(time_unit)
-  mask_type <- match.arg(mask_type)
-  land_policy <- match.arg(land_policy)
-  dots <- list(...)
-  track_args <- mget(setdiff(names(formals(extract_to_track)), "..."))
-  context <- .prepare_track(track_args, dots)
-  samples <- context$samples
-  metadata <- context$metadata
-  prepared <- context$prepared
-  options <- context$options
-  sampling <- options$sampling
-  variables <- unique(vapply(metadata, function(x) x$variable, character(1)))
-  resolution <- if (time_resolution == "auto" && !is.null(prepared)) {
-    prepared$resolution
-  } else {
-    time_resolution
+  statistic <- match.arg(statistic, c("mean", "sd", "min", "max"),
+                         several.ok = TRUE)
+  weighting <- match.arg(weighting)
+  time_match <- match.arg(time_match)
+  stop_track <- function(message) {
+    rlang::abort(message, class = "ocean3d_error_track_input", call = NULL)
   }
-  prefixes <- .buffer_output_names(variables, output_col, names(samples))
-  output_columns <- character()
-  for (variable in variables) {
-    group <- Filter(function(x) x$variable == variable, metadata)
-    selected_method <- group[[1L]]$method
-    columns <- .output_column_names(
-      selected_method, variable, prefixes[[variable]]
-    )
-    if (any(columns %in% names(samples))) {
-      stop(
-        "Extraction output would overwrite an existing column; ",
-        "change `output_col`.",
-        call. = FALSE
-      )
-    }
-    selected_sources <- lapply(group, function(x) x$source$source)
-    arguments <- c(
-      list(
-        data = samples, nc = selected_sources, var = variable,
-        method = selected_method, lon_col = lon_col, lat_col = lat_col,
-        depth_col = depth_col, date_col = date_col,
-        output_col = prefixes[[variable]],
-        return_match_info = TRUE, time_resolution = resolution
-      ), dots
-    )
-    if (quiet) {
-      arguments$time_report <- FALSE
-      arguments$spatial_report <- FALSE
-      arguments$depth_report <- FALSE
-    }
-    samples <- do.call(.extract_points_legacy, arguments)
-    output_columns <- c(output_columns, columns)
-  }
-  if (!is.null(prepared)) {
-    .warn_time_zone(prepared, paste0("`data$", date_col, "`"))
-  }
-  if (sampling == "cells") {
-    samples <- .track_collapse_cells(
-      samples, output_columns, context, lon_col, lat_col, depth_col, date_col
-    )
-  }
-  # Inserted samples on connections that failed the marine-mask check get NA
-  # values; each match_info record keeps its environmental selection, moves
-  # its status to `environmental_status`, and gains
-  # `status = "invalid_connection"` and the connection's `track_status`.
-  invalid <- samples$is_interpolated &
-    !samples$segment_status %in% c("marine", "not_checked")
-  for (column in output_columns) {
-    samples[[column]][invalid] <- NA_real_
-    name <- paste0(column, "_match_info")
-    for (i in which(invalid)) {
-      info <- samples[[name]][[i]]
-      info$environmental_status <- info$status
-      info$status <- "invalid_connection"
-      info$track_status <- samples$segment_status[i]
-      samples[[name]][[i]] <- info
+  for (amount in list(horizontal_radius_km, depth_radius_m)) {
+    if (!is.numeric(amount) || length(amount) != 1L || !is.finite(amount) ||
+          amount < 0) {
+      stop_track(paste(
+        "`horizontal_radius_km` and `depth_radius_m` must each be one",
+        "number, 0 or more."
+      ))
     }
   }
-  summary <- .track_summaries(
-    samples, output_columns, statistics, weighting, min_valid_fraction
-  )
-  if (!quiet && !is.null(summary) && any(summary$status != "complete")) {
-    message(
-      "Track report: ", sum(summary$status != "complete"),
-      " track/output summary row(s) need attention. See `result$summary` ",
-      "for coverage and status; NA samples remain part of the requested ",
-      "support."
-    )
+  buffered <- horizontal_radius_km > 0
+  if (!buffered && depth_radius_m > 0) {
+    stop_track("`depth_radius_m` needs a `horizontal_radius_km` above 0.")
   }
-  settings <- c(
-    options[setdiff(names(options), c("metadata", "land_mask", "mask_domain"))],
-    list(
-      sampling_counts = .track_sampling_counts(samples),
-      statistics = statistics,
-      candidate_sources = unique(
-        vapply(metadata, function(x) x$file, character(1))
-      ),
-      weighting = weighting, min_valid_fraction = min_valid_fraction,
-      time_resolution = resolution,
-      integration = if (sampling == "cells") "Grid interval support" else
-        "Endpoint half-interval support (approximate)"
-    )
-  )
-  list(samples = samples, summary = summary, settings = settings)
-}
 
-
-# Validate the arguments of extract_to_track() (a named list, enumerations
-# already matched) and sample the tracks.
-# `sampling = NULL` chooses balanced sampling when a step is supplied and
-# vertices otherwise. `dots` holds the point-selection options.
-.prepare_track <- function(args, dots) {
-  spatial_policy <- dots$spatial_match
-  if (!is.null(spatial_policy)) {
-    spatial_policy <- match.arg(spatial_policy, c("within", "nearest"))
-  }
-  .track_positive(args$mask_step_km, "mask_step_km", FALSE)
-  .track_positive(args$time_step, "time_step")
-  .track_positive(args$time_step_seconds, "time_step_seconds")
-  if (!is.null(args$time_step_seconds)) {
-    if (!is.null(args$time_step)) {
-      stop("Use time_step or time_step_seconds, not both.")
-    }
-    args$time_step <- args$time_step_seconds
-    args$time_unit <- "seconds"
-  }
-  args$sampling <- .track_sampling(
-    args$sampling, args$spacing_km, args$depth_step_m, args$time_step,
-    args$time_unit, args$max_samples
-  )
-  if (!is.null(args$time_step) && !args$interpolate_time) {
-    stop("time_step requires interpolate_time.")
-  }
-  custom_matching <- identical(spatial_policy, "nearest") ||
-    identical(args$time_resolution, "custom")
-  if (args$sampling == "cells" && custom_matching) {
-    stop(
-      "Cells mode requires spatial within matching and standard time precision."
-    )
-  }
-  if (!is.null(args$method)) {
-    args$method <- match.arg(
-      args$method, c("2d", "nearest", "surface", "bottom", "all")
-    )
-  }
-  for (name in c("interpolate_depth", "interpolate_time", "quiet")) {
-    .track_flag(args[[name]], name)
-  }
-  for (name in c("max_segment_km", "max_gap_hours")) {
-    .track_positive(args[[name]], name)
-  }
-  fraction <- args$min_valid_fraction
-  if (!is.numeric(fraction) || length(fraction) != 1L ||
-        !is.finite(fraction) || fraction < 0 || fraction > 1) {
-    stop("`min_valid_fraction` must be between zero and one.", call. = FALSE)
-  }
-  supported_statistics <- c("mean", "sd", "se", "min", "max")
-  bad_statistics <- !is.character(args$statistics) ||
-    !length(args$statistics) || anyNA(args$statistics) ||
-    anyDuplicated(args$statistics) ||
-    any(!args$statistics %in% supported_statistics)
-  if (!is.null(args$statistics) && bad_statistics) {
-    stop(
-      "`statistics` must be NULL or distinct supported statistic names.",
-      call. = FALSE
-    )
-  }
-  bad_var <- !is.character(args$var) || !length(args$var) ||
-    anyNA(args$var) || any(!nzchar(args$var)) || anyDuplicated(args$var)
-  if (!is.null(args$var) && bad_var) {
-    stop("`var` must be NULL or distinct variable names.", call. = FALSE)
-  }
-  for (name in c("lon_col", "lat_col", "depth_col", "date_col", "track_col")) {
-    value <- args[[name]]
-    if (is.null(value) && name == "track_col") {
-      next
-    }
-    if (!is.character(value) || length(value) != 1L || is.na(value) ||
-          !nzchar(value)) {
-      stop("`", name, "` must name one column.", call. = FALSE)
-    }
-  }
-  coordinates <- c(args$lon_col, args$lat_col, args$depth_col, args$date_col)
-  reserved <- c(
-    "source_row", "segment_id", "segment_fraction", "is_interpolated",
-    "distance_km", "sample_id", "support_km", "support_seconds",
-    "available_km", "available_seconds", "segment_status",
-    "segment_start_fraction", "segment_end_fraction", "sample_kind"
-  )
-  if (anyDuplicated(coordinates) ||
-        any(coordinates %in% c(reserved, "track_id")) ||
-        (!is.null(args$track_col) && args$track_col %in% coordinates)) {
-    stop(
-      "Coordinate, track and generated column names must be distinct.",
-      call. = FALSE
-    )
-  }
-  input_names <- if (is.matrix(args$data)) {
-    colnames(args$data)
+  proxy <- if (methods::is(nc, "SpatProxy")) {
+    nc
   } else {
-    names(args$data)
+    as_proxy(nc, var = var, lon_dim = lon_dim, lat_dim = lat_dim,
+             depth_dim = depth_dim, time_dim = time_dim)
   }
-  if (anyDuplicated(input_names)) {
-    stop("Input column names must be unique.", call. = FALSE)
+  var_name <- proxy@variable$name
+  has_depth <- !is.null(proxy@axes$depth)
+  if (!has_depth) {
+    if (!is.null(method) && !identical(method, "2d")) {
+      stop_track(glue::glue(
+        "Variable `{var_name}` has no depth, so `method` doesn't apply; ",
+        "leave it NULL."
+      ))
+    }
+    method <- NULL
+  } else if (buffered) {
+    if (!is.null(method)) stop_track("Leave `method` NULL with a radius.")
+    if (depth_radius_m == 0) {
+      stop_track(glue::glue(
+        "Variable `{var_name}` has depth, so buffers need a ",
+        "`depth_radius_m` above 0."
+      ))
+    }
+  } else {
+    if (is.null(method)) method <- "nearest"
+    rules <- c("nearest", "nearest_level", "bottom", "surface")
+    if (!rlang::is_string(method) || !method %in% rules) {
+      stop_track(glue::glue("`method` must be one of {toString(rules)}."))
+    }
   }
-  if (any(reserved %in% input_names) ||
-        ("track_id" %in% input_names &&
-           !identical(args$track_col, "track_id"))) {
-    stop(
-      "Input contains reserved track output columns. Rename them first.",
-      call. = FALSE
-    )
+  # Dated time steps, even one, are matched to each sample's time; a
+  # climatology gives its steps to every sample.
+  time_axis <- proxy@axes$time
+  timed <- !is.null(time_axis) && !isTRUE(time_axis$climatology)
+  needs_depth <- (has_depth && (buffered ||
+                                  method %in% c("nearest", "nearest_level"))) ||
+    !is.null(depth_step_m)
+  needs_time <- timed || weighting == "duration" || !is.null(time_step)
+
+  # One plain table of the vertices, whatever form `data` takes; sf points
+  # give their coordinates in WGS84.
+  table <- if (inherits(data, "sf")) {
+    xy <- sf::st_coordinates(sf::st_transform(sf::st_geometry(data), 4326))
+    out_table <- sf::st_drop_geometry(data)
+    out_table[[lon_col]] <- xy[, "X"]
+    out_table[[lat_col]] <- xy[, "Y"]
+    out_table
+  } else {
+    as.data.frame(data, stringsAsFactors = FALSE)
   }
-  # time_step_seconds without interpolate_time is rejected with time_step.
-  if (!is.null(args$depth_step_m) && !args$interpolate_depth) {
-    stop(
-      "Step limits require the corresponding interpolation switch.",
-      call. = FALSE
-    )
+  wanted <- c(lon_col, lat_col, track_col, if (needs_depth) depth_col,
+              if (needs_time) date_col)
+  missing_cols <- setdiff(wanted, names(table))
+  if (length(missing_cols)) {
+    stop_track(glue::glue(
+      "`data` needs the column(s) {toString(missing_cols)}."
+    ))
   }
-  if (!is.null(dots$time_match)) {
-    dots$time_match <- match.arg(dots$time_match, c("nearest", "exact"))
+  output <- if (is.null(output_col)) var_name else output_col
+  if (!rlang::is_string(output) || !nzchar(output)) {
+    stop_track("`output_col` must be one non-empty name.")
   }
-  allowed <- c(
-    "file_col", "lon_dim", "lat_dim", "depth_dim", "time_dim",
-    "time_match", "max_time_diff", "custom_time_interval", "spatial_match",
-    "max_distance_km", "time_report", "spatial_report", "depth_report",
-    "verbose"
+
+  # Build: each track becomes a line, sampled into points.
+  work <- data.frame(
+    track = if (is.null(track_col)) "1" else as.character(table[[track_col]]),
+    lon = table[[lon_col]], lat = table[[lat_col]],
+    depth = if (needs_depth) table[[depth_col]] else 0,
+    stringsAsFactors = FALSE
   )
-  bad_dots <- is.null(names(dots)) || any(!nzchar(names(dots))) ||
-    anyDuplicated(names(dots)) || any(!names(dots) %in% allowed)
-  if (length(dots) && bad_dots) {
-    stop(
-      "Use named supported point-selection options in `...`.",
-      call. = FALSE
-    )
+  if (needs_time) work$time <- table[[date_col]]
+  lines <- as_vector3d(work, type = "lines", id = "track",
+                       time = if (needs_time) "time")
+  samples <- sample_3d(lines, sampling = sampling, spacing_km = spacing_km,
+                       depth_step_m = depth_step_m, time_step = time_step,
+                       time_unit = time_unit, max_samples = max_samples)
+  out <- as.data.frame(samples)
+  if (weighting == "duration" && anyNA(out$support_seconds)) {
+    stop_track(paste(
+      "`weighting = \"duration\"` needs a date at every vertex. Give the",
+      "dates, or use \"distance\" or \"equal\"."
+    ))
   }
-  dimension_args <- dots[
-    intersect(names(dots), c("lon_dim", "lat_dim", "depth_dim", "time_dim"))
-  ]
-  # Tracks keep point extraction's support for climatological time axes.
-  described <- .describe_netcdf_sources(
-    args$nc, args$var,
-    if (is.null(dots$file_col)) "file" else dots$file_col, dimension_args,
-    function(handle, variable, dims, i) {
-      lon <- .get_dim_values(handle, dims$lon)
-      lat <- .get_dim_values(handle, dims$lat)
-      list(
-        variable = variable, source_index = i, file = handle$filename,
-        method = if (!is.null(args$method)) {
-          args$method
-        } else if (is.null(dims$depth)) {
-          "2d"
-        } else {
-          "nearest"
-        },
-        temporal = !is.null(dims$time), longitude = lon, latitude = lat,
-        lon_axis = .read_interval_axis(handle, dims$lon, "lon"),
-        lat_axis = .read_interval_axis(handle, dims$lat, "lat"),
-        depth_m = if (!is.null(dims$depth)) {
-          .read_depth_axis(
-            handle, dims$depth, .get_dim_values(handle, dims$depth)
-          )$depth_m
-        },
-        time_values = if (is.null(dims$time)) {
-          numeric()
-        } else {
-          as.numeric(.decode_netcdf_time(handle, dims$time))
-        }
-      )
-    }
-  )
-  lapply(described$opened, .close_source)
-  metadata <- lapply(described$metadata, function(m) {
-    m$source <- described$sources[[m$source_index]]
-    m
-  })
-  if (args$sampling == "cells") .track_check_cell_sources(metadata)
-  time_used <- any(vapply(metadata, function(x) x$temporal, logical(1)))
-  depth_used <- any(vapply(
-    metadata, function(x) x$method %in% c("nearest", "all"), logical(1)
-  ))
-  vertices <- .track_input(
-    args$data, args$track_col, args$lon_col, args$lat_col
-  )
-  if (depth_used || args$interpolate_depth) {
-    .check_required_cols(vertices, args$depth_col)
-    depths <- vertices[[args$depth_col]]
-    if (!is.numeric(depths) ||
-          any(!is.na(depths) & (!is.finite(depths) | depths < 0))) {
-      stop("Depths must be non-negative metres or NA.", call. = FALSE)
-    }
-  }
-  prepared <- NULL
-  time_values <- NULL
-  parse_time <- time_used || args$interpolate_time ||
-    args$weighting == "duration" || !is.null(args$max_gap_hours)
-  for (m in Filter(function(x) x$temporal, metadata)) {
-    .require_observation_time(vertices, args$date_col, m$variable, m$file)
-  }
-  if (parse_time) {
-    .check_required_cols(vertices, args$date_col)
-    prepared <- .prepare_time_input(
-      vertices[[args$date_col]],
-      if (args$time_resolution == "custom") "datetime" else
-        args$time_resolution,
-      input_name = paste0("`data$", args$date_col, "`"),
-      ids = vertices$track_id
-    )
-    time_values <- as.numeric(prepared$values)
-  }
-  if (inherits(args$land_mask, "SpatRaster")) {
-    if (!is.null(args$mask_domain)) {
-      stop(
-        "mask_domain applies to polygon masks; use raster NA cells.",
-        call. = FALSE
-      )
-    }
-    if (terra::nlyr(args$land_mask) != 1L ||
-          !nzchar(terra::crs(args$land_mask))) {
-      stop("A marine raster needs one layer and a CRS.", call. = FALSE)
-    }
-    values <- args$marine_values
-    if (!is.numeric(values) || !length(values) || any(!is.finite(values))) {
-      stop("Specify marine_values explicitly for a raster mask.", call. = FALSE)
-    }
-    outside_longitudes <- terra::xmin(args$land_mask) < -180 - 1e-8 ||
-      terra::xmax(args$land_mask) > 180 + 1e-8
-    if (terra::is.lonlat(args$land_mask) && outside_longitudes) {
-      stop(
-        "Rotate or reproject geographic masks to -180..180 longitudes.",
-        call. = FALSE
-      )
-    }
-  } else if (!is.null(args$land_mask)) {
-    polygon_types <- c("POLYGON", "MULTIPOLYGON")
-    if (!inherits(args$land_mask, c("sf", "sfc")) ||
-          is.na(sf::st_crs(args$land_mask)) ||
-          any(!sf::st_is_valid(args$land_mask)) ||
-          any(!sf::st_geometry_type(args$land_mask) %in% polygon_types)) {
-      stop("A polygon mask needs valid polygons with a CRS.", call. = FALSE)
-    }
-    args$land_mask <- sf::st_union(sf::st_geometry(args$land_mask))
-    if (!is.null(args$mask_domain)) {
-      if (!inherits(args$mask_domain, c("sf", "sfc")) ||
-            is.na(sf::st_crs(args$mask_domain)) ||
-            any(!sf::st_geometry_type(args$mask_domain) %in% polygon_types) ||
-            !all(sf::st_is_valid(args$mask_domain) %in% TRUE)) {
-        stop("mask_domain needs polygons with a CRS.", call. = FALSE)
+
+  # Intersect: one value per sample. The time step each sample takes comes
+  # from extract(), which matches all the samples at once.
+  rule <- if (!is.null(method)) list(method = method)
+  found <- do.call(terra::extract, c(list(proxy, samples), rule, list(
+    time_match = time_match, max_time_diff = max_time_diff
+  )))
+  no_step <- if (timed) is.na(found$time_step) else rep(FALSE, nrow(out))
+  value <- found$value
+  if (buffered) {
+    # For a variable without depth the depth window doesn't matter, but
+    # mask() keeps no cell of a plain raster for a buffer with no thickness,
+    # so it gets one metre.
+    circles <- buffer_3d(samples, radius_km = horizontal_radius_km,
+                         depth_window = if (has_depth) depth_radius_m else 1)
+    value <- rep(NA_real_, nrow(out))
+    n <- rep(0L, nrow(out))
+    for (i in which(!no_step)) {
+      circle <- circles[i]
+      # Cropped first: an error raised while S4 evaluates an argument for
+      # dispatch loses its class. A buffer off the grid gets NA.
+      source <- tryCatch(crop(proxy, circle),
+                         ocean3d_error_proxy_crop = function(e) NULL)
+      if (is.null(source)) next
+      when <- if (timed) found$time_step[i]
+      layers <- if (has_depth) {
+        as_voxel(source, time = when, time_match = "exact")
+      } else {
+        terra::rast(source, time = when, time_match = "exact")
       }
-      args$mask_domain <- sf::st_union(sf::st_geometry(args$mask_domain))
+      # The buffers keep the sample's time, which the voxel already matches,
+      # so mask()'s message that it drops polygon times is muted.
+      kept <- suppressMessages(mask(layers, circle))
+      summary <- summarise_3d(kept, statistic = "mean")
+      value[i] <- summary$mean
+      n[i] <- summary$n
     }
   }
-  options <- c(
-    args[c(
-      "sampling", "spacing_km", "interpolate_depth", "interpolate_time",
-      "depth_step_m", "time_step_seconds", "time_step", "time_unit",
-      "land_mask", "marine_values", "mask_type", "mask_domain",
-      "land_policy", "mask_step_km"
-    )],
-    list(
-      metadata = metadata,
-      resolution = if (is.null(prepared)) args$time_resolution else
-        prepared$resolution,
-      matching = dots
+
+  # One warning for every sample that got NA.
+  missing_value <- is.na(value) & !no_step
+  reasons <- c(
+    if (any(no_step)) glue::glue(
+      "{sum(no_step)} with no time step that matches"
     ),
-    args[c("max_segment_km", "max_gap_hours")]
+    if (any(missing_value)) glue::glue(
+      "{sum(missing_value)} outside the grid or without a value"
+    )
   )
-  sampled <- .track_sample_all(
-    vertices, options, args$lon_col, args$lat_col, args$depth_col,
-    args$date_col, time_values, depth_used,
-    time_used || args$weighting == "duration", args$max_samples
-  )
-  list(
-    samples = sampled$samples, metadata = metadata, prepared = prepared,
-    options = options, vertices = vertices, tracks = sampled$tracks
-  )
+  if (length(reasons)) {
+    rlang::warn(glue::glue(
+      "{sum(is.na(value))} of {nrow(out)} samples get NA: ",
+      "{glue::glue_collapse(reasons, sep = ' and ')}."
+    ), class = "ocean3d_warning_track_samples")
+  }
+
+  # Summarise: the statistics of each track's samples, weighted by the
+  # distance or time each stands for, as summarise_3d() weights values.
+  weights <- switch(weighting, distance = out$support_km,
+                    duration = out$support_seconds, equal = rep(1, nrow(out)))
+  ids <- unique(out$track_id)
+  summary <- do.call(rbind, lapply(ids, function(id) {
+    keep <- out$track_id == id & !is.na(value)
+    v <- value[keep]
+    w <- weights[keep]
+    if (sum(w) <= 0) w <- rep(1, length(v))
+    w <- w / sum(w)
+    average <- sum(w * v)
+    correction <- 1 - sum(w^2)
+    stats <- list(
+      mean = if (length(v)) average else NA_real_,
+      sd = if (length(v) > 1L && correction > 0) {
+        sqrt(sum(w * (v - average)^2) / correction)
+      } else {
+        NA_real_
+      },
+      min = if (length(v)) min(v) else NA_real_,
+      max = if (length(v)) max(v) else NA_real_
+    )
+    data.frame(track_id = id, stats[statistic], n = length(v),
+               stringsAsFactors = FALSE)
+  }))
+  rownames(summary) <- NULL
+
+  # The samples, track and sample number first, with the caller's column
+  # names for position, depth and date, and the columns not used dropped.
+  first <- c("track_id", "sample_id")
+  out <- out[c(first, setdiff(names(out), c(first, "feature_id", "vertex",
+                                            if (!needs_depth) "depth",
+                                            if (!needs_time) "time")))]
+  renamed <- c(lon = lon_col, lat = lat_col, depth = depth_col,
+               time = date_col)
+  at <- match(names(renamed), names(out))
+  names(out)[at[!is.na(at)]] <- renamed[!is.na(at)]
+  added <- c(output, if (buffered) paste0(output, "_n"))
+  if (any(added %in% names(out))) {
+    stop_track(glue::glue(
+      "The samples already have a column named ",
+      "{toString(intersect(added, names(out)))}. Choose another `output_col`."
+    ))
+  }
+  out[[output]] <- value
+  if (buffered) out[[paste0(output, "_n")]] <- n
+  list(samples = out, summary = summary)
 }
-
-
-# Shared netCDF reading and summary helpers of the track functions. They
-# came from the old buffer extraction, which is now a wrapper over the
-# exported step functions (#116), and go when extract_to_track() becomes one.
 
 # Open every netCDF source, select the requested (or detected) variables and
 # describe each source/variable pair with `describe(nc, var, dims,
