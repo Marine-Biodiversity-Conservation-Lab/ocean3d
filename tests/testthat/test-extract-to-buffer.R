@@ -81,6 +81,12 @@ test_that("a time window pools the values of every step inside it", {
   after <- extract_to_buffer(obs(), path, time_after = 1, statistic = "min")
   expect_equal(after$temp, at(6, 6, 2, 2))
   expect_identical(after$temp_n, 2L)
+  # Whole days given in hours, on dates: 1 and 2 January, not 3.
+  first <- obs()
+  first$date <- as.Date("2020-01-01")
+  in_hours <- extract_to_buffer(first, path, time_after = 24,
+                                time_unit = "hours")
+  expect_identical(in_hours$temp_n, 2L)
   # Hours on date-times.
   timed <- obs()
   timed$date <- as.POSIXct("2020-01-02 06:00", tz = "UTC")

@@ -283,7 +283,8 @@ extract_to_buffer <- function(
     when <- if (!timed) {
       NULL
     } else if (windowed && daily) {
-      as.Date(at, tz = "UTC") + c(-time_before, time_after)
+      as.Date(at, tz = "UTC") + round(c(-time_before, time_after) * seconds /
+                                        86400)
     } else if (windowed) {
       at + c(-time_before, time_after) * seconds
     } else if (daily) {
