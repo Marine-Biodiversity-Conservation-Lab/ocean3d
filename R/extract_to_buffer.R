@@ -41,20 +41,24 @@
 #' inside it into one statistic, each value keeping its own weight.
 #'
 #' An observation outside the grid, without a date on data with several time
-#' steps, without a depth where one is needed, or with no time step in its
-#' window gets `NA`, with `n = 0`.
+#' steps, without a depth where one is needed (or with a negative one), or
+#' with no time step in its window or within `max_time_diff` gets `NA`, and
+#' `<output>_n` is 0. One warning counts these observations, by reason. On
+#' data with several time steps on one day, observations need date-times or a
+#' time window: a date alone can't pick one of the steps, so the function
+#' stops.
 #'
 #' @param data Observation table, matrix, named list or sf POINT object.
 #' @param nc The data: a netCDF file path, several paths for a series of
-#'   files on one grid, an open [ncdf4::nc_open()] connection, or a
-#'   [SpatProxy-class] from [as_proxy()].
+#'   files on one grid, an open [ncdf4::nc_open()] connection, a
+#'   [SpatProxy-class] from [as_proxy()], or a [SpatVoxel-class] in memory.
 #' @param var Name of the variable, for a netCDF source. `NULL` detects the
 #'   only data variable of the file.
 #' @param horizontal_radius_km Radius of the circle around each observation,
-#'   in kilometres, measured on the WGS84 ellipsoid. `0` (default) uses the
-#'   observation's own cell.
-#' @param depth_radius_m Depth in metres above and below the observation.
-#'   `0` (default) picks one level per cell with `method`.
+#'   in kilometres, measured on the WGS84 ellipsoid, below 10000 as in
+#'   [buffer_3d()]. `0` (default) uses the observation's own cell.
+#' @param depth_radius_m Distance in metres above and below the observation's
+#'   depth. `0` (default) picks one level per cell with `method`.
 #' @param time_before,time_after Time before and after the observation, in
 #'   `time_unit`. Both `0` (default) read the one time step `time_match`
 #'   matches. For observations with dates and no hours, the window covers
@@ -63,13 +67,15 @@
 #'   `"seconds"`.
 #' @param statistic One of `"mean"` (default), `"sd"`, `"min"` and `"max"`.
 #' @param weighting `"weighted"` (default) weights each value by the volume of
-#'   its cell and level, or by its cell's area; `"equal"` counts each value
-#'   once.
-#' @param method Without a depth window, the level each cell takes: one of
-#'   the rules of [mask()] for points, `"nearest"` (default; the level
-#'   nearest the observation's depth that has a value), `"nearest_level"`,
-#'   `"bottom"` or `"surface"`. Leave `NULL` with a depth window, and for a
-#'   variable without depth, where `"2d"` is accepted too.
+#'   its cell and level with a depth window, and by its cell's area without
+#'   one (one level per cell) or for a variable without depth; `"equal"`
+#'   counts each value once.
+#' @param method How the level in each cell is chosen when there is no depth
+#'   window: one of the rules of [mask()] for points, `"nearest"` (default;
+#'   the level nearest the observation's depth that has a value),
+#'   `"nearest_level"` (the nearest level, even if it has no value),
+#'   `"bottom"` or `"surface"`. Leave `NULL` with a depth window. For a
+#'   variable without depth, leave `NULL` or use `"2d"`.
 #' @param lon_col,lat_col,depth_col,date_col Observation columns. The depth is
 #'   needed with a depth window or a `"nearest"` rule, and the date for data
 #'   with several time steps. Dates and date-times are read as in
@@ -84,8 +90,8 @@
 #'
 #' @returns `data` with two columns added: the statistic, named `output_col`
 #'   or after the variable, and `<output>_n`, the number of values it is
-#'   built on. sf input keeps its geometry. Existing columns are never
-#'   overwritten.
+#'   built on. sf input keeps its geometry. If `data` already has either
+#'   column, the function stops with an error; choose another `output_col`.
 #'
 #' @seealso [extract_to_point()], [extract_to_area()], and the [workflow
 #'   article](../articles/workflow-values-in-shapes.html).
@@ -206,8 +212,10 @@ extract_to_buffer <- function(
     stop_buffer("`output_col` must be one non-empty name.")
   }
   added <- c(output, paste0(output, "_n"))
-  if (any(added %in% names(data))) {
-    clash <- toString(intersect(added, names(data)))
+  # A matrix has no names() of its own, so its converted table is checked too.
+  taken <- union(names(data), names(table))
+  if (any(added %in% taken)) {
+    clash <- toString(intersect(added, taken))
     stop_buffer(glue::glue(
       "`data` already has a column named {clash}. Choose another `output_col`."
     ))
@@ -216,17 +224,11 @@ extract_to_buffer <- function(
   work <- data.frame(lon = table[[lon_col]], lat = table[[lat_col]],
                      depth = if (needs_depth) table[[depth_col]] else 0)
   if (timed) work$time <- table[[date_col]]
+  # A depth that can't be one (NA, negative or infinite) leaves its row out,
+  # as a missing position or date does.
   usable <- is.finite(work$lon) & is.finite(work$lat) & abs(work$lat) <= 90 &
-    !is.na(work$depth) & (!timed | !is.na(work$time))
-  if (any(!usable)) {
-    one <- sum(!usable) == 1L
-    rlang::warn(glue::glue(
-      "{sum(!usable)} of {nrow(work)} observations ",
-      "{if (one) 'has' else 'have'} no usable position",
-      "{if (needs_depth) ', depth' else ''}{if (timed) ' or date' else ''}, ",
-      "so {if (one) 'it gets' else 'they get'} NA."
-    ), class = "ocean3d_warning_buffer_rows")
-  }
+    is.finite(work$depth) & work$depth >= 0
+  if (timed) usable <- usable & !is.na(work$time)
   value <- rep(NA_real_, nrow(work))
   n <- rep(0L, nrow(work))
   points <- if (any(usable)) {
@@ -237,11 +239,33 @@ extract_to_buffer <- function(
   seconds <- c(days = 86400, hours = 3600, minutes = 60, seconds = 1)[[
     time_unit
   ]]
-  if (daily && windowed && time_unit != "days") {
-    stop_buffer(paste(
-      "The observations have dates without hours, so the time window must",
-      "be in days."
-    ))
+  if (daily && windowed) {
+    days <- c(time_before, time_after) * seconds / 86400
+    if (any(abs(days - round(days)) > 1e-6)) {
+      stop_buffer(paste(
+        "`data` has dates without hours, so `time_before` and `time_after`",
+        "must be whole days. Give the times with hours to use part of a day."
+      ))
+    }
+  }
+  # A date can't pick one of several steps on its day: the caller has to give
+  # date-times, as as_voxel() asks.
+  if (daily && !windowed) {
+    step_days <- floor(as.numeric(
+      time_axis$cftime$as_timestamp(asPOSIX = TRUE)
+    ) / 86400)
+    if (anyDuplicated(step_days)) {
+      stop_buffer(paste(
+        "Several time steps fall on one day in the data, so a date can't",
+        "pick one of them. Give the observations date-times (with hours), or",
+        "a time window of whole days to pool them."
+      ))
+    }
+  }
+  # Every buffer at once, so buffer_3d() checks the radius before any read.
+  circles <- if (horizontal_radius_km > 0 && !is.null(points)) {
+    buffer_3d(points, radius_km = horizontal_radius_km,
+              depth_window = depth_radius_m)
   }
   # The whole water column, for the cells a circle covers.
   deepest <- if (has_depth) {
@@ -250,14 +274,13 @@ extract_to_buffer <- function(
     1
   }
 
+  off_grid <- 0L
+  no_step <- 0L
   for (k in seq_along(which(usable))) {
     row <- which(usable)[k]
     point <- points[k]
     vertex <- as.data.frame(point)
-    circle <- if (horizontal_radius_km > 0) {
-      buffer_3d(point, radius_km = horizontal_radius_km,
-                depth_window = depth_radius_m)
-    }
+    circle <- if (!is.null(circles)) circles[k]
     at <- if (timed) vertex$time
     when <- if (!timed) {
       NULL
@@ -281,13 +304,20 @@ extract_to_buffer <- function(
     }
     # Cropped first: an error raised while S4 evaluates an argument for
     # dispatch loses its class. An observation off the grid, or with no time
-    # step in its window, gets NA.
+    # step in its window or within `max_time_diff`, gets NA and is counted in
+    # the warning below; the several-steps-a-day case stopped above.
     source <- tryCatch(crop(proxy, if (is.null(circle)) point else circle),
                        ocean3d_error_proxy_crop = function(e) NULL)
-    if (is.null(source)) next
+    if (is.null(source)) {
+      off_grid <- off_grid + 1L
+      next
+    }
     layers <- tryCatch(read(source),
                        ocean3d_error_proxy_time = function(e) NULL)
-    if (is.null(layers)) next
+    if (is.null(layers)) {
+      no_step <- no_step + 1L
+      next
+    }
     if (!is.list(layers)) layers <- list(layers)
 
     # The outline of the buffer over the whole water column: the cells the
@@ -352,6 +382,26 @@ extract_to_buffer <- function(
                             else "equal")
     value[row] <- summary[[statistic]]
     n[row] <- summary$n
+  }
+
+  # One warning for every observation that got NA without a value to read.
+  reasons <- c(
+    if (any(!usable)) glue::glue(
+      "{sum(!usable)} without a usable position",
+      "{if (needs_depth) ', depth' else ''}{if (timed) ' or date' else ''}"
+    ),
+    if (off_grid) glue::glue("{off_grid} outside the grid"),
+    if (no_step) glue::glue(
+      "{no_step} with no time step ",
+      "{if (windowed) 'in the window' else 'that matches'}"
+    )
+  )
+  if (length(reasons)) {
+    dropped <- sum(!usable) + off_grid + no_step
+    rlang::warn(glue::glue(
+      "{dropped} of {nrow(work)} observations get NA: ",
+      "{glue::glue_collapse(reasons, sep = ', ', last = ' and ')}."
+    ), class = "ocean3d_warning_buffer_rows")
   }
 
   out <- if (inherits(data, "sf") || is.data.frame(data)) data else table

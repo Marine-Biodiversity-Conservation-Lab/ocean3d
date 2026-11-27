@@ -104,25 +104,78 @@ test_that("a variable without depth reads one layer per step", {
 test_that("observations it can't place get NA, with one warning", {
   path <- buffer_file()
   on.exit(unlink(path))
-  data <- data.frame(lon = c(5.2, 50, 5.2, 5.2), lat = 5.3,
-                     depth = c(20, 20, NA, 20),
+  # Off the grid; no depth; no date; a negative and an infinite depth; and a
+  # date no step is within a day of.
+  data <- data.frame(lon = c(5.2, 50, 5.2, 5.2, 5.2, 5.2, 5.2), lat = 5.3,
+                     depth = c(20, 20, NA, 20, -3, Inf, 20),
                      date = as.Date(c("2020-01-02", "2020-01-02",
-                                      "2020-01-02", NA)))
-  expect_warning(out <- extract_to_buffer(data, path),
-                 "2 of 4 observations", class = "ocean3d_warning_buffer_rows")
-  expect_equal(out$temp, c(at(6, 6, 2, 2), NA, NA, NA))
-  expect_identical(out$temp_n, c(1L, 0L, 0L, 0L))
+                                      "2020-01-02", NA, "2020-01-02",
+                                      "2020-01-02", "2020-02-01")))
+  expect_warning(
+    out <- extract_to_buffer(data, path, max_time_diff = 1),
+    paste("6 of 7 observations get NA: 4 without a usable position, depth",
+          "or date, 1 outside the grid and 1 with no time step that matches"),
+    class = "ocean3d_warning_buffer_rows"
+  )
+  expect_equal(out$temp, c(at(6, 6, 2, 2), rep(NA, 6)))
+  expect_identical(out$temp_n, c(1L, rep(0L, 6)))
   # No observation usable at all.
   undated <- obs()
   undated$date <- as.Date(NA)
   expect_warning(none <- extract_to_buffer(undated, path),
-                 "1 of 1 observations has",
+                 "1 of 1 observations get NA",
                  class = "ocean3d_warning_buffer_rows")
   expect_identical(none$temp_n, 0L)
   # A window with no step in it.
   late <- obs()
   late$date <- as.Date("2020-02-01")
-  expect_identical(extract_to_buffer(late, path, time_before = 1)$temp_n, 0L)
+  expect_warning(
+    windowless <- extract_to_buffer(late, path, time_before = 1),
+    "1 with no time step in the window", class = "ocean3d_warning_buffer_rows"
+  )
+  expect_identical(windowless$temp_n, 0L)
+})
+
+test_that("data with no time axis, or one step, needs no date", {
+  values <- seq_len(10 * 10 * 2)
+  grid <- list(lon = seq(0.5, 9.5, 1), lat = seq(0.5, 9.5, 1),
+               depth = c(5, 15), values = values)
+  untimed <- do.call(make_grid_file, c(grid, list(time = NULL)))
+  climatology <- do.call(make_grid_file, c(grid, list(time = 0)))
+  on.exit(unlink(c(untimed, climatology)))
+  undated <- data.frame(lon = 5.2, lat = 5.3, depth = 14)
+  expected <- 6 + 10 * 5 + 100 # Cell (6, 6) at the second level.
+  for (path in c(untimed, climatology)) {
+    out <- expect_no_warning(extract_to_buffer(undated, path))
+    expect_equal(out$temp, expected)
+    expect_identical(out$temp_n, 1L)
+  }
+  # A voxel in memory has no time axis either.
+  voxel <- as_voxel(as_proxy(untimed))
+  expect_equal(extract_to_buffer(undated, voxel)$temp, expected)
+  expect_equal(
+    extract_to_buffer(undated, voxel, horizontal_radius_km = 50,
+                      depth_radius_m = 5)$temp_n,
+    extract_to_buffer(undated, untimed, horizontal_radius_km = 50,
+                      depth_radius_m = 5)$temp_n
+  )
+})
+
+test_that("a date can't pick one of several steps on its day", {
+  path <- make_grid_file(lon = seq(0.5, 9.5, 1), lat = seq(0.5, 9.5, 1),
+                         time = c(0, 0.25, 0.5, 0.75, 1))
+  on.exit(unlink(path))
+  dated <- data.frame(lon = 5.2, lat = 5.3, depth = 10,
+                      date = as.Date("2020-01-01"))
+  expect_error(extract_to_buffer(dated, path),
+               "Several time steps fall on one day",
+               class = "ocean3d_error_buffer_input")
+  # A window of whole days pools them: the four steps of 1 January and the
+  # one of 2 January.
+  expect_identical(extract_to_buffer(dated, path, time_after = 1)$temp_n, 5L)
+  # A date-time picks one.
+  dated$date <- as.POSIXct("2020-01-01 06:00", tz = "UTC")
+  expect_identical(extract_to_buffer(dated, path)$temp_n, 1L)
 })
 
 test_that("a series, a proxy and sf input give the same values", {
@@ -157,6 +210,11 @@ test_that("the output column is named and never overwrites", {
   expect_error(extract_to_buffer(obs(temp = 1), path),
                "already has a column named temp",
                class = "ocean3d_error_buffer_input")
+  # A matrix too, though it has no names() of its own.
+  matrix_data <- cbind(lon = 5.2, lat = 5.3, depth = 20, temp = 99)
+  expect_error(extract_to_buffer(matrix_data, make_grid_file(
+    lon = seq(0.5, 9.5, 1), lat = seq(0.5, 9.5, 1), time = 0
+  )), "already has a column named temp", class = "ocean3d_error_buffer_input")
 })
 
 test_that("extract_to_buffer() rejects requests it can't serve", {
@@ -170,14 +228,20 @@ test_that("extract_to_buffer() rejects requests it can't serve", {
          pattern = "Leave `method` NULL"),
     list(args = list(method = "deepest"), pattern = "must be one of"),
     list(args = list(time_before = 6, time_unit = "hours"),
-         pattern = "must\\s+be in days"),
+         pattern = "must\\s+be whole days"),
+    list(args = list(time_after = 0.5), pattern = "must\\s+be whole days"),
     list(args = list(depth_col = "z"), pattern = "needs the column")
   )
   for (case in cases) {
     expect_error(do.call(extract_to_buffer, c(list(obs(), path), case$args)),
                  case$pattern, class = "ocean3d_error_buffer_input")
   }
+  # buffer_3d() checks the radius, before any data is read.
+  expect_error(extract_to_buffer(obs(), path, horizontal_radius_km = 10000),
+               "below 10000", class = "ocean3d_error_vector3d")
   # Dropped options are no longer arguments.
-  expect_error(extract_to_buffer(obs(), path, statistic = "most_similar"))
-  expect_error(extract_to_buffer(obs(), path, min_valid_fraction = 0.5))
+  expect_error(extract_to_buffer(obs(), path, statistic = "most_similar"),
+               "should be one of")
+  expect_error(extract_to_buffer(obs(), path, min_valid_fraction = 0.5),
+               "unused argument")
 })
