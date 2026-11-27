@@ -8,9 +8,9 @@ this file in the same PR.
 ## Data models
 
 ocean3d currently has two data models for gridded data (see SPEC.md, "Data
-model"): netCDF files read with ncdf4 (`extract_to_point()`,
-`extract_to_track()`) and `SpatVoxel` / `SpatEnvelope` objects built on
-terra (everything else). #99 plans to unify them.
+model"): netCDF files read with ncdf4 through `as_proxy()` (the
+`extract_to_*()` functions) and `SpatVoxel` / `SpatEnvelope` objects built
+on terra (everything else). #99 plans to unify them.
 
 - Check which model a function takes before passing data to it or adding to
   it, and say which one in its `@param` docs.

@@ -289,6 +289,18 @@ The weights ignore `n`, so a buffer with 3 values counts as much as one with
 buffers cover. These buffers don't overlap, but neighbouring ones can use the
 same grid cells, so the local summaries aren't independent.
 
+`extract_to_track()` runs the same steps in one call. It gives the same
+mean, and `n`, the number of samples with a value:
+
+```{r extract-to-track}
+extract_to_track(route, path, track_col = "tag", date_col = "time",
+                 spacing_km = 10, horizontal_radius_km = 3,
+                 depth_radius_m = 10)$summary
+```
+
+Its `samples` table has the local means, as `temp`, and their number of
+values, as `temp_n`.
+
 `sample_3d()` doesn't yet check that each segment stays in water, so check
 that your samples aren't on land before summarising them (#105).
 

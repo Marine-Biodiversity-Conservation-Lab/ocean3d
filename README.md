@@ -118,9 +118,8 @@ takes one of them:
 
 | Input | Functions | Reads with |
 |---|---|---|
-| netCDF files (paths, open `ncdf4` connections or a file table) | `extract_to_track()` | ncdf4, only the cells each observation needs; keeps the time dimension |
 | `SpatVoxel` / `SpatEnvelope` (3D classes built on `terra::SpatRaster`) | the build, intersect and volume functions and `mask()` | terra; one time step per voxel |
-| netCDF paths, an open `ncdf4` connection or a `SpatProxy` from `as_proxy()` | `extract_to_point()` | `as_proxy()` and `terra::extract()`, each time step once for its points |
+| netCDF paths, an open `ncdf4` connection or a `SpatProxy` from `as_proxy()` | `extract_to_point()`, `extract_to_track()` | `as_proxy()` and `terra::extract()`, each time step once for its points |
 
 A voxel can't be passed to `extract_to_point()` or `extract_to_track()`.
 `extract_to_point()` takes netCDF paths, a connection or a `SpatProxy`, and
@@ -233,7 +232,9 @@ the cells each observation needs, and match time as well as depth.
   volume of each cell and depth level; a shortcut for `buffer_3d()`,
   `mask()` and `summarise_3d()`.
 - `extract_to_track()` — sample points along ordered tracks (e.g. tagging
-  data), extract values at them, and optionally summarise per track.
+  data) with `sample_3d()`, take the value at each sample, or the mean in a
+  buffer around it, and summarise each track, with each sample weighted by
+  the distance or time it stands for.
 
 ### Data utilities
 
