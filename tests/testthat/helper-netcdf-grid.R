@@ -10,7 +10,9 @@
 # `dim_order` lists the variable's dimensions in ncdf4 order (fastest-varying
 # first); axes left out with NULL are skipped. With `prec = "short"`, the
 # stored integers are packed with `scale` and `offset`. `extra_vars` adds
-# variables on lon and lat, named as in the list and filled with its values.
+# variables, named as in the list and filled with its values: an entry with a
+# value for every cell of the grid goes on the same axes as the main variable
+# (in lon, lat, depth, time order, like `values`), any other on lon and lat.
 # `depth_atts` and `time_atts` are attributes for those axes; `depth_name`
 # names the depth dimension.
 make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
@@ -60,8 +62,11 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
     ncdf4::ncvar_def(paste0(dim$name, "_bnds"), dim$units, list(nv, dim),
                      prec = "double")
   })
+  on_grid <- vapply(extra_vars, function(v) length(v) == prod(shape),
+                    logical(1))
   extra <- lapply(names(extra_vars), function(name) {
-    ncdf4::ncvar_def(name, "1", list(axes$lon, axes$lat), prec = "double")
+    dims <- if (on_grid[[name]]) unname(axes) else list(axes$lon, axes$lat)
+    ncdf4::ncvar_def(name, "1", dims, prec = "double")
   })
   missval <- if (prec == "short") -32767L else -9999
   chunked <- !is.null(chunksizes)
@@ -85,7 +90,12 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
     ncdf4::ncatt_put(nc, name, "bounds", paste0(name, "_bnds"))
   }
   for (name in names(extra_vars)) {
-    ncdf4::ncvar_put(nc, name, array(extra_vars[[name]], shape[1:2]))
+    v <- if (on_grid[[name]]) {
+      aperm(array(extra_vars[[name]], shape), match(names(axes), names(shape)))
+    } else {
+      array(extra_vars[[name]], shape[1:2])
+    }
+    ncdf4::ncvar_put(nc, name, v)
   }
   if (!is.null(positive)) depth_atts <- c(list(positive = positive), depth_atts)
   for (att in names(depth_atts)) {
@@ -97,25 +107,6 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
   }
   ncdf4::nc_close(nc)
   path
-}
-
-# make_grid_file() with the track and buffer tests' defaults. Unless `values`
-# is given, each value says which cell it is in: 10 * lon + 100 * lat + depth +
-# 1000 * time, with time in hours since 2020-01-01. `missing = TRUE` empties
-# the first longitude. Other arguments go to make_grid_file(), except
-# `positive`, `var_units` and `time_units`, which this wrapper sets.
-.make_track_nc <- function(
-  path, lon = 0:2, lat = c(0, 1), depth = NULL, time = NULL,
-  values = outer(outer(10 * lon, 100 * lat, "+"),
-                 outer(depth %||% 0, 1000 * (time %||% 0), "+"), "+"),
-  missing = FALSE, ...
-) {
-  if (missing) values[1L, , , ] <- NA_real_
-  make_grid_file(
-    lon, lat, depth, time, path = path, values = values,
-    positive = if (!is.null(depth)) "down", var_units = "degree_Celsius",
-    time_units = "hours since 2020-01-01 00:00:00", ...
-  )
 }
 
 # Sets attributes, given as `name = value`, on variable `var` of an existing

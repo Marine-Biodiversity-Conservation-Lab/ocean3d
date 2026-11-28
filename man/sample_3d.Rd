@@ -17,7 +17,7 @@ sample_3d(
 \arguments{
 \item{x}{A \link[=SpatVector3D-class]{SpatVector3D} of lines, from \code{\link[=as_vector3d]{as_vector3d()}}.}
 
-\item{sampling}{How to place the points, as in \code{\link[=extract_to_track]{extract_to_track()}}:
+\item{sampling}{How to place the points:
 \itemize{
 \item \code{"vertices"} keeps only the vertices.
 \item \code{"balanced"} spaces points evenly along each segment, as many as the
@@ -94,5 +94,6 @@ buffer_3d(samples, radius_km = 1, depth_window = 10)
 }
 \seealso{
 \code{\link[=buffer_3d]{buffer_3d()}} to turn the points into polygons;
-\code{\link[=extract_to_track]{extract_to_track()}}, which samples tracks the same way.
+\code{\link[=extract_to_track]{extract_to_track()}}, which samples tracks with \code{sample_3d()} and
+summarises the values along them.
 }

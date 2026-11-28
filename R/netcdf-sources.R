@@ -1,4 +1,4 @@
-# netCDF inputs shared by point, buffer and track extraction. File paths, open
+# netCDF inputs for the core object (as_proxy()). File paths, open
 # ncdf4 connections and file tables become one list of sources; each source is
 # opened and closed here, and the variable to read is detected when the caller
 # doesn't name one.
@@ -80,7 +80,7 @@
   # When `var = NULL`, the package tries to detect the variable automatically.
   # This is useful for workflows where each netCDF file contains one main
   # environmental variable, for example one file for NPPV and another file for
-  # salinity. Used by as_proxy(), extract_to_point() and the track functions.
+  # salinity. Used by as_proxy().
   #
   # Coordinate variables and the variables that CF metadata attaches to them
   # (`bounds`, `climatology`, `coordinates` and `grid_mapping` attributes,
