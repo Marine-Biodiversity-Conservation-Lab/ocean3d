@@ -1,8 +1,11 @@
-# Extract environmental values along tracks and lines
+# Summarise environmental values along tracks
 
-Sample ordered trajectories and take the environmental value at each
-sampled position. Return sampled positions and optional summaries per
-track.
+Samples points along each track, such as a dive or a vessel route, reads
+the value at each sample, and summarises the samples of each track. It
+is a convenience wrapper over the three steps of an analysis, and the
+[workflow
+article](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md)
+shows the same steps written out:
 
 ## Usage
 
@@ -14,33 +17,26 @@ extract_to_track(
   track_col = NULL,
   sampling = NULL,
   spacing_km = NULL,
-  interpolate_depth = FALSE,
-  interpolate_time = FALSE,
   depth_step_m = NULL,
-  time_step_seconds = NULL,
+  time_step = NULL,
+  time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
+  max_samples = 100000L,
+  horizontal_radius_km = 0,
+  depth_radius_m = 0,
   method = NULL,
-  statistics = "mean",
+  statistic = "mean",
   weighting = c("distance", "duration", "equal"),
-  min_valid_fraction = 0.8,
   lon_col = "lon",
   lat_col = "lat",
   depth_col = "depth",
   date_col = "date",
-  output_col = NULL,
-  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly", "custom"),
-  max_samples = 100000L,
-  max_segment_km = NULL,
-  max_gap_hours = NULL,
-  quiet = FALSE,
-  time_step = NULL,
-  time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
-  land_mask = NULL,
-  marine_values = NULL,
-  mask_type = c("land", "marine"),
-  mask_domain = NULL,
-  land_policy = c("skip", "error"),
-  mask_step_km = 0.5,
-  ...
+  lon_dim = NULL,
+  lat_dim = NULL,
+  depth_dim = NULL,
+  time_dim = NULL,
+  time_match = c("nearest", "exact"),
+  max_time_diff = NULL,
+  output_col = NULL
 )
 ```
 
@@ -48,239 +44,203 @@ extract_to_track(
 
 - data:
 
-  Ordered vertex table: a data frame, matrix, named list or sf POINT
-  features, as for
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md).
-  Rows are traversed in their supplied order within each track; they are
-  never sorted by date. Convert sf LINESTRING features first, e.g. with
+  Vertices of the tracks, in the order they were travelled: a data
+  frame, matrix, named list or sf POINT object. sf points are
+  transformed to longitude and latitude. To use sf lines, convert them
+  first, e.g. with
   `as.data.frame(sf::st_coordinates(sf::st_transform(lines, 4326)))` and
   `lon_col = "X", lat_col = "Y", track_col = "L1"`.
 
-- nc, var:
+- nc:
 
-  netCDF sources (a path, several paths, an open ncdf4 connection or a
-  table with a file column) and the variable names to read; `var = NULL`
-  detects one data variable per file. Files are read directly with
-  ncdf4; a
-  [SpatVoxel](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatVoxel-class.md)
-  or other `SpatRaster` isn't accepted.
+  The data: a netCDF file path, several paths for a series of files on
+  one grid, an open
+  [`ncdf4::nc_open()`](https://rdrr.io/pkg/ncdf4/man/nc_open.html)
+  connection, or a
+  [SpatProxy](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/SpatProxy-class.md)
+  from
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
+
+- var:
+
+  Name of the variable, for a netCDF source. `NULL` detects the only
+  data variable of the file.
 
 - track_col:
 
-  Optional track identifier column. Without it, the input is one track.
-  IDs are returned as text.
+  Column with track IDs. `NULL` (default) reads all of `data` as one
+  track, with ID `"1"`. Each track needs at least two vertices.
 
-- sampling:
+- sampling, spacing_km, depth_step_m, time_step, time_unit, max_samples:
 
-  NULL (default) uses 'balanced' when spacing_km, depth_step_m,
-  time_step_seconds or time_step is supplied, and 'vertices' otherwise.
-  'vertices' uses observations only; 'balanced' uses a shared
-  subdivision satisfying all explicit step limits; 'merged_steps' places
-  the evenly spaced samples that the distance and depth limits need, and
-  separately a sample at each time step, and keeps both sets; 'cells'
-  splits each connection at grid boundaries and samples interval
-  midpoints, retaining original vertices. Repeated visits are retained.
-  Cells mode currently uses spatial within matching.
+  Where the samples go along each track, as in
+  [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md):
+  only the vertices (default without a step), or with a spacing in
+  kilometres or a depth or time step, points in between as well.
 
-- spacing_km:
+- horizontal_radius_km:
 
-  Maximum horizontal spacing in kilometres when inserting samples.
-  Supply spacing or another step explicitly for balanced or
-  merged_steps.
+  Radius of a circle around each sample, in kilometres, below 10000 as
+  in
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md).
+  `0` (default) reads the value at the sample itself. A buffer needs
+  cells with a width, so data with a single longitude or latitude and no
+  cell bounds (a station or a transect) takes no radius.
 
-- interpolate_depth, interpolate_time:
+- depth_radius_m:
 
-  Allow linear interpolation of depth and elapsed UTC time between
-  vertices. FALSE by default. Constant endpoint values are retained;
-  missing endpoints produce missing intermediate values.
-
-- depth_step_m, time_step_seconds:
-
-  Optional maximum changes between samples. Require the corresponding
-  interpolation switch. They supplement horizontal spacing, including
-  for stationary or vertically moving tracks.
+  Distance in metres above and below each sample's depth, for the
+  buffers. Needed with a radius for a variable with depth, and used only
+  with a radius.
 
 - method:
 
-  Depth method for each sample: 'nearest', 'surface', 'bottom' or '2d',
-  as in
-  [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-  or 'all' for one column per depth method. NULL uses nearest for
-  variables with depth and 2d for variables without it.
+  For a variable with depth and no radius, the depth level each sample
+  takes, as in
+  [extract()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract-SpatProxy.md):
+  `"nearest"` (default; the level nearest the sample's depth that has a
+  value), `"nearest_level"` (the nearest level, even if it has no
+  value), `"bottom"` (the deepest level with a value) or `"surface"`.
+  Leave `NULL` with a radius; for a variable without depth, leave `NULL`
+  or use `"2d"`.
 
-- statistics:
+- statistic:
 
-  NULL for samples only, or distinct names from mean, sd, se, min and
-  max. Summaries describe sampled environmental selections.
+  One or more of `"mean"` (default), `"sd"`, `"min"` and `"max"`, of the
+  samples of each track.
 
 - weighting:
 
-  'distance', 'duration' or 'equal'. Distance and duration assign half
-  each adjacent segment's horizontal length or elapsed seconds to its
-  endpoint samples. Equal gives each sample the same weight.
-
-- min_valid_fraction:
-
-  Minimum valid fraction of total requested track support for a summary,
-  from zero to one. Missing values stay in its denominator.
+  How each sample is weighted in the track summaries: `"distance"`
+  (default) by `support_km`, `"duration"` by `support_seconds` (needs
+  dates), or `"equal"`.
 
 - lon_col, lat_col, depth_col, date_col:
 
-  Vertex coordinate columns. Dates are required for selected temporal
-  variables, duration weights or time-gap limits.
+  Vertex columns. The depth is needed for a variable with depth, unless
+  `method` is `"bottom"` or `"surface"`, and for `depth_step_m`. The
+  date is needed for data with dated time steps, for `time_step` and for
+  duration weights. Dates and date-times are read as in
+  [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md).
+
+- lon_dim, lat_dim, depth_dim, time_dim:
+
+  Dimension names for a netCDF source, as in
+  [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
+
+- time_match, max_time_diff:
+
+  How a sample's time is matched to a time step, as in
+  [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md):
+  the nearest step (default) or an exact one, and the largest gap in
+  days for a nearest match.
 
 - output_col:
 
-  Output name or named variable-to-column mapping.
-
-- time_resolution:
-
-  Point-time precision: 'auto', 'datetime' (instants), 'daily',
-  'monthly' or 'yearly' (UTC calendar labels), or 'custom' (full
-  timestamps, with `custom_time_interval` in `...` as a warning
-  threshold). With auto, the original observations set the precision,
-  before interpolation.
-
-- max_samples:
-
-  Maximum total sampled positions, a positive integer.
-
-- max_segment_km, max_gap_hours:
-
-  Optional limits that reject long segments or known elapsed time gaps.
-  Split disconnected trajectories explicitly. FALSE by default because
-  geometric elevation may use a different convention.
-
-- quiet:
-
-  Hide explanatory reports; scientific and time-zone warnings remain.
-
-- time_step, time_unit:
-
-  Optional temporal step and units: seconds, minutes, hours, elapsed
-  days, whole calendar months or years. Balanced sampling uses one equal
-  subdivision per original segment for elapsed-time limits. Calendar
-  steps count from the segment's start in UTC, and fall on the last day
-  of a shorter month: from 31 January, monthly steps give 29 February,
-  31 March, 30 April. Balanced sampling keeps these dates and adds
-  points between them where needed to meet the distance and depth
-  limits.
-
-- land_mask:
-
-  Optional sf polygon or single-layer terra SpatRaster mask. With no
-  mask, marine connectivity is not checked. Geographic rasters must use
-  longitudes from -180 to 180; rotate or reproject other conventions
-  explicitly. Antimeridian connections are split.
-
-- marine_values:
-
-  Numeric raster codes representing marine cells, including the
-  underlying codes of categorical rasters.
-
-- mask_type:
-
-  Meaning of polygon interiors: land or marine.
-
-- mask_domain:
-
-  Optional polygon domain for polygon masks. A land polygon alone cannot
-  establish that its exterior is known sea. For rasters, coverage is
-  defined by their extent and missing cells.
-
-- land_policy:
-
-  Skip invalid connections (default) or raise an error. Original
-  observations remain; invalid support stays in the denominator.
-
-- mask_step_km:
-
-  Maximum segment length of the polyline used for mask predicates. This
-  is an approximation to the geodesic; coastline accuracy also depends
-  on the supplied mask. Touching land counts as an intersection.
-
-- ...:
-
-  Point-selection options: file_col, dimension overrides, time_match,
-  max_time_diff, custom_time_interval, spatial_match, max_distance_km,
-  and time_report, spatial_report, depth_report, verbose.
+  Name of the value column in `samples`. `NULL` uses the variable's
+  name.
 
 ## Value
 
-A list with samples (coordinates, original vertex attributes, source-row
-references, sample support and extracted values), summary (one row per
-track and output, or NULL), and settings. Tracks follow first appearance
-order. Summary counts n_observed and n_assumed distinguish original
-vertices from inserted positions; n_samples is their total, including
-missing results and invalid connections. The same counts are available
-once per track in settings\$sampling_counts, even when statistics =
-NULL. Cell-interval midpoints count as assumed positions.
-variation_status is not_requested when neither SD nor SE is requested,
-available when the requested variation statistics are finite, or
-insufficient_variation_samples when accepted support has fewer than two
-valid samples. not_available covers rejected support or non-finite
-statistics; consult status for coverage and support problems. status is
-one of: empty (no known support), all_missing, insufficient_coverage,
-partial or complete. Samples follow traversal order. For vertices-only
-sampling the global input row order is retained. Non-coordinate
-attributes of inserted samples are NA. source_row indexes the input
-rows.
+A list of two data frames:
 
-## Interpretation and limits
+- `samples`: one row per sample, in order along each track, with
+  `track_id`, `sample_id`, the position (in `lon_col` and `lat_col`,
+  with longitudes from -180 to 180), the depth and date when used (in
+  `depth_col` and `date_col`; dates stay dates), `distance_km` from the
+  track's start, `support_km`, `support_seconds`, `is_interpolated`
+  (`FALSE` for the track's own vertices), and the value in `output_col`.
+  With a radius, also `<output>_n`, the number of values in the sample's
+  buffer.
 
-Positions follow WGS84 shortest geodesics. Distances are horizontal, not
-three-dimensional travel distances. Antipodal endpoints need a waypoint.
-Interpolated coordinates describe assumptions, not observations.
+- `summary`: one row per track, with `track_id`, a column per statistic,
+  and `n`, the number of samples with a value.
 
-Balanced sampling approximates line integration. Cells mode finds
-numerical intersections with rectilinear spatial cell boundaries and
-selection changes in depth and time. It retains separate segment visits,
-including returns to the same cell. Zero-support original vertices
-remain available for inspection. Cells mode is not a volume-weighted
-integration of physical averaging periods; the temporal rules still
-compare timestamp labels. Custom temporal precision and spatial nearest
-matching are currently unsupported in cells mode. Overlapping sources
-with different horizontal grids require explicit alignment or another
-sampling mode. Environmental values are taken from the grid cell and
-time step each sample falls in, never interpolated. The depth coordinate
-may be stored shallow to deep or deep to shallow; depths stored in any
-other order are rejected. Missing coordinates are rejected and multipart
-lines must be split explicitly.
+## Details
 
-SD and SE use the same reliability-weight correction and effective
-sample size as
-[`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md).
-Adjacent samples are usually correlated: SE is descriptive under an
-independence assumption, not an uncertainty estimate. Densifying a track
-does not create independent environmental observations.
-Distance-weighted summaries of stationary tracks are NA; duration
-weighting requires known time support and returns NA if any adjacent
-duration is unknown. settings records options and candidate files.
-Actual selected records are stored in the per-output match_info columns
-in samples.
+1.  **Build:** the vertices of each track become a line with
+    [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md),
+    and
+    [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+    places points along it, with depth and time interpolated between
+    vertices. With `horizontal_radius_km`,
+    [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
+    turns each sample into a buffer.
+
+2.  **Intersect:** without a radius,
+    [extract()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract-SpatProxy.md)
+    reads the value at each sample, in the cell that holds it and at the
+    depth level `method` picks. With a radius, the data for the sample's
+    time step are read with
+    [`crop()`](https://rspatial.github.io/terra/reference/crop.html) and
+    [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+    (or
+    [rast()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/rast-SpatProxy.md)
+    for a variable without depth), and
+    [`mask()`](https://rspatial.github.io/terra/reference/mask.html)
+    keeps the values inside its buffer: the cells the circle touches,
+    and the levels whose slab of water overlaps the depth window.
+    [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+    gives their mean, weighted by cell volume.
+
+3.  **Summarise:** the statistics of each track's sample values, each
+    sample weighted by `weighting`.
+
+Each sample is matched to the time step nearest its time, or equal to it
+with `time_match = "exact"`, as
+[extract()](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract-SpatProxy.md)
+matches points: a date by its UTC day, a date-time as an instant. A
+sample gets `NA` when it is outside the grid, on a cell or level without
+a value, has no date on data with dated time steps, or has no time step
+that matches. One warning counts these samples, by reason. The track
+summaries leave them out, and `n` is the number of samples with a value.
+
+With `weighting = "distance"` each sample stands for half the distance
+to the samples either side (`support_km`), so a stretch sampled more
+densely doesn't count for more; with `"duration"` for half the time
+(`support_seconds`). The weighted standard deviation is the one
+[`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+uses. A track whose samples all have zero weight, such as a track that
+doesn't move with distance weights, gets equal weights. Neighbouring
+samples are usually correlated, so the standard deviation describes
+their spread, not the uncertainty of the mean.
 
 ## See also
 
+[`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md),
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
+[`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md),
+and the [workflow
+article](https://marine-biodiversity-conservation-lab.github.io/ocean3d/articles/workflow-values-in-shapes.md).
 
 ## Examples
 
 ``` r
-nc_file <- system.file("extdata", "example_2d.nc", package = "ocean3d")
-track <- data.frame(
-  lon = c(0, 1), lat = c(40, 40),
-  date = as.Date(c("2020-01-01", "2020-01-01"))
-)
-result <- extract_to_track(track, nc_file,
-  var = "temp", method = "2d",
-  spacing_km = 20, quiet = TRUE
-)
-result$summary
-#>   track_id output_column weighting n_samples n_observed n_assumed n_valid
-#> 1        1          temp  distance         6          2         4       6
-#>   valid_fraction total_distance_km total_duration_seconds effective_n   status
-#> 1              1          85.39341                      0    5.555556 complete
-#>   mean variation_status
-#> 1 15.5    not_requested
+# Daily temperature on a 10 x 10 grid of 1 degree cells at four depths.
+path <- tempfile(fileext = ".nc")
+lon <- ncdf4::ncdim_def("lon", "degrees_east", seq(0.5, 9.5))
+lat <- ncdf4::ncdim_def("lat", "degrees_north", seq(0.5, 9.5))
+depth <- ncdf4::ncdim_def("depth", "m", c(5, 15, 30, 60))
+time <- ncdf4::ncdim_def("time", "days since 2020-01-01", 0:2)
+temp <- ncdf4::ncvar_def("temp", "degree_Celsius",
+                         list(lon, lat, depth, time), -9999)
+nc <- ncdf4::nc_create(path, temp)
+ncdf4::ncvar_put(nc, temp, seq_len(10 * 10 * 4 * 3) / 10)
+ncdf4::nc_close(nc)
+
+# A dive from the surface to 50 m over two days.
+dive <- data.frame(lon = c(2.5, 6.5), lat = c(3.5, 5.5), depth = c(0, 50),
+                   date = as.Date(c("2020-01-01", "2020-01-03")))
+
+# The value at a sample at least every 50 km, and the mean along the dive.
+track <- extract_to_track(dive, path, spacing_km = 50)
+track$summary
+#>   track_id mean  n
+#> 1        1   42 11
+
+# The mean within 30 km and 10 m above and below each sample instead.
+extract_to_track(dive, path, spacing_km = 50, horizontal_radius_km = 30,
+                 depth_radius_m = 10)$summary
+#>   track_id    mean  n
+#> 1        1 44.2459 11
 ```

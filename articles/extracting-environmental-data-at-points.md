@@ -745,7 +745,7 @@ extract_to_point(
   lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
   output_col = NULL, output_prefix = NULL, id_col = NULL,
 
-  # Source columns and dimensions
+  # Source dimensions
   lon_dim = NULL, lat_dim = NULL, depth_dim = NULL, time_dim = NULL,
 
   # Temporal selection

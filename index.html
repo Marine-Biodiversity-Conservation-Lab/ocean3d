@@ -168,7 +168,7 @@
 <div class="section level3">
 <h3 id="which-input-each-function-takes">Which input each function takes<a class="anchor" aria-label="anchor" href="#which-input-each-function-takes"></a>
 </h3>
-<p><code>ocean3d</code> currently has two data models for gridded data, and each function takes one of them:</p>
+<p><code>ocean3d</code> currently has two data models for gridded data: netCDF data described by a <code>SpatProxy</code> from <code><a href="reference/as_proxy.html">as_proxy()</a></code>, read with ncdf4, and <code>SpatVoxel</code> / <code>SpatEnvelope</code> objects in memory. <code><a href="reference/as_voxel.html">as_voxel()</a></code> reads one time step of a proxy as a voxel. Each function takes one or both:</p>
 <table class="table">
 <colgroup>
 <col width="33%">
@@ -182,11 +182,6 @@
 </tr></thead>
 <tbody>
 <tr>
-<td>netCDF files (paths, open <code>ncdf4</code> connections or a file table)</td>
-<td><code><a href="reference/extract_to_track.html">extract_to_track()</a></code></td>
-<td>ncdf4, only the cells each observation needs; keeps the time dimension</td>
-</tr>
-<tr>
 <td>
 <code>SpatVoxel</code> / <code>SpatEnvelope</code> (3D classes built on <code><a href="https://rspatial.github.io/terra/reference/SpatRaster-class.html" class="external-link">terra::SpatRaster</a></code>)</td>
 <td>the build, intersect and volume functions and <code>mask()</code>
@@ -196,7 +191,9 @@
 <tr>
 <td>netCDF paths, an open <code>ncdf4</code> connection or a <code>SpatProxy</code> from <code><a href="reference/as_proxy.html">as_proxy()</a></code>
 </td>
-<td><code><a href="reference/extract_to_point.html">extract_to_point()</a></code></td>
+<td>
+<code><a href="reference/extract_to_point.html">extract_to_point()</a></code>, <code><a href="reference/extract_to_track.html">extract_to_track()</a></code>
+</td>
 <td>
 <code><a href="reference/as_proxy.html">as_proxy()</a></code> and <code><a href="https://rspatial.github.io/terra/reference/extract.html" class="external-link">terra::extract()</a></code>, each time step once for its points</td>
 </tr>
@@ -275,7 +272,7 @@
 <li>
 <code><a href="reference/extract_to_buffer.html">extract_to_buffer()</a></code> — summarise values within a geodesic circle × depth window × time window around each observation, weighted by the volume of each cell and depth level; a shortcut for <code><a href="reference/buffer_3d.html">buffer_3d()</a></code>, <code>mask()</code> and <code><a href="reference/summarise_3d.html">summarise_3d()</a></code>.</li>
 <li>
-<code><a href="reference/extract_to_track.html">extract_to_track()</a></code> — sample points along ordered tracks (e.g. tagging data), extract values at them, and optionally summarise per track.</li>
+<code><a href="reference/extract_to_track.html">extract_to_track()</a></code> — sample points along ordered tracks (e.g. tagging data) with <code><a href="reference/sample_3d.html">sample_3d()</a></code>, take the value at each sample, or the mean in a buffer around it, and summarise each track, with each sample weighted by the distance or time it stands for.</li>
 </ul>
 </div>
 <div class="section level3">

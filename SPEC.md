@@ -290,10 +290,16 @@ its min and max depth.
 
 ### Now: two models
 
-`ocean3d` currently has two separate data models for the same kind of
-data (gridded marine variables by longitude, latitude and depth).
-Functions take one or the other, and no exported function converts one
-to the other.
+`ocean3d` currently has two data models for the same kind of data
+(gridded marine variables by longitude, latitude and depth): netCDF data
+described by the core object, `SpatProxy`
+([`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md)),
+and `SpatVoxel` / `SpatEnvelope` in memory.
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+reads one time step of a `SpatProxy` as a `SpatVoxel`. Since \#116 no
+exported function reads netCDF files directly; the extraction functions
+read them through
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md).
 
 “CF” below means the [Climate and Forecast (CF)
 Conventions](https://cfconventions.org/), the standard for metadata in
@@ -304,11 +310,11 @@ attributes say how to read the stored numbers: time units and calendar
 which (`axis`, `standard_name`). “CF-correct” means reading these as the
 conventions define them.
 
-|  | netCDF model | `SpatVoxel` model |
+|  | netCDF model (`SpatProxy`) | `SpatVoxel` model |
 |----|----|----|
-| Functions | [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md), [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md), [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()`, voxel profiles, [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md) |
-| Input | netCDF paths, connections or file tables | `SpatVoxel` / `SpatEnvelope`, S4 classes extending [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html) |
-| Reads with | ncdf4, only the cells each observation needs | terra |
+| Functions | [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md), and on a `SpatProxy`: `crop()`, [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), `rast()`, [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html) and [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md); the `extract_to_*()` functions, which take netCDF paths, a connection or a `SpatProxy` | [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md) and [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md) (which also take a voxel), [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md), [`intersect_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersect_3d.md), [`intersects_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/intersects_3d.md), `mask()`, voxel profiles, [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md), [`as_envelope()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_envelope.md), [`load_gebco_bathymetry()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/load_gebco_bathymetry.md), [`gfw_effort_to_raster()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/gfw_effort_to_raster.md) |
+| Input | netCDF paths, a series of files on one grid, a connection, or a voxel in memory | `SpatVoxel` / `SpatEnvelope`, S4 classes extending [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html) |
+| Reads with | ncdf4, only the cells and time steps each step needs | terra |
 | Depth | the netCDF depth coordinate: units converted to metres, `positive` direction, bounds | [`terra::depth()`](https://rspatial.github.io/terra/reference/depth.html), one set of depths for the whole grid, and each layer’s top and bottom (depth edges) when the voxel has them |
 | Time | CF time decoding (calendars, sub-daily steps, nearest or exact matching, series split across files) | at most one date per voxel, in [`terra::time()`](https://rspatial.github.io/terra/reference/time.html); the voxel tools don’t use it |
 | Cell edges | CF bounds, or inferred from cell centres | terra’s regular grid extent and resolution |
@@ -316,13 +322,9 @@ conventions define them.
 The netCDF model keeps 4D data (lon, lat, depth, time) and its CF
 metadata intact and reads only the cells it needs. The voxel model gets
 terra’s raster operations (crop, mask, cell area, resampling), which the
-volume and overlap tools depend on. The cost of the split: a voxel can’t
-be passed to
-[`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-a netCDF file can’t be passed to
-[`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md),
-depth and grid handling is written twice with different rules, and the
-voxel tools have no time dimension.
+volume and overlap tools depend on. The cost of the split: the voxel
+tools have no time dimension, so a time series is a list of voxels, one
+per step.
 
 ### Planned: one model (#99)
 
@@ -975,8 +977,9 @@ results <- do.call(rbind, results)
   voxel.
   [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
   gives each track sample its share of the track’s length and duration
-  (`support_km`, `support_seconds`). Summaries across a track’s samples
-  weighted by these shares are planned with the track wrapper (#116).
+  (`support_km`, `support_seconds`).
+  [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
+  summarises a track’s samples weighted by these shares (#116).
 - [`volume()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/volume.md)
   measures shapes rather than values. Its existing results don’t change:
   the voxel method computes the volume per cell and depth level first,
@@ -986,7 +989,7 @@ results <- do.call(rbind, results)
 #### Order of work
 
 Each step has its own issue, and each PR branches off `main`. Status as
-of 27 November 2026.
+of 28 November 2026.
 
 1.  **Document the current split:** which functions take netCDF and
     which take `SpatVoxel` (README function overview and each function’s
@@ -1126,14 +1129,27 @@ of 27 November 2026.
     [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
     `crop()`,
     [`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md),
-    `mask()` and `summarise_3d(by = "all")`, is in review (#182); it
-    drops the features left out on 25 November 2026 (partial weights,
+    `mask()` and `summarise_3d(by = "all")`, is done (#182); it drops
+    the features left out on 25 November 2026 (partial weights,
     `most_similar`, `min_valid_fraction`, `se`, cell and layer
     neighbourhoods, month and year windows, several variables and files
-    on different grids).
+    on different grids). The fourth,
     [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
-    is next. Until it is rebuilt, it uses the old point extraction
-    internally. The fast path for many points,
+    on
+    [`as_vector3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_vector3d.md),
+    [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+    and
+    [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html),
+    with
+    [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
+    `mask()` and
+    [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md)
+    for buffers around the samples, is in review (#183). It drops the
+    same features, and also land checks and one sample per grid cell,
+    which are planned for
+    [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+    (step 9). It removes the old point and track extraction code. The
+    fast path for many points,
     [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html)
     on a `SpatProxy` with `SpatVector3D` points, is done (#163); the
     [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
@@ -1308,8 +1324,16 @@ design](#package-design-build-intersect-summarise). Items marked
   (#116); partial weights and `most_similar` were dropped.
 - **Track extraction**.
   [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
-  samples points along ordered tracks (e.g. tagging data), extracts
-  netCDF values at them, and can summarise per track.
+  samples points along ordered tracks (e.g. tagging data) with
+  [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
+  and summarises each track, weighting each sample by the distance or
+  time it represents (#116). Each sample gets the value at its position,
+  with
+  [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html),
+  or the mean in a buffer around it, with
+  [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md),
+  `mask()` and
+  [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md).
 - **Area extraction**.
   [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
   keeps the values of a `SpatVoxel` or `SpatProxy` (e.g. environmental

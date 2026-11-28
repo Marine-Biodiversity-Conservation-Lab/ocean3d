@@ -66,7 +66,7 @@ only the cells and time steps it needs, at every depth level.
 proxy <- as_proxy(path)
 proxy
 #> class      : SpatProxy (experimental)
-#> source     : file23564923076c.nc
+#> source     : file22db34e4cfff.nc
 #> variable   : temp (degC)
 #> dimensions : 20 x 20 x 6 x 5 (lon x lat x depth x time)
 #> lon        : 150.025 to 150.975, 20 cells, edges inferred
@@ -397,6 +397,22 @@ The weights ignore `n`, so a buffer with 3 values counts as much as one
 with 8. This is a mean of the local means, not a mean over all the water
 the buffers cover. These buffers don’t overlap, but neighbouring ones
 can use the same grid cells, so the local summaries aren’t independent.
+
+[`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
+runs the same steps in one call. It gives the same mean, and `n`, the
+number of samples with a value:
+
+``` r
+
+extract_to_track(route, path, track_col = "tag", date_col = "time",
+                 spacing_km = 10, horizontal_radius_km = 3,
+                 depth_radius_m = 10)$summary
+#>   track_id     mean  n
+#> 1        D 25.96283 11
+```
+
+Its `samples` table has the local means, as `temp`, and their number of
+values, as `temp_n`.
 
 [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md)
 doesn’t yet check that each segment stays in water, so check that your

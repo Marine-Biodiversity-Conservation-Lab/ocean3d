@@ -143,14 +143,18 @@ SPEC.md](https://marine-biodiversity-conservation-lab.github.io/ocean3d/SPEC.htm
 
 ### Which input each function takes
 
-`ocean3d` currently has two data models for gridded data, and each
-function takes one of them:
+`ocean3d` currently has two data models for gridded data: netCDF data
+described by a `SpatProxy` from
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+read with ncdf4, and `SpatVoxel` / `SpatEnvelope` objects in memory.
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+reads one time step of a proxy as a voxel. Each function takes one or
+both:
 
 | Input | Functions | Reads with |
 |----|----|----|
-| netCDF files (paths, open `ncdf4` connections or a file table) | [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | ncdf4, only the cells each observation needs; keeps the time dimension |
 | `SpatVoxel` / `SpatEnvelope` (3D classes built on [`terra::SpatRaster`](https://rspatial.github.io/terra/reference/SpatRaster-class.html)) | the build, intersect and volume functions and `mask()` | terra; one time step per voxel |
-| netCDF paths, an open `ncdf4` connection or a `SpatProxy` from [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md) | [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md) | [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md) and [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html), each time step once for its points |
+| netCDF paths, an open `ncdf4` connection or a `SpatProxy` from [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md) | [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md), [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md) | [`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md) and [`terra::extract()`](https://rspatial.github.io/terra/reference/extract.html), each time step once for its points |
 
 A voxel can’t be passed to
 [`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md)
@@ -319,8 +323,11 @@ doesn’t take a `SpatVoxel`.
   `mask()` and
   [`summarise_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/summarise_3d.md).
 - [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
-  — sample points along ordered tracks (e.g. tagging data), extract
-  values at them, and optionally summarise per track.
+  — sample points along ordered tracks (e.g. tagging data) with
+  [`sample_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/sample_3d.md),
+  take the value at each sample, or the mean in a buffer around it, and
+  summarise each track, with each sample weighted by the distance or
+  time it stands for.
 
 ### Data utilities
 

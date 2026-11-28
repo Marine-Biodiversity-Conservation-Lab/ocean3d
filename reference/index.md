@@ -100,7 +100,7 @@ intersect and summarise in one call.
 - [`extract_to_buffer()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_buffer.md)
   : Summarise environmental values around observations
 - [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md)
-  : Extract environmental values along tracks and lines
+  : Summarise environmental values along tracks
 - [`extract_to_area()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_area.md)
   : Extract a 3D raster to an area and a depth band
 

@@ -36,8 +36,7 @@ sample_3d(
 
 - sampling:
 
-  How to place the points, as in
-  [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md):
+  How to place the points:
 
   - `"vertices"` keeps only the vertices.
 
@@ -103,7 +102,8 @@ between those vertices isn't known. Give every vertex a time, or none.
 [`buffer_3d()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/buffer_3d.md)
 to turn the points into polygons;
 [`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md),
-which samples tracks the same way.
+which samples tracks with `sample_3d()` and summarises the values along
+them.
 
 ## Examples
 

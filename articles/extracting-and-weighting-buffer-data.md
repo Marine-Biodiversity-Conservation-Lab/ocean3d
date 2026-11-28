@@ -349,7 +349,7 @@ extract_to_buffer(
   lon_col = "lon", lat_col = "lat", depth_col = "depth", date_col = "date",
   output_col = NULL,
 
-  # Source columns and dimensions
+  # Source dimensions
   lon_dim = NULL, lat_dim = NULL, depth_dim = NULL, time_dim = NULL,
 
   # Temporal selection

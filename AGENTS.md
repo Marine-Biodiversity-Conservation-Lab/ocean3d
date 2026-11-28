@@ -8,11 +8,13 @@ changes, update this file in the same PR.
 ## Data models
 
 ocean3d currently has two data models for gridded data (see SPEC.md,
-“Data model”): netCDF files read with ncdf4
-([`extract_to_point()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_point.md),
-[`extract_to_track()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/extract_to_track.md))
-and `SpatVoxel` / `SpatEnvelope` objects built on terra (everything
-else). \#99 plans to unify them.
+“Data model”): netCDF data described by a `SpatProxy` from
+[`as_proxy()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_proxy.md),
+read with ncdf4 (the `extract_to_*()` functions take netCDF paths or a
+proxy), and `SpatVoxel` / `SpatEnvelope` objects built on terra
+(everything else).
+[`as_voxel()`](https://marine-biodiversity-conservation-lab.github.io/ocean3d/reference/as_voxel.md)
+reads one time step of a proxy as a voxel. \#99 plans to unify them.
 
 - Check which model a function takes before passing data to it or adding
   to it, and say which one in its `@param` docs.

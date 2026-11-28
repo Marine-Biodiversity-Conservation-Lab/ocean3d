@@ -87,7 +87,7 @@ intersect step (<code><a href="intersect_3d.html">intersect_3d()</a></code>, <co
 
 
 <dt id="arg-sampling">sampling<a class="anchor" aria-label="anchor" href="#arg-sampling"></a></dt>
-<dd><p>How to place the points, as in <code><a href="extract_to_track.html">extract_to_track()</a></code>:</p><ul><li><p><code>"vertices"</code> keeps only the vertices.</p></li>
+<dd><p>How to place the points:</p><ul><li><p><code>"vertices"</code> keeps only the vertices.</p></li>
 <li><p><code>"balanced"</code> spaces points evenly along each segment, as many as the
 strictest step limit needs. With calendar steps, it keeps the step
 dates and spaces points evenly between them.</p></li>
@@ -146,7 +146,8 @@ between those vertices isn't known. Give every vertex a time, or none.</p>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="buffer_3d.html">buffer_3d()</a></code> to turn the points into polygons;
-<code><a href="extract_to_track.html">extract_to_track()</a></code>, which samples tracks the same way.</p></div>
+<code><a href="extract_to_track.html">extract_to_track()</a></code>, which samples tracks with <code>sample_3d()</code> and
+summarises the values along them.</p></div>
     </div>
 
     <div class="section level2">
