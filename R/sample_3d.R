@@ -169,41 +169,49 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
 }
 
 
+# The one producer of `ocean3d_error_track_sampling`: step limits, a sample
+# budget or a track sample_3d() can't sample. Raised by .track_sampling()
+# and the sampler.
+.abort_track_sampling <- function(message) {
+  rlang::abort(message, class = "ocean3d_error_track_sampling", call = NULL)
+}
+
+
 # The sampling mode, checked with its step limits and `max_samples`, for
 # sample_3d(). NULL picks "balanced" when a step is given and "vertices"
-# otherwise. Steps must be positive, calendar steps
-# whole months or years, and `max_samples` a positive whole number;
-# vertices sampling takes no steps, and the stepped modes need one. The one
-# producer of `ocean3d_error_track_sampling`.
+# otherwise. Steps must be positive, calendar steps whole months or years,
+# and `max_samples` a positive whole number; vertices sampling takes no
+# steps, and the stepped modes need one.
 .track_sampling <- function(sampling, spacing_km, depth_step_m, time_step,
                             time_unit, max_samples) {
-  fail <- function(message) {
-    rlang::abort(message, class = "ocean3d_error_track_sampling", call = NULL)
-  }
   positive <- function(value) {
     is.numeric(value) && length(value) == 1L && is.finite(value) && value > 0
   }
   for (name in c("spacing_km", "depth_step_m", "time_step")) {
     value <- get(name)
     if (!is.null(value) && !positive(value)) {
-      fail(glue::glue("`{name}` must be one finite positive number."))
+      .abort_track_sampling(glue::glue(
+        "`{name}` must be one finite positive number."
+      ))
     }
   }
   if (!positive(max_samples) || max_samples != floor(max_samples)) {
-    fail("`max_samples` must be a positive integer.")
+    .abort_track_sampling("`max_samples` must be a positive integer.")
   }
   has_steps <- !is.null(spacing_km) || !is.null(depth_step_m) ||
     !is.null(time_step)
   if (is.null(sampling)) sampling <- if (has_steps) "balanced" else "vertices"
   if (time_unit %in% c("months", "years") && !is.null(time_step) &&
         time_step != floor(time_step)) {
-    fail("Calendar steps require whole months or years.")
+    .abort_track_sampling("Calendar steps require whole months or years.")
   }
   if (sampling %in% c("balanced", "merged_steps") && !has_steps) {
-    fail("Balanced or merged_steps sampling needs an explicit spacing or step.")
+    .abort_track_sampling(
+      "Balanced or merged_steps sampling needs an explicit spacing or step."
+    )
   }
   if (sampling == "vertices" && has_steps) {
-    fail("Step limits cannot be used with vertices sampling.")
+    .abort_track_sampling("Step limits cannot be used with vertices sampling.")
   }
   sampling
 }
@@ -225,7 +233,9 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
   )
   angle <- atan2(sqrt(rowSums(cross^2)), rowSums(a * b))
   if (any(pi - angle < 1e-08)) {
-    stop("Antipodal endpoints need an intermediate waypoint.", call. = FALSE)
+    .abort_track_sampling(
+      "Antipodal endpoints need an intermediate waypoint."
+    )
   }
   # Each segment is a straight line from the origin of an azimuthal
   # equidistant projection centred on its start, i.e. the WGS84 geodesic.
@@ -240,29 +250,14 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
   )
   lengths <- vapply(xy, function(x) sqrt(sum(x^2)) / 1000, numeric(1))
   if (any(!is.finite(lengths))) {
-    stop(
-      "A geodesic could not be constructed; add a waypoint.",
-      call. = FALSE
+    .abort_track_sampling(
+      "A geodesic could not be constructed; add a waypoint."
     )
   }
   list(
     length_km = lengths, crs = crs, xy = xy,
     longitude = lon, latitude = lat
   )
-}
-
-
-.track_geodesic_positions <- function(arc, segment, fractions) {
-  xy <- outer(fractions, as.numeric(arc$xy[[segment]]))
-  result <- sf::sf_project(arc$crs[segment], "EPSG:4326", xy)
-  # Retain supplied endpoint coordinates, including stationary
-  # segments.
-  result[fractions == 0, ] <- c(arc$longitude[segment], arc$latitude[segment])
-  result[fractions == 1, ] <- c(
-    arc$longitude[segment + 1L], arc$latitude[segment + 1L]
-  )
-  colnames(result) <- c("lon", "lat")
-  result
 }
 
 
@@ -298,7 +293,7 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
       months <- if (unit == "years") 12 * k * step else k * step
       following <- as.numeric(.shift_temporal_months(first, months))
       if (length(values) >= budget) {
-        stop("time_step exceeds max_samples.")
+        .abort_track_sampling("time_step exceeds max_samples.")
       }
       values <- c(values, min(end, following))
       if (following >= end) break
@@ -309,7 +304,7 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
   seconds <- step * .time_unit_seconds(unit)
   n <- max(1, ceiling((end - start) / seconds))
   if (!is.finite(n) || n + 1 > budget) {
-    stop("time_step exceeds max_samples.")
+    .abort_track_sampling("time_step exceeds max_samples.")
   }
   seq(0, 1, length.out = n + 1)
 }
@@ -327,7 +322,7 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
   times <- v$time
   dt <- diff(times)
   if (any(dt < 0, na.rm = TRUE)) {
-    stop("Dates must follow traversal order.")
+    .abort_track_sampling("Dates must follow traversal order.")
   }
   pieces <- list()
   for (i in seq_along(dt)) {
@@ -345,7 +340,7 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
         )
       }
       if (!is.finite(count) || count + 1 > budget) {
-        stop("Track sampling exceeds max_samples.")
+        .abort_track_sampling("Track sampling exceeds max_samples.")
       }
       time_cuts <- .track_time_breaks(
         times[i], times[i + 1L], options$time_step,
@@ -372,14 +367,14 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
             }
             n <- max(1, ceiling(horizontal), ceiling(vertical))
             if (length(cuts) + n > budget) {
-              stop("Track sampling exceeds max_samples.")
+              .abort_track_sampling("Track sampling exceeds max_samples.")
             }
             cuts <- c(cuts, seq(first, last, length.out = n + 1L)[-1L])
           }
         } else {
           count <- max(count, length(time_cuts) - 1L)
           if (count + 1L > budget) {
-            stop("Track sampling exceeds max_samples.")
+            .abort_track_sampling("Track sampling exceeds max_samples.")
           }
           cuts <- seq(0, 1, length.out = count + 1L)
         }
@@ -391,7 +386,7 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
     width <- diff(cuts)
     used <- sum(vapply(pieces, nrow, integer(1)))
     if (length(fractions) + used + 1 > budget) {
-      stop("Track sampling exceeds max_samples.")
+      .abort_track_sampling("Track sampling exceeds max_samples.")
     }
     # Linear along the segment, with the vertex's own value at its start.
     along <- function(x) {
@@ -399,7 +394,11 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
       values[fractions == 0] <- x[i]
       values
     }
-    xy <- .track_geodesic_positions(arc, i, fractions)
+    # Points along the segment's straight line in its projection; the
+    # vertex keeps its own coordinates.
+    xy <- sf::sf_project(arc$crs[i], "EPSG:4326",
+                         outer(fractions, as.numeric(arc$xy[[i]])))
+    xy[fractions == 0, ] <- c(arc$longitude[i], arc$latitude[i])
     pieces[[i]] <- data.frame(
       lon = xy[, 1L], lat = xy[, 2L], depth = along(depths),
       time = along(times), is_interpolated = fractions != 0,
@@ -416,7 +415,7 @@ sample_3d <- function(x, sampling = NULL, spacing_km = NULL,
   )
   result <- do.call(rbind, c(pieces, list(last)))
   if (nrow(result) > budget) {
-    stop("Track sampling exceeds max_samples.")
+    .abort_track_sampling("Track sampling exceeds max_samples.")
   }
   # Each point stands for half the cut either side of it.
   for (name in c("support_km", "support_seconds")) {

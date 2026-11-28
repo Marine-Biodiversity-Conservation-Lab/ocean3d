@@ -223,5 +223,6 @@ test_that("sample_3d() rejects input it can't sample", {
   expect_s4_class(sample_3d(daily, time_step = 1, time_unit = "days"),
                   "SpatVector3D")
   expect_error(sample_3d(dive(), spacing_km = 0.01, max_samples = 10),
-               "max_samples")
+               "Track sampling exceeds max_samples",
+               class = "ocean3d_error_track_sampling")
 })
