@@ -605,6 +605,12 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## Minor improvements
 
+* `intersects_3d()` of two sets of `SpatVector3D` polygons no longer builds
+  the shared outlines, and gives the same pairs as before. It tests which
+  outlines share an area, then compares depths and times. With sf's
+  spherical geometry (the default), 2000 buffers against 200 areas took
+  4.6 s instead of 17 minutes (#179).
+
 * `vect_to_envelope()` now projects polygons in another CRS onto the CRS of
   `template`, as the 3D query functions do with polygons (#97). It used to
   stop with an error asking for the polygons to be projected first. Depth
