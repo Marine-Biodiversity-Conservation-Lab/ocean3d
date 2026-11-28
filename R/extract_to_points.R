@@ -9,26 +9,27 @@
 # easier to test and easier to maintain inside a package.
 # -----------------------------------------------------------------------------
 
+# The one producer of `ocean3d_error_missing_columns`: `x` lacks some of
+# `cols` (NA entries are ignored).
 .check_required_cols <- function(x, cols, x_name = "data") {
-  cols <- stats::na.omit(cols)
-  missing_cols <- setdiff(cols, names(x))
-
+  missing_cols <- setdiff(stats::na.omit(cols), names(x))
   if (length(missing_cols) > 0) {
-    stop(
-      sprintf(
-        "Missing required column(s) in `%s`: %s",
-        x_name,
-        toString(missing_cols)
-      ),
-      call. = FALSE
-    )
+    rlang::abort(glue::glue(
+      "Missing required column(s) in `{x_name}`: {toString(missing_cols)}"
+    ), class = "ocean3d_error_missing_columns", call = NULL)
   }
-
   invisible(TRUE)
 }
 
 
+# Observations as a data frame (or sf points with longitude and latitude
+# columns added): data frames as they are, sf POINTs transformed to WGS84,
+# and matrices and lists with names. The one producer of
+# `ocean3d_error_points_input`.
 .normalize_points_input <- function(x, lon_col = "lon", lat_col = "lat") {
+  fail <- function(message) {
+    rlang::abort(message, class = "ocean3d_error_points_input", call = NULL)
+  }
   # data.frame subclasses such as tibbles already use the internal format.
   if (is.data.frame(x) && !inherits(x, "sf")) {
     return(x)
@@ -37,55 +38,40 @@
   # sf objects can provide longitude and latitude directly from POINT geometry.
   if (inherits(x, "sf")) {
     geom_type <- unique(as.character(sf::st_geometry_type(x)))
-
     if (length(geom_type) != 1L || geom_type != "POINT") {
-      stop("`sf` input must contain POINT geometries.", call. = FALSE)
+      fail(paste(
+        "`sf` input must contain POINT geometries. Convert lines to a table",
+        "of vertices first, for example with `sf::st_coordinates()`."
+      ))
     }
-
-    coords_source <- x
-
     # Any CRS other than WGS84, geographic or not, is transformed.
-    if (sf::st_crs(coords_source) != sf::st_crs(4326)) {
-      if (is.na(sf::st_crs(coords_source))) {
-        stop(
-          "`sf` input must have a geographic CRS or a CRS that can be ",
-          "transformed to longitude/latitude.",
-          call. = FALSE
-        )
-      }
-
-      coords_source <- sf::st_transform(coords_source, 4326)
+    if (is.na(sf::st_crs(x))) {
+      fail(paste(
+        "`sf` input must have a geographic CRS or a CRS that can be",
+        "transformed to longitude/latitude."
+      ))
     }
-
-    coords <- sf::st_coordinates(coords_source)
+    coords <- sf::st_coordinates(sf::st_transform(sf::st_geometry(x), 4326))
     x[[lon_col]] <- coords[, 1]
     x[[lat_col]] <- coords[, 2]
-
     return(x)
   }
 
   # Matrices are converted to a data frame while preserving column names.
   if (is.matrix(x)) {
-    if (is.null(colnames(x))) {
-      stop("Matrix input must have column names.", call. = FALSE)
-    }
-
-    return(as.data.frame(x))
+    if (is.null(colnames(x))) fail("Matrix input must have column names.")
+    return(as.data.frame(x, stringsAsFactors = FALSE))
   }
 
   # Named lists are converted to a data frame.
   if (is.list(x)) {
     if (is.null(names(x)) || any(names(x) == "")) {
-      stop("List input must be named.", call. = FALSE)
+      fail("List input must be named.")
     }
-
-    return(as.data.frame(x))
+    return(as.data.frame(x, stringsAsFactors = FALSE))
   }
 
-  stop(
-    "`data` must be a data frame, tibble, sf object, matrix, or named list.",
-    call. = FALSE
-  )
+  fail("`data` must be a data frame, tibble, sf object, matrix, or named list.")
 }
 
 

@@ -58,7 +58,9 @@ a depth or time step, points in between as well.}
 
 \item{horizontal_radius_km}{Radius of a circle around each sample, in
 kilometres, below 10000 as in \code{\link[=buffer_3d]{buffer_3d()}}. \code{0} (default) reads the
-value at the sample itself.}
+value at the sample itself. A buffer needs cells with a width, so data
+with a single longitude or latitude and no cell bounds (a station or a
+transect) takes no radius.}
 
 \item{depth_radius_m}{Distance in metres above and below each sample's
 depth, for the buffers. Needed with a radius for a variable with depth,
@@ -99,8 +101,9 @@ variable's name.}
 A list of two data frames:
 \itemize{
 \item \code{samples}: one row per sample, in order along each track, with
-\code{track_id}, \code{sample_id}, the position (in \code{lon_col} and \code{lat_col}),
-the depth and date when used (in \code{depth_col} and \code{date_col}),
+\code{track_id}, \code{sample_id}, the position (in \code{lon_col} and \code{lat_col},
+with longitudes from -180 to 180), the depth and date when used (in
+\code{depth_col} and \code{date_col}; dates stay dates),
 \code{distance_km} from the track's start, \code{support_km},
 \code{support_seconds}, \code{is_interpolated} (\code{FALSE} for the track's own
 vertices), and the value in \code{output_col}. With a radius, also
@@ -136,8 +139,10 @@ sample weighted by \code{weighting}.
 
 Each sample is matched to the time step nearest its time, or equal to it
 with \code{time_match = "exact"}, as \link[=extract-SpatProxy]{extract()} matches
-points. A sample gets \code{NA} when it is outside the grid, on a cell or level
-without a value, or has no time step that matches. One warning counts
+points: a date by its UTC day, a date-time as an instant. A sample gets
+\code{NA} when it is outside the grid, on a cell or level without a value,
+has no date on data with dated time steps, or has no time step that
+matches. One warning counts
 these samples, by reason. The track summaries leave them out, and \code{n} is
 the number of samples with a value.
 

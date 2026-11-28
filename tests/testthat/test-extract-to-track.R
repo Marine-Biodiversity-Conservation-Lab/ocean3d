@@ -178,14 +178,54 @@ test_that("tracks keep their IDs and order, whatever form the vertices take", {
   }
   # A dated file needs the dates; one without them doesn't.
   expect_error(extract_to_track(route, path, track_col = "trip"),
-               "needs the column(s) date", class = "ocean3d_error_track_input",
-               fixed = TRUE)
+               "Missing required column(s) in `data`: date",
+               class = "ocean3d_error_missing_columns", fixed = TRUE)
+  # Lines are given as their vertices.
+  line <- sf::st_sf(geometry = sf::st_sfc(
+    sf::st_linestring(cbind(c(0.6, 1.6), 0.5)), crs = 4326
+  ))
+  expect_error(extract_to_track(line, undated), "Convert lines",
+               class = "ocean3d_error_points_input")
+})
+
+test_that("dates come back as dates, and undated samples are counted", {
+  path <- track_file()
+  on.exit(unlink(path))
+  dive <- data.frame(trip = c("a", "a", "b", "b"), lon = c(2.2, 5.2, 2.2, 5.2),
+                     lat = 3.3, depth = 20,
+                     date = as.Date(c("2020-01-01", "2020-01-03", NA, NA)))
+  expect_warning(
+    out <- extract_to_track(dive, path, track_col = "trip"),
+    "2 of 4 samples get NA: 2 without a date.",
+    class = "ocean3d_warning_track_samples", fixed = TRUE
+  )
+  expect_s3_class(out$samples$date, "Date")
+  expect_equal(out$samples$date[1:2], dive$date[1:2])
+  expect_identical(out$summary$n, c(2L, 0L))
+})
+
+test_that("a buffer needs cells with a width", {
+  # One longitude without bounds, as in a transect: the value at each
+  # sample can be read, but a buffer can't be placed.
+  transect <- make_grid_file(lon = 5, lat = seq(0.5, 9.5), depth = c(5, 15),
+                             time = NULL)
+  on.exit(unlink(transect))
+  along <- data.frame(lon = 5, lat = c(2.2, 6.3), depth = 10)
+  # Cells 3 and 7 along the latitudes; 10 m is halfway between the levels,
+  # so the shallower one.
+  expect_equal(extract_to_track(along, transect)$samples$temp, c(3, 7))
+  expect_error(
+    extract_to_track(along, transect, horizontal_radius_km = 20,
+                     depth_radius_m = 5),
+    "single longitude without cell bounds", class = "ocean3d_error_track_input"
+  )
 })
 
 test_that("extract_to_track() rejects input it can't use", {
   path <- track_file()
   flat <- track_file(depth = NULL)
-  on.exit(unlink(c(path, flat)))
+  undated <- track_file(time = NULL)
+  on.exit(unlink(c(path, flat, undated)))
   dive <- data.frame(lon = c(2.2, 5.2), lat = 3.3, depth = c(20, 50),
                      date = as.Date(c("2020-01-01", "2020-01-03")))
   cases <- list(
@@ -202,16 +242,16 @@ test_that("extract_to_track() rejects input it can't use", {
          "`method` must be one of nearest, nearest_level, bottom, surface"),
     list(quote(extract_to_track(dive, flat, method = "surface")),
          "has no depth, so `method` doesn't apply"),
-    list(quote(extract_to_track(dive["lon"], path)),
-         "needs the column(s) lat, depth, date"),
     list(quote(extract_to_track(dive, path, output_col = "")),
          "must be one non-empty name"),
     list(quote(extract_to_track(dive, path, output_col = "distance_km")),
          "already have a column named distance_km"),
-    list(quote(extract_to_track(dive[c("lon", "lat", "depth")],
-                                track_file(time = NULL),
-                                weighting = "duration")),
-         "needs the column(s) date")
+    list(quote(extract_to_track(stats::setNames(dive, c("x_n", "lat", "depth",
+                                                        "date")),
+                                path, output_col = "x", lon_col = "x_n",
+                                horizontal_radius_km = 10,
+                                depth_radius_m = 5)),
+         "already have a column named x_n")
   )
   for (case in cases) {
     expect_error(eval(case[[1]]), case[[2]],
@@ -221,9 +261,19 @@ test_that("extract_to_track() rejects input it can't use", {
   untimed <- dive
   untimed$date <- NA
   expect_error(
-    extract_to_track(untimed, track_file(time = NULL), weighting = "duration"),
+    extract_to_track(untimed, undated, weighting = "duration"),
     "needs a date at every vertex", class = "ocean3d_error_track_input"
   )
+  for (case in list(list(dive["lon"], "lat, depth, date"),
+                    list(dive[c("lon", "lat", "depth")], "date"))) {
+    expect_error(
+      extract_to_track(case[[1]], if (ncol(case[[1]]) == 1) path else undated,
+                       weighting = if (ncol(case[[1]]) == 1) "distance" else
+                         "duration"),
+      paste("Missing required column(s) in `data`:", case[[2]]),
+      class = "ocean3d_error_missing_columns", fixed = TRUE
+    )
+  }
   # The build and sampling steps check their own input.
   expect_error(extract_to_track(dive[1, ], path),
                class = "ocean3d_error_vector3d")

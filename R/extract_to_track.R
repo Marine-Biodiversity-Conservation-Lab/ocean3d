@@ -36,8 +36,10 @@
 #'
 #' Each sample is matched to the time step nearest its time, or equal to it
 #' with `time_match = "exact"`, as [extract()][extract-SpatProxy] matches
-#' points. A sample gets `NA` when it is outside the grid, on a cell or level
-#' without a value, or has no time step that matches. One warning counts
+#' points: a date by its UTC day, a date-time as an instant. A sample gets
+#' `NA` when it is outside the grid, on a cell or level without a value,
+#' has no date on data with dated time steps, or has no time step that
+#' matches. One warning counts
 #' these samples, by reason. The track summaries leave them out, and `n` is
 #' the number of samples with a value.
 #'
@@ -70,7 +72,9 @@
 #'   a depth or time step, points in between as well.
 #' @param horizontal_radius_km Radius of a circle around each sample, in
 #'   kilometres, below 10000 as in [buffer_3d()]. `0` (default) reads the
-#'   value at the sample itself.
+#'   value at the sample itself. A buffer needs cells with a width, so data
+#'   with a single longitude or latitude and no cell bounds (a station or a
+#'   transect) takes no radius.
 #' @param depth_radius_m Distance in metres above and below each sample's
 #'   depth, for the buffers. Needed with a radius for a variable with depth,
 #'   and used only with a radius.
@@ -101,8 +105,9 @@
 #'
 #' @returns A list of two data frames:
 #'   * `samples`: one row per sample, in order along each track, with
-#'     `track_id`, `sample_id`, the position (in `lon_col` and `lat_col`),
-#'     the depth and date when used (in `depth_col` and `date_col`),
+#'     `track_id`, `sample_id`, the position (in `lon_col` and `lat_col`,
+#'     with longitudes from -180 to 180), the depth and date when used (in
+#'     `depth_col` and `date_col`; dates stay dates),
 #'     `distance_km` from the track's start, `support_km`,
 #'     `support_seconds`, `is_interpolated` (`FALSE` for the track's own
 #'     vertices), and the value in `output_col`. With a radius, also
@@ -211,28 +216,42 @@ extract_to_track <- function(
     !is.null(depth_step_m)
   needs_time <- timed || weighting == "duration" || !is.null(time_step)
 
-  # One plain table of the vertices, whatever form `data` takes; sf points
-  # give their coordinates in WGS84.
-  table <- if (inherits(data, "sf")) {
-    xy <- sf::st_coordinates(sf::st_transform(sf::st_geometry(data), 4326))
-    out_table <- sf::st_drop_geometry(data)
-    out_table[[lon_col]] <- xy[, "X"]
-    out_table[[lat_col]] <- xy[, "Y"]
-    out_table
-  } else {
-    as.data.frame(data, stringsAsFactors = FALSE)
-  }
-  wanted <- c(lon_col, lat_col, track_col, if (needs_depth) depth_col,
-              if (needs_time) date_col)
-  missing_cols <- setdiff(wanted, names(table))
-  if (length(missing_cols)) {
-    stop_track(glue::glue(
-      "`data` needs the column(s) {toString(missing_cols)}."
-    ))
-  }
+  # One plain table of the vertices, whatever form `data` takes, as
+  # as_vector3d() reads it; sf points give their coordinates in WGS84.
+  table <- .normalize_points_input(data, lon_col, lat_col)
+  if (inherits(table, "sf")) table <- sf::st_drop_geometry(table)
+  .check_required_cols(table, c(lon_col, lat_col, track_col,
+                                if (needs_depth) depth_col,
+                                if (needs_time) date_col))
   output <- if (is.null(output_col)) var_name else output_col
   if (!rlang::is_string(output) || !nzchar(output)) {
     stop_track("`output_col` must be one non-empty name.")
+  }
+  # The columns of `samples`, known before anything is read.
+  columns <- c("track_id", "sample_id", lon_col, lat_col,
+               if (needs_depth) depth_col, if (needs_time) date_col,
+               "distance_km", "support_km", "support_seconds",
+               "is_interpolated")
+  added <- c(output, if (buffered) paste0(output, "_n"))
+  if (any(added %in% columns)) {
+    stop_track(glue::glue(
+      "The samples already have a column named ",
+      "{toString(intersect(added, columns))}. Choose another `output_col`."
+    ))
+  }
+  # A single longitude or latitude without bounds, as in a station time
+  # series or a transect, has no width, so as_voxel() can't read a buffer
+  # on it; extract() reads a point on the coordinate itself.
+  single <- vapply(proxy@axes[c("lon", "lat")], function(a) {
+    length(a$centres) == 1L && identical(a$edges, "none")
+  }, logical(1))
+  if (buffered && any(single)) {
+    axis <- c(lon = "longitude", lat = "latitude")[names(which(single))[1L]]
+    stop_track(glue::glue(
+      "The data has a single {axis} without cell bounds, so its cell has no ",
+      "width for a buffer. Use `horizontal_radius_km = 0` to read the value ",
+      "at each sample, or add cell bounds to the file."
+    ))
   }
 
   # Build: each track becomes a line, sampled into points.
@@ -257,12 +276,19 @@ extract_to_track <- function(
   }
 
   # Intersect: one value per sample. The time step each sample takes comes
-  # from extract(), which matches all the samples at once.
+  # from extract(), which matches all the samples at once; with a radius,
+  # its values at the samples are a cheap read next to the buffers'.
+  # Samples without a date are counted in the warning below, so extract()'s
+  # own warning about them is muted.
   rule <- if (!is.null(method)) list(method = method)
-  found <- do.call(terra::extract, c(list(proxy, samples), rule, list(
-    time_match = time_match, max_time_diff = max_time_diff
-  )))
-  no_step <- if (timed) is.na(found$time_step) else rep(FALSE, nrow(out))
+  found <- withCallingHandlers(
+    do.call(terra::extract, c(list(proxy, samples), rule, list(
+      time_match = time_match, max_time_diff = max_time_diff
+    ))),
+    ocean3d_warning_point_time = function(w) invokeRestart("muffleWarning")
+  )
+  undated <- if (timed) is.na(out$time) else rep(FALSE, nrow(out))
+  no_step <- if (timed) is.na(found$time_step) & !undated else undated
   value <- found$value
   if (buffered) {
     # For a variable without depth the depth window doesn't matter, but
@@ -272,7 +298,7 @@ extract_to_track <- function(
                          depth_window = if (has_depth) depth_radius_m else 1)
     value <- rep(NA_real_, nrow(out))
     n <- rep(0L, nrow(out))
-    for (i in which(!no_step)) {
+    for (i in which(!no_step & !undated)) {
       circle <- circles[i]
       # Cropped first: an error raised while S4 evaluates an argument for
       # dispatch loses its class. A buffer off the grid gets NA.
@@ -295,8 +321,9 @@ extract_to_track <- function(
   }
 
   # One warning for every sample that got NA.
-  missing_value <- is.na(value) & !no_step
+  missing_value <- is.na(value) & !no_step & !undated
   reasons <- c(
+    if (any(undated)) glue::glue("{sum(undated)} without a date"),
     if (any(no_step)) glue::glue(
       "{sum(no_step)} with no time step that matches"
     ),
@@ -307,34 +334,19 @@ extract_to_track <- function(
   if (length(reasons)) {
     rlang::warn(glue::glue(
       "{sum(is.na(value))} of {nrow(out)} samples get NA: ",
-      "{glue::glue_collapse(reasons, sep = ' and ')}."
+      "{glue::glue_collapse(reasons, sep = ', ', last = ' and ')}."
     ), class = "ocean3d_warning_track_samples")
   }
 
   # Summarise: the statistics of each track's samples, weighted by the
-  # distance or time each stands for, as summarise_3d() weights values.
+  # distance or time each stands for, with summarise_3d()'s statistics.
   weights <- switch(weighting, distance = out$support_km,
                     duration = out$support_seconds, equal = rep(1, nrow(out)))
   ids <- unique(out$track_id)
   summary <- do.call(rbind, lapply(ids, function(id) {
-    keep <- out$track_id == id & !is.na(value)
-    v <- value[keep]
-    w <- weights[keep]
-    if (sum(w) <= 0) w <- rep(1, length(v))
-    w <- w / sum(w)
-    average <- sum(w * v)
-    correction <- 1 - sum(w^2)
-    stats <- list(
-      mean = if (length(v)) average else NA_real_,
-      sd = if (length(v) > 1L && correction > 0) {
-        sqrt(sum(w * (v - average)^2) / correction)
-      } else {
-        NA_real_
-      },
-      min = if (length(v)) min(v) else NA_real_,
-      max = if (length(v)) max(v) else NA_real_
-    )
-    data.frame(track_id = id, stats[statistic], n = length(v),
+    keep <- out$track_id == id
+    data.frame(track_id = id,
+               .weighted_statistics(value[keep], weights[keep], statistic),
                stringsAsFactors = FALSE)
   }))
   rownames(summary) <- NULL
@@ -349,12 +361,9 @@ extract_to_track <- function(
                time = date_col)
   at <- match(names(renamed), names(out))
   names(out)[at[!is.na(at)]] <- renamed[!is.na(at)]
-  added <- c(output, if (buffered) paste0(output, "_n"))
-  if (any(added %in% names(out))) {
-    stop_track(glue::glue(
-      "The samples already have a column named ",
-      "{toString(intersect(added, names(out)))}. Choose another `output_col`."
-    ))
+  # Dates stay dates: each sample's is the UTC day it falls on.
+  if (needs_time && inherits(table[[date_col]], "Date")) {
+    out[[date_col]] <- as.Date(out[[date_col]])
   }
   out[[output]] <- value
   if (buffered) out[[paste0(output, "_n")]] <- n
