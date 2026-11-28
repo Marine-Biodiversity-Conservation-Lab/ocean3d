@@ -195,7 +195,7 @@ summarise_3d <- function(x, statistic = "mean",
 
 # Internal: the statistics of the non-NA `values` with their `weights`, as a
 # named list ending in `n`, the number of values. Called per voxel and per
-# depth level by summarise_3d().
+# depth level by summarise_3d(), and per track by extract_to_track().
 .weighted_statistics <- function(values, weights, statistic) {
   keep <- !is.na(values)
   values <- as.numeric(values[keep])
@@ -218,8 +218,7 @@ summarise_3d <- function(x, statistic = "mean",
 # the value at which the cumulative weight reaches half, averaged with the
 # next when it lands exactly on half, as stats::median() does. Weights that
 # sum to 0, such as volumes of a zero-thickness slab, count each value once.
-# Shared by buffer extraction (.buffer_summarise_samples()) and
-# summarise_3d().
+# Used by .weighted_statistics().
 .weighted_statistic <- function(values, weights, statistic) {
   if (statistic == "min") return(min(values))
   if (statistic == "max") return(max(values))

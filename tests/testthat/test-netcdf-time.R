@@ -157,12 +157,6 @@ month_edges <- matrix(as.numeric(utc(
   c("2020-01-01", "2020-02-01", "2020-02-01", "2020-03-01")
 )), nrow = 2L)
 
-read_metadata <- function(f) {
-  nc <- ncdf4::nc_open(f)
-  on.exit(ncdf4::nc_close(nc))
-  .read_temporal_metadata(nc, "time", "temp", .decode_netcdf_time(nc, "time"))
-}
-
 test_that("back-to-back time bounds decode without a warning (#113)", {
   # Bounds may list the later edge first.
   cases <- list(
@@ -181,15 +175,6 @@ test_that("back-to-back time bounds decode without a warning (#113)", {
                    label = case$label)
     expect_equal(edges, case$edges, label = case$label)
   }
-
-  # The bounds reach the time metadata as the month edges, even when warnings
-  # are errors.
-  f <- make_grid_file(depth = NULL, time = c(15, 45),
-                      time_bounds = monthly_bounds)
-  on.exit(unlink(f), add = TRUE)
-  old <- options(warn = 2)
-  on.exit(options(old), add = TRUE)
-  expect_no_error(read_metadata(f))
 })
 
 test_that("time bounds that miss their time step are rejected (#113)", {
@@ -203,9 +188,6 @@ test_that("time bounds that miss their time step are rejected (#113)", {
   expect_match(conditionMessage(err), "Invalid bounds for `time`", fixed = TRUE)
   expect_match(conditionMessage(err),
                "must contain its time step", fixed = TRUE)
-
-  # Point extraction doesn't read time bounds, so they don't stop it.
-  expect_no_error(read_metadata(f))
 })
 
 test_that("the time axis builder returns a CFtime object with its bounds", {
@@ -527,49 +509,4 @@ test_that("coarse selection rejects multiple records in one period", {
       "Multiple dataset timestamps", class = "ocean3d_error_repeated_time"
     )
   }
-})
-
-test_that("temporal eligibility needs a target and a non-missing time axis", {
-  axis <- as.POSIXct(c(NA_character_, "2020-01-01"), tz = "UTC")
-  target <- as.POSIXct("2020-01-10", tz = "UTC")
-  cases <- list(
-    list(label = "partly missing axis", axis = axis, target = target,
-         eligible = TRUE),
-    # Static sources have no time axis to restrict them.
-    list(label = "static source", axis = NULL, target = target,
-         eligible = TRUE),
-    list(label = "missing target", axis = axis, target = target[NA],
-         eligible = FALSE),
-    list(label = "all-missing axis", axis = axis[1], target = target,
-         eligible = FALSE),
-    list(label = "empty axis", axis = axis[0], target = target,
-         eligible = FALSE)
-  )
-  for (case in cases) {
-    expect_identical(
-      .temporal_source_eligible(case$axis, case$target, "daily"),
-      case$eligible, label = case$label
-    )
-  }
-})
-
-# Time metadata for point extraction (.read_temporal_metadata()) ---------------
-
-test_that("metadata keeps bounds separate from sampling cadence", {
-  f <- make_grid_file(depth = NULL, time = 0)
-  on.exit(unlink(f), add = TRUE)
-  set_atts(f, "temp", cell_methods = "time: mean")
-
-  info <- read_metadata(f)
-  expect_identical(info$cell_methods, "time: mean")
-  expect_identical(info$cadence$type, "unknown")
-  expect_identical(info$calendar, "standard")
-  expect_match(info$units, "days since")
-})
-
-test_that("explicit bounds describe intervals without inventing cadence", {
-  f <- make_grid_file(depth = NULL, time = 0,
-                      time_bounds = matrix(c(-0.5, 0.5), nrow = 2L))
-  on.exit(unlink(f), add = TRUE)
-  expect_identical(read_metadata(f)$cadence$type, "unknown")
 })

@@ -2,6 +2,71 @@
 
 ## Breaking changes
 
+`extract_to_track()` is now a shortcut for `as_vector3d()`, `sample_3d()`
+and `terra::extract()` (#116). With the new `horizontal_radius_km` and
+`depth_radius_m`, it gives the mean in a buffer around each sample, with
+`buffer_3d()`, `crop()`, `as_voxel()` (or `rast()`), `mask()` and
+`summarise_3d()`. It samples the tracks as `sample_3d()` does and returns
+two data frames: `samples`, one row per sample with its value, and
+`summary`, one row per track with each statistic and `n`, the number of
+samples with a value. What changes:
+
+* **Smaller output.** `settings` is gone. `samples` keeps `track_id`,
+  `sample_id`, the position, depth and date, `distance_km`, `support_km`,
+  `support_seconds`, `is_interpolated` and the value; the vertex table's
+  other columns, `source_row`, the segment columns and the `_match_info`
+  records are gone. `summary` keeps `track_id`, the statistics and `n`; the
+  coverage, status and count columns are gone. To see which time step and
+  depth level each sample was matched to, call `extract()` on
+  `as_proxy(nc)` with the samples from `sample_3d()`. Longitudes in
+  `samples` run from -180 to 180, also at the vertices.
+* **Samples without a value are left out of the summaries.** Before, they
+  stayed in the summary's denominator, and a track with a smaller share of
+  samples with a value than `min_valid_fraction` got `NA`. Now the summaries
+  use the samples with a value, and `n` counts them. One warning counts the samples that get
+  `NA`, by reason.
+* **Weights.** A track whose samples all have zero weight, such as a
+  stationary track with distance weights, now gets equal weights instead of
+  `NA`. Duration weights without a date at every vertex are now an error.
+* **Depth and time are always interpolated** between vertices, as
+  `sample_3d()` does.
+* **Arguments removed or renamed.** What to do instead:
+  * `statistics`: renamed `statistic`, as in `summarise_3d()`, one or more
+    of `"mean"`, `"sd"`, `"min"` and `"max"`. `"se"` has no replacement:
+    neighbouring samples are usually correlated, so a standard error that
+    treats them as independent is too small; use `"sd"` and `n`.
+    `statistics = NULL` is gone; the summary is always returned.
+  * `min_valid_fraction`: filter on `n`, or compare it with the number of
+    samples of each track.
+  * `interpolate_depth` and `interpolate_time`: no longer needed.
+  * `time_step_seconds`: use `time_step` with `time_unit = "seconds"`.
+  * `sampling = "cells"`: no replacement yet; one sample per grid cell is
+    planned for `sample_3d()` (#105). Use a `spacing_km` smaller than the
+    cells.
+  * `land_mask`, `marine_values`, `mask_type`, `mask_domain`, `land_policy`
+    and `mask_step_km`: no replacement yet; checking whether segments cross
+    land is planned for `sample_3d()` (#105). Check the samples against a
+    land polygon before summarising them.
+  * `max_segment_km` and `max_gap_hours`: check the vertex table before the
+    call, and split long gaps into separate tracks with `track_col`.
+  * `method = "all"`: call once per method. `method` takes `"nearest"`,
+    `"bottom"` and `"surface"` as before, and the new `"nearest_level"`
+    (the nearest level, even if it has no value).
+  * `time_resolution` and `custom_time_interval`: each sample is matched to
+    the nearest time step, or with `time_match = "exact"` to the step equal
+    to its time, as in `extract_to_point()`: a date by its UTC day, a
+    date-time as an instant.
+  * `quiet`, `time_report`, `spatial_report`, `depth_report` and `verbose`:
+    no longer needed, because the function prints no reports.
+  * `spatial_match` and `max_distance_km`: a sample off the grid gets `NA`.
+  * `...`: `time_match`, `max_time_diff` and the dimension arguments
+    (`lon_dim`, `lat_dim`, `depth_dim`, `time_dim`) are now named arguments.
+* **One variable on one grid.** `var` is one name, `output_col` one column
+  name, and `nc` one file, a series of files on one grid, an open
+  connection or a `SpatProxy`. For several variables, call it once per
+  variable; a table of files (`file_col`) and files on different grids are
+  no longer read together.
+
 `extract_to_buffer()` is now a shortcut for `as_vector3d()`, `buffer_3d()`,
 `crop()`, `as_voxel()` (or `rast()` for a variable without depth), `mask()`
 and `summarise_3d()` (#116). It returns `data` with the statistic, named
