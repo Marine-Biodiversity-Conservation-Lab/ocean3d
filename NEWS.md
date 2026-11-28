@@ -2,20 +2,27 @@
 
 ## Breaking changes
 
-`as_proxy()` reads CF's extended form of the `grid_mapping` attribute, such
-as `"crs: lat lon"` or `"crs_osgb: x y crs_wgs84: lat lon"`, and stops when
-the grid mapping can't be used (#137). Before, it read only a `grid_mapping`
-that named one variable, and recorded EPSG:4326 for anything else. Now:
+`as_proxy()` now reads the extended form of the `grid_mapping` attribute
+from the CF (Climate and Forecast) conventions, such as `"crs: lat lon"` or
+`"crs_osgb: x y crs_wgs84: lat lon"` (#137). Before, it read `grid_mapping`
+only when it named one variable, and recorded EPSG:4326 otherwise. Now:
 
-* With the extended form, the CRS comes from the mapping listed with the
-  grid's longitude and latitude dimensions (or the only mapping listed), so
-  an ETRS89 file is recorded as ETRS89, and a projected mapping stops.
-* A `grid_mapping` that names a variable the file doesn't have stops.
-* A list of mappings with none for longitude and latitude stops.
+* With the extended form, `as_proxy()` takes the CRS from the mapping listed
+  with the grid's longitude and latitude (or from the only mapping listed),
+  so an ETRS89 file is recorded as ETRS89.
+* `as_proxy()` stops with an error when an extended-form mapping is
+  projected (a projected mapping given by one name already stopped), when
+  `grid_mapping` names a variable the file doesn't have, or when it lists
+  several mappings and none is for longitude and latitude.
 
-Files that passed before may now stop with an error. Fix the file's
-`grid_mapping` attribute (for example with NCO's `ncatted`), or delete it if
-the grid is plain WGS84 longitude and latitude.
+`extract_to_point()` and `extract_to_buffer()` call `as_proxy()` on each
+netCDF file, so they stop on the same files. A common way to get such a file
+is to save one variable with xarray (`ds[["temp"]].to_netcdf()`), which keeps
+`grid_mapping = "crs"` but drops the `crs` variable.
+
+`as_proxy()` may now stop with an error on files it read before. To read them,
+fix the file's `grid_mapping` attribute (for example with NCO's `ncatted`),
+or delete it if the grid is plain WGS84 longitude and latitude.
 
 `extract_to_buffer()` is now a shortcut for `as_vector3d()`, `buffer_3d()`,
 `crop()`, `as_voxel()` (or `rast()` for a variable without depth), `mask()`
