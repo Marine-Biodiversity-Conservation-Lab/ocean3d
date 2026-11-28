@@ -362,15 +362,17 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 .proxy_crs <- function(nc, var, lon, lat) {
   mappings <- .grid_mappings(.read_attribute(nc, var, "grid_mapping"))
   if (!length(mappings)) return("EPSG:4326")
-  # The names a reference can stand for, as ncdf4 lists them: an absolute
-  # path without its leading `/`, or a relative one in the variable's group
-  # and then as it is.
+  # References as ncdf4 names them: an absolute path without its leading
+  # `/`; a relative one in the variable's group if the group has it (the
+  # nearest scope wins, as in CF), otherwise as it is.
+  known <- c(names(nc$var), names(nc$dim))
   resolve <- function(refs) {
-    absolute <- startsWith(refs, "/")
-    in_group <- if (grepl("/", var, fixed = TRUE)) {
-      file.path(dirname(var), refs[!absolute])
-    }
-    c(sub("^/", "", refs[absolute]), in_group, refs[!absolute])
+    vapply(refs, function(ref) {
+      if (startsWith(ref, "/")) return(sub("^/", "", ref))
+      in_group <- file.path(dirname(var), ref)
+      if (grepl("/", var, fixed = TRUE) && in_group %in% known) in_group else
+        ref
+    }, character(1), USE.NAMES = FALSE)
   }
   if (length(mappings) > 1L) {
     applies <- vapply(mappings, function(coords) {
@@ -386,15 +388,13 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     }
     mappings <- mappings[applies]
   }
-  mapping <- names(mappings)[1L]
-  found <- intersect(resolve(mapping), names(nc$var))
-  if (!length(found)) {
+  mapping <- resolve(names(mappings)[1L])
+  if (!mapping %in% names(nc$var)) {
     rlang::abort(glue::glue(
       "Variable `{var}` uses the grid mapping `{mapping}`, but the file has ",
       "no variable of that name, so its CRS isn't known."
     ), class = "ocean3d_error_grid_mapping", call = NULL)
   }
-  mapping <- found[1L]
   read <- function(name) {
     att <- ncdf4::ncatt_get(nc, mapping, name)
     if (isTRUE(att$hasatt)) att$value
