@@ -80,9 +80,10 @@ haul <- data.frame(
 haul
 ```
 
-Rows are in the order they were travelled. The function never sorts a route
-by date. With several tracks, `track_col` names the column that says which
-positions belong together. Each track needs at least two vertices, and a
+Rows are in the order they were travelled; `extract_to_track()` doesn't
+sort a route by date. With several tracks, set `track_col` to the column
+that groups the positions into tracks. Each track needs at least two
+vertices, and a
 vertex without coordinates is an error, so an unknown gap can't silently
 become a connecting segment.
 
@@ -156,9 +157,9 @@ table(route$samples$is_interpolated)
 
 **This interpolates the path, not the temperature.** Each inserted location
 takes the value of its cell, depth level and time step, as a point does.
-Several nearby samples can therefore select the same value.
+Several nearby samples can therefore get the same value.
 
-A one-kilometre spacing can select the same grid cell several times. That is
+A one-kilometre spacing can read the same grid cell several times. That is
 expected: these are positions along the route, not a list of unique cells.
 Conversely, a route can cross a narrow corner of a cell between samples
 without ever querying it. A smaller spacing makes this less likely, but
@@ -169,9 +170,10 @@ per grid cell is planned for `sample_3d()` (#105).
 plot_track_map(route$samples, observed$samples)
 ```
 
-Positions follow shortest WGS84 geodesics. Distances are horizontal; they
-don't include vertical travel. Routes near the antimeridian follow the short
-connection.
+Positions between vertices follow the shortest path over the Earth's
+surface (the WGS84 geodesic). Distances are horizontal; they don't include
+vertical travel. A route across 180 degrees longitude takes the shorter way
+round.
 
 ## Step 3: Understanding the summary weights
 
@@ -301,12 +303,15 @@ data.frame(
   )
 )
 sum(duration$samples$support_seconds) / 60
+weight_spread <- diff(range(c(route$summary$mean, equal$summary$mean,
+                              duration$summary$mean)))
 ```
 
 The total duration is 120 minutes. Every sample is nearest the daily time
-step of 20 September, so the comparison changes the weights rather than the
-time step. Differences can be small if the field changes little along this route;
-the invented example above makes their meaning easier to see.
+step of 20 September, so only the weights differ between the three runs.
+Here the three means agree to within `r signif(weight_spread, 1)` degrees
+C, because temperature changes little along this route; the
+invented example above shows the difference more clearly.
 
 `"sd"`, `"min"` and `"max"` summarise the same samples. The standard
 deviation uses the same weights, with the formula of `summarise_3d()`.
@@ -332,7 +337,13 @@ data.frame(
   samples = vapply(runs, function(r) nrow(r$samples), integer(1)),
   mean = vapply(runs, function(r) r$summary$mean, numeric(1))
 )
+spacing_spread <- diff(range(vapply(runs, function(r) r$summary$mean,
+                                    numeric(1))))
 ```
+
+Here the means at 2, 1 and 0.5 km agree to within
+`r signif(spacing_spread, 1)` degrees C, so a 1 km spacing is fine enough
+for this haul.
 
 ## Step 5: Following a dive in depth and time
 
@@ -389,7 +400,8 @@ time, here the daily step of 20 or 21 September.
 Sometimes we want to query both sets of step positions. `merged_steps` keeps
 the distance and depth subdivision and adds the time subdivision, removing
 positions that coincide. For this dive, the first set has 15 intervals
-(10 m each) and the second 24 (one hour each). Their union has 37 positions.
+(10 m each) and the second 24 (one hour each). Together they give 37
+positions.
 
 ```{r merged-dive}
 merged_dive <- extract_to_track(
@@ -467,16 +479,18 @@ data.frame(
 ```
 
 The track mean then averages the buffer means, weighted by distance as
-before. Neighbouring buffers can share grid cells, so their means aren't
+before. Here it differs from the mean of the values at the samples by about
+`r signif(abs(buffered$summary$mean - dive_result$summary$mean), 1)` degrees
+C. Neighbouring buffers can share grid cells, so their means aren't
 independent.
 
 ## Step 7: Recognising gaps and missing values
 
-A sample takes the cell that contains it. A route that leaves the grid
-therefore has values along one part and `NA` along another. One warning
-counts the samples that get `NA`, and the summary uses the samples with a
-value: compare `n` with the number of samples to see how much of the track
-has values.
+A sample takes the value of the cell that contains it, so a route that
+leaves the grid has values along one part and `NA` along the rest. One
+warning counts the samples that get `NA`. The summary uses only the samples
+with a value: compare `n` with the number of samples to see how much of the
+track has values.
 
 ```{r partial-route}
 outside <- haul[c(1, 3), ]
@@ -489,11 +503,12 @@ partial$summary
 nrow(partial$samples)
 ```
 
-To drop a summary built on too little of the track, filter on `n`.
+Here `r partial$summary$n` of the `r nrow(partial$samples)` samples have a
+value. To drop a summary built on too little of the track, filter on `n`.
 
-`max_samples` caps the number of positions across all tracks, so a spacing
-that is too small for a long track stops instead of building a very large
-result:
+`max_samples` caps the number of positions across all tracks. If a spacing
+would need more, the call stops with an error instead of building a very
+large result:
 
 ```{r sample-budget-example, error=TRUE}
 # A one-metre spacing would need far more than 100 positions.

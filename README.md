@@ -113,8 +113,10 @@ below are grouped by step (see the [package design in SPEC.md](SPEC.md#package-d
 
 ### Which input each function takes
 
-`ocean3d` currently has two data models for gridded data, and each function
-takes one of them:
+`ocean3d` currently has two data models for gridded data: netCDF data
+described by a `SpatProxy` from `as_proxy()`, read with ncdf4, and
+`SpatVoxel` / `SpatEnvelope` objects in memory. `as_voxel()` reads one time
+step of a proxy as a voxel. Each function takes one or both:
 
 | Input | Functions | Reads with |
 |---|---|---|
