@@ -117,7 +117,7 @@ woa_cache_clear <- function(confirm = TRUE) {
     "0.25" = list(dir = "0.25", code = "04"),
     "1"    = list(dir = "1.00", code = "01"),
     "1.00" = list(dir = "1.00", code = "01"),
-    "5"    = list(dir = "5deg", code = "5d")
+    "5"    = list(dir = "5.00", code = "5d")
   )
   if (!res %in% names(specs)) {
     stop("Unknown resolution '", resolution, "'. Supported: 0.25, 1, 5.")
@@ -200,13 +200,15 @@ woa_cache_clear <- function(confirm = TRUE) {
   invisible(dest)
 }
 
-# Internal: HEAD request for remote file size in MB. Returns NA if the server
-# doesn't report Content-Length (unusual for static NCEI files).
+# Internal: HEAD request for remote file size in MB. Returns NA if the request
+# fails (such as a 404, whose Content-Length is that of the error page) or the
+# server doesn't report Content-Length (unusual for static NCEI files).
 .woa_remote_size_mb <- function(url) {
   tryCatch({
     h <- curl::new_handle()
     curl::handle_setopt(h, nobody = TRUE)
     resp <- curl::curl_fetch_memory(url, handle = h)
+    if (resp$status_code != 200L) return(NA_real_)
     hdrs <- curl::parse_headers_list(resp$headers)
     len <- as.numeric(hdrs[["content-length"]])
     if (is.na(len) || len <= 0) NA_real_ else len / 1024^2

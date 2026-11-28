@@ -540,6 +540,11 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## Bug fixes
 
+* `woa_download(resolution = 5)` looked for the files in a `5deg` directory
+  that NCEI doesn't have, so every 5-degree download failed with a 404. It
+  now uses NCEI's `5.00` directory. The size `woa_download()` reports before
+  a download is now "unknown size" when the server's response is an error;
+  before, a missing file was reported as `0.0 MB` (#46).
 * With a `time_step` in months or years, `extract_to_track()` placed each
   sample one step after the previous one, so a segment starting on
   31 January got 29 February, then 29 March, and kept the 29th. Samples now

@@ -272,3 +272,28 @@ test_that("a WOA-style file reads through as_proxy(), crop(), as_voxel()", {
   expect_true(terra::same.crs(v, "EPSG:4326"))
   expect_false(terra::timeInfo(v)$time)
 })
+
+test_that("as_proxy() picks the `ma` field out of a WOA-style file", {
+  # A monthly WOA file holds each field as its own variable; `t_ma` is the
+  # month minus the annual climatology.
+  f <- make_grid_file(lon = grid_lon, lat = grid_lat, depth = c(0, 5, 10),
+                      depth_bounds = rbind(c(0, 2.5, 7.5), c(2.5, 7.5, 12.5)),
+                      time = 0.5,
+                      time_units = "months since 0000-01-01 00:00:00",
+                      var = "t_an")
+  on.exit(unlink(f), add = TRUE)
+  nc <- ncdf4::nc_open(f, write = TRUE)
+  ma <- ncdf4::ncvar_def("t_ma", "degrees_celsius",
+                         nc$var$t_an$dim, missval = -9999)
+  nc <- ncdf4::ncvar_add(nc, ma)
+  ncdf4::ncvar_put(nc, "t_ma", -ncdf4::ncvar_get(nc, "t_an"))
+  ncdf4::nc_close(nc)
+
+  area <- terra::ext(2, 5, 11, 13)
+  an <- as_voxel(terra::crop(as_proxy(f, var = "t_an"), area))
+  v <- as_voxel(terra::crop(as_proxy(f, var = "t_ma"), area))
+  expect_identical(unique(terra::varnames(v)), "t_ma")
+  expect_identical(terra::nlyr(v), 3)
+  expect_equal(terra::values(v), -terra::values(an), ignore_attr = TRUE)
+  expect_equal(depth_bounds(v), depth_bounds(an))
+})
