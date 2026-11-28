@@ -144,7 +144,12 @@ setValidity("SpatProxy", function(object) {
 #'   climatology without a date; climatologies with more steps aren't
 #'   supported yet.
 #' * **CRS:** EPSG:4326, unless the variable's `grid_mapping` gives another
-#'   geographic CRS as WKT (`crs_wkt` or `spatial_ref`).
+#'   geographic CRS as WKT (`crs_wkt` or `spatial_ref`). CF's extended form,
+#'   such as `"crs_osgb: x y crs_wgs84: lat lon"`, is read too, using the
+#'   mapping listed with the longitude and latitude dimensions. `as_proxy()`
+#'   stops with an error if the mapping isn't geographic, if the mapping
+#'   variable is missing from the file, or if no listed mapping is for
+#'   longitude and latitude.
 #'
 #' Regular longitude-latitude grids with coordinate values are supported;
 #' curvilinear, projected and rotated-pole grids are rejected. Bad cell bounds
@@ -273,7 +278,7 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
       },
       time = if (!is.null(dims$time)) .proxy_time_axis(nc, dims$time, path)
     )),
-    crs = .proxy_crs(nc, var)
+    crs = .proxy_crs(nc, var, dims$lon, dims$lat)
   )
 }
 
@@ -330,10 +335,59 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   list(dim = dim, cftime = cftime, edges = "bounds")
 }
 
+# A CF `grid_mapping` attribute as a list of mapping names, each with the
+# coordinates it applies to. The short form, `"crs"`, is one name with no
+# coordinates. The extended form lists names ending in `:`, each followed by
+# its coordinates: `"crs_osgb: x y crs_wgs84: lat lon"`. Used by
+# .detect_netcdf_var() and .proxy_crs().
+.grid_mappings <- function(value) {
+  if (!is.character(value)) return(list())
+  # Join a colon to its name and put a space after it, so `"crs : lat lon"`
+  # and `"crs:lat lon"` read as `"crs: lat lon"`.
+  value <- gsub(":", ": ", gsub("[[:space:]]+:", ":", value[[1L]]))
+  tokens <- strsplit(trimws(value), "[[:space:]]+")
+  tokens <- tokens[[1L]][nzchar(tokens[[1L]])]
+  is_name <- endsWith(tokens, ":")
+  if (!any(is_name)) {
+    return(stats::setNames(rep(list(character()), length(tokens)), tokens))
+  }
+  # Each name starts a group; anything before the first name is dropped.
+  group <- cumsum(is_name)
+  coords <- !is_name & group > 0L
+  out <- lapply(seq_len(sum(is_name)), function(i) tokens[coords & group == i])
+  stats::setNames(out, sub(":$", "", tokens[is_name]))
+}
+
 # EPSG:4326, or the geographic CRS the variable's grid mapping gives as WKT.
-.proxy_crs <- function(nc, var) {
-  mapping <- .read_attribute(nc, var, "grid_mapping")
-  if (is.null(mapping) || !mapping %in% names(nc$var)) return("EPSG:4326")
+# `lon` and `lat` are the grid's dimensions; with several mappings in CF's
+# extended form, the first whose coordinates include both is used. Names in
+# the attribute are relative to the variable's group (#93).
+.proxy_crs <- function(nc, var, lon, lat) {
+  mappings <- .grid_mappings(.read_attribute(nc, var, "grid_mapping"))
+  if (!length(mappings)) return("EPSG:4326")
+  if (length(mappings) > 1L) {
+    applies <- vapply(mappings, function(coords) {
+      all(c(lon, lat) %in% .resolve_group_name(nc, var, coords))
+    }, logical(1))
+    if (!any(applies)) {
+      listed <- toString(paste0("`", names(mappings), "`"))
+      rlang::abort(glue::glue(
+        "Variable `{var}` lists the grid mappings {listed}, but none of ",
+        "them applies to its longitude and latitude dimensions `{lon}` and ",
+        "`{lat}`. Fix or delete the variable's `grid_mapping` attribute, for ",
+        "example with NCO's `ncatted`."
+      ), class = "ocean3d_error_grid_mapping", call = NULL)
+    }
+    mappings <- mappings[applies]
+  }
+  mapping <- .resolve_group_name(nc, var, names(mappings)[1L])
+  if (!mapping %in% names(nc$var)) {
+    rlang::abort(glue::glue(
+      "Variable `{var}` uses the grid mapping `{mapping}`, but the file has ",
+      "no variable of that name, so its CRS isn't known. Fix or delete the ",
+      "variable's `grid_mapping` attribute, for example with NCO's `ncatted`."
+    ), class = "ocean3d_error_grid_mapping", call = NULL)
+  }
   read <- function(name) {
     att <- ncdf4::ncatt_get(nc, mapping, name)
     if (isTRUE(att$hasatt)) att$value

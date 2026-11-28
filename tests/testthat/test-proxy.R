@@ -16,16 +16,17 @@ proxy_error <- function(...) {
   )
 }
 
-# Adds a `crs` grid-mapping variable to `temp`, with the mapping name and WKT
-# given.
-add_mapping <- function(f, name = NULL, wkt = NULL, grid_mapping = "crs") {
+# Adds a grid-mapping variable (`crs` by default) with the mapping name and
+# WKT given, and sets `temp`'s `grid_mapping` attribute.
+add_mapping <- function(f, name = NULL, wkt = NULL, grid_mapping = "crs",
+                        mapping = "crs") {
   nc <- ncdf4::nc_open(f, write = TRUE)
-  nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def("crs", "", list(),
+  nc <- ncdf4::ncvar_add(nc, ncdf4::ncvar_def(mapping, "", list(),
                                               prec = "integer"))
   ncdf4::nc_close(nc)
   atts <- Filter(Negate(is.null), list(grid_mapping_name = name,
                                        crs_wkt = wkt))
-  do.call(set_atts, c(list(f, "crs"), atts))
+  do.call(set_atts, c(list(f, mapping), atts))
   set_atts(f, "temp", grid_mapping = grid_mapping)
 }
 
@@ -261,6 +262,95 @@ test_that("the CRS comes from a geographic grid mapping", {
   expect_equal(
     extract_to_point(nc = h, lon = 1.5, lat = 10.5, method = "2d"), 2
   )
+})
+
+test_that("CF's extended grid_mapping form is read", {
+  etrs89 <- terra::crs("EPSG:4258")
+  osgb <- terra::crs("EPSG:27700")
+  mapped <- function(grid_mapping, mappings) {
+    f <- make_grid_file()
+    for (m in names(mappings)) {
+      add_mapping(f, wkt = mappings[[m]], grid_mapping = grid_mapping,
+                  mapping = m)
+    }
+    f
+  }
+
+  f <- mapped("crs: lat lon", list(crs = etrs89))
+  on.exit(unlink(f), add = TRUE)
+  expect_identical(as_proxy(f)@crs, etrs89)
+  # A space before the colon is read the same way.
+  set_atts(f, "temp", grid_mapping = "crs : lat lon")
+  expect_identical(as_proxy(f)@crs, etrs89)
+
+  # With two mappings, the one listing the grid's lon and lat is used.
+  g <- mapped("crs_osgb: x y crs_etrs89: lat lon",
+              list(crs_osgb = osgb, crs_etrs89 = etrs89))
+  on.exit(unlink(g), add = TRUE)
+  expect_identical(as_proxy(g)@crs, etrs89)
+
+  cases <- list(
+    list(label = "projected mapping", grid_mapping = "crs: lon lat",
+         mappings = list(crs = osgb), message = "isn't a geographic"),
+    list(label = "no mapping for lon and lat",
+         grid_mapping = "crs_osgb: x y crs_etrs89: x y",
+         mappings = list(crs_osgb = osgb, crs_etrs89 = etrs89),
+         message = "none of them applies to .*`lon` and `lat`"),
+    list(label = "missing mapping variable", grid_mapping = "crs",
+         mappings = list(), message = "no variable of that name"),
+    list(label = "missing mapping variable, extended form",
+         grid_mapping = "crs: lat lon", mappings = list(),
+         message = "no variable of that name")
+  )
+  for (case in cases) {
+    h <- mapped(case$grid_mapping, case$mappings)
+    on.exit(unlink(h), add = TRUE)
+    if (!length(case$mappings)) set_atts(h, "temp",
+                                         grid_mapping = case$grid_mapping)
+    expect_error(as_proxy(h, var = "temp"), case$message,
+                 class = "ocean3d_error_grid_mapping", label = case$label)
+  }
+})
+
+test_that("a grid mapping is found in the variable's group", {
+  etrs89 <- terra::crs("EPSG:4258")
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  lon <- ncdf4::ncdim_def("grp/lon", "degrees_east", c(0.5, 1.5))
+  lat <- ncdf4::ncdim_def("grp/lat", "degrees_north", c(10.5, 11.5))
+  nc <- ncdf4::nc_create(f, list(
+    ncdf4::ncvar_def("grp/temp", "degC", list(lon, lat), -9999),
+    ncdf4::ncvar_def("grp/crs", "", list(), prec = "integer")
+  ), force_v4 = TRUE)
+  ncdf4::ncvar_put(nc, "grp/temp", matrix(1:4, 2))
+  ncdf4::ncatt_put(nc, "grp/crs", "crs_wkt", etrs89)
+  ncdf4::nc_close(nc)
+
+  # The last lists a mapping in another group with the same coordinate
+  # names first.
+  for (grid_mapping in c("crs", "crs: lat lon", "other: x y crs: lon lat",
+                         "/crs: /lon /lat /grp/crs: /grp/lon /grp/lat")) {
+    set_atts(f, "grp/temp", grid_mapping = grid_mapping)
+    # `grp/crs` isn't data, so `grp/temp` is detected.
+    expect_identical(as_proxy(f)@crs, etrs89, label = grid_mapping)
+  }
+})
+
+test_that("a grid mapping is found in an ancestor group", {
+  etrs89 <- terra::crs("EPSG:4258")
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  lon <- ncdf4::ncdim_def("a/b/lon", "degrees_east", c(0.5, 1.5))
+  lat <- ncdf4::ncdim_def("a/b/lat", "degrees_north", c(10.5, 11.5))
+  nc <- ncdf4::nc_create(f, list(
+    ncdf4::ncvar_def("a/b/temp", "degC", list(lon, lat), -9999),
+    ncdf4::ncvar_def("a/crs", "", list(), prec = "integer")
+  ), force_v4 = TRUE)
+  ncdf4::ncvar_put(nc, "a/b/temp", matrix(1:4, 2))
+  ncdf4::ncatt_put(nc, "a/crs", "crs_wkt", etrs89)
+  ncdf4::ncatt_put(nc, "a/b/temp", "grid_mapping", "crs")
+  ncdf4::nc_close(nc)
+  expect_identical(as_proxy(f)@crs, etrs89)
 })
 
 test_that("an open connection is read and left open", {

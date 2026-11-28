@@ -2,6 +2,29 @@
 
 ## Breaking changes
 
+`as_proxy()` now reads the extended form of the `grid_mapping` attribute
+from the CF (Climate and Forecast) conventions, such as `"crs: lat lon"` or
+`"crs_osgb: x y crs_wgs84: lat lon"` (#137). Before, it read `grid_mapping`
+only when it named one variable, and recorded EPSG:4326 otherwise. Now:
+
+* With the extended form, `as_proxy()` takes the CRS from the mapping listed
+  with the grid's longitude and latitude (or from the only mapping listed),
+  so an ETRS89 file is recorded as ETRS89.
+* `as_proxy()` stops with an error when an extended-form mapping is
+  projected (a projected mapping given by one name already stopped), when
+  `grid_mapping` names a variable the file doesn't have, or when it lists
+  several mappings and none is for longitude and latitude.
+
+`extract_to_point()`, `extract_to_buffer()` and `extract_to_track()` call
+`as_proxy()` on each netCDF file, so they stop on the same files. A common
+way to get such a file is to save one variable with xarray
+(`ds[["temp"]].to_netcdf()`), which keeps `grid_mapping = "crs"` but drops
+the `crs` variable.
+
+`as_proxy()` may now stop with an error on files it read before. To read them,
+fix the file's `grid_mapping` attribute (for example with NCO's `ncatted`),
+or delete it if the grid is plain WGS84 longitude and latitude.
+
 `extract_to_track()` is now a shortcut for `as_vector3d()`, `sample_3d()`
 and `terra::extract()` (#116). With the new `horizontal_radius_km` and
 `depth_radius_m`, it gives the mean in a buffer around each sample, with

@@ -99,9 +99,13 @@
       atts <- c("bounds", "climatology", "coordinates", "grid_mapping")
       unlist(lapply(atts, function(att) {
         value <- .read_attribute(nc, name, att)
-        if (is.character(value)) {
-          sub(":$", "", unlist(strsplit(value, "[[:space:]]+")))
+        refs <- if (identical(att, "grid_mapping")) {
+          mappings <- .grid_mappings(value)
+          c(names(mappings), unlist(mappings))
+        } else if (is.character(value)) {
+          unlist(strsplit(value, "[[:space:]]+"))
         }
+        .resolve_group_name(nc, name, as.character(refs))
       }))
     }
   ))
