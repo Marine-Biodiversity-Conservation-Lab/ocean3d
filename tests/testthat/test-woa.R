@@ -94,6 +94,7 @@ test_that("woa_download builds the NCEI URL for each resolution", {
     .package = "curl"
   )
   for (case in cases) {
+    url <- NULL
     tmp <- tempfile("woa_url_")
     woa_download("temperature", resolution = case$resolution,
                  output_dir = tmp, quiet = TRUE)
