@@ -60,6 +60,10 @@
       "`method` sets the depth level SpatVector3D points take, so it ",
       "applies only to a variable with depth: mask() of a SpatVoxel by ",
       "points, or extract() on a SpatProxy whose variable has depth."
+    ),
+    seafloor = paste0(
+      "`seafloor` clips the depth levels of a SpatVoxel or SpatProxy; an ",
+      "envelope takes the seafloor as a `depth_max` limit when it is built."
     )
   )
   why <- why[intersect(names(why), nms)]

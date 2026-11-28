@@ -338,6 +338,17 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
+* `volume()` of a `SpatVoxel` or `SpatProxy` gains `seafloor`: the seafloor
+  depth in metres, positive down, as a single-layer `SpatRaster` on the
+  voxel's grid or one number. Each occupied level then counts only the part
+  of its slab above the seafloor, in the total and with `per_cell` and
+  `per_level`. Without it, a level the seafloor cuts counts as a whole slab:
+  an envelope from 0 to 60 m on levels 25 m thick measures 75 m of water,
+  and with `seafloor` it measures 60 m. An occupied level wholly below the
+  seafloor measures 0, not `NA`. The seafloor is one depth per cell, so a
+  cell that is half land still counts its whole area. Results without
+  `seafloor` don't change.
+
 * `summarise_3d(x, by = "all")` summarises every value of every voxel in a
   list in one row, such as all the time steps of a time window, each value
   keeping its own weight (#116).
