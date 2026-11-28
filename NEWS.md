@@ -540,6 +540,10 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## Bug fixes
 
+* `intersect_3d()` of two sets of `SpatVector3D` polygons no longer stops
+  with "replacement has 2 rows, data has 1" when, with sf's spherical
+  geometry, the only pair that meets shares a polygon and a line. It now
+  gives that pair's polygon, and `intersects_3d()` lists the pair (#179).
 * With a `time_step` in months or years, `extract_to_track()` placed each
   sample one step after the previous one, so a segment starting on
   31 January got 29 February, then 29 March, and kept the 29th. Samples now
@@ -605,11 +609,11 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## Minor improvements
 
-* `intersects_3d()` of two sets of `SpatVector3D` polygons no longer builds
-  the shared outlines, and gives the same pairs as before. It tests which
-  outlines share an area, then compares depths and times. With sf's
-  spherical geometry (the default), 2000 buffers against 200 areas took
-  4.6 s instead of 17 minutes (#179).
+* `intersect_3d()` and `intersects_3d()` are faster for two sets of
+  `SpatVector3D` polygons and give the same results as before (#179). In
+  one run of 2000 buffers against 200 areas, `intersects_3d()` took 2.6 s
+  instead of 17 minutes with sf's spherical geometry (the default), and
+  0.4 s instead of 0.7 s with planar geometry (`sf::sf_use_s2(FALSE)`).
 
 * `vect_to_envelope()` now projects polygons in another CRS onto the CRS of
   `template`, as the 3D query functions do with polygons (#97). It used to

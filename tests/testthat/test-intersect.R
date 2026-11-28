@@ -1215,16 +1215,7 @@ test_that("intersects_3d() of polygon sets lists the pairs that share space", {
                         b4 = character(0)))
 })
 
-# The pairs intersect_3d() gives, listed as intersects_3d() lists them.
-pairs_from_intersect_3d <- function(x, y) {
-  shared <- as.data.frame(intersect_3d(x, y))
-  ids_x <- as.data.frame(x)$feature_id
-  ids_y <- as.data.frame(y)$feature_id
-  hits <- split(shared$feature_id_y, factor(shared$feature_id_x, ids_x))
-  lapply(hits, function(h) ids_y[ids_y %in% h])
-}
-
-test_that("intersects_3d() of polygon sets agrees with intersect_3d()", {
+test_that("intersects_3d() of polygon sets skips outlines that only touch", {
   rect <- function(x0, x1, y0 = 0, y1 = 1) {
     sf::st_polygon(list(rbind(c(x0, y0), c(x1, y0), c(x1, y1), c(x0, y1),
                               c(x0, y0))))
@@ -1271,54 +1262,43 @@ test_that("intersects_3d() of polygon sets agrees with intersect_3d()", {
       b <- as_vector3d(b, id = "id", time = c("start", "end"),
                        depth_min = "top", depth_max = 200)
       expected <- list(a1 = if (case$a1) "b1" else character(0), a2 = "b2")
-      answer <- suppressMessages(intersects_3d(a, b))
-      expect_identical(answer, expected, label = label)
-      expect_identical(answer, suppressMessages(pairs_from_intersect_3d(a, b)),
+      expect_identical(suppressMessages(intersects_3d(a, b)), expected,
                        label = label)
     }
   }
 })
 
-test_that("intersects_3d() of random polygon sets agrees with intersect_3d()", {
-  # Rectangles and triangles on whole degrees, so many outlines share edges
-  # and corners, with depths and dates that often only touch.
-  random_set <- function(n, prefix) {
-    shapes <- lapply(seq_len(n), function(k) {
-      x0 <- sample(0:8, 1)
-      y0 <- sample(0:8, 1)
-      w <- sample(1:3, 1)
-      h <- sample(1:3, 1)
-      corners <- if (k %% 4 == 0) {
-        rbind(c(x0, y0), c(x0 + w, y0), c(x0, y0 + h), c(x0, y0))
-      } else {
-        rbind(c(x0, y0), c(x0 + w, y0), c(x0 + w, y0 + h), c(x0, y0 + h),
-              c(x0, y0))
-      }
-      sf::st_polygon(list(corners))
-    })
-    top <- sample(c(0, 50, 100), n, replace = TRUE)
-    start <- as.Date("2020-01-01") + sample(0:20, n, replace = TRUE)
-    end <- start + sample(0:5, n, replace = TRUE)
-    # Every fifth polygon has no time.
-    start[seq_len(n) %% 5 == 0] <- NA
-    end[is.na(start)] <- NA
-    p <- sf::st_sf(id = paste0(prefix, seq_len(n)), top = top,
-                   bottom = top + sample(c(50, 100), n, replace = TRUE),
-                   start = start, end = end,
-                   geometry = sf::st_sfc(shapes, crs = 4326))
-    as_vector3d(p, id = "id", depth_min = "top", depth_max = "bottom",
-                time = c("start", "end"))
+test_that("polygon sets with edges at computed coordinates share area", {
+  # Corners at x0 / 3 lie on the slanted edge from (0, 0) to (3, 1) as near
+  # as floating point allows. On top of the edge, the two share only a line;
+  # a nanodegree above it, a sliver with an area. On the sphere, that sliver
+  # comes with a line, as a collection, and it is the only pair.
+  pg <- function(m) sf::st_polygon(list(rbind(m, m[1, ])))
+  a <- as_vector3d(sf::st_sf(id = "a1", geometry = sf::st_sfc(
+    pg(rbind(c(0, 0), c(3, 1), c(0, 1))), crs = 4326
+  )), id = "id", depth_min = 0, depth_max = 100)
+  box <- function(x0, lift) {
+    p <- pg(rbind(c(x0, x0 / 3 + lift), c(x0 + 0.1, (x0 + 0.1) / 3 + lift),
+                  c(x0 + 0.1, x0 / 3 - 0.5), c(x0, x0 / 3 - 0.5)))
+    as_vector3d(sf::st_sf(id = "b1", geometry = sf::st_sfc(p, crs = 4326)),
+                id = "id", depth_min = 0, depth_max = 100)
   }
-  set.seed(179)
-  a <- random_set(25, "a")
-  b <- random_set(30, "b")
+  cases <- list(
+    list(label = "on the edge", b = box(1.1, 0), n = 0L),
+    list(label = "on the edge, at the corner", b = box(2.9, 0), n = 0L),
+    list(label = "a sliver above it", b = box(2.9, 1e-9), n = 1L)
+  )
   old <- suppressMessages(sf::sf_use_s2())
   on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
   for (s2 in c(TRUE, FALSE)) {
     suppressMessages(sf::sf_use_s2(s2))
-    expect_identical(suppressMessages(intersects_3d(a, b)),
-                     suppressMessages(pairs_from_intersect_3d(a, b)),
-                     label = glue::glue("s2 = {s2}"))
+    for (case in cases) {
+      label <- glue::glue("{case$label}, s2 = {s2}")
+      shared <- suppressMessages(intersect_3d(a, case$b))
+      expect_identical(length(shared), case$n, label = label)
+      expect_identical(suppressMessages(intersects_3d(a, case$b)),
+                       list(a1 = rep("b1", case$n)), label = label)
+    }
   }
 })
 

@@ -81,9 +81,7 @@ of \code{y} it shares 3D space with. A pair is listed exactly when
 \code{\link[=intersect_3d]{intersect_3d()}} gives it a polygon or point, so outlines that only share
 an edge, depth ranges that only touch and times that don't overlap aren't
 listed. Swapping \code{x} and \code{y} gives the same pairs listed the other way
-round. For two polygon sets, \code{intersects_3d()} compares the outlines
-without building the shared ones, so it is faster than \code{\link[=intersect_3d]{intersect_3d()}}
-on large sets.
+round.
 
 The order of \code{x} and \code{y} does not matter.
 }

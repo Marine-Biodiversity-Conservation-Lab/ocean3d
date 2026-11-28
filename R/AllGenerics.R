@@ -384,9 +384,7 @@ setGeneric("intersect_3d", function(x, y, ...) standardGeneric("intersect_3d"))
 #' [intersect_3d()] gives it a polygon or point, so outlines that only share
 #' an edge, depth ranges that only touch and times that don't overlap aren't
 #' listed. Swapping `x` and `y` gives the same pairs listed the other way
-#' round. For two polygon sets, `intersects_3d()` compares the outlines
-#' without building the shared ones, so it is faster than [intersect_3d()]
-#' on large sets.
+#' round.
 #'
 #' The order of `x` and `y` does not matter.
 #'

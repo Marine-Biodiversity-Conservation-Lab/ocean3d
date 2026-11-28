@@ -20,6 +20,7 @@ Imports:
     magrittr,
     methods,
     rlang,
+    s2,
     sf (>= 1.1.0),
     terra,
     rredlist,

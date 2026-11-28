@@ -653,50 +653,6 @@ setMethod("intersect_3d", c("SpatEnvelope", "SpatVector3D"),
 setMethod("intersect_3d", c("SpatVoxel", "SpatVector3D"),
           function(x, y, ...) intersect_3d(y, x, ...))
 
-# Internal: the checks for two SpatVector3D sets, shared by intersect_3d()
-# and intersects_3d(). Each is polygons or points, not both points, and
-# their times are of one kind. Returns that kind, or NA when neither set has
-# times.
-.check_vector3d_pair <- function(x, y, ...) {
-  .no_extra_args(...)
-  .check_geomtype(x, c("polygons", "points"))
-  .check_geomtype(y, c("polygons", "points"))
-  if (x@type == "points" && y@type == "points") .stop_neither_3d(x, y)
-  resolution <- unique(stats::na.omit(c(x@time_resolution,
-                                        y@time_resolution)))
-  if (length(resolution) > 1L) {
-    rlang::abort(paste0(
-      "One set has dates and the other has hours, so their ",
-      "times can't be compared. Rebuild one with as_vector3d() from ",
-      "times of the same kind."
-    ), class = "ocean3d_error_time_resolution_differ", call = NULL)
-  }
-  if (length(resolution)) resolution else NA_character_
-}
-
-# Internal: the depth range and time interval that pairs of polygons share,
-# and whether they share any. `x` and `y` are two polygon sets' features,
-# and pair k is row `i[k]` of `x` with row `j[k]` of `y`. Shared by
-# intersect_3d() and intersects_3d(), so the two always agree on which pairs
-# overlap.
-.shared_depth_time <- function(x, y, i, j) {
-  depth_min <- pmax(x$depth_min[i], y$depth_min[j])
-  depth_max <- pmin(x$depth_max[i], y$depth_max[j])
-  # A polygon without a time is there at any time, so the pair takes the
-  # other polygon's interval. Intervals are closed: with dates, both
-  # include their end day, so two that share a day overlap on it.
-  time_start <- pmax(x$time_start[i], y$time_start[j], na.rm = TRUE)
-  time_end <- pmin(x$time_end[i], y$time_end[j], na.rm = TRUE)
-  list(
-    depth_min = depth_min, depth_max = depth_max,
-    time_start = time_start, time_end = time_end,
-    # Strict `>`, as for envelopes: depth ranges that only touch share no
-    # water.
-    overlap = depth_max > depth_min &
-      (is.na(time_start) | time_start <= time_end)
-  )
-}
-
 # Two sets of polygons: every pair whose outlines, depth ranges and times
 # overlap gives one polygon, as sf::st_intersection() does in 2D. Points and
 # polygons: every point inside a polygon's outline, depth range and time
@@ -707,30 +663,74 @@ setMethod("intersect_3d", c("SpatVoxel", "SpatVector3D"),
 setMethod(
   "intersect_3d", c("SpatVector3D", "SpatVector3D"),
   function(x, y, ...) {
-    resolution <- .check_vector3d_pair(x, y, ...)
+    .no_extra_args(...)
+    .check_geomtype(x, c("polygons", "points"))
+    .check_geomtype(y, c("polygons", "points"))
+    if (x@type == "points" && y@type == "points") .stop_neither_3d(x, y)
+    resolution <- unique(stats::na.omit(c(x@time_resolution,
+                                          y@time_resolution)))
+    if (length(resolution) > 1L) {
+      rlang::abort(paste0(
+        "One set has dates and the other has hours, so their ",
+        "times can't be compared. Rebuild one with as_vector3d() from ",
+        "times of the same kind."
+      ), class = "ocean3d_error_time_resolution_differ", call = NULL)
+    }
+    resolution <- if (length(resolution)) resolution else NA_character_
     if (x@type == "points" || y@type == "points") {
       return(.points_in_polygons(x, y, resolution))
     }
-    as_pieces <- function(v, suffix) {
-      out <- sf::st_sf(v@features["feature_id"],
-                       geometry = v@features$geometry)
-      names(out)[1] <- paste0("feature_id", suffix)
-      # The ID holds for the whole polygon, which tells sf not to warn that
-      # it might not.
-      sf::st_agr(out) <- "constant"
-      out
+    fx <- x@features
+    fy <- y@features
+    # Only pairs whose outlines meet can share space, so they are found
+    # first with sf::st_intersects(), which uses a spatial index. On the
+    # sphere the closed model also counts outlines that only touch, so no
+    # pair with a shared area is missed. The pairs are put in order by
+    # polygon of `y`, then of `x`, the order sf::st_intersection() gives.
+    on_sphere <- sf::sf_use_s2()
+    hits <- if (on_sphere) {
+      sf::st_intersects(fx$geometry, fy$geometry, model = "closed")
+    } else {
+      sf::st_intersects(fx$geometry, fy$geometry)
     }
-    pairs <- sf::st_intersection(as_pieces(x, "_x"), as_pieces(y, "_y"))
+    i <- rep(seq_along(hits), lengths(hits))
+    j <- unlist(hits)
+    order_y <- order(j, i)
+    i <- i[order_y]
+    j <- j[order_y]
 
-    shared <- .shared_depth_time(
-      x@features, y@features,
-      match(pairs$feature_id_x, x@features$feature_id),
-      match(pairs$feature_id_y, y@features$feature_id)
-    )
+    depth_min <- pmax(fx$depth_min[i], fy$depth_min[j])
+    depth_max <- pmin(fx$depth_max[i], fy$depth_max[j])
+    # A polygon without a time is there at any time, so the pair takes the
+    # other polygon's interval. Intervals are closed: with dates, both
+    # include their end day, so two that share a day overlap on it.
+    time_start <- pmax(fx$time_start[i], fy$time_start[j], na.rm = TRUE)
+    time_end <- pmin(fx$time_end[i], fy$time_end[j], na.rm = TRUE)
+    # Strict `>`, as for envelopes: depth ranges that only touch share no
+    # water.
+    overlap <- depth_max > depth_min &
+      (is.na(time_start) | time_start <= time_end)
+    i <- i[overlap]
+    j <- j[overlap]
+
+    # The shared outline is built only for the pairs that share depths and
+    # times, one pair at a time, with the model sf::st_intersection() uses.
+    # On the sphere, the s2 result is converted through well-known binary:
+    # sf::st_as_sfc() on an s2 result splits a lone collection into its
+    # parts, one row each, which would put the outlines out of line with
+    # their pairs.
+    geometry <- if (on_sphere) {
+      shared <- s2::s2_intersection(fx$geometry[i], fy$geometry[j],
+                                    s2::s2_options(model = "semi-open"))
+      sf::st_as_sfc(s2::s2_as_binary(shared), crs = 4326)
+    } else {
+      sf::st_intersection(fx$geometry[i], fy$geometry[j], by_element = TRUE)
+    }
     # Outlines that only share an edge or corner give lines or points,
-    # which have no area; a collection keeps its polygon parts.
-    geometry <- lapply(sf::st_geometry(pairs), function(g) {
-      if (inherits(g, "GEOMETRYCOLLECTION")) {
+    # which have no area; a collection keeps its polygon parts. Pairs that
+    # share nothing give an empty collection, which stays empty.
+    geometry <- lapply(geometry, function(g) {
+      if (inherits(g, "GEOMETRYCOLLECTION") && length(g) > 0L) {
         # On one geometry, st_collection_extract() and st_union() give a
         # geometry, not a column, so the parts go in a column first.
         parts <- sf::st_sfc(sf::st_collection_extract(g, "POLYGON"))
@@ -739,18 +739,17 @@ setMethod(
       g
     })
     geometry <- sf::st_sfc(geometry, crs = 4326)
-    polygonal <- sf::st_geometry_type(geometry) %in%
+    keep <- sf::st_geometry_type(geometry) %in%
       c("POLYGON", "MULTIPOLYGON") & !sf::st_is_empty(geometry)
-    keep <- polygonal & shared$overlap
 
     features <- data.frame(
       feature_id = as.character(seq_len(sum(keep))),
-      depth_min = shared$depth_min[keep],
-      depth_max = shared$depth_max[keep],
-      time_start = shared$time_start[keep],
-      time_end = shared$time_end[keep],
-      feature_id_x = pairs$feature_id_x[keep],
-      feature_id_y = pairs$feature_id_y[keep],
+      depth_min = depth_min[overlap][keep],
+      depth_max = depth_max[overlap][keep],
+      time_start = time_start[overlap][keep],
+      time_end = time_end[overlap][keep],
+      feature_id_x = fx$feature_id[i][keep],
+      feature_id_y = fy$feature_id[j][keep],
       stringsAsFactors = FALSE
     )
     features$geometry <- geometry[keep]
@@ -809,56 +808,22 @@ setMethod(
 }
 
 # Two SpatVector3D sets: for each feature of `x`, the features of `y` it
-# shares 3D space with, the pairs intersect_3d() gives. Points and polygons
-# take their pairs from intersect_3d(). Two polygon sets skip the shared
-# outlines, which a yes/no answer doesn't need: a predicate finds the
-# outlines that share area, and .shared_depth_time() then keeps the pairs
-# whose depths and times overlap, as in intersect_3d().
+# shares 3D space with. The pairs come from intersect_3d(), so the two always
+# agree.
 #' @rdname intersects_3d
 #' @export
 setMethod(
   "intersects_3d", c("SpatVector3D", "SpatVector3D"),
   function(x, y, ...) {
-    .check_vector3d_pair(x, y, ...)
+    # Assigned first: an error raised while S4 evaluates an argument for
+    # dispatch loses its class.
+    shared <- intersect_3d(x, y, ...)
+    shared <- as.data.frame(shared)
     ids_x <- as.data.frame(x)$feature_id
     ids_y <- as.data.frame(y)$feature_id
-    if (x@type == "points" || y@type == "points") {
-      shared <- as.data.frame(intersect_3d(x, y))
-      hits <- split(shared$feature_id_y, factor(shared$feature_id_x, ids_x))
-      # In the order of `y`, as sf::st_intersects() lists them.
-      return(lapply(hits, function(h) ids_y[ids_y %in% h]))
-    }
-    fx <- x@features
-    fy <- y@features
-    # intersect_3d() keeps a pair when sf::st_intersection() gives it some
-    # area. With planar geometry (GEOS, sf_use_s2(FALSE)), that is a pair
-    # whose interiors meet in an area, which the pattern tests. On the sphere
-    # (s2), the open model leaves out the boundary, so it skips outlines that
-    # only touch at a corner or along a whole edge.
-    on_sphere <- sf::sf_use_s2()
-    hits <- if (on_sphere) {
-      sf::st_intersects(fx$geometry, fy$geometry, model = "open")
-    } else {
-      sf::st_relate(fx$geometry, fy$geometry, pattern = "2********")
-    }
-    i <- rep(seq_along(hits), lengths(hits))
-    j <- unlist(hits)
-    keep <- .shared_depth_time(fx, fy, i, j)$overlap
-    i <- i[keep]
-    j <- j[keep]
-    if (on_sphere) {
-      # s2's open model still finds outlines that share part of an edge, so
-      # the pairs left are intersected as intersect_3d() does, one pair at a
-      # time, and kept when the shared outline has an area.
-      shared <- sf::st_intersection(fx$geometry[i], fy$geometry[j],
-                                    by_element = TRUE)
-      area <- sf::st_dimension(shared) %in% 2L
-      i <- i[area]
-      j <- j[area]
-    }
-    # Each element of `hits` is in the order of `y`, as sf::st_intersects()
-    # lists them.
-    split(ids_y[j], factor(ids_x[i], ids_x))
+    hits <- split(shared$feature_id_y, factor(shared$feature_id_x, ids_x))
+    # In the order of `y`, as sf::st_intersects() lists them.
+    lapply(hits, function(h) ids_y[ids_y %in% h])
   }
 )
 
