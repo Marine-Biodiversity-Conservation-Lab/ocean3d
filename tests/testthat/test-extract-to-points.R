@@ -349,19 +349,6 @@ test_that("depth methods name columns and extract values", {
   }
 })
 
-test_that("nearest spatial matching requires an explicit valid distance", {
-  expect_identical(.validate_spatial_matching("within", NULL), "within")
-  expect_identical(.validate_spatial_matching("nearest", 0), "nearest")
-  expect_identical(.validate_spatial_matching("nearest", 5), "nearest")
-  expect_error(.validate_spatial_matching("within", 5), "requires")
-  for (limit in list(NULL, NA_real_, Inf, -1, c(1, 2), "5")) {
-    expect_error(
-      .validate_spatial_matching("nearest", limit),
-      "finite"
-    )
-  }
-})
-
 test_that("formula-based and pressure axes require explicit conversion", {
   paths <- replicate(3, tempfile(fileext = ".nc"))
   on.exit(unlink(paths), add = TRUE)
@@ -401,17 +388,6 @@ test_that("invalid file depth metadata fail before vertical extraction", {
       method = "surface", date_col = NULL
     ), patterns[i])
   }
-})
-
-test_that("report numbers are short without hiding small differences", {
-  expect_equal(.selection_number(1.80399482019311e-7, 5L), "0")
-  expect_equal(.selection_number(-1e-7, 5L), "0")
-  expect_equal(.selection_number(38.0208320617676, 5L), "38.02083")
-  expect_equal(.selection_number(1.01823663711548), "1.02")
-  expect_equal(.selection_number(20), "20")
-  expect_equal(.selection_number(0), "0")
-  expect_equal(.selection_number(0.001, small = TRUE), "<0.01")
-  expect_equal(.selection_number(0.01, small = TRUE), "0.01")
 })
 
 test_that("static variables use default date_col without a date column", {

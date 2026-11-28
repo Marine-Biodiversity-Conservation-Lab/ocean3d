@@ -69,6 +69,49 @@ test_that("monthly steps count from the start and don't drift (#146)", {
   expect_identical(s@time_resolution, "daily")
 })
 
+test_that("calendar shifts clamp to the end of a shorter month", {
+  shift <- function(x, months) {
+    format(.shift_temporal_months(as.POSIXct(x, tz = "UTC"), months),
+           "%Y-%m-%d %H:%M:%S", tz = "UTC")
+  }
+  ends <- c("2020-01-31 12:34:56", "2020-03-31 12:34:56",
+            "2021-03-31 12:34:56")
+  expect_equal(vapply(ends, shift, "", months = 1), c(
+    "2020-02-29 12:34:56", "2020-04-30 12:34:56", "2021-04-30 12:34:56"
+  ), ignore_attr = TRUE)
+  expect_equal(vapply(ends, shift, "", months = -1), c(
+    "2019-12-31 12:34:56", "2020-02-29 12:34:56", "2021-02-28 12:34:56"
+  ), ignore_attr = TRUE)
+  # Years are 12 months, so a leap day moves to 28 February.
+  expect_equal(shift("2020-02-29 19:30:00", 12), "2021-02-28 19:30:00")
+  expect_equal(shift("2020-02-29 19:30:00", -12), "2019-02-28 19:30:00")
+})
+
+test_that("balanced sampling meets every step limit with one even spacing", {
+  # 2 degrees along the equator (222 km), 150 m down and 24 hours: the
+  # hourly step needs the most points, 24 segments, and so sets the spacing
+  # for distance and depth too.
+  line <- as_vector3d(
+    data.frame(id = "A", lon = c(0, 2), lat = 0, depth = c(30, 180),
+               time = as.POSIXct(c("2020-01-01 00:00", "2020-01-02 00:00"),
+                                 tz = "UTC")),
+    type = "lines", id = "id", time = "time"
+  )
+  v <- as.data.frame(sample_3d(line, spacing_km = 30, depth_step_m = 10,
+                               time_step = 1))
+  expect_equal(nrow(v), 25)
+  expect_equal(v$depth, seq(30, 180, length.out = 25))
+  expect_equal(v$lon, seq(0, 2, length.out = 25))
+  expect_equal(as.numeric(v$time - v$time[1], units = "hours"), 0:24)
+  # The same limits with merged_steps: the 15 depth steps and 24 hourly
+  # steps are kept as separate cuts.
+  merged <- as.data.frame(sample_3d(line, sampling = "merged_steps",
+                                    spacing_km = 30, depth_step_m = 10,
+                                    time_step = 1))
+  expect_equal(nrow(merged), 37)
+  expect_lte(max(diff(merged$depth)), 10)
+})
+
 test_that("a line across the antimeridian goes the short way", {
   line <- as_vector3d(
     data.frame(id = "B", lon = c(179.5, -179.5), lat = 0, depth = c(0, 10)),
@@ -180,5 +223,6 @@ test_that("sample_3d() rejects input it can't sample", {
   expect_s4_class(sample_3d(daily, time_step = 1, time_unit = "days"),
                   "SpatVector3D")
   expect_error(sample_3d(dive(), spacing_km = 0.01, max_samples = 10),
-               "max_samples")
+               "Track sampling exceeds max_samples",
+               class = "ocean3d_error_track_sampling")
 })

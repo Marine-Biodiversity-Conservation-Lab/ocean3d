@@ -2,7 +2,7 @@
 % Please edit documentation in R/extract_to_track.R
 \name{extract_to_track}
 \alias{extract_to_track}
-\title{Extract environmental values along tracks and lines}
+\title{Summarise environmental values along tracks}
 \usage{
 extract_to_track(
   data,
@@ -11,224 +11,176 @@ extract_to_track(
   track_col = NULL,
   sampling = NULL,
   spacing_km = NULL,
-  interpolate_depth = FALSE,
-  interpolate_time = FALSE,
   depth_step_m = NULL,
-  time_step_seconds = NULL,
+  time_step = NULL,
+  time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
+  max_samples = 100000L,
+  horizontal_radius_km = 0,
+  depth_radius_m = 0,
   method = NULL,
-  statistics = "mean",
+  statistic = "mean",
   weighting = c("distance", "duration", "equal"),
-  min_valid_fraction = 0.8,
   lon_col = "lon",
   lat_col = "lat",
   depth_col = "depth",
   date_col = "date",
-  output_col = NULL,
-  time_resolution = c("auto", "datetime", "daily", "monthly", "yearly", "custom"),
-  max_samples = 100000L,
-  max_segment_km = NULL,
-  max_gap_hours = NULL,
-  quiet = FALSE,
-  time_step = NULL,
-  time_unit = c("hours", "minutes", "seconds", "days", "months", "years"),
-  land_mask = NULL,
-  marine_values = NULL,
-  mask_type = c("land", "marine"),
-  mask_domain = NULL,
-  land_policy = c("skip", "error"),
-  mask_step_km = 0.5,
-  ...
+  lon_dim = NULL,
+  lat_dim = NULL,
+  depth_dim = NULL,
+  time_dim = NULL,
+  time_match = c("nearest", "exact"),
+  max_time_diff = NULL,
+  output_col = NULL
 )
 }
 \arguments{
-\item{data}{Ordered vertex table: a data frame, matrix, named list or sf
-POINT features, as for \code{\link[=extract_to_point]{extract_to_point()}}. Rows are traversed in their
-supplied order within each track; they are never sorted by date. Convert
-sf LINESTRING features first, e.g. with
+\item{data}{Vertices of the tracks, in the order they were travelled: a
+data frame, matrix, named list or sf POINT object. sf points are
+transformed to longitude and latitude. To use sf lines, convert them
+first, e.g. with
 \code{as.data.frame(sf::st_coordinates(sf::st_transform(lines, 4326)))} and
 \verb{lon_col = "X", lat_col = "Y", track_col = "L1"}.}
 
-\item{nc, var}{netCDF sources (a path, several paths, an open ncdf4
-connection or a table with a file column) and the variable names to
-read; \code{var = NULL} detects one data variable per file. Files are read
-directly with ncdf4; a \link[=SpatVoxel-class]{SpatVoxel} or other \code{SpatRaster} isn't
-accepted.}
+\item{nc}{The data: a netCDF file path, several paths for a series of
+files on one grid, an open \code{\link[ncdf4:nc_open]{ncdf4::nc_open()}} connection, or a
+\link[=SpatProxy-class]{SpatProxy} from \code{\link[=as_proxy]{as_proxy()}}.}
 
-\item{track_col}{Optional track identifier column. Without it, the input is
-one track. IDs are returned as text.}
+\item{var}{Name of the variable, for a netCDF source. \code{NULL} detects the
+only data variable of the file.}
 
-\item{sampling}{NULL (default) uses 'balanced' when spacing_km,
-depth_step_m, time_step_seconds or time_step is supplied, and
-'vertices' otherwise. 'vertices' uses observations only; 'balanced'
-uses a shared subdivision satisfying all explicit step limits;
-'merged_steps' places the evenly spaced samples that the distance and
-depth limits need, and separately a sample at each time step, and keeps
-both sets;
-'cells' splits each connection at
-grid boundaries and samples interval midpoints, retaining original
-vertices.
-Repeated visits are retained. Cells mode currently uses spatial within
-matching.}
+\item{track_col}{Column with track IDs. \code{NULL} (default) reads all of
+\code{data} as one track, with ID \code{"1"}. Each track needs at least two
+vertices.}
 
-\item{spacing_km}{Maximum horizontal spacing in kilometres when inserting
-samples.
-Supply spacing or another step explicitly for balanced or merged_steps.}
+\item{sampling, spacing_km, depth_step_m, time_step, time_unit, max_samples}{Where the samples go along each track, as in \code{\link[=sample_3d]{sample_3d()}}: only the
+vertices (default without a step), or with a spacing in kilometres or
+a depth or time step, points in between as well.}
 
-\item{interpolate_depth, interpolate_time}{Allow linear interpolation of depth
-and elapsed UTC time between vertices. FALSE by default. Constant endpoint
-values are retained; missing endpoints produce missing intermediate values.}
+\item{horizontal_radius_km}{Radius of a circle around each sample, in
+kilometres, below 10000 as in \code{\link[=buffer_3d]{buffer_3d()}}. \code{0} (default) reads the
+value at the sample itself. A buffer needs cells with a width, so data
+with a single longitude or latitude and no cell bounds (a station or a
+transect) takes no radius.}
 
-\item{depth_step_m, time_step_seconds}{Optional maximum changes between
-samples. Require the corresponding interpolation switch. They supplement
-horizontal spacing, including for stationary or vertically moving tracks.}
+\item{depth_radius_m}{Distance in metres above and below each sample's
+depth, for the buffers. Needed with a radius for a variable with depth,
+and used only with a radius.}
 
-\item{method}{Depth method for each sample: 'nearest', 'surface', 'bottom'
-or '2d', as in \code{\link[=extract_to_point]{extract_to_point()}}, or 'all' for one column per depth
-method. NULL uses nearest for variables with depth and 2d for variables
-without it.}
+\item{method}{For a variable with depth and no radius, the depth level
+each sample takes, as in \link[=extract-SpatProxy]{extract()}: \code{"nearest"}
+(default; the level nearest the sample's depth that has a value),
+\code{"nearest_level"} (the nearest level, even if it has no value),
+\code{"bottom"} (the deepest level with a value) or \code{"surface"}. Leave
+\code{NULL} with a radius; for a variable without depth, leave \code{NULL} or use
+\code{"2d"}.}
 
-\item{statistics}{NULL for samples only, or distinct names from mean, sd, se,
-min and max. Summaries describe sampled environmental selections.}
+\item{statistic}{One or more of \code{"mean"} (default), \code{"sd"}, \code{"min"} and
+\code{"max"}, of the samples of each track.}
 
-\item{weighting}{'distance', 'duration' or 'equal'. Distance and duration
-assign half each adjacent segment's horizontal length or elapsed seconds
-to its endpoint samples. Equal gives each sample the same weight.}
+\item{weighting}{How each sample is weighted in the track summaries:
+\code{"distance"} (default) by \code{support_km}, \code{"duration"} by
+\code{support_seconds} (needs dates), or \code{"equal"}.}
 
-\item{min_valid_fraction}{Minimum valid fraction of total requested track
-support for a summary, from zero to one. Missing values stay in its
-denominator.}
+\item{lon_col, lat_col, depth_col, date_col}{Vertex columns. The depth is
+needed for a variable with depth, unless \code{method} is \code{"bottom"} or
+\code{"surface"}, and for \code{depth_step_m}. The date is needed for data with
+dated time steps, for \code{time_step} and for duration weights. Dates and
+date-times are read as in \code{\link[=as_vector3d]{as_vector3d()}}.}
 
-\item{lon_col, lat_col, depth_col, date_col}{Vertex coordinate columns. Dates
-are
-required for selected temporal variables, duration weights or time-gap
-limits.}
+\item{lon_dim, lat_dim, depth_dim, time_dim}{Dimension names for a netCDF
+source, as in \code{\link[=as_proxy]{as_proxy()}}.}
 
-\item{output_col}{Output name or named variable-to-column mapping.}
+\item{time_match, max_time_diff}{How a sample's time is matched to a time
+step, as in \code{\link[=as_voxel]{as_voxel()}}: the nearest step (default) or an exact one,
+and the largest gap in days for a nearest match.}
 
-\item{time_resolution}{Point-time precision: 'auto', 'datetime' (instants),
-'daily', 'monthly' or 'yearly' (UTC calendar labels), or 'custom' (full
-timestamps, with \code{custom_time_interval} in \code{...} as a warning threshold).
-With auto, the original observations set the precision, before
-interpolation.}
-
-\item{max_samples}{Maximum total sampled positions, a positive integer.}
-
-\item{max_segment_km, max_gap_hours}{Optional limits that reject long segments
-or known elapsed time gaps. Split disconnected trajectories explicitly.
-FALSE by default because geometric elevation may use a different
-convention.}
-
-\item{quiet}{Hide explanatory reports; scientific and time-zone warnings
-remain.}
-
-\item{time_step, time_unit}{Optional temporal step and units: seconds,
-minutes,
-hours, elapsed days, whole calendar months or years. Balanced sampling uses
-one equal subdivision per original segment for elapsed-time limits.
-Calendar steps count from the segment's start in UTC, and fall on the
-last day of a shorter month: from 31 January, monthly steps give
-29 February, 31 March, 30 April. Balanced sampling keeps these dates and
-adds points between them where needed to meet the distance and depth
-limits.}
-
-\item{land_mask}{Optional sf polygon or single-layer terra SpatRaster mask.
-With no mask, marine connectivity is not checked.
-Geographic rasters must use longitudes from -180 to 180; rotate or
-reproject other conventions explicitly. Antimeridian connections are split.}
-
-\item{marine_values}{Numeric raster codes representing marine cells,
-including the underlying codes of categorical rasters.}
-
-\item{mask_type}{Meaning of polygon interiors: land or marine.}
-
-\item{mask_domain}{Optional polygon domain for polygon masks. A land
-polygon alone cannot establish that its exterior is known sea.
-For rasters, coverage is defined by their extent and missing cells.}
-
-\item{land_policy}{Skip invalid connections (default) or raise an error.
-Original observations remain; invalid support stays in the denominator.}
-
-\item{mask_step_km}{Maximum segment length of the polyline used for mask
-predicates. This is an approximation to the geodesic; coastline accuracy
-also depends on the supplied mask. Touching land counts as an intersection.}
-
-\item{...}{Point-selection options: file_col, dimension overrides,
-time_match,
-max_time_diff, custom_time_interval, spatial_match, max_distance_km, and
-time_report, spatial_report, depth_report, verbose.}
+\item{output_col}{Name of the value column in \code{samples}. \code{NULL} uses the
+variable's name.}
 }
 \value{
-A list with samples (coordinates, original vertex attributes,
-source-row references, sample support and extracted values), summary (one
-row
-per track and output, or NULL), and settings. Tracks follow first
-appearance order. Summary counts n_observed and n_assumed distinguish
-original vertices from inserted positions; n_samples is their total,
-including missing results and invalid connections. The same counts are
-available once per track in settings$sampling_counts, even when
-statistics = NULL. Cell-interval midpoints count as assumed positions.
-variation_status is not_requested when neither SD nor SE is requested,
-available when the requested variation statistics are finite, or
-insufficient_variation_samples when accepted support has fewer than two
-valid samples. not_available covers rejected support or non-finite
-statistics; consult status for coverage and support problems. status
-is one of: empty (no known support), all_missing,
-insufficient_coverage, partial or complete.
-Samples follow traversal order. For vertices-only sampling the global
-input row order is retained. Non-coordinate attributes of inserted samples
-are NA. source_row indexes the input rows.
+A list of two data frames:
+\itemize{
+\item \code{samples}: one row per sample, in order along each track, with
+\code{track_id}, \code{sample_id}, the position (in \code{lon_col} and \code{lat_col},
+with longitudes from -180 to 180), the depth and date when used (in
+\code{depth_col} and \code{date_col}; dates stay dates),
+\code{distance_km} from the track's start, \code{support_km},
+\code{support_seconds}, \code{is_interpolated} (\code{FALSE} for the track's own
+vertices), and the value in \code{output_col}. With a radius, also
+\verb{<output>_n}, the number of values in the sample's buffer.
+\item \code{summary}: one row per track, with \code{track_id}, a column per
+statistic, and \code{n}, the number of samples with a value.
+}
 }
 \description{
-Sample ordered trajectories and take the environmental value at each sampled
-position. Return sampled positions and optional summaries per track.
+Samples points along each track, such as a dive or a vessel route, reads
+the value at each sample, and summarises the samples of each track. It is
+a convenience wrapper over the three steps of an analysis, and the
+\href{../articles/workflow-values-in-shapes.html}{workflow article} shows the
+same steps written out:
 }
-\section{Interpretation and limits}{
-
-Positions follow WGS84 shortest geodesics. Distances are
-horizontal, not three-dimensional travel distances. Antipodal endpoints need
-a waypoint. Interpolated coordinates describe assumptions, not observations.
-
-Balanced sampling approximates line integration. Cells mode finds numerical
-intersections with rectilinear spatial cell boundaries and selection changes
-in depth and time. It retains separate segment visits, including returns to
-the same cell. Zero-support original vertices remain available for
-inspection.
-Cells mode is not a volume-weighted integration of physical averaging
-periods;
-the temporal rules still compare timestamp labels. Custom temporal precision
-and spatial nearest matching are currently unsupported in cells mode.
-Overlapping sources with different horizontal grids require explicit
-alignment or another sampling mode.
-Environmental values are taken from the grid cell and time step each
-sample falls in, never interpolated.
-The depth coordinate may be stored shallow to deep or deep to shallow;
-depths stored in any other order are rejected.
-Missing coordinates are rejected and multipart lines must be split
-explicitly.
-
-SD and SE use the same reliability-weight correction and effective sample
-size as \code{\link[=summarise_3d]{summarise_3d()}}. Adjacent samples are usually correlated: SE is
-descriptive under an independence assumption, not an uncertainty estimate.
-Densifying a track does not create independent environmental observations.
-Distance-weighted summaries of stationary tracks are NA; duration weighting
-requires known time support and returns NA if any adjacent duration is
-unknown.
-settings records options and candidate files. Actual selected records are
-stored in the per-output match_info columns in samples.
+\details{
+\enumerate{
+\item \strong{Build:} the vertices of each track become a line with
+\code{\link[=as_vector3d]{as_vector3d()}}, and \code{\link[=sample_3d]{sample_3d()}} places points along it, with depth
+and time interpolated between vertices. With \code{horizontal_radius_km},
+\code{\link[=buffer_3d]{buffer_3d()}} turns each sample into a buffer.
+\item \strong{Intersect:} without a radius, \link[=extract-SpatProxy]{extract()} reads
+the value at each sample, in the cell that holds it and at the depth
+level \code{method} picks. With a radius, the data for the sample's time
+step are read with \code{\link[terra:crop]{crop()}} and \code{\link[=as_voxel]{as_voxel()}} (or \link[=rast-SpatProxy]{rast()}
+for a variable without depth), and \code{\link[terra:mask]{mask()}} keeps the values inside its
+buffer: the cells the circle touches, and the levels whose slab of
+water overlaps the depth window. \code{\link[=summarise_3d]{summarise_3d()}} gives their mean,
+weighted by cell volume.
+\item \strong{Summarise:} the statistics of each track's sample values, each
+sample weighted by \code{weighting}.
 }
 
+Each sample is matched to the time step nearest its time, or equal to it
+with \code{time_match = "exact"}, as \link[=extract-SpatProxy]{extract()} matches
+points: a date by its UTC day, a date-time as an instant. A sample gets
+\code{NA} when it is outside the grid, on a cell or level without a value,
+has no date on data with dated time steps, or has no time step that
+matches. One warning counts
+these samples, by reason. The track summaries leave them out, and \code{n} is
+the number of samples with a value.
+
+With \code{weighting = "distance"} each sample stands for half the distance to
+the samples either side (\code{support_km}), so a stretch sampled more densely
+doesn't count for more; with \code{"duration"} for half the time
+(\code{support_seconds}). The weighted standard deviation is the one
+\code{\link[=summarise_3d]{summarise_3d()}} uses. A track whose samples all have zero weight, such
+as a track that doesn't move with distance weights, gets equal weights.
+Neighbouring samples are usually correlated, so the standard deviation
+describes their spread, not the uncertainty of the mean.
+}
 \examples{
-nc_file <- system.file("extdata", "example_2d.nc", package = "ocean3d")
-track <- data.frame(
-  lon = c(0, 1), lat = c(40, 40),
-  date = as.Date(c("2020-01-01", "2020-01-01"))
-)
-result <- extract_to_track(track, nc_file,
-  var = "temp", method = "2d",
-  spacing_km = 20, quiet = TRUE
-)
-result$summary
+# Daily temperature on a 10 x 10 grid of 1 degree cells at four depths.
+path <- tempfile(fileext = ".nc")
+lon <- ncdf4::ncdim_def("lon", "degrees_east", seq(0.5, 9.5))
+lat <- ncdf4::ncdim_def("lat", "degrees_north", seq(0.5, 9.5))
+depth <- ncdf4::ncdim_def("depth", "m", c(5, 15, 30, 60))
+time <- ncdf4::ncdim_def("time", "days since 2020-01-01", 0:2)
+temp <- ncdf4::ncvar_def("temp", "degree_Celsius",
+                         list(lon, lat, depth, time), -9999)
+nc <- ncdf4::nc_create(path, temp)
+ncdf4::ncvar_put(nc, temp, seq_len(10 * 10 * 4 * 3) / 10)
+ncdf4::nc_close(nc)
+
+# A dive from the surface to 50 m over two days.
+dive <- data.frame(lon = c(2.5, 6.5), lat = c(3.5, 5.5), depth = c(0, 50),
+                   date = as.Date(c("2020-01-01", "2020-01-03")))
+
+# The value at a sample at least every 50 km, and the mean along the dive.
+track <- extract_to_track(dive, path, spacing_km = 50)
+track$summary
+
+# The mean within 30 km and 10 m above and below each sample instead.
+extract_to_track(dive, path, spacing_km = 50, horizontal_radius_km = 30,
+                 depth_radius_m = 10)$summary
 }
 \seealso{
-\code{\link[=extract_to_point]{extract_to_point()}}, \code{\link[=extract_to_buffer]{extract_to_buffer()}}
+\code{\link[=sample_3d]{sample_3d()}}, \code{\link[=extract_to_point]{extract_to_point()}}, \code{\link[=extract_to_buffer]{extract_to_buffer()}}, and
+the \href{../articles/workflow-values-in-shapes.html}{workflow article}.
 }

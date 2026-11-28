@@ -2,8 +2,8 @@
 # attribute is read and checked against the coordinate (shape, finite values,
 # matching units). Without bounds, edges are inferred halfway between
 # neighbouring centres. .read_interval_axis() builds and checks the cell
-# intervals of every axis (longitude, latitude, depth and time) for point,
-# buffer and track extraction and the core object.
+# intervals of every axis (longitude, latitude, depth and time) for the core
+# object (as_proxy()).
 
 # Cell edges halfway between neighbouring centres, with the outer edges half
 # a step beyond the end centres. `centres` (at least two) may be in any
@@ -108,7 +108,7 @@
 # as out of order rather than fail inside `if`. The only
 # producer of that class, so every stored axis follows the same rule. Called
 # by .axis_intervals() (every axis read by .read_interval_axis()) and by
-# .read_depth_axis() (depth in point, buffer and track extraction).
+# .read_depth_axis().
 .check_axis_order <- function(values, coordinate, file = NULL) {
   steps <- diff(values)
   if (length(steps) &&
@@ -234,8 +234,7 @@
 # zero-width cell only when `allow_singleton`; both default to TRUE for
 # longitude and latitude (the defaults are evaluated after match.arg()).
 # Depth order is checked by .read_depth_axis() before .axis_intervals()
-# checks it again. Used by point, buffer and track extraction and the core
-# object.
+# checks it again. Used by the core object (as_proxy()).
 .read_interval_axis <- function(
   nc,
   coordinate,

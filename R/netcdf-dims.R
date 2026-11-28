@@ -2,7 +2,7 @@
 # Dimensions are matched from CF metadata (`axis`, `standard_name`, `units`),
 # then by name. Coordinate values and attributes are read for both coordinate
 # variables and plain dimensions, and two-dimensional (curvilinear) coordinates
-# are rejected. Shared by point, buffer and track extraction.
+# are rejected. Used by the core object (as_proxy()).
 
 .get_dim_values <- function(nc, dim_name) {
   if (is.null(dim_name)) {

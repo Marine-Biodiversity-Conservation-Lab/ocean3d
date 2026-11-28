@@ -99,25 +99,6 @@ make_grid_file <- function(lon = c(0.5, 1.5, 2.5), lat = c(10.5, 11.5),
   path
 }
 
-# make_grid_file() with the track and buffer tests' defaults. Unless `values`
-# is given, each value says which cell it is in: 10 * lon + 100 * lat + depth +
-# 1000 * time, with time in hours since 2020-01-01. `missing = TRUE` empties
-# the first longitude. Other arguments go to make_grid_file(), except
-# `positive`, `var_units` and `time_units`, which this wrapper sets.
-.make_track_nc <- function(
-  path, lon = 0:2, lat = c(0, 1), depth = NULL, time = NULL,
-  values = outer(outer(10 * lon, 100 * lat, "+"),
-                 outer(depth %||% 0, 1000 * (time %||% 0), "+"), "+"),
-  missing = FALSE, ...
-) {
-  if (missing) values[1L, , , ] <- NA_real_
-  make_grid_file(
-    lon, lat, depth, time, path = path, values = values,
-    positive = if (!is.null(depth)) "down", var_units = "degree_Celsius",
-    time_units = "hours since 2020-01-01 00:00:00", ...
-  )
-}
-
 # Sets attributes, given as `name = value`, on variable `var` of an existing
 # file. For attributes make_grid_file() can't set, such as those of a bounds
 # variable.

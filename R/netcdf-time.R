@@ -46,9 +46,7 @@
 # invisibly, and a climatology stops with `ocean3d_error_time_climatology`.
 # With `one_step_ok = TRUE`, as in the core object, a climatology with one
 # time step returns TRUE instead, for the caller to record without a date.
-# Buffer extraction stops on every climatology; point and track extraction
-# accept climatologies and report them instead. `file` names the file in the
-# message.
+# `file` names the file in the message.
 .check_climatology <- function(nc, time_dim, file = NULL,
                                one_step_ok = FALSE) {
   units <- .read_attribute(nc, time_dim, "units")
@@ -394,11 +392,4 @@
     out[i] <- as.integer(idx)
   }
   out
-}
-
-# A source may offer a temporal candidate without implying a coverage interval.
-# Matching and tolerance are handled by .match_time_indices().
-.temporal_source_eligible <- function(time_values, target, resolution) {
-  if (is.null(time_values)) return(TRUE)
-  !is.na(target) && any(!is.na(time_values))
 }

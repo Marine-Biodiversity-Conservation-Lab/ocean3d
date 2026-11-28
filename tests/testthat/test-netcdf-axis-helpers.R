@@ -71,44 +71,7 @@ test_that("longitude cells that overlap modulo 360 are rejected", {
   expect_match(conditionMessage(err), "overlap around the globe")
 })
 
-# Horizontal axes and cell matching --------------------------------------------
-
-test_that("spatial indices respect edges and longitude conventions", {
-  axis <- list(
-    centres = c(0, 1), lower = c(-0.5, 0.5), upper = c(0.5, 1.5),
-    longitude = FALSE, basis = "inferred_midpoints"
-  )
-  expect_identical(.containing_axis_indices(axis, -0.5), 1L)
-  expect_identical(.containing_axis_indices(axis, 1.5), 2L)
-  expect_length(.containing_axis_indices(axis, 1.6), 0L)
-  axis <- list(
-    centres = c(179, 181), lower = c(178, 180), upper = c(180, 182),
-    longitude = TRUE, basis = "inferred_midpoints"
-  )
-  expect_identical(.containing_axis_indices(axis, -179), 2L)
-  expect_identical(.containing_axis_indices(axis, 181), 2L)
-  expect_length(.containing_axis_indices(axis, 0), 0L)
-})
-
-test_that("singleton axes do not invent spatial coverage", {
-  axis <- list(
-    centres = 40, lower = 40, upper = 40,
-    longitude = FALSE, basis = "singleton_coordinate"
-  )
-  expect_identical(.containing_axis_indices(axis, 40), 1L)
-  expect_length(.containing_axis_indices(axis, 41), 0L)
-})
-
-test_that("single-precision station coordinates match their own station", {
-  station <- as.numeric(c(-122.40000152587891, 36.79999923706055))
-  lon <- list(centres = station[1], lower = station[1], upper = station[1],
-              longitude = TRUE, basis = "singleton_coordinate")
-  lat <- list(centres = station[2], lower = station[2], upper = station[2],
-              longitude = FALSE, basis = "singleton_coordinate")
-  expect_identical(.containing_axis_indices(lon, -122.4), 1L)
-  expect_identical(.containing_axis_indices(lat, 36.8), 1L)
-  expect_length(.containing_axis_indices(lon, -122.401), 0L)
-})
+# Horizontal axes --------------------------------------------------------------
 
 test_that("irregular descending axes preserve original indices", {
   path <- tempfile(fileext = ".nc")
@@ -119,9 +82,10 @@ test_that("irregular descending axes preserve original indices", {
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   axis <- .read_interval_axis(nc, "lon", "lon")
   expect_identical(axis$basis, "inferred_midpoints")
-  expect_identical(.containing_axis_indices(axis, 5), 1L)
-  expect_identical(.containing_axis_indices(axis, 0), 3L)
-  expect_length(.containing_axis_indices(axis, 20), 0L)
+  # Each cell keeps its place in the file, with edges halfway between.
+  expect_equal(axis$centres, c(5, 2, 0))
+  expect_equal(axis$lower, c(3.5, 1, -1))
+  expect_equal(axis$upper, c(6.5, 3.5, 1))
 })
 
 test_that("spatial axes check their values and wrap whole-globe cells", {
@@ -183,179 +147,8 @@ test_that("longitude and latitude stored out of order are rejected", {
   }
 })
 
-test_that("geographic proximity is not independent degree subtraction", {
-  # At high latitude the geographically closest centre is not necessarily
-  # the one with the smallest latitude difference.
-  result <- .nearest_horizontal_cell(60, c(80, 85), 1L, 1:2, 0, 80)
-  expect_identical(result$lat_idx, 2L)
-  expect_identical(result$lon_idx, 1L)
-  expect_gt(result$distance_km, 0)
-  whole <- .nearest_horizontal_cells(60, c(80, 85), 0, 80)[[1L]]
-  expect_equal(result, whole)
-})
-
-test_that("nearest cells and longitudes wrap around the antimeridian", {
-  selected <- .nearest_horizontal_cell(
-    c(179, -170), 40, 1:2, 1L, -179.9, 40
-  )
-  expect_identical(selected$lon_idx, 1L)
+test_that("longitudes wrap around the antimeridian", {
   expect_equal(.normalise_longitude(c(-160, 200)), c(-160, -160))
-})
-
-match_one_cell <- function(lon_axis, lat_axis, lon_values, lat_values,
-                           lon_target, lat_target, spatial_match,
-                           max_distance_km) {
-  match_cells <- getFromNamespace(".match_horizontal_cells", "ocean3d")
-  match_row <- getFromNamespace(".horizontal_match_row", "ocean3d")
-  match_row(match_cells(
-    lon_axis, lat_axis, lon_values, lat_values, lon_target, lat_target,
-    spatial_match, max_distance_km
-  ), 1L)
-}
-
-test_that("horizontal selection records accepted and rejected candidates", {
-  inside <- list(
-    centres = 0, lower = 0, upper = 0, longitude = FALSE
-  )
-  longitude <- inside
-  longitude$longitude <- TRUE
-  accepted <- match_one_cell(
-    longitude, inside, 0, 0, 0.01, 0, "nearest", 2
-  )
-  expect_true(accepted$accepted)
-  expect_identical(accepted$reason, "matched")
-  expect_equal(accepted$selected_lon, 0)
-  expect_equal(accepted$selected_lat, 0)
-  expect_gt(accepted$distance_km, 1)
-  rejected <- match_one_cell(
-    longitude, inside, 0, 0, 0.01, 0, "nearest", 0.5
-  )
-  expect_false(rejected$accepted)
-  expect_identical(rejected$reason, "distance_limit_exceeded")
-  expect_gt(rejected$distance_km, 1)
-  outside <- match_one_cell(
-    longitude, inside, 0, 0, 0.01, 0, "within", NULL
-  )
-  expect_identical(outside$reason, "outside_grid")
-  invalid <- match_one_cell(
-    longitude, inside, 0, 0, NA_real_, 0, "nearest", 5
-  )
-  expect_identical(invalid$reason, "invalid_coordinates")
-})
-
-test_that("cell containment is separate from overall coverage", {
-  lon <- list(centres = c(0, 1), lower = c(-0.01, -0.5),
-              upper = c(0.01, 1.5), longitude = TRUE)
-  lat <- list(centres = 0, lower = 0, upper = 0, longitude = FALSE)
-  result <- match_one_cell(lon, lat, c(0, 1), 0, 0.1, 0,
-                           "nearest", 100)
-  expect_true(result$accepted)
-  expect_true(result$inside_coverage)
-  expect_false(result$inside_selected_cell)
-  expect_equal(result$lon_idx, 1L)
-  lon <- list(centres = c(179, 181), lower = c(178, 180),
-              upper = c(180, 182), longitude = TRUE)
-  wrapped <- match_one_cell(lon, lat, c(179, -179), 0, 181, 0,
-                            "nearest", 100)
-  expect_true(wrapped$inside_selected_cell)
-  expect_true(wrapped$inside_coverage)
-})
-
-test_that("great-circle distances match sf under s2", {
-  original <- sf::sf_use_s2()
-  on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
-  suppressMessages(sf::sf_use_s2(TRUE))
-  a <- sf::st_sfc(sf::st_point(c(0, 0)), crs = 4326)
-  points <- rbind(c(1, 1), c(179.5, -60), c(-179.9, 89), c(0.01, 0))
-  for (k in seq_len(nrow(points))) {
-    b <- sf::st_sfc(sf::st_point(points[k, ]), crs = 4326)
-    expect_equal(
-      .great_circle_km(0, 0, points[k, 1], points[k, 2]),
-      as.numeric(sf::st_distance(a, b)) / 1000,
-      tolerance = 1e-12
-    )
-  }
-})
-
-test_that("matching does not depend on the sf s2 setting", {
-  original <- sf::sf_use_s2()
-  on.exit(suppressMessages(sf::sf_use_s2(original)), add = TRUE)
-  suppressMessages(sf::sf_use_s2(FALSE))
-  lon <- list(centres = c(0, 1), lower = c(-0.5, 0.5), upper = c(0.5, 1.5),
-              longitude = TRUE)
-  lat <- list(centres = c(40, 41), lower = c(39.5, 40.5),
-              upper = c(40.5, 41.5), longitude = FALSE)
-  for (spatial_match in c("within", "nearest")) {
-    matches <- .match_horizontal_cells(lon, lat, c(0, 1), c(40, 41),
-                                       c(0.1, 1.4), c(40, 40),
-                                       spatial_match, 100)
-    expect_identical(matches$lon_idx, 1:2)
-    expect_identical(matches$lat_idx, c(1L, 1L))
-  }
-})
-
-test_that("whole-grid nearest search matches a search over every cell", {
-  set.seed(42)
-  lon <- c(seq(-179.5, 179.5, by = 7), 180)
-  lat <- sort(c(-90, runif(20, -89, 89), 90))
-  x <- c(runif(60, -360, 360), 180, -180, 179.99, 0, 10)
-  y <- c(runif(60, -90, 90), 0, 89.9, -89.9, 90, -90)
-  fast <- .nearest_horizontal_cells(lon, lat, x, y)
-  for (k in seq_along(x)) {
-    slow <- .nearest_horizontal_cell(lon, lat, seq_along(lon),
-                                     seq_along(lat), x[k], y[k])
-    expect_equal(fast[[k]]$distance_km, slow$distance_km, tolerance = 1e-12)
-    # Away from the poles the selected cell is the same too.
-    if (abs(y[k]) < 89) {
-      expect_identical(fast[[k]][c("lon_idx", "lat_idx")],
-                       slow[c("lon_idx", "lat_idx")])
-    }
-  }
-  invalid <- .nearest_horizontal_cells(lon, lat, c(NA, 0, Inf), c(0, 91, 0))
-  expect_true(all(vapply(invalid, is.null, logical(1))))
-  expect_length(.nearest_horizontal_cells(lon, lat, numeric(), numeric()), 0L)
-})
-
-test_that("exact distance ties keep the first cell in storage order", {
-  batch <- .nearest_horizontal_cells(c(0, 0), 0, c(0, 0), c(0, 0))
-  expect_identical(batch[[1L]]$lon_idx, 1L)
-  expect_identical(batch[[2L]]$lon_idx, 1L)
-  expect_equal(batch[[1L]]$distance_km, 0)
-  # A point on a shared edge is equally far from both centres; rounding
-  # noise must not decide, so the first (west/south) cell is kept.
-  lon <- seq(-4.5, 4.5, 1)
-  lat <- seq(35.5, 44.5, 1)
-  for (y in lat) {
-    edge <- .nearest_horizontal_cell(lon, lat, 4:5, which(lat == y), -1, y)
-    expect_identical(edge$lon_idx, 4L)
-    nearest <- .nearest_horizontal_cells(lon, lat, -1, y)[[1L]]
-    expect_identical(nearest$lon_idx, 4L)
-  }
-  # A point just off the edge still gets the truly closer cell.
-  off <- .nearest_horizontal_cell(lon, lat, 4:5, 1L, -1 + 1e-6, 35.5)
-  expect_identical(off$lon_idx, 5L)
-})
-
-test_that("nearest candidates preserve matching limits and containment", {
-  lon <- list(centres = c(0, 1), lower = c(-0.5, 0.5),
-              upper = c(0.5, 1.5), longitude = TRUE)
-  lat <- list(centres = 40, lower = 39, upper = 41, longitude = FALSE)
-  x <- c(0, 0.1, 1.6, NA)
-  y <- rep(40, 4)
-  nearest <- .nearest_horizontal_cells(c(0, 1), 40, x, y)
-  distance <- nearest[[3L]]$distance_km
-  for (limit in c(0, 1, 100, distance, distance - 1e-6)) {
-    matches <- .match_horizontal_cells(lon, lat, c(0, 1), 40, x, y,
-                                       "nearest", limit)
-    for (i in 1:3) {
-      expect_identical(matches$lon_idx[i], nearest[[i]]$lon_idx)
-      expect_identical(matches$accepted[i],
-                       nearest[[i]]$distance_km <= limit)
-    }
-    expect_identical(matches$reason[4L], "invalid_coordinates")
-  }
-  expect_false(matches$inside_coverage[3L])
-  expect_true(matches$inside_selected_cell[2L])
 })
 
 # Depth axes (.prepare_depth_axis()) -------------------------------------------
@@ -447,7 +240,7 @@ test_that("shared bounds edges that differ by rounding are accepted", {
   on.exit(ncdf4::nc_close(nc), add = TRUE)
   axis <- .read_interval_axis(nc, "lon", "lon")
   expect_identical(axis$basis, "explicit_bounds")
-  expect_identical(.containing_axis_indices(axis, 120), 201L)
+  expect_equal(c(axis$lower[201], axis$upper[201]), c(119.95, 120.05))
 })
 
 # Interval axes (.read_interval_axis()) ----------------------------------------
