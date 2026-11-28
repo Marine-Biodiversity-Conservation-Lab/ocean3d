@@ -333,6 +333,23 @@ test_that("a grid mapping is found in the variable's group", {
   }
 })
 
+test_that("a grid mapping is found in an ancestor group", {
+  etrs89 <- terra::crs("EPSG:4258")
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  lon <- ncdf4::ncdim_def("a/b/lon", "degrees_east", c(0.5, 1.5))
+  lat <- ncdf4::ncdim_def("a/b/lat", "degrees_north", c(10.5, 11.5))
+  nc <- ncdf4::nc_create(f, list(
+    ncdf4::ncvar_def("a/b/temp", "degC", list(lon, lat), -9999),
+    ncdf4::ncvar_def("a/crs", "", list(), prec = "integer")
+  ), force_v4 = TRUE)
+  ncdf4::ncvar_put(nc, "a/b/temp", matrix(1:4, 2))
+  ncdf4::ncatt_put(nc, "a/crs", "crs_wkt", etrs89)
+  ncdf4::ncatt_put(nc, "a/b/temp", "grid_mapping", "crs")
+  ncdf4::nc_close(nc)
+  expect_identical(as_proxy(f, var = "a/b/temp")@crs, etrs89)
+})
+
 test_that("an open connection is read and left open", {
   f <- make_grid_file()
   nc <- ncdf4::nc_open(f)

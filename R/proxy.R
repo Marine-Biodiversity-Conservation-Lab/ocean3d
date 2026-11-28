@@ -363,15 +363,20 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
   mappings <- .grid_mappings(.read_attribute(nc, var, "grid_mapping"))
   if (!length(mappings)) return("EPSG:4326")
   # References as ncdf4 names them: an absolute path without its leading
-  # `/`; a relative one in the variable's group if the group has it (the
-  # nearest scope wins, as in CF), otherwise as it is.
+  # `/`; a relative one in the nearest group that has it, searching from the
+  # variable's group up to the root (CF's search by proximity).
   known <- c(names(nc$var), names(nc$dim))
+  groups <- character()
+  group <- dirname(var)
+  while (group != ".") {
+    groups <- c(groups, group)
+    group <- dirname(group)
+  }
   resolve <- function(refs) {
     vapply(refs, function(ref) {
       if (startsWith(ref, "/")) return(sub("^/", "", ref))
-      in_group <- file.path(dirname(var), ref)
-      if (grepl("/", var, fixed = TRUE) && in_group %in% known) in_group else
-        ref
+      found <- intersect(file.path(groups, ref), known)
+      if (length(found)) found[1L] else ref
     }, character(1), USE.NAMES = FALSE)
   }
   if (length(mappings) > 1L) {
