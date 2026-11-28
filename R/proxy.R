@@ -357,13 +357,15 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 
 # EPSG:4326, or the geographic CRS the variable's grid mapping gives as WKT.
 # `lon` and `lat` are the grid's dimensions; with several mappings in CF's
-# extended form, the one whose coordinates include both is used.
+# extended form, the one whose coordinates include both is used. Names in
+# the attribute are relative to the variable's group (#93).
 .proxy_crs <- function(nc, var, lon, lat) {
   mappings <- .grid_mappings(.read_attribute(nc, var, "grid_mapping"))
   if (!length(mappings)) return("EPSG:4326")
   if (length(mappings) > 1L) {
-    applies <- vapply(mappings, function(coords) all(c(lon, lat) %in% coords),
-                      logical(1))
+    applies <- vapply(mappings, function(coords) {
+      all(basename(c(lon, lat)) %in% basename(coords))
+    }, logical(1))
     if (!any(applies)) {
       listed <- toString(paste0("`", names(mappings), "`"))
       rlang::abort(glue::glue(
@@ -375,6 +377,11 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
     mappings <- mappings[applies]
   }
   mapping <- names(mappings)[1L]
+  if (grepl("/", var, fixed = TRUE) && !startsWith(mapping, "/")) {
+    in_group <- file.path(dirname(var), mapping)
+    if (in_group %in% names(nc$var)) mapping <- in_group
+  }
+  mapping <- sub("^/", "", mapping)
   if (!mapping %in% names(nc$var)) {
     rlang::abort(glue::glue(
       "Variable `{var}` uses the grid mapping `{mapping}`, but the file has ",

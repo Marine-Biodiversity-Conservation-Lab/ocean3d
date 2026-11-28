@@ -309,6 +309,27 @@ test_that("CF's extended grid_mapping form is read", {
   }
 })
 
+test_that("a grid mapping is found in the variable's group", {
+  etrs89 <- terra::crs("EPSG:4258")
+  f <- tempfile(fileext = ".nc")
+  on.exit(unlink(f), add = TRUE)
+  lon <- ncdf4::ncdim_def("grp/lon", "degrees_east", c(0.5, 1.5))
+  lat <- ncdf4::ncdim_def("grp/lat", "degrees_north", c(10.5, 11.5))
+  nc <- ncdf4::nc_create(f, list(
+    ncdf4::ncvar_def("grp/temp", "degC", list(lon, lat), -9999),
+    ncdf4::ncvar_def("grp/crs", "", list(), prec = "integer")
+  ), force_v4 = TRUE)
+  ncdf4::ncvar_put(nc, "grp/temp", matrix(1:4, 2))
+  ncdf4::ncatt_put(nc, "grp/crs", "crs_wkt", etrs89)
+  ncdf4::nc_close(nc)
+
+  for (grid_mapping in c("crs", "crs: lat lon", "other: x y crs: lon lat")) {
+    set_atts(f, "grp/temp", grid_mapping = grid_mapping)
+    expect_identical(as_proxy(f, var = "grp/temp")@crs, etrs89,
+                     label = grid_mapping)
+  }
+})
+
 test_that("an open connection is read and left open", {
   f <- make_grid_file()
   nc <- ncdf4::nc_open(f)
