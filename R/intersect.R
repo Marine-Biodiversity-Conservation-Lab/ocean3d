@@ -680,30 +680,69 @@ setMethod(
     if (x@type == "points" || y@type == "points") {
       return(.points_in_polygons(x, y, resolution))
     }
-    as_pieces <- function(v, suffix) {
-      f <- v@features
-      out <- sf::st_sf(f[c("feature_id", "depth_min", "depth_max",
-                           "time_start", "time_end")],
-                       geometry = f$geometry)
-      names(out)[1:5] <- paste0(names(out)[1:5], suffix)
-      # Depths and times hold for the whole polygon, which tells sf not to
-      # warn that they might not.
-      sf::st_agr(out) <- "constant"
-      out
+    fx <- x@features
+    fy <- y@features
+    # Only pairs whose outlines meet can share space, so they are found
+    # first with sf::st_intersects(), which uses a spatial index. On the
+    # sphere the closed model also counts outlines that only touch, so no
+    # pair with a shared area is missed. The pairs are put in order by
+    # polygon of `y`, then of `x`, the order sf::st_intersection() gives.
+    on_sphere <- sf::sf_use_s2()
+    hits <- if (on_sphere) {
+      sf::st_intersects(fx$geometry, fy$geometry, model = "closed")
+    } else {
+      # sf says once, from the intersection below, that it treats
+      # longitude and latitude as planar.
+      suppressMessages(sf::st_intersects(fx$geometry, fy$geometry))
     }
-    pairs <- sf::st_intersection(as_pieces(x, "_x"), as_pieces(y, "_y"))
+    i <- rep(seq_along(hits), lengths(hits))
+    # as.integer(): with no polygons in `x`, unlist() gives NULL.
+    j <- as.integer(unlist(hits))
+    order_y <- order(j, i)
+    i <- i[order_y]
+    j <- j[order_y]
 
-    depth_min <- pmax(pairs$depth_min_x, pairs$depth_min_y)
-    depth_max <- pmin(pairs$depth_max_x, pairs$depth_max_y)
+    depth_min <- pmax(fx$depth_min[i], fy$depth_min[j])
+    depth_max <- pmin(fx$depth_max[i], fy$depth_max[j])
     # A polygon without a time is there at any time, so the pair takes the
     # other polygon's interval. Intervals are closed: with dates, both
     # include their end day, so two that share a day overlap on it.
-    time_start <- pmax(pairs$time_start_x, pairs$time_start_y, na.rm = TRUE)
-    time_end <- pmin(pairs$time_end_x, pairs$time_end_y, na.rm = TRUE)
+    time_start <- pmax(fx$time_start[i], fy$time_start[j], na.rm = TRUE)
+    time_end <- pmin(fx$time_end[i], fy$time_end[j], na.rm = TRUE)
+    # Strict `>`, as for envelopes: depth ranges that only touch share no
+    # water.
+    overlap <- depth_max > depth_min &
+      (is.na(time_start) | time_start <= time_end)
+    i <- i[overlap]
+    j <- j[overlap]
+
+    # The shared outline is built only for the pairs that share depths and
+    # times, one pair at a time, with the model sf::st_intersection() uses.
+    # On the sphere, the s2 result is converted through well-known binary:
+    # sf::st_as_sfc() on an s2 result splits a lone collection into its
+    # parts, one row each, which would put the outlines out of line with
+    # their pairs.
+    geometry <- if (on_sphere) {
+      shared <- s2::s2_intersection(fx$geometry[i], fy$geometry[j],
+                                    s2::s2_options(model = "semi-open"))
+      shared <- sf::st_as_sfc(s2::s2_as_binary(shared), crs = 4326)
+      # As sf::st_intersection() did: when every pair that meets gives a
+      # polygon, a mix of polygons and multipolygons becomes multipolygons.
+      met <- !sf::st_is_empty(shared)
+      types <- as.character(sf::st_geometry_type(shared[met]))
+      if (all(types %in% c("POLYGON", "MULTIPOLYGON")) &&
+            "MULTIPOLYGON" %in% types) {
+        shared[met] <- sf::st_cast(shared[met], "MULTIPOLYGON")
+      }
+      shared
+    } else {
+      sf::st_intersection(fx$geometry[i], fy$geometry[j], by_element = TRUE)
+    }
     # Outlines that only share an edge or corner give lines or points,
-    # which have no area; a collection keeps its polygon parts.
-    geometry <- lapply(sf::st_geometry(pairs), function(g) {
-      if (inherits(g, "GEOMETRYCOLLECTION")) {
+    # which have no area; a collection keeps its polygon parts. Pairs that
+    # share nothing give an empty collection, which stays empty.
+    geometry <- lapply(geometry, function(g) {
+      if (inherits(g, "GEOMETRYCOLLECTION") && length(g) > 0L) {
         # On one geometry, st_collection_extract() and st_union() give a
         # geometry, not a column, so the parts go in a column first.
         parts <- sf::st_sfc(sf::st_collection_extract(g, "POLYGON"))
@@ -712,21 +751,17 @@ setMethod(
       g
     })
     geometry <- sf::st_sfc(geometry, crs = 4326)
-    polygonal <- sf::st_geometry_type(geometry) %in%
+    keep <- sf::st_geometry_type(geometry) %in%
       c("POLYGON", "MULTIPOLYGON") & !sf::st_is_empty(geometry)
-    # Strict `>`, as for envelopes: depth ranges that only touch share no
-    # water.
-    keep <- polygonal & depth_max > depth_min &
-      (is.na(time_start) | time_start <= time_end)
 
     features <- data.frame(
       feature_id = as.character(seq_len(sum(keep))),
-      depth_min = depth_min[keep],
-      depth_max = depth_max[keep],
-      time_start = time_start[keep],
-      time_end = time_end[keep],
-      feature_id_x = pairs$feature_id_x[keep],
-      feature_id_y = pairs$feature_id_y[keep],
+      depth_min = depth_min[overlap][keep],
+      depth_max = depth_max[overlap][keep],
+      time_start = time_start[overlap][keep],
+      time_end = time_end[overlap][keep],
+      feature_id_x = fx$feature_id[i][keep],
+      feature_id_y = fy$feature_id[j][keep],
       stringsAsFactors = FALSE
     )
     features$geometry <- geometry[keep]
@@ -786,9 +821,7 @@ setMethod(
 
 # Two SpatVector3D sets: for each feature of `x`, the features of `y` it
 # shares 3D space with. The pairs come from intersect_3d(), so the two always
-# agree. For two polygon sets that builds every shared outline, which a
-# yes/no answer doesn't need; testing outlines with a predicate that ignores
-# shared edges, then depths and times, would be faster for large sets.
+# agree.
 #' @rdname intersects_3d
 #' @export
 setMethod(

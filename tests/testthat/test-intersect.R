@@ -1215,6 +1215,159 @@ test_that("intersects_3d() of polygon sets lists the pairs that share space", {
                         b4 = character(0)))
 })
 
+test_that("intersects_3d() of polygon sets skips outlines that only touch", {
+  rect <- function(x0, x1, y0 = 0, y1 = 1) {
+    sf::st_polygon(list(rbind(c(x0, y0), c(x1, y0), c(x1, y1), c(x0, y1),
+                              c(x0, y0))))
+  }
+  # a1: 0-100 m, 1 to 15 January; a2: 0-100 m, no time.
+  a <- sf::st_sf(id = c("a1", "a2"),
+                 start = as.Date(c("2020-01-01", NA)),
+                 end = as.Date(c("2020-01-15", NA)),
+                 geometry = sf::st_sfc(rect(0, 1), rect(10, 11), crs = 4326))
+  a <- as_vector3d(a, id = "id", time = c("start", "end"),
+                   depth_min = 0, depth_max = 100)
+  cases <- list(
+    list(label = "overlap", geometry = rect(0.5, 2), top = 0,
+         start = NA, end = NA, a1 = TRUE),
+    list(label = "whole shared edge", geometry = rect(1, 2), top = 0,
+         start = NA, end = NA, a1 = FALSE),
+    list(label = "part of an edge", geometry = rect(1, 2, 0.5, 0.7), top = 0,
+         start = NA, end = NA, a1 = FALSE),
+    # a1's corner lies on b1's edge, and the two edges overlap from there.
+    list(label = "edges that overlap in part", geometry = rect(1, 2, 0.5, 3),
+         top = 0, start = NA, end = NA, a1 = FALSE),
+    list(label = "corner", geometry = rect(1, 2, 1, 2), top = 0,
+         start = NA, end = NA, a1 = FALSE),
+    list(label = "touching depths", geometry = rect(0.5, 2), top = 100,
+         start = NA, end = NA, a1 = FALSE),
+    # Dates include their end day, so sharing 15 January is an overlap.
+    list(label = "one shared day", geometry = rect(0.5, 2), top = 0,
+         start = "2020-01-15", end = "2020-01-31", a1 = TRUE),
+    list(label = "next day", geometry = rect(0.5, 2), top = 0,
+         start = "2020-01-16", end = "2020-01-31", a1 = FALSE)
+  )
+  old <- suppressMessages(sf::sf_use_s2())
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  for (s2 in c(TRUE, FALSE)) {
+    suppressMessages(sf::sf_use_s2(s2))
+    for (case in cases) {
+      label <- glue::glue("{case$label}, s2 = {s2}")
+      # b2 overlaps a2, which has no time, so it is listed whatever b's
+      # times are.
+      b <- sf::st_sf(id = c("b1", "b2"), top = c(case$top, 0),
+                     start = as.Date(case$start), end = as.Date(case$end),
+                     geometry = sf::st_sfc(case$geometry, rect(10.5, 12),
+                                           crs = 4326))
+      b <- as_vector3d(b, id = "id", time = c("start", "end"),
+                       depth_min = "top", depth_max = 200)
+      expected <- list(a1 = if (case$a1) "b1" else character(0), a2 = "b2")
+      expect_identical(suppressMessages(intersects_3d(a, b)), expected,
+                       label = label)
+    }
+  }
+})
+
+test_that("polygon sets with edges at computed coordinates share area", {
+  # Corners at x0 / 3 lie on the slanted edge from (0, 0) to (3, 1) as near
+  # as floating point allows. On top of the edge, the two share only a line;
+  # a nanodegree above it, a sliver with an area. On the sphere, that sliver
+  # comes with a line, as a collection, and it is the only pair.
+  pg <- function(m) sf::st_polygon(list(rbind(m, m[1, ])))
+  a <- as_vector3d(sf::st_sf(id = "a1", geometry = sf::st_sfc(
+    pg(rbind(c(0, 0), c(3, 1), c(0, 1))), crs = 4326
+  )), id = "id", depth_min = 0, depth_max = 100)
+  box <- function(x0, lift) {
+    p <- pg(rbind(c(x0, x0 / 3 + lift), c(x0 + 0.1, (x0 + 0.1) / 3 + lift),
+                  c(x0 + 0.1, x0 / 3 - 0.5), c(x0, x0 / 3 - 0.5)))
+    as_vector3d(sf::st_sf(id = "b1", geometry = sf::st_sfc(p, crs = 4326)),
+                id = "id", depth_min = 0, depth_max = 100)
+  }
+  cases <- list(
+    list(label = "on the edge", b = box(1.1, 0), n = 0L),
+    list(label = "on the edge, at the corner", b = box(2.9, 0), n = 0L),
+    list(label = "a sliver above it", b = box(2.9, 1e-9), n = 1L)
+  )
+  old <- suppressMessages(sf::sf_use_s2())
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  for (s2 in c(TRUE, FALSE)) {
+    suppressMessages(sf::sf_use_s2(s2))
+    for (case in cases) {
+      label <- glue::glue("{case$label}, s2 = {s2}")
+      shared <- suppressMessages(intersect_3d(a, case$b))
+      expect_identical(length(shared), case$n, label = label)
+      expect_identical(suppressMessages(intersects_3d(a, case$b)),
+                       list(a1 = rep("b1", case$n)), label = label)
+    }
+  }
+})
+
+test_that("intersect_3d() of polygon sets takes an empty set", {
+  far <- function(x0) {
+    sf::st_polygon(list(rbind(c(x0, 0), c(x0 + 1, 0), c(x0 + 1, 1),
+                              c(x0, 1), c(x0, 0))))
+  }
+  a <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(far(0), crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  b <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(far(5), crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  none <- suppressMessages(intersect_3d(a, b))
+  old <- suppressMessages(sf::sf_use_s2())
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  for (s2 in c(TRUE, FALSE)) {
+    suppressMessages(sf::sf_use_s2(s2))
+    for (pair in list(list(none, a), list(a, none))) {
+      shared <- suppressMessages(intersect_3d(pair[[1]], pair[[2]]))
+      expect_s4_class(shared, "SpatVector3D")
+      expect_identical(length(shared), 0L, label = glue::glue("s2 = {s2}"))
+    }
+    expect_identical(suppressMessages(intersects_3d(a, none)),
+                     list(`1` = character(0)))
+  }
+})
+
+test_that("intersect_3d() of polygon sets gives multipolygons on the sphere", {
+  # With sf's spherical geometry, when every pair that meets shares a
+  # polygon and one shares a multipolygon, every pair gets a multipolygon,
+  # as sf::st_intersection() of two sets gives.
+  rect <- function(x0, x1) {
+    rbind(c(x0, 0), c(x1, 0), c(x1, 1), c(x0, 1), c(x0, 0))
+  }
+  two_parts <- sf::st_multipolygon(list(list(rect(0, 1)), list(rect(3, 4))))
+  x <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(two_parts, crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  y <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(
+    sf::st_polygon(list(rect(0.5, 3.5))), sf::st_polygon(list(rect(0.2, 0.4))),
+    crs = 4326
+  )), depth_min = 0, depth_max = 100)
+  old <- suppressMessages(sf::sf_use_s2(TRUE))
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  geometry <- as.data.frame(intersect_3d(x, y))$geometry
+  expect_identical(as.character(sf::st_geometry_type(geometry)),
+                   c("MULTIPOLYGON", "MULTIPOLYGON"))
+})
+
+test_that("intersect_3d() of polygon sets says once that it is planar", {
+  # With planar geometry, sf says that it treats longitude and latitude as
+  # planar once per call.
+  square <- function(x0) {
+    sf::st_polygon(list(rbind(c(x0, 0), c(x0 + 2, 0), c(x0 + 2, 1),
+                              c(x0, 1), c(x0, 0))))
+  }
+  x <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(square(0), crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  y <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(square(1), crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  old <- suppressMessages(sf::sf_use_s2(FALSE))
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  said <- character(0)
+  withCallingHandlers(intersect_3d(x, y), message = function(m) {
+    said <<- c(said, conditionMessage(m))
+    invokeRestart("muffleMessage")
+  })
+  expect_identical(sum(grepl("planar", said)), 1L)
+})
+
 test_that("intersect_3d() of polygon sets keeps the polygon part of a mix", {
   # With planar geometry, a two-part polygon that overlaps a square in one
   # part and only touches it in the other gives a polygon and a line.

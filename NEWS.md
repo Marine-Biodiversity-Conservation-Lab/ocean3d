@@ -605,6 +605,10 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## Bug fixes
 
+* `intersect_3d()` of two sets of `SpatVector3D` polygons no longer stops
+  with "replacement has 2 rows, data has 1" when, with sf's spherical
+  geometry, the only pair that meets shares a polygon and a line. It now
+  gives that pair's polygon, and `intersects_3d()` lists the pair (#179).
 * `woa_download(resolution = 5)` looked for the files in a `5deg` directory
   that NCEI doesn't have, so every 5-degree download failed with a
   "not found" (404) error. It now uses NCEI's `5.00` directory. When the
@@ -676,6 +680,13 @@ an exact match and stop otherwise. For the old behaviour, pass
   first (#93).
 
 ## Minor improvements
+
+* `intersect_3d()` and `intersects_3d()` are faster for two sets of
+  `SpatVector3D` polygons and give the same pairs and shapes as before
+  (#179). In one run of 2000 buffers against 200 areas, `intersects_3d()`
+  took 2.6 s instead of 17 minutes with sf's spherical geometry (the
+  default), and 0.4 s instead of 0.7 s with planar geometry
+  (`sf::sf_use_s2(FALSE)`).
 
 * `vect_to_envelope()` now projects polygons in another CRS onto the CRS of
   `template`, as the 3D query functions do with polygons (#97). It used to
