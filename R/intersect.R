@@ -691,10 +691,13 @@ setMethod(
     hits <- if (on_sphere) {
       sf::st_intersects(fx$geometry, fy$geometry, model = "closed")
     } else {
-      sf::st_intersects(fx$geometry, fy$geometry)
+      # sf says once, from the intersection below, that it treats
+      # longitude and latitude as planar.
+      suppressMessages(sf::st_intersects(fx$geometry, fy$geometry))
     }
     i <- rep(seq_along(hits), lengths(hits))
-    j <- unlist(hits)
+    # as.integer(): with no polygons in `x`, unlist() gives NULL.
+    j <- as.integer(unlist(hits))
     order_y <- order(j, i)
     i <- i[order_y]
     j <- j[order_y]
@@ -722,7 +725,16 @@ setMethod(
     geometry <- if (on_sphere) {
       shared <- s2::s2_intersection(fx$geometry[i], fy$geometry[j],
                                     s2::s2_options(model = "semi-open"))
-      sf::st_as_sfc(s2::s2_as_binary(shared), crs = 4326)
+      shared <- sf::st_as_sfc(s2::s2_as_binary(shared), crs = 4326)
+      # As sf::st_intersection() did: when every pair that meets gives a
+      # polygon, a mix of polygons and multipolygons becomes multipolygons.
+      met <- !sf::st_is_empty(shared)
+      types <- as.character(sf::st_geometry_type(shared[met]))
+      if (all(types %in% c("POLYGON", "MULTIPOLYGON")) &&
+            "MULTIPOLYGON" %in% types) {
+        shared[met] <- sf::st_cast(shared[met], "MULTIPOLYGON")
+      }
+      shared
     } else {
       sf::st_intersection(fx$geometry[i], fy$geometry[j], by_element = TRUE)
     }

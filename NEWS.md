@@ -610,10 +610,11 @@ an exact match and stop otherwise. For the old behaviour, pass
 ## Minor improvements
 
 * `intersect_3d()` and `intersects_3d()` are faster for two sets of
-  `SpatVector3D` polygons and give the same results as before (#179). In
-  one run of 2000 buffers against 200 areas, `intersects_3d()` took 2.6 s
-  instead of 17 minutes with sf's spherical geometry (the default), and
-  0.4 s instead of 0.7 s with planar geometry (`sf::sf_use_s2(FALSE)`).
+  `SpatVector3D` polygons and give the same pairs and shapes as before
+  (#179). In one run of 2000 buffers against 200 areas, `intersects_3d()`
+  took 2.6 s instead of 17 minutes with sf's spherical geometry (the
+  default), and 0.4 s instead of 0.7 s with planar geometry
+  (`sf::sf_use_s2(FALSE)`).
 
 * `vect_to_envelope()` now projects polygons in another CRS onto the CRS of
   `template`, as the 3D query functions do with polygons (#97). It used to

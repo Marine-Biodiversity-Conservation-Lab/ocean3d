@@ -1302,6 +1302,72 @@ test_that("polygon sets with edges at computed coordinates share area", {
   }
 })
 
+test_that("intersect_3d() of polygon sets takes an empty set", {
+  far <- function(x0) {
+    sf::st_polygon(list(rbind(c(x0, 0), c(x0 + 1, 0), c(x0 + 1, 1),
+                              c(x0, 1), c(x0, 0))))
+  }
+  a <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(far(0), crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  b <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(far(5), crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  none <- suppressMessages(intersect_3d(a, b))
+  old <- suppressMessages(sf::sf_use_s2())
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  for (s2 in c(TRUE, FALSE)) {
+    suppressMessages(sf::sf_use_s2(s2))
+    for (pair in list(list(none, a), list(a, none))) {
+      shared <- suppressMessages(intersect_3d(pair[[1]], pair[[2]]))
+      expect_s4_class(shared, "SpatVector3D")
+      expect_identical(length(shared), 0L, label = glue::glue("s2 = {s2}"))
+    }
+    expect_identical(suppressMessages(intersects_3d(a, none)),
+                     list(`1` = character(0)))
+  }
+})
+
+test_that("intersect_3d() of polygon sets gives multipolygons on the sphere", {
+  # With sf's spherical geometry, when every pair that meets shares a
+  # polygon and one shares a multipolygon, every pair gets a multipolygon,
+  # as sf::st_intersection() of two sets gives.
+  rect <- function(x0, x1) {
+    rbind(c(x0, 0), c(x1, 0), c(x1, 1), c(x0, 1), c(x0, 0))
+  }
+  two_parts <- sf::st_multipolygon(list(list(rect(0, 1)), list(rect(3, 4))))
+  x <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(two_parts, crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  y <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(
+    sf::st_polygon(list(rect(0.5, 3.5))), sf::st_polygon(list(rect(0.2, 0.4))),
+    crs = 4326
+  )), depth_min = 0, depth_max = 100)
+  old <- suppressMessages(sf::sf_use_s2(TRUE))
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  geometry <- as.data.frame(intersect_3d(x, y))$geometry
+  expect_identical(as.character(sf::st_geometry_type(geometry)),
+                   c("MULTIPOLYGON", "MULTIPOLYGON"))
+})
+
+test_that("intersect_3d() of polygon sets says once that it is planar", {
+  # With planar geometry, sf says that it treats longitude and latitude as
+  # planar once per call.
+  square <- function(x0) {
+    sf::st_polygon(list(rbind(c(x0, 0), c(x0 + 2, 0), c(x0 + 2, 1),
+                              c(x0, 1), c(x0, 0))))
+  }
+  x <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(square(0), crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  y <- as_vector3d(sf::st_sf(geometry = sf::st_sfc(square(1), crs = 4326)),
+                   depth_min = 0, depth_max = 100)
+  old <- suppressMessages(sf::sf_use_s2(FALSE))
+  on.exit(suppressMessages(sf::sf_use_s2(old)), add = TRUE)
+  said <- character(0)
+  withCallingHandlers(intersect_3d(x, y), message = function(m) {
+    said <<- c(said, conditionMessage(m))
+    invokeRestart("muffleMessage")
+  })
+  expect_identical(sum(grepl("planar", said)), 1L)
+})
+
 test_that("intersect_3d() of polygon sets keeps the polygon part of a mix", {
   # With planar geometry, a two-part polygon that overlaps a square in one
   # part and only touches it in the other gives a polygon and a line.
