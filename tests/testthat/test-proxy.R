@@ -323,7 +323,10 @@ test_that("a grid mapping is found in the variable's group", {
   ncdf4::ncatt_put(nc, "grp/crs", "crs_wkt", etrs89)
   ncdf4::nc_close(nc)
 
-  for (grid_mapping in c("crs", "crs: lat lon", "other: x y crs: lon lat")) {
+  # The last lists a mapping in another group with the same coordinate
+  # names first.
+  for (grid_mapping in c("crs", "crs: lat lon", "other: x y crs: lon lat",
+                         "/crs: /lon /lat /grp/crs: /grp/lon /grp/lat")) {
     set_atts(f, "grp/temp", grid_mapping = grid_mapping)
     expect_identical(as_proxy(f, var = "grp/temp")@crs, etrs89,
                      label = grid_mapping)
