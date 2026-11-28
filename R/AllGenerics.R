@@ -46,6 +46,13 @@ NULL
 #' error shrinks as the levels tighten around the range. Where an envelope's
 #' limits fall exactly on levels under `bounds = "top"`, the two agree.
 #'
+#' The same happens at the seafloor: a level the seafloor cuts counts as a
+#' whole slab, so water 60 m deep on levels that stand for 0-25, 25-50 and
+#' 50-75 m measures as 75 m. Pass the seafloor depth as `seafloor` to count
+#' only the part of each slab above it. This corrects the seafloor only: a
+#' level cut by a shape's own upper or lower depth limit still counts in
+#' full.
+#'
 #' To measure the space two domains share, measure their intersection:
 #' `volume(intersect_3d(a, b))`.
 #'
@@ -82,6 +89,23 @@ NULL
 #'   contributes no volume. Outer edges are clamped to `range(depths)` under
 #'   both. Same argument, same meaning, as in [envelope_to_voxel()]. Not used
 #'   for a voxel that carries its own depth edges (see [SpatVoxel-class]).
+#' @param seafloor SpatVoxel and SpatProxy only. `NULL` (default) counts
+#'   every occupied level as its whole slab. Otherwise the seafloor depth in
+#'   metres as positive numbers increasing downward (land is 0): a
+#'   single-layer `SpatRaster` on the grid of `x`, or one number for a flat
+#'   seafloor. Each occupied level then counts only the part of its slab
+#'   above the seafloor: with a slab from `lower` to `upper`, a thickness of
+#'   `seafloor - lower`, kept between 0 and `upper - lower`. This applies to
+#'   the total, `per_cell` and `per_level`. An occupied level wholly below
+#'   the seafloor measures 0, not `NA`: which levels and cells are `NA`
+#'   still depends only on `x`. GEBCO and other elevation rasters are
+#'   negative below sea level; turn one into a seafloor depth with
+#'   `terra::clamp(-elevation, lower = 0)`, as for [as_envelope()].
+#'   Negative values are an error, and so is `NA` in a cell where
+#'   `x` is occupied (`NA` elsewhere is ignored). The seafloor is one depth
+#'   per cell, so nothing finer than the grid is resolved: a cell that is
+#'   half land still counts its whole area down to that depth. For a
+#'   `SpatProxy`, the same seafloor clips every time step.
 #'
 #' @returns With `per_cell = FALSE`, a number: the total volume in km³. With
 #'   `per_cell = TRUE`, a single-layer `SpatRaster` named `volume` on the grid
@@ -90,7 +114,8 @@ NULL
 #'   `per_level = TRUE` as well, a [SpatVoxel-class] on the depth levels and
 #'   edges of `x`, layers `volume_depth=<value>`: the volume of each cell at
 #'   each level in km³, `NA` where the level is unoccupied. Summing its
-#'   layers gives the per-cell raster.
+#'   layers gives the per-cell raster. With `seafloor`, an occupied level or
+#'   cell with no water above the seafloor is 0.
 #'
 #'   For a [SpatProxy-class], one result per time step: with
 #'   `per_cell = FALSE` a data frame with columns `time` (the step's
@@ -132,6 +157,11 @@ NULL
 #'
 #' # Per cell and level: each occupied level's share of the column.
 #' terra::values(volume(v, per_cell = TRUE, per_level = TRUE))
+#'
+#' # A seafloor at 120 m cuts the 100 m level (50-150 m) to 70 m and leaves
+#' # nothing of the 200 m level: 3 * 1 * 0.12 = 0.36 km³.
+#' volume(v, seafloor = 120)
+#' terra::values(volume(v, per_cell = TRUE, per_level = TRUE, seafloor = 120))
 #'
 #' # Overlap with a second domain at 100-300 m: intersect, then measure.
 #' b <- as_envelope(fp, depth_min = 100, depth_max = 300)

@@ -71,20 +71,56 @@ setMethod("volume", "SpatEnvelope", function(x, per_cell = FALSE,
 setMethod(
   "volume", "SpatVoxel",
   function(x, per_cell = FALSE, per_level = FALSE,
-           bounds = c("midpoint", "top")) {
+           bounds = c("midpoint", "top"), seafloor = NULL) {
     bounds <- match.arg(bounds)
     .check_3d(x, "x")
 
     occ <- .voxel_occupancy(x)
     slab <- .depth_slabs(depths(x), bounds, depth_bounds(x))
+    thickness <- slab$upper - slab$lower
+    if (!is.null(seafloor)) {
+      # A level the seafloor cuts counts only the part of its slab above the
+      # seafloor, and a level wholly below it counts none: per cell and
+      # level, the thickness becomes clamp(seafloor - lower, 0, upper - lower).
+      seafloor <- .grid_value(seafloor, x, "`seafloor`", fill = TRUE)
+      seafloor <- methods::as(seafloor, "SpatRaster")  # remove the 3D class
+      shallowest <- terra::minmax(seafloor, compute = TRUE)[1, 1]
+      # A cell without a seafloor depth can't be clipped. It matters only
+      # under the voxel, so a bathymetry masked to the study area passes.
+      n_unknown <- terra::global(is.na(seafloor) & .footprint(x), "sum")[[1]]
+      problem <- if (isTRUE(shallowest < 0)) {
+        glue::glue(
+          "`seafloor` must be the seafloor depth in metres, positive down; ",
+          "its lowest value is {shallowest}. For elevation that is negative ",
+          "below sea level, such as GEBCO, pass ",
+          "`terra::clamp(-elevation, lower = 0)`."
+        )
+      } else if (n_unknown > 0) {
+        cells <- if (n_unknown == 1) "1 cell" else "{n_unknown} cells"
+        glue::glue(
+          "`seafloor` is NA in ", cells, " where `x` is occupied, so the ",
+          "water there can't be measured. Give those cells a depth (0 for ",
+          "land), or mask `x` to the cells that have one."
+        )
+      }
+      if (!is.null(problem)) {
+        rlang::abort(problem, class = "ocean3d_error_volume_seafloor",
+                     call = NULL)
+      }
+      thickness <- terra::rast(lapply(seq_along(thickness), function(i) {
+        terra::clamp(seafloor - slab$lower[i], lower = 0,
+                     upper = thickness[i])
+      }))
+    }
     # Summing thickness over occupied levels only is what makes an interior
     # gap cost volume, unlike voxel_to_envelope() plus the envelope formula.
     # The raster stays on the left of the operator: terra mishandles
     # `numeric <op> SpatRaster`. The vector is recycled layer-wise.
-    occupied_m <- occ * (slab$upper - slab$lower)
+    occupied_m <- occ * thickness
     if (per_level) {
       # Each occupied level's volume, NA where a level is unoccupied, as
-      # everywhere a shape is absent (SPEC.md, "Absent is NA").
+      # everywhere a shape is absent (SPEC.md, "Absent is NA"). An occupied
+      # level below the seafloor is a measurement of no water: 0, not NA.
       per_level_km3 <- terra::mask(.cell_area_km2(x) * (occupied_m / 1000),
                                    occ, maskvalues = 0)
       return(as_voxel(per_level_km3, depths = depths(x), varname = "volume",
@@ -145,8 +181,9 @@ setMethod("volume", "SpatRaster",
 # .read_time_steps(); a step larger than the read budget is read in groups of
 # depth layers. Every group is read with the proxy's depth edges, so each
 # layer stands for the same slab whichever layers are read with it, and the
-# groups' volumes add up to the whole step's. Only the per-cell result keeps
-# a raster per step.
+# groups' volumes add up to the whole step's, with or without `seafloor`,
+# which clips each layer on its own. Only the per-cell result keeps a raster
+# per step.
 #' @rdname volume
 #' @param fun SpatProxy only. Which values count as occupied, as in
 #'   [occupied()]: `NULL` (default) counts every non-`NA` value; otherwise a
@@ -170,7 +207,7 @@ setMethod("volume", "SpatRaster",
 #' @export
 setMethod("volume", "SpatProxy", function(x, per_cell = FALSE,
                                           per_level = FALSE, fun = NULL,
-                                          ...) {
+                                          seafloor = NULL, ...) {
   .no_extra_args(...)
   .check_per_level(per_level, per_cell, "A SpatProxy",
                    reason = "is measured one time step at a time",
@@ -211,7 +248,7 @@ setMethod("volume", "SpatProxy", function(x, per_cell = FALSE,
                             variable$name, "nearest", NULL, depth = span)
       times[step] <<- as.numeric(.voxel_time(v))
       if (!is.null(fun)) v <- occupied(v, fun)
-      part <- volume(v, per_cell = per_cell)
+      part <- volume(v, per_cell = per_cell, seafloor = seafloor)
       # Added up as each group is read, so only the running total is kept.
       # A cell stays NA until a group has water in it, as volume() gives.
       total <- if (is.null(total)) {

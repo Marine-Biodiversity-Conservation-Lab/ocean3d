@@ -13,13 +13,26 @@ volume(x, per_cell = FALSE, per_level = FALSE, ...)
 
 \S4method{volume}{SpatEnvelope}(x, per_cell = FALSE, per_level = FALSE, ...)
 
-\S4method{volume}{SpatVoxel}(x, per_cell = FALSE, per_level = FALSE, bounds = c("midpoint", "top"))
+\S4method{volume}{SpatVoxel}(
+  x,
+  per_cell = FALSE,
+  per_level = FALSE,
+  bounds = c("midpoint", "top"),
+  seafloor = NULL
+)
 
 \S4method{volume}{SpatVector3D}(x, per_cell = FALSE, per_level = FALSE, ...)
 
 \S4method{volume}{SpatRaster}(x, per_cell = FALSE, per_level = FALSE, ...)
 
-\S4method{volume}{SpatProxy}(x, per_cell = FALSE, per_level = FALSE, fun = NULL, ...)
+\S4method{volume}{SpatProxy}(
+  x,
+  per_cell = FALSE,
+  per_level = FALSE,
+  fun = NULL,
+  seafloor = NULL,
+  ...
+)
 }
 \arguments{
 \item{x}{A \link[=SpatEnvelope-class]{SpatEnvelope}, a \link[=SpatVoxel-class]{SpatVoxel},
@@ -51,6 +64,24 @@ contributes no volume. Outer edges are clamped to \code{range(depths)} under
 both. Same argument, same meaning, as in \code{\link[=envelope_to_voxel]{envelope_to_voxel()}}. Not used
 for a voxel that carries its own depth edges (see \link[=SpatVoxel-class]{SpatVoxel}).}
 
+\item{seafloor}{SpatVoxel and SpatProxy only. \code{NULL} (default) counts
+every occupied level as its whole slab. Otherwise the seafloor depth in
+metres as positive numbers increasing downward (land is 0): a
+single-layer \code{SpatRaster} on the grid of \code{x}, or one number for a flat
+seafloor. Each occupied level then counts only the part of its slab
+above the seafloor: with a slab from \code{lower} to \code{upper}, a thickness of
+\code{seafloor - lower}, kept between 0 and \code{upper - lower}. This applies to
+the total, \code{per_cell} and \code{per_level}. An occupied level wholly below
+the seafloor measures 0, not \code{NA}: which levels and cells are \code{NA}
+still depends only on \code{x}. GEBCO and other elevation rasters are
+negative below sea level; turn one into a seafloor depth with
+\code{terra::clamp(-elevation, lower = 0)}, as for \code{\link[=as_envelope]{as_envelope()}}.
+Negative values are an error, and so is \code{NA} in a cell where
+\code{x} is occupied (\code{NA} elsewhere is ignored). The seafloor is one depth
+per cell, so nothing finer than the grid is resolved: a cell that is
+half land still counts its whole area down to that depth. For a
+\code{SpatProxy}, the same seafloor clips every time step.}
+
 \item{fun}{SpatProxy only. Which values count as occupied, as in
 \code{\link[=occupied]{occupied()}}: \code{NULL} (default) counts every non-\code{NA} value; otherwise a
 function of a layer's values returning \code{TRUE} where the cell is
@@ -65,7 +96,8 @@ depth interval, or no occupied level). Its sum is the total. With
 \code{per_level = TRUE} as well, a \link[=SpatVoxel-class]{SpatVoxel} on the depth levels and
 edges of \code{x}, layers \verb{volume_depth=<value>}: the volume of each cell at
 each level in km³, \code{NA} where the level is unoccupied. Summing its
-layers gives the per-cell raster.
+layers gives the per-cell raster. With \code{seafloor}, an occupied level or
+cell with no water above the seafloor is 0.
 
 For a \link[=SpatProxy-class]{SpatProxy}, one result per time step: with
 \code{per_cell = FALSE} a data frame with columns \code{time} (the step's
@@ -113,6 +145,13 @@ overlap with the envelope. So a range of 0-100 m discretized onto
 more water than the envelope it came from. Coarse levels overstate; the
 error shrinks as the levels tighten around the range. Where an envelope's
 limits fall exactly on levels under \code{bounds = "top"}, the two agree.
+
+The same happens at the seafloor: a level the seafloor cuts counts as a
+whole slab, so water 60 m deep on levels that stand for 0-25, 25-50 and
+50-75 m measures as 75 m. Pass the seafloor depth as \code{seafloor} to count
+only the part of each slab above it. This corrects the seafloor only: a
+level cut by a shape's own upper or lower depth limit still counts in
+full.
 
 To measure the space two domains share, measure their intersection:
 \code{volume(intersect_3d(a, b))}.
@@ -173,6 +212,11 @@ terra::values(volume(e, per_cell = TRUE))
 
 # Per cell and level: each occupied level's share of the column.
 terra::values(volume(v, per_cell = TRUE, per_level = TRUE))
+
+# A seafloor at 120 m cuts the 100 m level (50-150 m) to 70 m and leaves
+# nothing of the 200 m level: 3 * 1 * 0.12 = 0.36 km³.
+volume(v, seafloor = 120)
+terra::values(volume(v, per_cell = TRUE, per_level = TRUE, seafloor = 120))
 
 # Overlap with a second domain at 100-300 m: intersect, then measure.
 b <- as_envelope(fp, depth_min = 100, depth_max = 300)

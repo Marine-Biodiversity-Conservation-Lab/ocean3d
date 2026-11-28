@@ -158,6 +158,188 @@ test_that("per_level needs per_cell and a voxel", {
   }
 })
 
+# ---- seafloor ---------------------------------------------------------------
+
+# Helper: a voxel on make_grid()'s 3 x 3 grid of 1 km x 1 km cells, with 25 m
+# levels that stand for 0-25, 25-50, 50-75 and 75-100 m, occupied everywhere
+# unless `vals` says otherwise.
+voxel_25m <- function(vals = 1) {
+  as_voxel(make_voxel(vals, c(12.5, 37.5, 62.5, 87.5)),
+           depth_bounds = cbind(c(0, 25, 50, 75), c(25, 50, 75, 100)))
+}
+
+test_that("volume(seafloor = ) counts a cut level down to the seafloor only", {
+  # An envelope from 0 to 60 m occupies the levels 0-25, 25-50 and 50-75 m,
+  # so its voxel measures 75 m of water, a quarter too much.
+  e <- as_envelope(make_grid(vals = 1), depth_min = 0, depth_max = 60)
+  v <- envelope_to_voxel(e, depths(voxel_25m()),
+                         depth_bounds = depth_bounds(voxel_25m()))
+  expect_equal(volume(v), 1.25 * volume(e))
+
+  # With the seafloor at 60 m, the third level counts 10 m, and the voxel
+  # measures what the envelope does, as a number or as a raster.
+  expect_equal(volume(v, seafloor = 60), volume(e))
+  expect_equal(volume(v, seafloor = make_grid(vals = 60)), volume(e))
+  expect_equal(terra::values(volume(v, per_cell = TRUE, seafloor = 60)),
+               terra::values(volume(e, per_cell = TRUE)))
+})
+
+test_that("volume(seafloor = ) clips each cell and level", {
+  # Seafloor depths per cell: 60 m cuts the third level, 30 m the second, and
+  # 0 m (land) leaves no water; 200 m and deeper are below every level. The
+  # NA is under cell 9, which the voxel doesn't occupy.
+  seafloor <- make_grid(vals = c(60, 30, 0, 200, 25, 50, 75, 10, NA))
+  v <- voxel_25m(rbind(matrix(1, 8, 4), NA))
+  # The thickness in m of each level (columns) in each cell (rows).
+  thickness <- rbind(c(25, 25, 10, 0), c(25, 5, 0, 0), c(0, 0, 0, 0),
+                     c(25, 25, 25, 25), c(25, 0, 0, 0), c(25, 25, 0, 0),
+                     c(25, 25, 25, 0), c(10, 0, 0, 0), rep(NA, 4))
+
+  per_level <- volume(v, per_cell = TRUE, per_level = TRUE,
+                      seafloor = seafloor)
+  expect_s4_class(per_level, "SpatVoxel")
+  expect_equal(depth_bounds(per_level), depth_bounds(v))
+  vals <- unname(terra::values(per_level, mat = TRUE))
+  expect_equal(vals, thickness / 1000, tolerance = 0.01)
+  # An occupied level wholly below the seafloor is 0, a measurement; only an
+  # unoccupied level is NA, with or without a seafloor.
+  expect_identical(vals[1, 4], 0)
+  expect_identical(vals[3, ], rep(0, 4))
+  expect_identical(
+    is.na(vals),
+    is.na(unname(terra::values(volume(v, per_cell = TRUE, per_level = TRUE),
+                               mat = TRUE)))
+  )
+
+  # Per cell and in total, the levels add up.
+  per_cell <- terra::values(volume(v, per_cell = TRUE,
+                                   seafloor = seafloor))[, 1]
+  expect_equal(per_cell, c(rowSums(thickness[1:8, ]) / 1000, NA),
+               tolerance = 0.01)
+  expect_identical(per_cell[3], 0)
+  expect_equal(per_cell[1:8], rowSums(vals[1:8, ]))
+  expect_equal(volume(v, seafloor = seafloor), sum(per_cell, na.rm = TRUE))
+
+  # An unoccupied level stays NA and adds nothing, above the seafloor or not.
+  gap <- voxel_25m(cbind(rep(1, 9), rep(NA, 9), rep(1, 9), rep(1, 9)))
+  vals <- terra::values(volume(gap, per_cell = TRUE, per_level = TRUE,
+                               seafloor = 60))
+  expect_equal(unname(vals[1, ]), c(0.025, NA, 0.01, 0), tolerance = 0.01)
+  expect_equal(volume(gap, seafloor = 60), 9 * 0.035, tolerance = 0.01)
+})
+
+test_that("volume(seafloor = ) follows the slabs `bounds` gives", {
+  # Without stored edges the slabs come from `bounds`. Levels at 0, 100 and
+  # 200 m stand for 0-50, 50-150 and 150-200 m under "midpoint", and for
+  # 0-100, 100-200 and nothing under "top".
+  v <- make_voxel(1, c(0, 100, 200))
+  expect_equal(volume(v, seafloor = 120), 9 * 0.12, tolerance = 0.01)
+  expect_equal(volume(v, bounds = "top", seafloor = 120), 9 * 0.12,
+               tolerance = 0.01)
+  vals <- terra::values(volume(v, per_cell = TRUE, per_level = TRUE,
+                               bounds = "top", seafloor = 120))
+  expect_equal(unname(vals[1, ]), c(0.1, 0.02, 0), tolerance = 0.01)
+})
+
+test_that("a seafloor below every level, or none, changes nothing", {
+  v <- voxel_25m(cbind(rep(1, 9), c(NA, rep(1, 8)), rep(1, 9), rep(NA, 9)))
+  deep <- make_grid(vals = 100:108)
+  cases <- list(
+    list(),
+    list(per_cell = TRUE),
+    list(per_cell = TRUE, per_level = TRUE)
+  )
+  for (args in cases) {
+    without <- do.call(volume, c(list(v), args))
+    for (seafloor in list(NULL, deep, 5000)) {
+      with <- do.call(volume, c(list(v, seafloor = seafloor), args))
+      if (is.numeric(without)) {
+        expect_identical(with, without)
+      } else {
+        expect_identical(terra::values(with), terra::values(without))
+        expect_identical(class(with), class(without))
+      }
+    }
+  }
+  # The total without the argument is still slab thickness times cell area:
+  # 9 cells x 50 m, and 8 cells x 25 m.
+  expect_equal(volume(v), 9 * 0.05 + 8 * 0.025, tolerance = 0.01)
+})
+
+test_that("volume() rejects a seafloor it cannot use", {
+  v <- voxel_25m(rbind(matrix(1, 8, 4), NA))
+  on_grid <- make_grid(vals = 60)
+  cases <- list(
+    "another extent" = list(
+      seafloor = terra::shift(on_grid, dx = 500),
+      pattern = "`seafloor` does not align with `x`",
+      class = "ocean3d_error_grid_mismatch"
+    ),
+    "another CRS" = list(
+      seafloor = terra::rast(nrows = 3, ncols = 3, vals = 60,
+                             crs = "EPSG:4326"),
+      pattern = "`seafloor` has a different CRS",
+      class = "ocean3d_error_grid_mismatch"
+    ),
+    "two layers" = list(
+      seafloor = c(on_grid, on_grid),
+      pattern = "`seafloor` must be a single-layer SpatRaster; got 2",
+      class = "ocean3d_error_grid_value"
+    ),
+    "not a number or raster" = list(
+      seafloor = "60",
+      pattern = "`seafloor` must be a single non-missing number or",
+      class = "ocean3d_error_grid_value"
+    ),
+    "several numbers" = list(
+      seafloor = c(60, 80),
+      pattern = "`seafloor` must be a single non-missing number or",
+      class = "ocean3d_error_grid_value"
+    ),
+    "a missing number" = list(
+      seafloor = NA_real_,
+      pattern = "got NA",
+      class = "ocean3d_error_grid_value"
+    ),
+    "elevation, negative below sea level" = list(
+      seafloor = make_grid(vals = c(-60, rep(5, 8))),
+      pattern = "positive down; its lowest value is -60",
+      class = "ocean3d_error_volume_seafloor"
+    ),
+    "a negative number" = list(
+      seafloor = -60,
+      pattern = "positive down",
+      class = "ocean3d_error_volume_seafloor"
+    ),
+    "NA under an occupied cell" = list(
+      seafloor = make_grid(vals = c(NA, rep(60, 8))),
+      pattern = "`seafloor` is NA in 1 cell where `x` is occupied",
+      class = "ocean3d_error_volume_seafloor"
+    ),
+    "NA under several occupied cells" = list(
+      seafloor = make_grid(vals = c(NA, NA, rep(60, 7))),
+      pattern = "`seafloor` is NA in 2 cells where `x` is occupied",
+      class = "ocean3d_error_volume_seafloor"
+    )
+  )
+  for (label in names(cases)) {
+    case <- cases[[label]]
+    expect_error(volume(v, seafloor = case$seafloor), case$pattern,
+                 class = case$class, label = label)
+  }
+
+  # An envelope and polygons have no levels to clip.
+  shapes <- list(
+    make_range_rast(rep(0, 9), rep(100, 9)),
+    as_vector3d(make_polygon(), depth_min = 0, depth_max = 100)
+  )
+  for (x in shapes) {
+    expect_error(volume(x, seafloor = 60),
+                 "unused argument\\(s\\): seafloor.*clips the depth levels",
+                 class = "ocean3d_error_unused_argument")
+  }
+})
+
 # ---- measuring an overlap ---------------------------------------------------
 
 test_that("volume(intersect_3d()) matches hand-computed overlaps", {
@@ -387,6 +569,38 @@ test_that("reading a step in groups of depth layers gives the same volume", {
   expect_equal(volume(as_proxy(v))$volume_km3, whole)
   expect_equal(terra::values(volume(as_proxy(v), per_cell = TRUE)),
                whole_cells)
+})
+
+test_that("volume() of a proxy clips every step at the seafloor", {
+  # Levels at 5, 15, 25 and 35 m stand for 0-10, 10-20, 20-30 and 30-40 m.
+  # The seafloor is land in one cell, cuts a level in four and is below
+  # every level in the last.
+  g <- proxy_and_file(depth = c(5, 15, 25, 35))
+  on.exit(unlink(g$file), add = TRUE)
+  p <- g$proxy
+  steps <- lapply(1:2, function(i) as_voxel(p, time = i))
+  seafloor <- terra::rast(methods::as(steps[[1]], "SpatRaster"), nlyrs = 1,
+                          vals = c(0, 4, 10, 18, 33, 500))
+
+  out <- volume(p, seafloor = seafloor)
+  expect_equal(out$volume_km3, vapply(steps, volume, 0, seafloor = seafloor))
+  expect_lt(out$volume_km3[1L], volume(p)$volume_km3[1L])
+  cells <- volume(p, per_cell = TRUE, seafloor = seafloor)
+  for (i in 1:2) {
+    expect_equal(terra::values(cells[[i]]),
+                 terra::values(volume(steps[[i]], per_cell = TRUE,
+                                      seafloor = seafloor)))
+  }
+  # Without the argument the proxy measures whole slabs, as before.
+  expect_equal(volume(p, seafloor = NULL), volume(p))
+
+  # Read one layer at a time, each layer is still clipped on its own.
+  rlang::local_options(ocean3d.max_read_mb = 1e-9)
+  expect_equal(volume(p, seafloor = seafloor), out)
+  expect_equal(terra::values(volume(p, per_cell = TRUE, seafloor = seafloor)),
+               terra::values(cells))
+  expect_error(volume(p, seafloor = -seafloor), "positive down",
+               class = "ocean3d_error_volume_seafloor")
 })
 
 test_that("a one-level voxel without edges measures no volume as a proxy", {
