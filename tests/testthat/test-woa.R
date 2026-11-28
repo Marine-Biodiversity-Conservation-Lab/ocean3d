@@ -105,9 +105,11 @@ test_that("woa_download builds the NCEI URL for each resolution", {
 
 test_that("woa_download reports an unknown size when the server says 404", {
   # A 404 page has its own Content-Length, which isn't the file's size.
+  downloads <- 0L
   testthat::local_mocked_bindings(
     curl_download = function(url, destfile, ...) {
-      writeBin(raw(1024), destfile)
+      downloads <<- downloads + 1L
+      writeBin(raw(2 * 1024^2), destfile)
       invisible(destfile)
     },
     curl_fetch_memory = function(url, handle, ...) {
@@ -120,7 +122,16 @@ test_that("woa_download reports an unknown size when the server says 404", {
   tmp <- tempfile("woa_404_")
   on.exit(unlink(tmp, recursive = TRUE))
   expect_message(
-    woa_download("temperature", resolution = "1", output_dir = tmp),
+    path <- woa_download("temperature", resolution = "1", output_dir = tmp),
     "Downloading (unknown size): woa23_decav_t00_01.nc", fixed = TRUE
   )
+  expect_identical(downloads, 1L)
+
+  # A cached 2 MB file is kept, not taken as truncated against the 404 page.
+  expect_message(
+    woa_download("temperature", resolution = "1", output_dir = tmp),
+    "Cached: woa23_decav_t00_01.nc", fixed = TRUE
+  )
+  expect_identical(downloads, 1L)
+  expect_identical(file.size(path), 2 * 1024^2)
 })

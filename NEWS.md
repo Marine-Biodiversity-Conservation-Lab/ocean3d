@@ -541,10 +541,12 @@ an exact match and stop otherwise. For the old behaviour, pass
 ## Bug fixes
 
 * `woa_download(resolution = 5)` looked for the files in a `5deg` directory
-  that NCEI doesn't have, so every 5-degree download failed with a 404. It
-  now uses NCEI's `5.00` directory. The size `woa_download()` reports before
-  a download is now "unknown size" when the server's response is an error;
-  before, a missing file was reported as `0.0 MB` (#46).
+  that NCEI doesn't have, so every 5-degree download failed with a
+  "not found" (404) error. It now uses NCEI's `5.00` directory. When the
+  server returns an error, `woa_download()` now gives the file size as
+  "unknown size" instead of `0.0 MB`. A file already in the cache is then
+  kept: before, it was taken as truncated and downloaded again, and if that
+  download failed, the cached file was deleted (#46).
 * With a `time_step` in months or years, `extract_to_track()` placed each
   sample one step after the previous one, so a segment starting on
   31 January got 29 February, then 29 March, and kept the 29th. Samples now
