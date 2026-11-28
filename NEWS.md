@@ -338,7 +338,7 @@ an exact match and stop otherwise. For the old behaviour, pass
 
 ## New features
 
-* `volume()` of a `SpatVoxel` or `SpatProxy` gains `seafloor`: the seafloor
+* `volume()` of a `SpatVoxel` or `SpatProxy` gains `seafloor` (#187): the seafloor
   depth in metres, positive down, as a single-layer `SpatRaster` on the
   voxel's grid or one number. Each occupied level then counts only the part
   of its slab above the seafloor, in the total and with `per_cell` and
