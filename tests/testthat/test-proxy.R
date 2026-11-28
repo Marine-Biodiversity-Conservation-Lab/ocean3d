@@ -279,6 +279,9 @@ test_that("CF's extended grid_mapping form is read", {
   f <- mapped("crs: lat lon", list(crs = etrs89))
   on.exit(unlink(f), add = TRUE)
   expect_identical(as_proxy(f)@crs, etrs89)
+  # A space before the colon is read the same way.
+  set_atts(f, "temp", grid_mapping = "crs : lat lon")
+  expect_identical(as_proxy(f)@crs, etrs89)
 
   # With two mappings, the one listing the grid's lon and lat is used.
   g <- mapped("crs_osgb: x y crs_etrs89: lat lon",
@@ -328,8 +331,8 @@ test_that("a grid mapping is found in the variable's group", {
   for (grid_mapping in c("crs", "crs: lat lon", "other: x y crs: lon lat",
                          "/crs: /lon /lat /grp/crs: /grp/lon /grp/lat")) {
     set_atts(f, "grp/temp", grid_mapping = grid_mapping)
-    expect_identical(as_proxy(f, var = "grp/temp")@crs, etrs89,
-                     label = grid_mapping)
+    # `grp/crs` isn't data, so `grp/temp` is detected.
+    expect_identical(as_proxy(f)@crs, etrs89, label = grid_mapping)
   }
 })
 
@@ -347,7 +350,7 @@ test_that("a grid mapping is found in an ancestor group", {
   ncdf4::ncatt_put(nc, "a/crs", "crs_wkt", etrs89)
   ncdf4::ncatt_put(nc, "a/b/temp", "grid_mapping", "crs")
   ncdf4::nc_close(nc)
-  expect_identical(as_proxy(f, var = "a/b/temp")@crs, etrs89)
+  expect_identical(as_proxy(f)@crs, etrs89)
 })
 
 test_that("an open connection is read and left open", {

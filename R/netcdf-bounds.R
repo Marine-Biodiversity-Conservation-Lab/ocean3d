@@ -58,11 +58,7 @@
         !nzchar(name)) {
     return(unusable("have an invalid bounds reference"))
   }
-  # In a netCDF-4 group, CF names are relative to the coordinate's group.
-  if (!name %in% names(nc$var) && grepl("/", coordinate, fixed = TRUE)) {
-    grouped <- file.path(dirname(coordinate), name)
-    if (grouped %in% names(nc$var)) name <- grouped
-  }
+  name <- .resolve_group_name(nc, coordinate, name)
   if (!name %in% names(nc$var)) {
     return(unusable(paste0(
       "were not found (missing bounds variable `", name, "`)"

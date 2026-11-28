@@ -145,10 +145,11 @@ setValidity("SpatProxy", function(object) {
 #'   supported yet.
 #' * **CRS:** EPSG:4326, unless the variable's `grid_mapping` gives another
 #'   geographic CRS as WKT (`crs_wkt` or `spatial_ref`). CF's extended form,
-#'   such as `"crs_osgb: x y crs_wgs84: lat lon"`, is read too: the mapping
-#'   listed with the longitude and latitude dimensions is used. A mapping
-#'   that isn't geographic, a mapping variable missing from the file, or a
-#'   list with no mapping for longitude and latitude stops with an error.
+#'   such as `"crs_osgb: x y crs_wgs84: lat lon"`, is read too, using the
+#'   mapping listed with the longitude and latitude dimensions. `as_proxy()`
+#'   stops with an error if the mapping isn't geographic, if the mapping
+#'   variable is missing from the file, or if no listed mapping is for
+#'   longitude and latitude.
 #'
 #' Regular longitude-latitude grids with coordinate values are supported;
 #' curvilinear, projected and rotated-pole grids are rejected. Bad cell bounds
@@ -341,8 +342,10 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 # .detect_netcdf_var() and .proxy_crs().
 .grid_mappings <- function(value) {
   if (!is.character(value)) return(list())
-  # A space after each colon also splits the form `"crs:lat lon"`.
-  tokens <- strsplit(trimws(gsub(":", ": ", value[[1L]])), "[[:space:]]+")
+  # Join a colon to its name and put a space after it, so `"crs : lat lon"`
+  # and `"crs:lat lon"` read as `"crs: lat lon"`.
+  value <- gsub(":", ": ", gsub("[[:space:]]+:", ":", value[[1L]]))
+  tokens <- strsplit(trimws(value), "[[:space:]]+")
   tokens <- tokens[[1L]][nzchar(tokens[[1L]])]
   is_name <- endsWith(tokens, ":")
   if (!any(is_name)) {
@@ -357,47 +360,32 @@ as_proxy <- function(x, var = NULL, lon_dim = NULL, lat_dim = NULL,
 
 # EPSG:4326, or the geographic CRS the variable's grid mapping gives as WKT.
 # `lon` and `lat` are the grid's dimensions; with several mappings in CF's
-# extended form, the one whose coordinates include both is used. Names in
+# extended form, the first whose coordinates include both is used. Names in
 # the attribute are relative to the variable's group (#93).
 .proxy_crs <- function(nc, var, lon, lat) {
   mappings <- .grid_mappings(.read_attribute(nc, var, "grid_mapping"))
   if (!length(mappings)) return("EPSG:4326")
-  # References as ncdf4 names them: an absolute path without its leading
-  # `/`; a relative one in the nearest group that has it, searching from the
-  # variable's group up to the root (CF's search by proximity).
-  known <- c(names(nc$var), names(nc$dim))
-  groups <- character()
-  group <- dirname(var)
-  while (group != ".") {
-    groups <- c(groups, group)
-    group <- dirname(group)
-  }
-  resolve <- function(refs) {
-    vapply(refs, function(ref) {
-      if (startsWith(ref, "/")) return(sub("^/", "", ref))
-      found <- intersect(file.path(groups, ref), known)
-      if (length(found)) found[1L] else ref
-    }, character(1), USE.NAMES = FALSE)
-  }
   if (length(mappings) > 1L) {
     applies <- vapply(mappings, function(coords) {
-      all(c(lon, lat) %in% resolve(coords))
+      all(c(lon, lat) %in% .resolve_group_name(nc, var, coords))
     }, logical(1))
     if (!any(applies)) {
       listed <- toString(paste0("`", names(mappings), "`"))
       rlang::abort(glue::glue(
         "Variable `{var}` lists the grid mappings {listed}, but none of ",
         "them applies to its longitude and latitude dimensions `{lon}` and ",
-        "`{lat}`."
+        "`{lat}`. Fix or delete the variable's `grid_mapping` attribute, for ",
+        "example with NCO's `ncatted`."
       ), class = "ocean3d_error_grid_mapping", call = NULL)
     }
     mappings <- mappings[applies]
   }
-  mapping <- resolve(names(mappings)[1L])
+  mapping <- .resolve_group_name(nc, var, names(mappings)[1L])
   if (!mapping %in% names(nc$var)) {
     rlang::abort(glue::glue(
       "Variable `{var}` uses the grid mapping `{mapping}`, but the file has ",
-      "no variable of that name, so its CRS isn't known."
+      "no variable of that name, so its CRS isn't known. Fix or delete the ",
+      "variable's `grid_mapping` attribute, for example with NCO's `ncatted`."
     ), class = "ocean3d_error_grid_mapping", call = NULL)
   }
   read <- function(name) {

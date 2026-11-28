@@ -56,6 +56,27 @@
   att$value
 }
 
+# The names ncdf4 uses for CF references made by variable `var`, such as the
+# names in its `bounds`, `coordinates` or `grid_mapping` attribute. In a
+# netCDF-4 group (#93), an absolute path loses its leading `/`, and a
+# relative name becomes the path in the nearest group that has it, searching
+# from `var`'s group up to the root (CF's search by proximity). A name found
+# nowhere is returned as given.
+.resolve_group_name <- function(nc, var, refs) {
+  known <- c(names(nc$var), names(nc$dim))
+  groups <- character()
+  group <- dirname(var)
+  while (group != ".") {
+    groups <- c(groups, group)
+    group <- dirname(group)
+  }
+  vapply(refs, function(ref) {
+    if (startsWith(ref, "/")) return(sub("^/", "", ref))
+    found <- intersect(c(file.path(groups, ref), ref), known)
+    if (length(found)) found[1L] else ref
+  }, character(1), USE.NAMES = FALSE)
+}
+
 .normalise_axis_attribute <- function(x) {
   if (!is.character(x) || length(x) != 1L ||
         is.na(x)) {
@@ -203,10 +224,7 @@
     trimws(as.character(coordinates)[1]),
     "\\s+"
   )[[1]]
-  # Names in the attribute are relative to the variable's group.
-  if (grepl("/", var, fixed = TRUE)) {
-    coordinates <- c(coordinates, file.path(dirname(var), coordinates))
-  }
+  coordinates <- .resolve_group_name(nc, var, coordinates)
 
   for (coordinate in coordinates) {
     if (!coordinate %in% names(nc$var)) next
