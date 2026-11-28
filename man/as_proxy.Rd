@@ -77,7 +77,11 @@ axis with one step, such as a World Ocean Atlas period, is recorded as a
 climatology without a date; climatologies with more steps aren't
 supported yet.
 \item \strong{CRS:} EPSG:4326, unless the variable's \code{grid_mapping} gives another
-geographic CRS as WKT (\code{crs_wkt} or \code{spatial_ref}).
+geographic CRS as WKT (\code{crs_wkt} or \code{spatial_ref}). CF's extended form,
+such as \code{"crs_osgb: x y crs_wgs84: lat lon"}, is read too: the mapping
+listed with the longitude and latitude dimensions is used. A mapping
+that isn't geographic, a mapping variable missing from the file, or a
+list with no mapping for longitude and latitude stops with an error.
 }
 
 Regular longitude-latitude grids with coordinate values are supported;

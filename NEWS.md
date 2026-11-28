@@ -2,6 +2,21 @@
 
 ## Breaking changes
 
+`as_proxy()` reads CF's extended form of the `grid_mapping` attribute, such
+as `"crs: lat lon"` or `"crs_osgb: x y crs_wgs84: lat lon"`, and stops when
+the grid mapping can't be used (#137). Before, it read only a `grid_mapping`
+that named one variable, and recorded EPSG:4326 for anything else. Now:
+
+* With the extended form, the CRS comes from the mapping listed with the
+  grid's longitude and latitude dimensions (or the only mapping listed), so
+  an ETRS89 file is recorded as ETRS89, and a projected mapping stops.
+* A `grid_mapping` that names a variable the file doesn't have stops.
+* A list of mappings with none for longitude and latitude stops.
+
+Files that passed before may now stop with an error. Fix the file's
+`grid_mapping` attribute (for example with NCO's `ncatted`), or delete it if
+the grid is plain WGS84 longitude and latitude.
+
 `extract_to_buffer()` is now a shortcut for `as_vector3d()`, `buffer_3d()`,
 `crop()`, `as_voxel()` (or `rast()` for a variable without depth), `mask()`
 and `summarise_3d()` (#116). It returns `data` with the statistic, named
